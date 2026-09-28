@@ -83,12 +83,25 @@ fn unix_seconds() -> u64 {
         .unwrap_or_default()
         .as_secs()
 }
-fn entry() -> Result<Entry, ServiceError> {
-    Entry::new("dev.geod-agent.desktop", "geod-oauth")
-        .map_err(|_| error("CREDENTIAL_STORE", "无法访问系统凭据库"))
+fn credential_account(identity_origin: &str) -> String {
+    if identity_origin == "https://geod.laogao.xyz" {
+        "geod-oauth".into()
+    } else {
+        format!(
+            "geod-oauth-{:x}",
+            Sha256::digest(identity_origin.as_bytes())
+        )
+    }
 }
-fn read_tokens() -> Result<Option<Tokens>, ServiceError> {
-    let value = match entry()?.get_password() {
+fn entry(identity_origin: &str) -> Result<Entry, ServiceError> {
+    Entry::new(
+        "dev.geod-agent.desktop",
+        &credential_account(identity_origin),
+    )
+    .map_err(|_| error("CREDENTIAL_STORE", "无法访问系统凭据库"))
+}
+fn read_tokens(identity_origin: &str) -> Result<Option<Tokens>, ServiceError> {
+    let value = match entry(identity_origin)?.get_password() {
         Ok(value) => value,
         Err(keyring::Error::NoEntry) => return Ok(None),
         Err(_) => return Err(error("CREDENTIAL_STORE", "读取系统凭据失败")),
@@ -98,15 +111,15 @@ fn read_tokens() -> Result<Option<Tokens>, ServiceError> {
         .map_err(|_| error("CREDENTIAL_STORE", "系统凭据格式错误"))
 }
 fn write_tokens(tokens: &Tokens) -> Result<(), ServiceError> {
-    entry()?
+    entry(&tokens.identity_origin)?
         .set_password(
             &serde_json::to_string(tokens)
                 .map_err(|_| error("CREDENTIAL_STORE", "凭据编码失败"))?,
         )
         .map_err(|_| error("CREDENTIAL_STORE", "保存系统凭据失败"))
 }
-fn delete_tokens() -> Result<(), ServiceError> {
-    match entry()?.delete_credential() {
+fn delete_tokens(identity_origin: &str) -> Result<(), ServiceError> {
+    match entry(identity_origin)?.delete_credential() {
         Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
         Err(_) => Err(error("CREDENTIAL_STORE", "移除系统凭据失败")),
     }
@@ -215,7 +228,8 @@ fn get_access_token(state: &ServiceState, config: &ServiceConfig) -> Result<Stri
         .credential_lock
         .lock()
         .expect("credential mutex poisoned");
-    let mut tokens = read_tokens()?.ok_or_else(|| error("AUTH_REQUIRED", "请先登录 GeoD"))?;
+    let mut tokens = read_tokens(&config.identity_origin)?
+        .ok_or_else(|| error("AUTH_REQUIRED", "请先登录 GeoD"))?;
     if tokens.identity_origin != config.identity_origin {
         return Err(error("AUTH_REQUIRED", "请重新登录 GeoD"));
     }
@@ -238,7 +252,7 @@ fn get_access_token(state: &ServiceState, config: &ServiceConfig) -> Result<Stri
                 | reqwest::StatusCode::UNAUTHORIZED
                 | reqwest::StatusCode::FORBIDDEN
         ) {
-            delete_tokens()?;
+            delete_tokens(&config.identity_origin)?;
             return Err(error("AUTH_EXPIRED", "GeoD 授权已失效，请重新登录"));
         }
         return Err(error("IDENTITY_UNAVAILABLE", "GeoD 身份服务暂时不可达"));
@@ -278,7 +292,7 @@ pub fn auth_status(state: State<'_, ServiceState>) -> Result<AuthStatus, Service
             .credential_lock
             .lock()
             .expect("credential mutex poisoned");
-        read_tokens()?
+        read_tokens(&config.identity_origin)?
     };
     if let Some(tokens) = tokens {
         if tokens.identity_origin == config.identity_origin {
@@ -457,7 +471,7 @@ pub fn auth_begin(
             .credential_lock
             .lock()
             .expect("credential mutex poisoned");
-        if read_tokens()?.is_some() {
+        if read_tokens(&config.identity_origin)?.is_some() {
             return Err(error("AUTH_ACTIVE", "请先退出当前 GeoD 账号"));
         }
     }
@@ -539,7 +553,7 @@ pub fn auth_logout(state: State<'_, ServiceState>) -> Result<AuthStatus, Service
         .credential_lock
         .lock()
         .expect("credential mutex poisoned");
-    if let Some(tokens) = read_tokens()? {
+    if let Some(tokens) = read_tokens(&config.identity_origin)? {
         if tokens.identity_origin == config.identity_origin {
             let _ = client(&config.identity_origin).and_then(|client| {
                 client
@@ -554,7 +568,7 @@ pub fn auth_logout(state: State<'_, ServiceState>) -> Result<AuthStatus, Service
             });
         }
     }
-    delete_tokens()?;
+    delete_tokens(&config.identity_origin)?;
     Ok(AuthStatus {
         state: "disconnected",
         user_id: None,
@@ -579,6 +593,16 @@ mod tests {
         assert!(validate_origin("http://example.com").is_err());
         assert!(validate_origin("https://example.com/path").is_err());
         assert!(validate_origin("https://user:password@example.com").is_err());
+    }
+
+    #[test]
+    fn local_test_login_does_not_share_the_production_credential() {
+        assert_eq!(credential_account("https://geod.laogao.xyz"), "geod-oauth");
+        let first = credential_account("http://127.0.0.1:41001");
+        let second = credential_account("http://127.0.0.1:41002");
+        assert_ne!(first, "geod-oauth");
+        assert_ne!(first, second);
+        assert_eq!(first, credential_account("http://127.0.0.1:41001"));
     }
 
     #[test]

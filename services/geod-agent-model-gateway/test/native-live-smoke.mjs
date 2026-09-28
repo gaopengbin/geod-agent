@@ -11,6 +11,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { createGatewayServer, readConfig } from "../server.mjs";
 
 assert.ok(process.env.DEEPSEEK_API_KEY, "Set DEEPSEEK_API_KEY for this optional native smoke test");
+assert.equal(process.env.GEOD_NATIVE_ALLOW_BROWSER_AUTH, "1", "This smoke test opens a browser for OAuth. Set GEOD_NATIVE_ALLOW_BROWSER_AUTH=1 only when explicitly running the interactive test.");
 if (process.platform !== "win32") throw new Error("This smoke test requires Windows WebView2");
 const exe = process.env.GEOD_AGENT_EXE || resolve(import.meta.dirname, "../../../apps/geod-agent-desktop/src-tauri/target/release/geod-agent-desktop.exe");
 const folder = mkdtempSync(resolve(tmpdir(), "geod-native-deepseek-"));
@@ -169,6 +170,17 @@ try {
   console.error("Native OAuth callback completed");
   const sources = await evaluate("window.__TAURI_INTERNALS__.invoke('sources_list')");
   assert.ok(Array.isArray(sources));
+  if (process.env.GEOD_EXPECT_COMPLETED_JOB_ID) {
+    const jobId = process.env.GEOD_EXPECT_COMPLETED_JOB_ID;
+    const completed = await evaluate(`window.__TAURI_INTERNALS__.invoke('jobs_get', { jobId: ${JSON.stringify(jobId)} })`);
+    assert.equal(completed?.state, "completed", "Previously approved task must remain completed after installation");
+    const manifest = await evaluate(`window.__TAURI_INTERNALS__.invoke('artifacts_inspect', { jobId: ${JSON.stringify(jobId)} })`);
+    assert.equal(manifest.quality.missingTiles, 0);
+    assert.ok(manifest.assets.some(asset => asset.mimeType === "image/tiff"));
+    const preview = await evaluate(`window.__TAURI_INTERNALS__.invoke('artifact_preview', { jobId: ${JSON.stringify(jobId)} })`);
+    assert.match(preview?.dataUrl || "", /^data:image\/png;base64,/);
+    console.error(`Installed app rechecked completed task ${jobId}: ${manifest.assets.length} assets, ${manifest.quality.missingTiles} missing tiles`);
+  }
   const originalConversationId = await evaluate("JSON.parse(localStorage.getItem('geod-agent-conversations-0.1') || '[]')[0]?.conversationId || null");
   await evaluate("document.querySelector('.conversation-sidebar-head button').click()");
   await waitFor(async () => await evaluate("!!document.querySelector('.agent-composer textarea')"), 10_000, "agent composer");
