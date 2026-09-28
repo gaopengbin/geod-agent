@@ -190,6 +190,10 @@ fn checked_in_contracts_match_rust_types() {
             include_str!("../../../contracts/0.1/plan.schema.json"),
             geod_task_engine::plan_schema(),
         ),
+        (
+            include_str!("../../../contracts/0.1/job-event.schema.json"),
+            schemars::schema_for!(geod_task_engine::ledger::JobEvent),
+        ),
     ] {
         let saved: serde_json::Value = serde_json::from_str(saved).unwrap();
         assert_eq!(saved, serde_json::to_value(generated).unwrap());

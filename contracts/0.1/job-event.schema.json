@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "JobEvent",
+  "type": "object",
+  "properties": {
+    "jobId": {
+      "type": "string"
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "seq": {
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0
+    },
+    "state": {
+      "$ref": "#/$defs/JobState"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "jobId",
+    "seq",
+    "occurredAt",
+    "state"
+  ],
+  "$defs": {
+    "JobState": {
+      "type": "string",
+      "enum": [
+        "queued",
+        "downloading",
+        "processing",
+        "verifying",
+        "completed",
+        "partial",
+        "failed",
+        "cancelled"
+      ]
+    }
+  }
+}

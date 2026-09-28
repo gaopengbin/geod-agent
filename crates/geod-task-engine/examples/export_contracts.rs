@@ -1,4 +1,4 @@
-use geod_task_engine::{plan_schema, source_descriptor_schema, task_spec_schema};
+use geod_task_engine::{ledger::JobEvent, plan_schema, source_descriptor_schema, task_spec_schema};
 use std::{fs, path::Path};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -8,6 +8,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ("task-spec.schema.json", task_spec_schema()),
         ("source-descriptor.schema.json", source_descriptor_schema()),
         ("plan.schema.json", plan_schema()),
+        ("job-event.schema.json", schemars::schema_for!(JobEvent)),
     ] {
         fs::write(
             root.join(name),

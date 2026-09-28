@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::path::{Component, Path};
 
+pub mod ledger;
+
 const MAX_PLAN_TILES: u64 = 4096;
 const MAX_PLAN_RGBA_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 const POLICY_VERSION: &str = "imagery-plan-0.1";
