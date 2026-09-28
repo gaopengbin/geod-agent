@@ -29,7 +29,7 @@ npm run tauri:dev
 npm run tauri:build
 ```
 
-安装包在 `apps/geod-agent-desktop/src-tauri/target/release/bundle/nsis/GeoD Agent_0.1.0_x64-setup.exe`。早期包已在隔离目录完成 NSIS 安装、启动和卸载冒烟；用户批准的 USGS 样本随后通过原生窗口和安装后程序重开核验。当前含 OSM 底图、成果影像图层和账号授权入口的安装包 SHA-256 为 `7828f81c2e8a17d316a7116308edb7e0e4c13778ad4975487de4487441b41621`，已从 Release 可执行文件检查界面，尚未对这个最新安装包重复安装验收。浏览器 `npm run dev` 只提供界面预览，Tauri IPC 不可用。
+安装包在 `apps/geod-agent-desktop/src-tauri/target/release/bundle/nsis/GeoD Agent_0.1.0_x64-setup.exe`。早期包已在隔离目录完成 NSIS 安装、启动和卸载冒烟；用户批准的 USGS 样本随后通过原生窗口和安装后程序重开核验。当前安装包已包含 GeoD 远端账号请求使用 Windows 用户代理的修复，SHA-256 为 `e64e076586095737429bd3e615982488ac622a2fa3ebcb7eae1d82a3abd8ad63`。此前已从 Release 可执行文件检查界面，尚未对这个最新安装包重复安装验收。浏览器 `npm run dev` 只提供界面预览，Tauri IPC 不可用。
 
 用户另行批准了 USGS NAIP 公共领域小样本：`[-77.05, 38.85, -77.04, 38.86]`、Z12、256 px、1 瓦片，输出到新目录 `artifacts/native-approved-usgs-20260928`。原生桌面界面已登记图源、生成计划、按计划哈希批准、执行下载并到达 `completed`；安装后程序重开也显示了同一作业。作业 ID `9b53d49f-3880-4e4d-b5e2-8564cbcb8244`，1/1 瓦片、3 项成果、`missingTiles=0`。`artifacts/verify-native-approved.py` 独立检查 SQLite 审批与事件、文件 SHA-256、GeoTIFF 的 30×38 像素与 EPSG:3857、MBTiles 完整性及 1 瓦片。
 
