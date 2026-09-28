@@ -535,6 +535,98 @@ impl TaskStore {
         Ok(manifest)
     }
 
+    /// Finish a job interrupted after its bundle was published but before the
+    /// final ledger transition. This only reads and verifies local files.
+    pub fn recover_verifying_job(&mut self, job_id: &str) -> Result<Manifest, LedgerError> {
+        let job = self
+            .get_job(job_id)?
+            .ok_or_else(|| LedgerError::new("JOB_NOT_FOUND", "Job was not found"))?;
+        if job.state != JobState::Verifying {
+            return Err(LedgerError::new(
+                "JOB_STATE_CONFLICT",
+                "Only a verifying job can be recovered",
+            ));
+        }
+        let plan = self
+            .get_plan(&job.plan_id)?
+            .ok_or_else(|| LedgerError::new("PLAN_NOT_FOUND", "Plan was not found"))?;
+        let destination = PathBuf::from(&plan.plan.spec.output_directory);
+        let inspected = imagery::inspect_bundle(&destination).and_then(|manifest| {
+            if manifest.id != format!("geod-agent-job-{job_id}") {
+                return Err(geod_core::imagery::CoreError::new(
+                    "ARTIFACT_OWNERSHIP",
+                    "Artifact belongs to another job",
+                ));
+            }
+            Ok(manifest)
+        });
+        match inspected {
+            Ok(manifest) => {
+                self.transition(
+                    job_id,
+                    JobState::Verifying,
+                    JobState::Completed,
+                    None,
+                    Utc::now(),
+                )?;
+                let cache_parent = self
+                    .db_path
+                    .parent()
+                    .ok_or_else(|| LedgerError::new("STORAGE_ERROR", "Database has no parent"))?
+                    .join("tile-cache");
+                let cache_root = cache_parent.join(job_id);
+                if let (Ok(parent), Ok(root)) = (
+                    std::fs::canonicalize(&cache_parent),
+                    std::fs::canonicalize(&cache_root),
+                ) {
+                    if root.parent() == Some(parent.as_path()) {
+                        let _ = std::fs::remove_dir_all(root);
+                    }
+                }
+                Ok(manifest)
+            }
+            Err(error) => {
+                self.transition(
+                    job_id,
+                    JobState::Verifying,
+                    JobState::Failed,
+                    Some(error.code),
+                    Utc::now(),
+                )?;
+                Err(LedgerError::new(error.code, error.message))
+            }
+        }
+    }
+
+    /// Called once at desktop startup; a damaged bundle is marked failed while
+    /// other interrupted verifications continue independently.
+    pub fn recover_verifying_jobs(&mut self) -> Result<usize, LedgerError> {
+        let ids = {
+            let mut statement = self
+                .conn
+                .prepare("SELECT job_id FROM jobs WHERE state='verifying'")?;
+            let ids = statement
+                .query_map([], |row| row.get::<_, String>(0))?
+                .collect::<Result<Vec<_>, _>>()?;
+            ids
+        };
+        let mut completed = 0;
+        for id in ids {
+            match self.recover_verifying_job(&id) {
+                Ok(_) => completed += 1,
+                Err(error) => {
+                    let state = self.get_job(&id)?.map(|job| job.state);
+                    if !matches!(state, Some(JobState::Completed | JobState::Failed))
+                        && error.code != "JOB_STATE_CONFLICT"
+                    {
+                        return Err(error);
+                    }
+                }
+            }
+        }
+        Ok(completed)
+    }
+
     /// Cancel a job left without an active worker, such as after app restart.
     /// Active workers use a cancellation flag and transition themselves.
     pub fn cancel_inactive_job(&mut self, job_id: &str) -> Result<Job, LedgerError> {
@@ -889,36 +981,7 @@ impl TaskStore {
         match result {
             Ok(_) => {
                 self.transition(job_id, job.state, JobState::Verifying, None, Utc::now())?;
-                match imagery::inspect_bundle(&destination) {
-                    Ok(manifest) => {
-                        self.transition(
-                            job_id,
-                            JobState::Verifying,
-                            JobState::Completed,
-                            None,
-                            Utc::now(),
-                        )?;
-                        if let (Ok(parent), Ok(root)) = (
-                            std::fs::canonicalize(&cache_parent),
-                            std::fs::canonicalize(&cache.root),
-                        ) {
-                            if root.parent() == Some(parent.as_path()) {
-                                let _ = std::fs::remove_dir_all(root);
-                            }
-                        }
-                        Ok(manifest)
-                    }
-                    Err(error) => {
-                        self.transition(
-                            job_id,
-                            JobState::Verifying,
-                            JobState::Failed,
-                            Some(error.code),
-                            Utc::now(),
-                        )?;
-                        Err(LedgerError::new(error.code, error.message))
-                    }
-                }
+                self.recover_verifying_job(job_id)
             }
             Err(error) => {
                 let next = match error.code {

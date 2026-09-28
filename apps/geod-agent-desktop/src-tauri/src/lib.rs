@@ -344,6 +344,27 @@ fn jobs_resume(state: State<'_, AppState>, job_id: String) -> Result<Job, AppErr
             message: "作业仍在停止中，请稍后继续".into(),
         });
     }
+    if job.state == geod_task_engine::ledger::JobState::Verifying {
+        let recovered = store.recover_verifying_job(&job_id);
+        let current = store.get_job(&job_id)?.ok_or_else(|| AppError {
+            code: "JOB_NOT_FOUND",
+            message: "任务不存在".into(),
+        });
+        return match (recovered, current) {
+            (Ok(_), Ok(current)) => Ok(current),
+            (Err(_), Ok(current))
+                if matches!(
+                    current.state,
+                    geod_task_engine::ledger::JobState::Completed
+                        | geod_task_engine::ledger::JobState::Failed
+                ) =>
+            {
+                Ok(current)
+            }
+            (Err(error), _) => Err(error.into()),
+            (_, Err(error)) => Err(error),
+        };
+    }
     if job.state == geod_task_engine::ledger::JobState::Failed {
         job = store.retry_failed_job(&job_id)?;
     } else if job.state == geod_task_engine::ledger::JobState::Paused {
@@ -656,6 +677,14 @@ pub fn run() {
             TaskStore::open(&db_path).map_err(|error| {
                 std::io::Error::other(format!("{}: {}", error.code, error.message))
             })?;
+            let recovery_path = db_path.clone();
+            tauri::async_runtime::spawn_blocking(move || {
+                if let Ok(mut store) = TaskStore::open(&recovery_path) {
+                    if let Err(error) = store.recover_verifying_jobs() {
+                        eprintln!("GeoD artifact recovery failed: {}", error.code);
+                    }
+                }
+            });
             app.manage(AppState {
                 db_path,
                 running_jobs: Arc::new(Mutex::new(HashMap::new())),
