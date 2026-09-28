@@ -35,12 +35,14 @@ export function readConfig(env = process.env) {
   if (!/^[a-zA-Z0-9._:/-]{1,128}$/.test(model)) throw new Error("LAOGAO_MODEL is invalid");
   const port = Number(env.GEOD_AGENT_LISTEN_PORT || 8786);
   if (!Number.isSafeInteger(port) || port < 1 || port > 65535) throw new Error("Gateway port is invalid");
+  const tokenLimit = Number(env.GEOD_AGENT_TOKEN_LIMIT || 100_000);
+  if (!Number.isSafeInteger(tokenLimit) || tokenLimit < 20_000 || tokenLimit > 100_000_000) throw new Error("GeoD Agent token limit is invalid");
   return {
     host, port, secret, apiKey, model,
     identityOrigin: safeUrl(env.GEOD_IDENTITY_ORIGIN, "GEOD_IDENTITY_ORIGIN"),
     upstreamBase: safeUrl(env.LAOGAO_BASE_URL || "http://127.0.0.1:19094/v1", "LAOGAO_BASE_URL"),
     dbPath: resolve(env.GEOD_AGENT_DB_PATH || "./data/agent-model.sqlite"),
-    tokenLimit: Number(env.GEOD_AGENT_TOKEN_LIMIT || 100_000),
+    tokenLimit,
   };
 }
 function json(response, status, value) {
@@ -80,7 +82,7 @@ async function identity(config, token, fetchImpl) {
   if (!/^[A-Za-z0-9_-]{43}$/.test(token)) throw new HttpError(401, "UNAUTHORIZED");
   let response;
   try {
-    response = await fetchImpl(`${config.identityOrigin}/api/geod/oauth/introspect`, { method: "POST", headers: { authorization: `Bearer ${config.secret}`, "content-type": "application/json" }, body: JSON.stringify({ token }), signal: AbortSignal.timeout(8000) });
+    response = await fetchImpl(`${config.identityOrigin}/api/geod/oauth/introspect`, { method: "POST", redirect: "error", headers: { authorization: `Bearer ${config.secret}`, "content-type": "application/json" }, body: JSON.stringify({ token }), signal: AbortSignal.timeout(8000) });
   } catch { throw new HttpError(503, "IDENTITY_UNAVAILABLE"); }
   if (!response.ok) throw new HttpError(503, "IDENTITY_UNAVAILABLE");
   let data;
@@ -118,7 +120,7 @@ export function createGatewayServer(config, { fetchImpl = fetch } = {}) {
       let upstream;
       try {
         upstream = await fetchImpl(`${config.upstreamBase}/chat/completions`, {
-          method: "POST", headers: { authorization: `Bearer ${config.apiKey}`, "content-type": "application/json" },
+          method: "POST", redirect: "error", headers: { authorization: `Bearer ${config.apiKey}`, "content-type": "application/json" },
           body: JSON.stringify({ model: config.model, messages: [{ role: "system", content: SYSTEM }, ...messages], tools: TOOLS, tool_choice: "auto", max_tokens: 1024, stream: false }),
           signal: AbortSignal.timeout(45_000),
         });

@@ -143,6 +143,7 @@ fn load_config(path: &PathBuf) -> Result<ServiceConfig, ServiceError> {
 }
 fn client() -> Result<Client, ServiceError> {
     Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
         .timeout(Duration::from_secs(55))
         .build()
         .map_err(|_| error("NETWORK_ERROR", "网络客户端初始化失败"))
@@ -185,10 +186,16 @@ fn get_access_token(state: &ServiceState, config: &ServiceConfig) -> Result<Stri
         .send()
         .map_err(|_| error("IDENTITY_UNAVAILABLE", "GeoD 身份服务暂时不可达"))?;
     if !response.status().is_success() {
-        if response.status().is_client_error() {
+        if matches!(
+            response.status(),
+            reqwest::StatusCode::BAD_REQUEST
+                | reqwest::StatusCode::UNAUTHORIZED
+                | reqwest::StatusCode::FORBIDDEN
+        ) {
             delete_tokens()?;
+            return Err(error("AUTH_EXPIRED", "GeoD 授权已失效，请重新登录"));
         }
-        return Err(error("AUTH_EXPIRED", "GeoD 授权已失效，请重新登录"));
+        return Err(error("IDENTITY_UNAVAILABLE", "GeoD 身份服务暂时不可达"));
     }
     let refreshed: TokenResponse = response
         .json()
@@ -253,16 +260,34 @@ pub fn auth_status(state: State<'_, ServiceState>) -> Result<AuthStatus, Service
             })
         }
     };
-    let _guard = state
-        .credential_lock
-        .lock()
-        .expect("credential mutex poisoned");
-    if let Some(tokens) = read_tokens()? {
+    let tokens = {
+        let _guard = state
+            .credential_lock
+            .lock()
+            .expect("credential mutex poisoned");
+        read_tokens()?
+    };
+    if let Some(tokens) = tokens {
         if tokens.identity_origin == config.identity_origin {
+            let refresh_error = if tokens.access_expires_at <= unix_seconds() + 30 {
+                match get_access_token(&state, &config) {
+                    Ok(_) => None,
+                    Err(cause) if cause.code == "AUTH_EXPIRED" || cause.code == "AUTH_REQUIRED" => {
+                        return Ok(AuthStatus {
+                            state: "disconnected",
+                            user_id: None,
+                            error: Some(cause.message),
+                        });
+                    }
+                    Err(cause) => Some(cause.message),
+                }
+            } else {
+                None
+            };
             return Ok(AuthStatus {
                 state: "connected",
                 user_id: Some(tokens.user_id),
-                error: None,
+                error: refresh_error,
             });
         }
     }
@@ -283,6 +308,24 @@ fn send_page(stream: &mut std::net::TcpStream, success: bool) {
     let status = if success { "200 OK" } else { "400 Bad Request" };
     let _ = write!(stream, "HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n{body}", body.len());
 }
+fn read_callback_headers(reader: &mut impl Read) -> Option<String> {
+    let mut buffer = [0_u8; 8192];
+    let mut length = 0;
+    while length < buffer.len() {
+        let read = reader.read(&mut buffer[length..]).ok()?;
+        if read == 0 {
+            return None;
+        }
+        length += read;
+        if let Some(end) = buffer[..length]
+            .windows(4)
+            .position(|part| part == b"\r\n\r\n")
+        {
+            return Some(String::from_utf8_lossy(&buffer[..end + 4]).into_owned());
+        }
+    }
+    None
+}
 fn complete_flow(
     listener: TcpListener,
     expected_state: String,
@@ -297,13 +340,15 @@ fn complete_flow(
     while Instant::now() < deadline {
         match listener.accept() {
             Ok((mut stream, _)) => {
+                let _ = stream.set_nonblocking(false);
                 let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
-                let mut buffer = [0_u8; 8192];
-                let length = match stream.read(&mut buffer) {
-                    Ok(length) => length,
-                    Err(_) => continue,
+                let request = match read_callback_headers(&mut stream) {
+                    Some(request) => request,
+                    None => {
+                        send_page(&mut stream, false);
+                        continue;
+                    }
                 };
-                let request = String::from_utf8_lossy(&buffer[..length]);
                 let first = request.lines().next().unwrap_or("");
                 let host = request
                     .lines()
@@ -445,6 +490,12 @@ pub fn auth_begin(
         flow.pending = true;
         flow.error = None;
     }
+    if app.opener().open_url(url.as_str(), None::<&str>).is_err() {
+        let mut flow = state.flow.lock().expect("flow mutex poisoned");
+        flow.pending = false;
+        flow.error = Some("无法打开系统浏览器".into());
+        return Err(error("BROWSER_UNAVAILABLE", "无法打开系统浏览器"));
+    }
     let flow = Arc::clone(&state.flow);
     let credential_lock = Arc::clone(&state.credential_lock);
     thread::spawn(move || {
@@ -458,12 +509,6 @@ pub fn auth_begin(
             credential_lock,
         )
     });
-    if app.opener().open_url(url.as_str(), None::<&str>).is_err() {
-        let mut flow = state.flow.lock().expect("flow mutex poisoned");
-        flow.pending = false;
-        flow.error = Some("无法打开系统浏览器".into());
-        return Err(error("BROWSER_UNAVAILABLE", "无法打开系统浏览器"));
-    }
     Ok(AuthStatus {
         state: "waiting",
         user_id: None,
@@ -520,6 +565,51 @@ mod tests {
         assert!(validate_origin("http://example.com").is_err());
         assert!(validate_origin("https://example.com/path").is_err());
         assert!(validate_origin("https://user:password@example.com").is_err());
+    }
+
+    #[test]
+    fn credentials_are_not_sent_to_redirect_targets() {
+        let redirect = TcpListener::bind("127.0.0.1:0").unwrap();
+        let target = TcpListener::bind("127.0.0.1:0").unwrap();
+        target.set_nonblocking(true).unwrap();
+        let redirect_url = format!("http://{}", redirect.local_addr().unwrap());
+        let target_url = format!("http://{}", target.local_addr().unwrap());
+        let server = thread::spawn(move || {
+            let (mut stream, _) = redirect.accept().unwrap();
+            let mut request = [0_u8; 2048];
+            let _ = stream.read(&mut request).unwrap();
+            write!(stream, "HTTP/1.1 302 Found\r\nLocation: {target_url}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").unwrap();
+        });
+        let response = client()
+            .unwrap()
+            .post(redirect_url)
+            .bearer_auth("test-secret")
+            .send()
+            .unwrap();
+        server.join().unwrap();
+        assert_eq!(response.status(), reqwest::StatusCode::FOUND);
+        assert!(
+            matches!(target.accept(), Err(error) if error.kind() == std::io::ErrorKind::WouldBlock)
+        );
+    }
+
+    #[test]
+    fn callback_headers_can_arrive_in_fragments() {
+        struct Fragments<'a>(&'a [u8]);
+        impl Read for Fragments<'_> {
+            fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+                let count = self.0.len().min(buffer.len()).min(3);
+                buffer[..count].copy_from_slice(&self.0[..count]);
+                self.0 = &self.0[count..];
+                Ok(count)
+            }
+        }
+        let request =
+            b"GET /oauth/callback?code=abc HTTP/1.1\r\nHost: 127.0.0.1:12345\r\n\r\nextra";
+        assert_eq!(
+            read_callback_headers(&mut Fragments(request)).as_deref(),
+            Some("GET /oauth/callback?code=abc HTTP/1.1\r\nHost: 127.0.0.1:12345\r\n\r\n")
+        );
     }
 }
 

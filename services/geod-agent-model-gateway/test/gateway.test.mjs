@@ -90,3 +90,40 @@ test("ambiguous upstream failure remains reserved for reconciliation", async () 
 test("public HTTP upstream and identity are rejected except loopback", () => {
   assert.throws(() => readConfig({ GEOD_AGENT_GATEWAY_SECRET: SECRET, LAOGAO_API_KEY: "key", LAOGAO_MODEL: "model", GEOD_IDENTITY_ORIGIN: "http://example.com", LAOGAO_BASE_URL: "http://127.0.0.1:19094/v1" }), /HTTPS/);
 });
+
+test("identity and upstream redirects cannot forward credentials", async () => {
+  let forwarded = 0;
+  const destination = createServer((_request, response) => { forwarded++; response.end("unexpected"); });
+  const destinationOrigin = await listen(destination);
+  const redirectIdentity = createServer((_request, response) => {
+    response.writeHead(307, { location: `${destinationOrigin}/identity` }); response.end();
+  });
+  const identityOrigin = await listen(redirectIdentity);
+  const redirectUpstream = createServer((_request, response) => {
+    response.writeHead(307, { location: `${destinationOrigin}/upstream` }); response.end();
+  });
+  const upstreamOrigin = await listen(redirectUpstream);
+  const identityConfig = readConfig({ GEOD_AGENT_GATEWAY_SECRET: SECRET, LAOGAO_API_KEY: "project-key", LAOGAO_MODEL: "fake-geod-model", GEOD_IDENTITY_ORIGIN: identityOrigin, LAOGAO_BASE_URL: `${upstreamOrigin}/v1`, GEOD_AGENT_DB_PATH: join(folder, "identity-redirect.sqlite") });
+  const upstreamConfig = readConfig({ GEOD_AGENT_GATEWAY_SECRET: SECRET, LAOGAO_API_KEY: "project-key", LAOGAO_MODEL: "fake-geod-model", GEOD_IDENTITY_ORIGIN: `http://127.0.0.1:${identityServer.address().port}`, LAOGAO_BASE_URL: `${upstreamOrigin}/v1`, GEOD_AGENT_DB_PATH: join(folder, "upstream-redirect.sqlite") });
+  const identityGateway = createGatewayServer(identityConfig);
+  const upstreamGateway = createGatewayServer(upstreamConfig);
+  const identityBase = await listen(identityGateway);
+  const upstreamBase = await listen(upstreamGateway);
+  try {
+    const headers = { authorization: `Bearer ${TOKEN}` };
+    assert.equal((await fetch(`${identityBase}/api/agent/usage`, { headers })).status, 503);
+    const response = await fetch(`${upstreamBase}/api/agent/generations`, { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify({ generationId: "redirect-01", conversationId: "redirect-02", messages: [{ role: "user", content: "sources?" }] }) });
+    assert.equal(response.status, 202);
+    assert.equal((await response.json()).state, "pending_reconcile");
+    assert.equal(forwarded, 0);
+  } finally {
+    await Promise.all([close(identityGateway), close(upstreamGateway), close(redirectIdentity), close(redirectUpstream), close(destination)]);
+  }
+});
+
+test("token limits reject invalid quota configuration", () => {
+  const config = { GEOD_AGENT_GATEWAY_SECRET: SECRET, LAOGAO_API_KEY: "key", LAOGAO_MODEL: "model", GEOD_IDENTITY_ORIGIN: "http://127.0.0.1:8787" };
+  for (const limit of ["-1", "NaN", "19999", "100000001"]) {
+    assert.throws(() => readConfig({ ...config, GEOD_AGENT_TOKEN_LIMIT: limit }), /token limit/);
+  }
+});
