@@ -40,6 +40,10 @@
 
 桌面 OAuth 的并发入口已收紧：预检前占用授权流程，第二次触发直接返回进行中；失败路径释放占用。无浏览器测试、NSIS 隔离升级和已批准 USGS 成果只读复检通过，安装包哈希已更新。此检查不代表生产账号服务上线。
 
+2026-09-28 19:49（北京时间）再次只读核对：Studio 与网站 release symlink 仍为上文基线；9114 的 OAuth 授权接口返回 404，9115 没有监听；Studio 健康接口返回 200，`nginx -t` 通过，服务器可用空间约 56 GiB。Nginx 网站配置通过 `/srv/laogao/config/geod/routes.conf` 仅公开列明的账号与 Studio 路径，并保留 `/api/` 的 404 兜底。本地已准备 [限定路由配置](../../deploy/nginx/geod-agent-routes.conf)：只开放三个桌面 OAuth 入口与 `/api/agent/`，`introspect` 继续不公开；须在服务本机验收后、备份 routes.conf 后追加，并由生产 `nginx -t` 验证再 reload。此配置尚未上传或在生产 Nginx 中试装。
+
+只检查了服务器 `/srv/laogao/secrets/geod-studio.env` 及同目录顶层 `*.env` 的变量**名称**，未发现 `DEEPSEEK_API_KEY` 或 `GEOD_AGENT_GATEWAY_SECRET`；没有读取或打印密钥值。这不证明其他位置不存在 DeepSeek 密钥。部署前仍须确认官方 DeepSeek 密钥来源，在受限服务端环境文件中设置它，并为 Studio 与 Agent 网关生成独立共享密钥；不得把它们写入归档或仓库。三个 Linux 发布包和本轮 NSIS 包的 SHA-256 已重新核对，与上表一致。
+
 ## 获批后的顺序
 
 1. 再次核对当前 GeoD Studio、网站 symlink 及 Nginx 配置未漂移。对账号 `store.json` 做 JSON 解析检查；在有写入可能时先做一致性备份。备份现有 PM2 与 Nginx 配置。新网关 SQLite 创建后运行 `PRAGMA quick_check`。保留完整旧发布与回滚链接。
