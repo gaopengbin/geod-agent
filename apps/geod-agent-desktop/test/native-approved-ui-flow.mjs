@@ -90,12 +90,11 @@ try {
   assert.deepEqual(stored.plan.spec.outputFormats, ["geotiff", "mbtiles"]);
   assert.equal(stored.plan.totalTiles, 90);
   assert.equal(stored.plan.requiredFreeDiskBytes, 114098176);
-  assert.ok(Date.parse(stored.plan.expiresAt) > Date.now() + 60_000, "Approved plan is too close to expiry");
   const existing = await invoke("jobs_for_plan", { planId: approved.planId });
   if (existing) {
     assert.equal(existing.planHash, approved.hash);
     assert.equal(existing.state, "failed", "Only an existing failed job can be retried by this harness");
-  }
+  } else assert.ok(Date.parse(stored.plan.expiresAt) > Date.now() + 60_000, "New approval requires a live plan");
   console.log(JSON.stringify({ phase: "preflight", planHash: approved.hash, tiles: 90, output: approved.output, existingJob: existing?.jobId || null, appPid: app.pid }));
 
   const chatPosition = await waitFor(async () => evaluate(`(() => { const raw = localStorage.getItem('geod-agent-conversations-0.1:account:' + ${JSON.stringify(status.userId)}); const chats = JSON.parse(raw || '[]'); return chats.findIndex(chat => chat.planId === ${JSON.stringify(approved.planId)}) + 1; })()`), "approved plan conversation");
