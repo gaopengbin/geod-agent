@@ -28,7 +28,7 @@ npm run tauri:dev
 npm run tauri:build
 ```
 
-安装包在 `apps/geod-agent-desktop/src-tauri/target/release/bundle/nsis/GeoD Agent_0.1.0_x64-setup.exe`。浏览器 `npm run dev` 只提供界面预览，Tauri IPC 不可用。
+安装包在 `apps/geod-agent-desktop/src-tauri/target/release/bundle/nsis/GeoD Agent_0.1.0_x64-setup.exe`。2026-09-28 已在本机以 NSIS 静默模式安装到隔离测试目录：安装目录包含应用与卸载程序，HKCU 有 GeoD Agent 卸载记录；从安装目录启动后主窗口标题为 GeoD Agent、进程可响应，应用创建了 schema v2 的本地任务数据库。随后正常关闭窗口，静默卸载返回 0，安装目录与卸载记录消失；确认只含本次测试数据库后清理了测试 AppData。此项证明安装和启动，不证明原生界面的图源登记、批准、地图与下载交互已通过。浏览器 `npm run dev` 只提供界面预览，Tauri IPC 不可用。
 
 模型网关需先配置本地环境变量：`GEOD_IDENTITY_ORIGIN`、`GEOD_AGENT_GATEWAY_SECRET`（与身份服务相同且至少 32 字符）、`LAOGAO_BASE_URL`（优先本机加密隧道）、`LAOGAO_API_KEY`（本产品独立的 New API 下游密钥）、`LAOGAO_MODEL`、`GEOD_AGENT_TOKEN_LIMIT` 与数据库路径。参考 `services/geod-agent-model-gateway/.env.example`，密钥不得写入仓库。设置后运行 `npm ci; npm test; npm start`。桌面应用首次在智能助手内设置身份站点和模型网关的 HTTPS 地址；本地联调可用 `127.0.0.1` HTTP。
 
@@ -36,7 +36,7 @@ npm run tauri:build
 
 ## 验证与未完成项
 
-- 已通过：`geod-core` 12 测试、`geod-task-engine` 17 测试、模型网关 5 测试、GeoD OAuth 3 测试；桌面前端构建、Rust Clippy `-D warnings`、NSIS 安装包构建。浏览器预览已检查助手抽屉；原生窗口还需安装后交互测试。作业恢复及成果查看会核对成果的作业 ID，不会将其他作业的有效目录误认作自己的结果。
+- 已通过：`geod-core` 12 测试、`geod-task-engine` 17 测试、模型网关 5 测试、GeoD OAuth 3 测试；桌面前端构建、Rust Clippy `-D warnings`、NSIS 安装包构建与隔离安装/启动/卸载冒烟。浏览器预览已检查助手抽屉；原生窗口仍需交互测试。作业恢复及成果查看会核对成果的作业 ID，不会将其他作业的有效目录误认作自己的结果。
 - 模型网关的工具调用与续答目前使用本地假身份服务和假上游模型验证。尚缺产品独立 New API 密钥、选定真实模型的工具调用/用量测试以及部署后的真实 GeoD 登录验收。
 - 桌面任务已保存带计划和图源版本绑定的瓦片检查点；恢复时逐片核对大小、SHA-256 与像素尺寸，已校验瓦片不重复请求。网络暂时故障可在同一批准和作业 ID 下重试；主动暂停与崩溃后恢复均保留原批准和作业 ID。多边形导入、复杂边界掩膜、更多数据类型、源凭据引用与干净 Windows 安装回归尚未完成。
 - 安装包未签名，尚未向用户发布或部署身份服务、网关。
