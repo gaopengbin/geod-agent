@@ -605,6 +605,60 @@ mod tests {
         assert_eq!(first, credential_account("http://127.0.0.1:41001"));
     }
 
+    #[cfg(windows)]
+    #[test]
+    fn expired_local_login_refreshes_silently_and_survives_state_recreation() {
+        struct CredentialCleanup(String);
+        impl Drop for CredentialCleanup {
+            fn drop(&mut self) {
+                let _ = delete_tokens(&self.0);
+            }
+        }
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let origin = format!("http://{}", listener.local_addr().unwrap());
+        let cleanup = CredentialCleanup(origin.clone());
+        let old_refresh = "r".repeat(43);
+        write_tokens(&Tokens {
+            identity_origin: origin.clone(),
+            access_token: "a".repeat(43),
+            refresh_token: old_refresh.clone(),
+            user_id: "isolated-refresh-test".into(),
+            access_expires_at: unix_seconds().saturating_sub(1),
+        })
+        .unwrap();
+        let new_access = "b".repeat(43);
+        let server_access = new_access.clone();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = [0_u8; 4096];
+            let count = stream.read(&mut request).unwrap();
+            assert!(String::from_utf8_lossy(&request[..count])
+                .starts_with("POST /api/geod/oauth/token "));
+            let response = serde_json::json!({
+                "access_token": server_access,
+                "refresh_token": "s".repeat(43),
+                "user_id": "isolated-refresh-test",
+                "expires_in": 3600,
+            })
+            .to_string();
+            write!(stream, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{response}", response.len()).unwrap();
+        });
+        let config = ServiceConfig {
+            identity_origin: origin.clone(),
+            gateway_origin: origin.clone(),
+        };
+        let first_state = ServiceState::new(PathBuf::new());
+        assert_eq!(get_access_token(&first_state, &config).unwrap(), new_access);
+        server.join().unwrap();
+        let persisted = read_tokens(&origin).unwrap().unwrap();
+        assert_eq!(persisted.refresh_token, "s".repeat(43));
+        let restarted_state = ServiceState::new(PathBuf::new());
+        assert_eq!(get_access_token(&restarted_state, &config).unwrap(), new_access);
+        drop(cleanup);
+        assert!(read_tokens(&origin).unwrap().is_none());
+    }
+
     #[test]
     fn login_preflight_requires_the_geod_oauth_route() {
         for (status, body, available) in [
