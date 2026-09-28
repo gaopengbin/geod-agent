@@ -7,7 +7,8 @@
     "start": "node server.mjs",
     "reconcile": "node reconcile.mjs",
     "test": "node --test test/*.test.mjs",
-    "smoke:deepseek": "node test/live-smoke.mjs"
+    "smoke:deepseek": "node test/live-smoke.mjs",
+    "smoke:native": "node test/native-live-smoke.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^12.0.0"

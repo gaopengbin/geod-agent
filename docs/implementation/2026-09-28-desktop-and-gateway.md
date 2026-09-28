@@ -42,6 +42,7 @@ npm run tauri:build
 ## 验证与未完成项
 
 - 已通过：`geod-core` 12 测试、`geod-task-engine` 17 测试、模型网关 7 测试、桌面服务 3 测试、GeoD OAuth 3 测试；桌面前端构建、Rust Clippy `-D warnings`、NSIS 安装包构建与隔离安装/启动/卸载冒烟。原生窗口中用户批准的计划已走完图源登记、批准、下载和成果核验。作业恢复及成果查看会核对成果的作业 ID，不会将其他作业的有效目录误认作自己的结果。
-- 网关单元测试使用本地假身份服务和假 DeepSeek 响应。另用旧 GeoD 网关本地配置中已有的 DeepSeek 密钥，只在一次测试进程内调用官方 API：真实 `deepseek-flash` 先发出 `sources_list` 工具调用，接收测试图源结果后续答；两次请求实际结算 1,552 token，保留额度归零。密钥未写入本仓库。可在服务端设置 `DEEPSEEK_API_KEY` 后运行 `npm run smoke:deepseek` 复验。该测试的账号鉴权和本机图源结果仍为模拟，真实 GeoD 登录及桌面会话尚未验收。
+- 网关单元测试使用本地假身份服务和假 DeepSeek 响应。另用旧 GeoD 网关本地配置中已有的 DeepSeek 密钥，只在测试进程内调用官方 API：真实 `deepseek-flash` 先发出 `sources_list` 工具调用，接收测试图源结果后续答；两次请求实际结算 1,552 token，保留额度归零。密钥未写入本仓库。可在服务端设置 `DEEPSEEK_API_KEY` 后运行 `npm run smoke:deepseek` 复验。
+- 原生桌面联调使用本地模拟的 GeoD OAuth 服务和真实 DeepSeek API：浏览器授权码及 PKCE 回跳进入 Windows 凭据库；桌面界面读取本机 1 个已授权 USGS 图源，并完成 `sources_list → 本机工具结果 → DeepSeek 续答`，结算 1,712 token，保留额度为 0。测试未发起下载，结束时调用登出并清理测试对话。可先构建 Release 可执行文件，在网关目录设置 `DEEPSEEK_API_KEY` 后运行 `npm run smoke:native` 复验。线上 GeoD OAuth 路由仍未发布，真实账号登录后的完整链路尚未验收。
 - 桌面任务已保存带计划和图源版本绑定的瓦片检查点；恢复时逐片核对大小、SHA-256 与像素尺寸，已校验瓦片不重复请求。网络暂时故障可在同一批准和作业 ID 下重试；主动暂停与崩溃后恢复均保留原批准和作业 ID。多边形导入、复杂边界掩膜、更多数据类型、源凭据引用与干净 Windows 安装回归尚未完成。
 - 安装包未签名，尚未向用户发布或部署身份服务、网关。
