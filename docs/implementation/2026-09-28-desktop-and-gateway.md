@@ -15,6 +15,7 @@
 - 图源：USGS `USGSNAIPPlus/ImageServer/exportImage`；测试范围为美国本土华盛顿区域 `[-77.05, 38.85, -77.04, 38.86]`，Z12。源服务返回 `image/png`，本机成功下载、拼接并重新检查 GeoTIFF、MBTiles、预览和 manifest。
 - 裁剪后 GeoTIFF 为 30×38 像素；像素边缘足迹 `[-77.0502090454, 38.8498686695, -77.0399093628, 38.8600282742]`。MBTiles 含 1 个原始完整瓦片；manifest `missingTiles=0`。
 - 512 像素同源样本用 `cargo run --example usgs_naip -- <new-absolute-output-directory> 512` 验证，最新结果在 `artifacts/usgs-naip-20260928-dc-512-georef/`。GeoTIFF 59×76 像素，预览保持相同尺寸；重新打开后对 GeoTIFF 坐标系、比例尺、定位点、manifest 足迹与 SHA-256 做一致性检查，MBTiles 完整性检查通过，`missingTiles=0`。这是核心引擎的真实图源验证，尚不是安装后桌面全链验收。
+- 同桌面后端的账本路径另用 `cargo run --example usgs_approved_job -- <new-output-dir> <new-sqlite-file> [256|512]` 完成真实图源登记→计划→批准→作业→成果按作业 ID 检查。256/512 两档均得到 `Completed`、1 瓦片、3 项成果、`missingTiles=0`；本地证据分别在 `artifacts/usgs-approved-20260928-256/`、`artifacts/usgs-approved-20260928-512/` 和同名 SQLite 文件。示例中的批准由测试程序显式执行，不等于桌面界面人工批准已验收。
 - 复现：`cd crates/geod-core; cargo run --example usgs_naip -- <new-absolute-output-directory>`。每次输出目录须不存在，避免覆盖。样本成果在本地 `artifacts/usgs-naip-20260928-dc-cropped/`，已从 Git 忽略。
 - [USGS National Map 许可说明](https://www.usgs.gov/faqs/what-are-terms-uselicensing-map-services-and-data-national-map)说明地图服务与数据属于公共领域并请求署名；[影像服务元数据](https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPPlus/ImageServer)描述了覆盖与来源。这个预设仅用于美国本土，其他地区及图源由用户核对授权。
 

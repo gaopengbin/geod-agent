@@ -31,6 +31,14 @@ impl LedgerError {
     }
 }
 
+impl std::fmt::Display for LedgerError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "{}: {}", self.code, self.message)
+    }
+}
+
+impl std::error::Error for LedgerError {}
+
 impl From<rusqlite::Error> for LedgerError {
     fn from(error: rusqlite::Error) -> Self {
         Self::new("STORAGE_ERROR", error.to_string())

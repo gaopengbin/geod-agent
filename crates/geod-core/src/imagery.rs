@@ -1067,12 +1067,16 @@ pub fn inspect_bundle(root: &Path) -> Result<Manifest, CoreError> {
                     "GeoTIFF CRS does not match manifest",
                 ));
             }
-            let scale = decoder.get_tag_f64_vec(Tag::ModelPixelScaleTag).map_err(|_| {
-                CoreError::new("ARTIFACT_INCOMPLETE", "GeoTIFF scale tag is missing")
-            })?;
-            let tie = decoder.get_tag_f64_vec(Tag::ModelTiepointTag).map_err(|_| {
-                CoreError::new("ARTIFACT_INCOMPLETE", "GeoTIFF tie point is missing")
-            })?;
+            let scale = decoder
+                .get_tag_f64_vec(Tag::ModelPixelScaleTag)
+                .map_err(|_| {
+                    CoreError::new("ARTIFACT_INCOMPLETE", "GeoTIFF scale tag is missing")
+                })?;
+            let tie = decoder
+                .get_tag_f64_vec(Tag::ModelTiepointTag)
+                .map_err(|_| {
+                    CoreError::new("ARTIFACT_INCOMPLETE", "GeoTIFF tie point is missing")
+                })?;
             let [west, south, east, north] = item.bounds;
             if scale.len() != 3
                 || tie.len() != 6
