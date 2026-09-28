@@ -24,6 +24,7 @@ BACKUP = BASE / "backups/geod-agent-20260928-65b5e65d"
 EXPECTED_HASH = "d408012d2c89ac94f8781c1e64a10d8a5597c7008eb644794438637d2e4e810b"
 OLD_NAME = "geod-studio-geod-oauth-20260928"
 NEW_NAME = "geod-studio-geod-consent-20260928"
+BACKUP_LABEL = "geod-consent-20260928"
 
 
 def request(port, path, method="GET", body=None, headers=None):
@@ -142,8 +143,8 @@ def switch():
         raise RuntimeError("Studio release changed before switch")
     if (NEW / "web/candidate-ok.txt").read_text(encoding="ascii").strip() != EXPECTED_HASH:
         raise RuntimeError("Candidate smoke marker missing or mismatched")
-    symlink_backup = BACKUP / "studio-before-geod-consent-20260928.txt"
-    account_backup = BACKUP / "account-store-before-geod-consent-20260928.json"
+    symlink_backup = BACKUP / f"studio-before-{BACKUP_LABEL}.txt"
+    account_backup = BACKUP / f"account-store-before-{BACKUP_LABEL}.json"
     if symlink_backup.exists() or account_backup.exists():
         raise RuntimeError("Consent release backup already exists")
     account_dir = None
