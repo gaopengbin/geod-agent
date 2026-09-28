@@ -1,0 +1,21 @@
+# Build outputs and local state
+target/
+node_modules/
+dist/
+.vite/
+.turbo/
+*.log
+*.db
+*.sqlite
+*.sqlite3
+*.db-wal
+*.db-shm
+.env
+.env.*
+!.env.example
+
+# Editor and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

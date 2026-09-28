@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="950" viewBox="0 0 1600 950" role="img" aria-labelledby="title desc">
+  <title id="title">GeoD Agent 桌面工作区视觉示意</title>
+  <desc id="desc">左侧是任务对话，中间是带瓦片格网和裁剪边界的地图，右侧是待确认下载计划。所有地图和数字均为示意。</desc>
+  <defs>
+    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#11BBE9"/><stop offset=".45" stop-color="#1875F0"/><stop offset="1" stop-color="#0637B0"/></linearGradient>
+    <pattern id="tiles" width="72" height="72" patternUnits="userSpaceOnUse"><path d="M72 0H0V72" fill="none" stroke="#1875F0" stroke-width="1.5" stroke-opacity=".4"/></pattern>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M32 0H0V32" fill="none" stroke="#C8D8EC" stroke-width="1" stroke-opacity=".45"/></pattern>
+    <filter id="shadow"><feDropShadow dx="0" dy="8" stdDeviation="14" flood-color="#284C7E" flood-opacity=".08"/></filter>
+    <clipPath id="mapClip"><rect x="375" y="188" width="798" height="588" rx="16"/></clipPath>
+  </defs>
+  <rect width="1600" height="950" fill="#F7F9FC"/>
+  <rect width="1600" height="72" fill="#FFFFFF"/>
+  <path d="M0 71.5H1600" stroke="#E4EBF4"/>
+  <rect x="25" y="20" width="35" height="35" rx="11" fill="url(#blue)"/>
+  <path d="M37 38a7 7 0 1 1 7 7h-3v-7h9" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="72" y="46" font-family="Inter, Microsoft YaHei, sans-serif" font-size="23" font-weight="800" fill="#202A3A">GeoD <tspan fill="#1769E8">Agent</tspan></text>
+  <text x="282" y="45" font-family="Microsoft YaHei, sans-serif" font-size="13" fill="#6A7788">地理数据获取与交付</text>
+  <g font-family="Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#526274">
+    <text x="1154" y="44">任务历史</text><text x="1253" y="44">图源</text><text x="1320" y="44">帮助</text>
+  </g>
+  <circle cx="1534" cy="36" r="20" fill="#E6F0FF"/><text x="1525" y="43" font-family="Microsoft YaHei, sans-serif" font-size="16" font-weight="700" fill="#1769E8">高</text>
+
+  <rect x="24" y="96" width="327" height="828" rx="20" fill="#FFFFFF" stroke="#E5ECF5" filter="url(#shadow)"/>
+  <text x="48" y="132" font-family="Microsoft YaHei, sans-serif" font-size="13" font-weight="700" letter-spacing="1" fill="#1769E8">当前任务</text>
+  <text x="48" y="171" font-family="Microsoft YaHei, sans-serif" font-size="23" font-weight="760" fill="#202A3A">下载并裁剪影像</text>
+  <text x="48" y="197" font-family="Microsoft YaHei, sans-serif" font-size="12" fill="#7A8796">今天 14:32 · 计划等待确认</text>
+  <path d="M48 216H327" stroke="#E8EDF4"/>
+  <rect x="48" y="238" width="276" height="89" rx="14" fill="#F5F8FC"/>
+  <text x="64" y="264" font-family="Microsoft YaHei, sans-serif" font-size="12" font-weight="700" fill="#596A7B">你</text>
+  <text x="64" y="287" font-family="Microsoft YaHei, sans-serif" font-size="14" fill="#202A3A">用我的影像源下载成都市这块</text>
+  <text x="64" y="309" font-family="Microsoft YaHei, sans-serif" font-size="14" fill="#202A3A">范围，15 级，按边界裁剪。</text>
+  <circle cx="62" cy="361" r="14" fill="url(#blue)"/>
+  <text x="57" y="366" font-family="Inter, sans-serif" font-size="14" font-weight="800" fill="#fff">G</text>
+  <text x="85" y="366" font-family="Microsoft YaHei, sans-serif" font-size="13" font-weight="700" fill="#304156">GeoD Agent</text>
+  <text x="48" y="399" font-family="Microsoft YaHei, sans-serif" font-size="14" fill="#405064">我已根据你画的范围生成计划。</text>
+  <text x="48" y="425" font-family="Microsoft YaHei, sans-serif" font-size="14" fill="#405064">预计 192 块瓦片，输出约 220 MB。</text>
+  <text x="48" y="451" font-family="Microsoft YaHei, sans-serif" font-size="14" fill="#405064">请在右侧检查图源和保存位置。</text>
+  <rect x="48" y="478" width="276" height="71" rx="14" fill="#EDF6FF" stroke="#CFDFFF"/>
+  <circle cx="68" cy="499" r="5" fill="#1769E8"/><text x="83" y="504" font-family="Microsoft YaHei, sans-serif" font-size="12" font-weight="700" fill="#1769E8">计划已生成</text>
+  <text x="64" y="529" font-family="Microsoft YaHei, sans-serif" font-size="13" fill="#405064">等待你确认后开始本地下载</text>
+  <path d="M48 830H327" stroke="#E8EDF4"/>
+  <rect x="48" y="850" width="276" height="52" rx="14" fill="#F7F9FC" stroke="#DDE6F1"/>
+  <text x="65" y="882" font-family="Microsoft YaHei, sans-serif" font-size="13" fill="#8B98A7">补充要求或调整计划…</text>
+  <circle cx="300" cy="876" r="15" fill="#1769E8"/><path d="m296 877 4-4 4 4m-4-4v8" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+
+  <rect x="375" y="96" width="798" height="828" rx="20" fill="#FFFFFF" stroke="#E5ECF5" filter="url(#shadow)"/>
+  <text x="400" y="132" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="750" fill="#202A3A">任务地图</text>
+  <text x="400" y="157" font-family="Microsoft YaHei, sans-serif" font-size="12" fill="#718093">检查边界、瓦片覆盖与成果实际足迹</text>
+  <rect x="989" y="111" width="158" height="38" rx="12" fill="#F5F8FC" stroke="#E1E9F3"/>
+  <text x="1007" y="135" font-family="Microsoft YaHei, sans-serif" font-size="12" fill="#596A7B">导入边界  ·  编辑</text>
+  <g clip-path="url(#mapClip)">
+    <rect x="375" y="188" width="798" height="588" fill="#EAF2F5"/>
+    <rect x="375" y="188" width="798" height="588" fill="url(#grid)"/>
+    <path d="M349 354C552 293 628 432 772 370S1036 280 1216 339" fill="none" stroke="#C8DED8" stroke-width="56" stroke-linecap="round"/>
+    <path d="M351 579C555 592 628 511 776 543S990 629 1208 588" fill="none" stroke="#DDE8DB" stroke-width="76" stroke-linecap="round"/>
+    <path d="M357 253C543 341 696 218 834 289S1021 432 1196 409M366 695C537 624 709 665 813 596S1076 516 1197 481" fill="none" stroke="#FDFEFE" stroke-width="17"/>
+    <path d="M477 188C524 364 603 482 679 775M872 179C849 338 932 461 1004 781" fill="none" stroke="#FFFFFF" stroke-width="11"/>
+    <path d="M557 201C638 313 698 301 805 417S1042 561 1184 687" fill="none" stroke="#BCDDE9" stroke-width="29" stroke-linecap="round"/>
+    <path d="M557 201C638 313 698 301 805 417S1042 561 1184 687" fill="none" stroke="#D6F3FB" stroke-width="18" stroke-linecap="round"/>
+    <text x="636" y="335" font-family="Microsoft YaHei, sans-serif" font-size="19" font-weight="700" fill="#738B97">成都</text>
+    <text x="1030" y="692" font-family="Microsoft YaHei, sans-serif" font-size="13" fill="#8EA0A9">示意地图</text>
+    <rect x="590" y="316" width="470" height="350" fill="url(#tiles)" opacity=".86"/>
+    <path d="M635 386 767 335 913 352 1036 431 1010 557 894 642 742 603 638 510Z" fill="#1769E8" fill-opacity=".17" stroke="#1769E8" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M635 386 767 335 913 352 1036 431 1010 557 894 642 742 603 638 510Z" fill="none" stroke="#FFFFFF" stroke-width="1.2" stroke-dasharray="6 7"/>
+    <circle cx="635" cy="386" r="5" fill="#fff" stroke="#1769E8" stroke-width="3"/><circle cx="1036" cy="431" r="5" fill="#fff" stroke="#1769E8" stroke-width="3"/><circle cx="742" cy="603" r="5" fill="#fff" stroke="#1769E8" stroke-width="3"/>
+  </g>
+  <rect x="395" y="207" width="173" height="40" rx="12" fill="#FFFFFF" stroke="#DDE7F2"/>
+  <circle cx="414" cy="227" r="5" fill="#1769E8"/>
+  <text x="429" y="232" font-family="Microsoft YaHei, sans-serif" font-size="12" font-weight="700" fill="#304156">计划覆盖 · 192 块</text>
+  <rect x="1014" y="213" width="135" height="64" rx="12" fill="#FFFFFF" stroke="#DDE7F2"/>
+  <text x="1030" y="236" font-family="Microsoft YaHei, sans-serif" font-size="11" fill="#7A8796">当前视图</text>
+  <text x="1030" y="257" font-family="Microsoft YaHei, sans-serif" font-size="13" font-weight="700" fill="#304156">成都市 · 已画边界</text>
+  <rect x="400" y="805" width="748" height="91" rx="15" fill="#F7F9FC" stroke="#E6EDF6"/>
+  <circle cx="423" cy="832" r="5" fill="#1769E8"/><text x="436" y="837" font-family="Microsoft YaHei, sans-serif" font-size="12" fill="#526274">蓝色边界：最终裁剪范围</text>
+  <path d="M675 832h15m-15-5v10m15-10v10" stroke="#1769E8" stroke-width="1.3"/><text x="704" y="837" font-family="Microsoft YaHei, sans-serif" font-size="12" fill="#526274">格网：计划获取的瓦片</text>
+  <text x="423" y="870" font-family="Microsoft YaHei, sans-serif" font-size="12" fill="#8A98A8">执行后这里将显示成功/缺失覆盖、真实影像足迹及透明裁剪区</text>
+
+  <rect x="1198" y="96" width="378" height="828" rx="20" fill="#FFFFFF" stroke="#E5ECF5" filter="url(#shadow)"/>
+  <text x="1222" y="133" font-family="Microsoft YaHei, sans-serif" font-size="21" font-weight="750" fill="#202A3A">下载计划</text>
+  <text x="1222" y="157" font-family="Microsoft YaHei, sans-serif" font-size="12" fill="#718093">你可以修改参数，再确认执行</text>
+  <rect x="1222" y="183" width="330" height="48" rx="13" fill="#E9F4FF"/>
+  <circle cx="1245" cy="207" r="11" fill="#1769E8"/><path d="m1240 207 4 4 7-8" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="1266" y="212" font-family="Microsoft YaHei, sans-serif" font-size="13" font-weight="700" fill="#1769E8">已通过来源与范围校验</text>
+  <g font-family="Microsoft YaHei, sans-serif">
+    <text x="1222" y="267" font-size="12" fill="#7A8796">图源</text><text x="1222" y="291" font-size="15" font-weight="650" fill="#202A3A">我的已授权影像源</text>
+    <text x="1222" y="333" font-size="12" fill="#7A8796">范围</text><text x="1222" y="357" font-size="15" font-weight="650" fill="#202A3A">地图上绘制的边界</text>
+    <text x="1222" y="399" font-size="12" fill="#7A8796">影像级别</text><text x="1222" y="423" font-size="15" font-weight="650" fill="#202A3A">15 级</text>
+    <text x="1222" y="465" font-size="12" fill="#7A8796">输出</text><text x="1222" y="489" font-size="15" font-weight="650" fill="#202A3A">GeoTIFF + 离线瓦片包</text>
+  </g>
+  <path d="M1222 519H1552" stroke="#E8EDF4"/>
+  <text x="1222" y="551" font-family="Microsoft YaHei, sans-serif" font-size="13" font-weight="700" fill="#304156">资源估算</text>
+  <rect x="1222" y="570" width="156" height="83" rx="13" fill="#F6F9FC"/>
+  <text x="1239" y="597" font-family="Microsoft YaHei, sans-serif" font-size="12" fill="#7A8796">计划瓦片</text>
+  <text x="1239" y="628" font-family="Inter, sans-serif" font-size="25" font-weight="750" fill="#202A3A">192</text>
+  <rect x="1390" y="570" width="162" height="83" rx="13" fill="#F6F9FC"/>
+  <text x="1407" y="597" font-family="Microsoft YaHei, sans-serif" font-size="12" fill="#7A8796">预计输出</text>
+  <text x="1407" y="628" font-family="Inter, sans-serif" font-size="25" font-weight="750" fill="#202A3A">220 MB</text>
+  <rect x="1222" y="670" width="330" height="65" rx="13" fill="#FFF8EA" stroke="#F4DDB0"/>
+  <text x="1238" y="695" font-family="Microsoft YaHei, sans-serif" font-size="12" font-weight="700" fill="#935B12">请确认来源许可与下载额度</text>
+  <text x="1238" y="718" font-family="Microsoft YaHei, sans-serif" font-size="12" fill="#765F3E">实际流量和大小可能与估算不同</text>
+  <text x="1222" y="776" font-family="Microsoft YaHei, sans-serif" font-size="12" fill="#7A8796">保存到</text>
+  <text x="1222" y="800" font-family="Inter, Microsoft YaHei, sans-serif" font-size="13" font-weight="650" fill="#304156">GeoD / 我的任务 / 成都影像</text>
+  <rect x="1222" y="833" width="330" height="57" rx="15" fill="#1769E8"/>
+  <text x="1313" y="869" font-family="Microsoft YaHei, sans-serif" font-size="15" font-weight="700" fill="#FFFFFF">确认并在本机下载</text>
+  <text x="1240" y="916" font-family="Microsoft YaHei, sans-serif" font-size="11" fill="#A1ADBB">概念示意 · 数字和地图均非真实下载计划</text>
+</svg>
