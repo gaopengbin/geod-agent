@@ -135,10 +135,27 @@ fn validate_config(config: ServiceConfig) -> Result<ServiceConfig, ServiceError>
     })
 }
 fn load_config(path: &PathBuf) -> Result<ServiceConfig, ServiceError> {
-    let value = fs::read_to_string(path)
-        .map_err(|_| error("SERVICE_NOT_CONFIGURED", "请先设置 GeoD 身份和模型服务地址"))?;
-    let config: ServiceConfig = serde_json::from_str(&value)
-        .map_err(|_| error("SERVICE_NOT_CONFIGURED", "服务配置损坏"))?;
+    let config: ServiceConfig = match fs::read_to_string(path) {
+        Ok(value) => serde_json::from_str(&value)
+            .map_err(|_| error("SERVICE_NOT_CONFIGURED", "服务配置损坏"))?,
+        Err(io_error) if io_error.kind() == std::io::ErrorKind::NotFound => {
+            let identity_origin = std::env::var("GEOD_AGENT_IDENTITY_ORIGIN")
+                .ok()
+                .or_else(|| option_env!("GEOD_AGENT_IDENTITY_ORIGIN").map(str::to_string));
+            let gateway_origin = std::env::var("GEOD_AGENT_GATEWAY_ORIGIN")
+                .ok()
+                .or_else(|| option_env!("GEOD_AGENT_GATEWAY_ORIGIN").map(str::to_string));
+            ServiceConfig {
+                identity_origin: identity_origin.ok_or_else(|| {
+                    error("SERVICE_NOT_CONFIGURED", "GeoD 账号授权服务尚未接通")
+                })?,
+                gateway_origin: gateway_origin.ok_or_else(|| {
+                    error("SERVICE_NOT_CONFIGURED", "GeoD 模型服务尚未接通")
+                })?,
+            }
+        }
+        Err(_) => return Err(error("SERVICE_NOT_CONFIGURED", "读取服务配置失败")),
+    };
     validate_config(config)
 }
 fn client() -> Result<Client, ServiceError> {
@@ -205,39 +222,6 @@ fn get_access_token(state: &ServiceState, config: &ServiceConfig) -> Result<Stri
     Ok(tokens.access_token)
 }
 
-#[tauri::command]
-pub fn service_config_get(
-    state: State<'_, ServiceState>,
-) -> Result<Option<ServiceConfig>, ServiceError> {
-    if !state.config_path.exists() {
-        return Ok(None);
-    }
-    load_config(&state.config_path).map(Some)
-}
-#[tauri::command]
-pub fn service_config_set(
-    state: State<'_, ServiceState>,
-    config: ServiceConfig,
-) -> Result<ServiceConfig, ServiceError> {
-    if state.flow.lock().expect("flow mutex poisoned").pending {
-        return Err(error("AUTH_IN_PROGRESS", "请先完成当前登录流程"));
-    }
-    let normalized = validate_config(config)?;
-    let _guard = state
-        .credential_lock
-        .lock()
-        .expect("credential mutex poisoned");
-    if read_tokens()?.is_some() {
-        return Err(error("AUTH_ACTIVE", "请先退出当前 GeoD 账号"));
-    }
-    fs::write(
-        &state.config_path,
-        serde_json::to_vec_pretty(&normalized)
-            .map_err(|_| error("SERVICE_CONFIG", "服务配置编码失败"))?,
-    )
-    .map_err(|_| error("SERVICE_CONFIG", "保存服务配置失败"))?;
-    Ok(normalized)
-}
 #[tauri::command]
 pub fn auth_status(state: State<'_, ServiceState>) -> Result<AuthStatus, ServiceError> {
     let flow = state.flow.lock().expect("flow mutex poisoned");

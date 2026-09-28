@@ -1,94 +1,155 @@
 import { useEffect, useRef, useState } from "react";
 import * as maplibregl from "maplibre-gl";
-import type { Map, MapMouseEvent } from "maplibre-gl";
-import type { FeatureCollection, Polygon } from "geojson";
-import type { Bounds } from "./api";
+import type { Map } from "maplibre-gl";
+import { api, desktopAvailable, type ArtifactPreview, type Bounds } from "./api";
 import { Button } from "@/components/motion/button/base";
-import { Crosshair, Minus, Plus } from "lucide-react";
+import { Minus, Plus } from "lucide-react";
 
-const emptyStyle = {
-  version: 8 as const,
-  sources: {},
-  layers: [{ id: "background", type: "background" as const, paint: { "background-color": "#e9f1f6" } }],
-};
-
-function geometry(bounds: Bounds): FeatureCollection<Polygon> {
-  const [w, s, e, n] = bounds;
-  return { type: "FeatureCollection", features: [{ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [[[w, s], [e, s], [e, n], [w, n], [w, s]]] } }] };
+if (desktopAvailable) {
+  maplibregl.addProtocol("geod-osm", async ({ url }) => {
+    const match = /^geod-osm:\/\/(\d+)\/(\d+)\/(\d+)\.png$/.exec(url);
+    if (!match) throw new Error("Invalid OpenStreetMap tile URL");
+    const encoded = await api.osmBasemapTile(Number(match[1]), Number(match[2]), Number(match[3]));
+    const binary = atob(encoded);
+    const bytes = Uint8Array.from(binary, character => character.charCodeAt(0));
+    return { data: bytes.buffer };
+  });
 }
 
-export function MapView({ bounds, onBoundsChange }: { bounds: Bounds; onBoundsChange: (value: Bounds) => void }) {
+function emptyStyle(theme: "light" | "dark") {
+  return {
+    version: 8 as const,
+    sources: {
+      osm: {
+        type: "raster" as const,
+        tiles: [desktopAvailable ? "geod-osm://{z}/{x}/{y}.png" : "https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+        tileSize: 256,
+        minzoom: 0,
+        maxzoom: 15,
+      },
+    },
+    layers: [
+      { id: "background", type: "background" as const, paint: { "background-color": theme === "dark" ? "#0e0f11" : "#edf4fa" } },
+      { id: "osm", type: "raster" as const, source: "osm" },
+    ],
+  };
+}
+
+interface Overlay {
+  width: number;
+  height: number;
+  meridians: number[];
+  parallels: number[];
+  selection: { x: number; y: number; width: number; height: number } | null;
+}
+const blankOverlay: Overlay = { width: 0, height: 0, meridians: [], parallels: [], selection: null };
+const steps = [0.0001, 0.0002, 0.0005, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 30, 45];
+
+function projectOverlay(map: Map, bounds: Bounds | null): Overlay {
+  const width = map.getContainer().clientWidth;
+  const height = map.getContainer().clientHeight;
+  const visible = map.getBounds();
+  const west = visible.getWest();
+  const east = visible.getEast();
+  const south = Math.max(-85, visible.getSouth());
+  const north = Math.min(85, visible.getNorth());
+  const target = Math.max((east - west) / 8, (north - south) / 8);
+  const step = steps.find(value => value >= target) ?? 45;
+  const meridians: number[] = [];
+  const parallels: number[] = [];
+  for (let longitude = Math.ceil(west / step) * step; longitude <= east && meridians.length < 30; longitude += step) {
+    const x = map.project([longitude, 0]).x;
+    if (x >= 0 && x <= width) meridians.push(x);
+  }
+  for (let latitude = Math.ceil(south / step) * step; latitude <= north && parallels.length < 30; latitude += step) {
+    const y = map.project([map.getCenter().lng, latitude]).y;
+    if (y >= 0 && y <= height) parallels.push(y);
+  }
+  let selection: Overlay["selection"] = null;
+  if (bounds) {
+    const upperLeft = map.project([bounds[0], bounds[3]]);
+    const lowerRight = map.project([bounds[2], bounds[1]]);
+    selection = { x: Math.min(upperLeft.x, lowerRight.x), y: Math.min(upperLeft.y, lowerRight.y), width: Math.abs(lowerRight.x - upperLeft.x), height: Math.abs(lowerRight.y - upperLeft.y) };
+  }
+  return { width, height, meridians, parallels, selection };
+}
+
+export function MapView({ bounds, preview, theme }: { bounds: Bounds | null; preview: ArtifactPreview | null; theme: "light" | "dark" }) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Map | null>(null);
   const boundsRef = useRef(bounds);
-  const onBoundsRef = useRef(onBoundsChange);
-  const drawRef = useRef(false);
-  const [drawing, setDrawing] = useState(false);
   const [ready, setReady] = useState(false);
+  const [imageryState, setImageryState] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [overlay, setOverlay] = useState<Overlay>(blankOverlay);
   boundsRef.current = bounds;
-  onBoundsRef.current = onBoundsChange;
 
   useEffect(() => {
     if (!container.current) return;
-    const map = new maplibregl.Map({
-      container: container.current,
-      style: emptyStyle,
-      center: [116.4, 39.9],
-      zoom: 6,
-      attributionControl: false,
-      maxPitch: 0,
-    });
+    const map = new maplibregl.Map({ container: container.current, style: emptyStyle(theme), center: [108, 35], zoom: 3, attributionControl: false, maxPitch: 0 });
     mapRef.current = map;
-    map.on("load", () => {
-      const grid: FeatureCollection = { type: "FeatureCollection", features: [] };
-      for (let lon = -180; lon <= 180; lon += 10) grid.features.push({ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: [[lon, -85], [lon, 85]] } });
-      for (let lat = -80; lat <= 80; lat += 10) grid.features.push({ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: [[-180, lat], [180, lat]] } });
-      map.addSource("graticule", { type: "geojson", data: grid });
-      map.addLayer({ id: "graticule", type: "line", source: "graticule", paint: { "line-color": "#b8ccdb", "line-width": 1, "line-opacity": 0.62 } });
-      map.addSource("selection", { type: "geojson", data: geometry(boundsRef.current) });
-      map.addLayer({ id: "selection-fill", type: "fill", source: "selection", paint: { "fill-color": "#1769e8", "fill-opacity": 0.15 } });
-      map.addLayer({ id: "selection-border", type: "line", source: "selection", paint: { "line-color": "#1769e8", "line-width": 2.5 } });
+    const update = () => setOverlay(projectOverlay(map, boundsRef.current));
+    map.on("move", update);
+    map.on("resize", update);
+    map.on("style.load", () => {
       setReady(true);
-      map.fitBounds([[boundsRef.current[0], boundsRef.current[1]], [boundsRef.current[2], boundsRef.current[3]]], { padding: 110, maxZoom: 9, duration: 0 });
+      if (boundsRef.current) map.fitBounds([[boundsRef.current[0], boundsRef.current[1]], [boundsRef.current[2], boundsRef.current[3]]], { padding: 70, maxZoom: 15, duration: 0 });
+      update();
     });
-    let start: [number, number] | null = null;
-    const down = (event: MapMouseEvent) => {
-      if (!drawRef.current) return;
-      start = [event.lngLat.lng, event.lngLat.lat];
-      map.dragPan.disable();
-    };
-    const move = (event: MapMouseEvent) => {
-      if (!start) return;
-      const next: Bounds = [Math.min(start[0], event.lngLat.lng), Math.min(start[1], event.lngLat.lat), Math.max(start[0], event.lngLat.lng), Math.max(start[1], event.lngLat.lat)];
-      (map.getSource("selection") as maplibregl.GeoJSONSource | undefined)?.setData(geometry(next));
-    };
-    const up = (event: MapMouseEvent) => {
-      if (!start) return;
-      const next: Bounds = [Math.min(start[0], event.lngLat.lng), Math.min(start[1], event.lngLat.lat), Math.max(start[0], event.lngLat.lng), Math.max(start[1], event.lngLat.lat)];
-      start = null;
-      map.dragPan.enable();
-      drawRef.current = false;
-      setDrawing(false);
-      if (next[2] - next[0] > 0.00001 && next[3] - next[1] > 0.00001) onBoundsRef.current(next.map(n => Number(n.toFixed(6))) as Bounds);
-    };
-    map.on("mousedown", down);
-    map.on("mousemove", move);
-    map.on("mouseup", up);
     return () => { map.remove(); mapRef.current = null; };
   }, []);
 
   useEffect(() => {
-    const source = mapRef.current?.getSource("selection") as maplibregl.GeoJSONSource | undefined;
-    source?.setData(geometry(bounds));
+    const map = mapRef.current;
+    if (map?.getLayer("background")) map.setPaintProperty("background", "background-color", theme === "dark" ? "#0e0f11" : "#edf4fa");
+  }, [theme, ready]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready) return;
+    setOverlay(projectOverlay(map, bounds));
+    if (bounds) map.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]], { padding: 70, maxZoom: 15, duration: 500 });
   }, [bounds, ready]);
 
-  return <div className="map-shell">
-    <div ref={container} className="map-canvas" aria-label="坐标地图与选择范围" />
-    <div className="map-overlay top-left"><span className="eyebrow">SPATIAL WORKSPACE</span><strong>范围与覆盖</strong><small>真实经纬网 · 无在线底图</small></div>
-    <div className="map-controls">
-      <Button variant={drawing ? "primary" : "secondary"} size="sm" onClick={() => { drawRef.current = !drawRef.current; setDrawing(drawRef.current); }}><Crosshair size={15} />{drawing ? "在地图上拖框" : "地图拖框"}</Button>
-      <div className="zoom-controls"><Button variant="secondary" size="icon" aria-label="放大地图" onClick={() => mapRef.current?.zoomIn()}><Plus size={16} /></Button><Button variant="secondary" size="icon" aria-label="缩小地图" onClick={() => mapRef.current?.zoomOut()}><Minus size={16} /></Button></div>
-    </div>
-    <div className="map-overlay bottom-left"><span className="map-dot" />{bounds.map(n => n.toFixed(3)).join(" / ")}</div>
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready) return;
+    if (map.getLayer("verified-imagery")) map.removeLayer("verified-imagery");
+    if (map.getSource("verified-imagery")) map.removeSource("verified-imagery");
+    if (!preview) { setImageryState("idle"); return; }
+    setImageryState("loading");
+    const [west, south, east, north] = preview.bounds;
+    map.addSource("verified-imagery", {
+      type: "image",
+      coordinates: [[west, north], [east, north], [east, south], [west, south]],
+    });
+    map.addLayer({
+      id: "verified-imagery",
+      type: "raster",
+      source: "verified-imagery",
+      paint: { "raster-opacity": 1, "raster-resampling": "linear", "raster-fade-duration": 0 },
+    });
+    let cancelled = false;
+    const image = new Image();
+    image.onload = () => {
+      if (cancelled) return;
+      (map.getSource("verified-imagery") as maplibregl.ImageSource).updateImage({ image });
+      setImageryState("ready");
+    };
+    image.onerror = () => { if (!cancelled) setImageryState("error"); };
+    image.src = preview.dataUrl;
+    return () => { cancelled = true; image.onload = null; image.onerror = null; };
+  }, [preview, ready]);
+
+  return <div className={`map-shell ${ready ? "" : "map-fallback"}`}>
+    <div ref={container} className="map-canvas" aria-label="Agent 计划范围预览" />
+    {!ready && <div className="map-fallback-grid" aria-hidden="true" />}
+    {ready && overlay.width > 0 && overlay.height > 0 && <svg className="map-data-overlay" viewBox={`0 0 ${overlay.width} ${overlay.height}`} preserveAspectRatio="none" aria-hidden="true">
+      {overlay.selection && <rect className="map-selection" x={overlay.selection.x} y={overlay.selection.y} width={overlay.selection.width} height={overlay.selection.height} />}
+    </svg>}
+    {!ready && bounds && <div className="map-fallback-extent" aria-label="计划范围示意"><span>计划范围示意</span></div>}
+    <div className="map-overlay top-left"><span className="eyebrow">MAPLIBRE GL</span><strong>{imageryState === "ready" ? "已校验影像" : bounds ? "计划范围" : "地图工作区"}</strong><small>{imageryState === "ready" ? "USGS 影像 · OSM 底图" : imageryState === "loading" ? "正在加载本地影像" : imageryState === "error" ? "本地影像显示失败" : ready ? "OpenStreetMap 底图" : "地图正在加载"}</small></div>
+    <div className="map-controls"><div className="zoom-controls"><Button variant="secondary" size="icon" aria-label="放大地图" disabled={!ready} onClick={() => mapRef.current?.zoomIn()}><Plus size={16} /></Button><Button variant="secondary" size="icon" aria-label="缩小地图" disabled={!ready} onClick={() => mapRef.current?.zoomOut()}><Minus size={16} /></Button></div></div>
+    <div className="map-overlay bottom-left"><span className="map-dot" />{bounds ? bounds.map(n => n.toFixed(3)).join(" / ") : "Agent 生成计划后显示范围"}</div>
+    <div className="map-attribution">{preview && <span>{preview.attribution} · </span>}<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a></div>
   </div>;
 }

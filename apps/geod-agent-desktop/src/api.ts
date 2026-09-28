@@ -71,7 +71,7 @@ export interface Job { jobId: string; planId: string; approvalId: string; planHa
 export interface JobEvent { jobId: string; seq: number; occurredAt: string; state: JobState; errorCode?: string; completedTiles?: number; totalTiles?: number }
 export interface Asset { id: string; kind: string; role: string; path: string; bytes: number; sha256: string; bounds: Bounds; width?: number; height?: number }
 export interface Manifest { name: string; bounds: Bounds; assets: Asset[]; quality: { status: string; missingTiles: number; warnings: string[] }; provenance: { source: string; attribution: string; retrievedAt: string }[] }
-export interface ServiceConfig { identityOrigin: string; gatewayOrigin: string }
+export interface ArtifactPreview { dataUrl: string; bounds: Bounds; attribution: string }
 export interface AuthStatus { state: "unconfigured" | "disconnected" | "waiting" | "connected"; userId: string | null; error: string | null }
 export interface AgentToolCall { id: string; type: "function"; function: { name: string; arguments: string } }
 export interface AgentMessage { role: "user" | "assistant" | "tool"; content: string | null; tool_call_id?: string; tool_calls?: AgentToolCall[] }
@@ -81,6 +81,8 @@ export interface ModelUsage { limitTokens: number; committedTokens: number; rese
 export const desktopAvailable = isTauri();
 
 export const api = {
+  osmBasemapTile: (z: number, x: number, y: number) => invoke<string>("osm_basemap_tile", { z, x, y }),
+  outputDirectorySuggest: () => invoke<string>("output_directory_suggest"),
   sourcesList: () => invoke<SourceDescriptor[]>("sources_list"),
   sourcesSave: (endpoint: HttpSource, minZoom: number, maxZoom: number) => invoke<SourceDescriptor>("sources_save", { endpoint, minZoom, maxZoom, permissionAcknowledged: true }),
   plansCreate: (spec: TaskSpec) => invoke<StoredPlan>("plans_create", { spec }),
@@ -95,8 +97,7 @@ export const api = {
   jobsResume: (jobId: string) => invoke<Job>("jobs_resume", { jobId }),
   jobsEvents: (jobId: string, afterSeq: number) => invoke<JobEvent[]>("jobs_events", { jobId, afterSeq }),
   artifactsInspect: (jobId: string) => invoke<Manifest>("artifacts_inspect", { jobId }),
-  serviceConfigGet: () => invoke<ServiceConfig | null>("service_config_get"),
-  serviceConfigSet: (config: ServiceConfig) => invoke<ServiceConfig>("service_config_set", { config }),
+  artifactPreview: (jobId: string) => invoke<ArtifactPreview | null>("artifact_preview", { jobId }),
   authStatus: () => invoke<AuthStatus>("auth_status"),
   authBegin: () => invoke<AuthStatus>("auth_begin"),
   authLogout: () => invoke<AuthStatus>("auth_logout"),

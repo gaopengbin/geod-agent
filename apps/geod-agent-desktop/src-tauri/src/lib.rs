@@ -1,5 +1,6 @@
 mod services;
 
+use base64::Engine;
 use chrono::Utc;
 use geod_core::imagery::{CoreError, HttpSource, Manifest};
 use geod_task_engine::{
@@ -7,15 +8,19 @@ use geod_task_engine::{
     SourceDescriptor, TaskSpec,
 };
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 use std::{
     collections::HashMap,
+    fs,
     path::PathBuf,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
+        Arc, Mutex, OnceLock,
     },
+    time::{Duration, SystemTime},
 };
-use tauri::{Manager, State};
+use tauri::{AppHandle, Manager, State};
+use uuid::Uuid;
 
 struct AppState {
     db_path: PathBuf,
@@ -55,6 +60,28 @@ impl From<CoreError> for AppError {
 
 fn open_store(state: &AppState) -> Result<TaskStore, AppError> {
     TaskStore::open(&state.db_path).map_err(Into::into)
+}
+
+#[tauri::command]
+fn output_directory_suggest(app: AppHandle) -> Result<String, AppError> {
+    let base = app
+        .path()
+        .document_dir()
+        .or_else(|_| app.path().app_data_dir())
+        .map_err(|error| AppError {
+            code: "STORAGE_ERROR",
+            message: error.to_string(),
+        })?;
+    let name = format!(
+        "imagery-{}-{}",
+        Utc::now().format("%Y%m%d-%H%M%S"),
+        &Uuid::new_v4().simple().to_string()[..8]
+    );
+    Ok(base
+        .join("GeoD Agent")
+        .join(name)
+        .to_string_lossy()
+        .into_owned())
 }
 
 #[tauri::command]
@@ -364,6 +391,208 @@ fn artifacts_inspect(state: State<'_, AppState>, job_id: String) -> Result<Manif
         .map_err(Into::into)
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ArtifactPreview {
+    data_url: String,
+    bounds: [f64; 4],
+    attribution: String,
+}
+
+#[tauri::command]
+fn artifact_preview(
+    state: State<'_, AppState>,
+    job_id: String,
+) -> Result<Option<ArtifactPreview>, AppError> {
+    let store = open_store(&state)?;
+    let manifest = store.inspect_job_artifact(&job_id)?;
+    let preview = match manifest
+        .assets
+        .iter()
+        .find(|asset| asset.role == "preview" && asset.mime_type == "image/png")
+    {
+        Some(asset) => asset,
+        None => return Ok(None),
+    };
+    if preview.path != "preview.png" || preview.bytes > 8 * 1024 * 1024 {
+        return Err(AppError {
+            code: "PREVIEW_INVALID",
+            message: "Preview asset is unsafe or too large".into(),
+        });
+    }
+    let job = store.get_job(&job_id)?.ok_or_else(|| AppError {
+        code: "JOB_NOT_FOUND",
+        message: "Job was not found".into(),
+    })?;
+    let plan = store.get_plan(&job.plan_id)?.ok_or_else(|| AppError {
+        code: "PLAN_NOT_FOUND",
+        message: "Plan was not found".into(),
+    })?;
+    let bytes = fs::read(PathBuf::from(&plan.plan.spec.output_directory).join(&preview.path))
+        .map_err(|error| AppError {
+            code: "PREVIEW_INVALID",
+            message: error.to_string(),
+        })?;
+    if bytes.len() as u64 != preview.bytes
+        || format!("{:x}", Sha256::digest(&bytes)) != preview.sha256
+    {
+        return Err(AppError {
+            code: "PREVIEW_INVALID",
+            message: "Preview checksum changed after artifact inspection".into(),
+        });
+    }
+    Ok(Some(ArtifactPreview {
+        data_url: format!(
+            "data:image/png;base64,{}",
+            base64::engine::general_purpose::STANDARD.encode(bytes)
+        ),
+        bounds: preview.bounds,
+        attribution: manifest
+            .provenance
+            .first()
+            .map(|source| source.attribution.clone())
+            .unwrap_or(plan.plan.attribution),
+    }))
+}
+
+#[cfg(windows)]
+fn windows_user_proxy() -> Option<reqwest::Proxy> {
+    use winreg::{enums::HKEY_CURRENT_USER, RegKey};
+    let settings = RegKey::predef(HKEY_CURRENT_USER)
+        .open_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings")
+        .ok()?;
+    let enabled: u32 = settings.get_value("ProxyEnable").ok()?;
+    if enabled == 0 {
+        return None;
+    }
+    let configured: String = settings.get_value("ProxyServer").ok()?;
+    let server = configured
+        .split(';')
+        .find_map(|entry| entry.strip_prefix("https="))
+        .or_else(|| {
+            configured
+                .split(';')
+                .find(|entry| !entry.contains('='))
+        })?;
+    let address = if server.contains("://") {
+        server.to_string()
+    } else {
+        format!("http://{server}")
+    };
+    reqwest::Proxy::all(address).ok()
+}
+
+/// Interactive viewport tiles only. OSM imagery is never included in GeoD exports.
+#[tauri::command]
+async fn osm_basemap_tile(app: AppHandle, z: u8, x: u32, y: u32) -> Result<String, AppError> {
+    if z > 15 || x >= (1u32 << z) || y >= (1u32 << z) {
+        return Err(AppError {
+            code: "MAP_TILE_INVALID",
+            message: "Map tile coordinate is outside the supported range".into(),
+        });
+    }
+    let root = app.path().app_cache_dir().map_err(|error| AppError {
+        code: "MAP_CACHE_ERROR",
+        message: error.to_string(),
+    })?;
+    let tile_path = root
+        .join("osm-basemap")
+        .join(z.to_string())
+        .join(x.to_string())
+        .join(format!("{y}.png"));
+    let cached = fs::metadata(&tile_path).ok();
+    let fresh = cached
+        .as_ref()
+        .and_then(|metadata| metadata.modified().ok())
+        .and_then(|modified| SystemTime::now().duration_since(modified).ok())
+        .is_some_and(|age| age < Duration::from_secs(7 * 24 * 60 * 60));
+    if fresh {
+        let bytes = fs::read(&tile_path).map_err(|error| AppError {
+            code: "MAP_CACHE_ERROR",
+            message: error.to_string(),
+        })?;
+        if bytes.len() <= 1024 * 1024 && bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+            return Ok(base64::engine::general_purpose::STANDARD.encode(bytes));
+        }
+    }
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    let client = CLIENT.get_or_init(|| {
+        let builder = reqwest::Client::builder()
+            .timeout(Duration::from_secs(15))
+            .user_agent("GeoD-Agent/0.1 (desktop interactive basemap)");
+        #[cfg(windows)]
+        let builder = if let Some(proxy) = windows_user_proxy() {
+            builder.proxy(proxy)
+        } else {
+            builder
+        };
+        builder
+            .build()
+            .expect("valid GeoD HTTP client")
+    });
+    let response = client
+        .get(format!("https://tile.openstreetmap.org/{z}/{x}/{y}.png"))
+        .send()
+        .await;
+    let bytes = match response {
+        Ok(response) if response.status().is_success() => response
+            .bytes()
+            .await
+            .map_err(|error| AppError {
+                code: "MAP_TILE_NETWORK",
+                message: error.to_string(),
+            })?
+            .to_vec(),
+        Ok(response) => {
+            return Err(AppError {
+                code: "MAP_TILE_NETWORK",
+                message: format!("OpenStreetMap returned HTTP {}", response.status()),
+            })
+        }
+        Err(error) => {
+            if cached.is_some() {
+                return fs::read(&tile_path)
+                    .map(|bytes| base64::engine::general_purpose::STANDARD.encode(bytes))
+                    .map_err(|io_error| AppError {
+                        code: "MAP_CACHE_ERROR",
+                        message: io_error.to_string(),
+                    });
+            }
+            return Err(AppError {
+                code: "MAP_TILE_NETWORK",
+                message: error.to_string(),
+            });
+        }
+    };
+    if bytes.len() > 1024 * 1024 || !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        return Err(AppError {
+            code: "MAP_TILE_INVALID",
+            message: "OpenStreetMap response is not a valid PNG tile".into(),
+        });
+    }
+    let parent = tile_path.parent().ok_or_else(|| AppError {
+        code: "MAP_CACHE_ERROR",
+        message: "Map cache path is invalid".into(),
+    })?;
+    fs::create_dir_all(parent).map_err(|error| AppError {
+        code: "MAP_CACHE_ERROR",
+        message: error.to_string(),
+    })?;
+    let temporary = tile_path.with_extension(format!("{}.tmp", Uuid::new_v4().simple()));
+    fs::write(&temporary, &bytes).map_err(|error| AppError {
+        code: "MAP_CACHE_ERROR",
+        message: error.to_string(),
+    })?;
+    if cached.is_some() {
+        let _ = fs::remove_file(&tile_path);
+    }
+    if fs::rename(&temporary, &tile_path).is_err() {
+        // Another in-flight request may have filled the same tile on Windows.
+        let _ = fs::remove_file(&temporary);
+    }
+    Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -385,6 +614,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            output_directory_suggest,
             sources_list,
             sources_save,
             plans_create,
@@ -399,8 +629,8 @@ pub fn run() {
             jobs_active,
             jobs_events,
             artifacts_inspect,
-            services::service_config_get,
-            services::service_config_set,
+            artifact_preview,
+            osm_basemap_tile,
             services::auth_status,
             services::auth_begin,
             services::auth_logout,

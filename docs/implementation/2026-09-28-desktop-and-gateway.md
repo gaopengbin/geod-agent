@@ -4,7 +4,7 @@
 
 ## 已接通的本地链路
 
-- 独立 Tauri 2 桌面程序：登记授权来源、地图拖框和经纬度输入、计划估算、按计划哈希批准、作业启动/暂停/继续/取消、事件进度、成果检查。
+- 独立 Tauri 2 桌面程序：左侧本机对话列表、中间 Agent 对话与地图预览、右侧可展开成果页；Agent 提交有类型的计划参数，本机估算并按计划哈希批准，随后可启动/暂停/继续/取消作业、查看事件进度和检查成果。没有手动任务参数表单。
 - `geod-core` 从 XYZ/TMS 与 ArcGIS ImageServer `exportImage` 读取 256/512 像素瓦片；GeoTIFF 按 WGS84 请求框对应的 Web Mercator 像素边界裁剪，MBTiles 保留完整瓦片，manifest 保存各资产实际足迹与 SHA-256。输出目录存在时拒绝覆盖。
 - GeoD 身份服务的 `/api/geod/oauth/*` 路由复用现有账号存储；桌面客户端采用授权码与 PKCE、本机回环回调、Windows 凭据库保存刷新令牌。已有网站 Cookie 继续有效。该路由目前位于 `G:\code\GIS-AI\geostyle-web` 的本地工作树，尚未发布。
 - 桌面授权回调按完整 HTTP 请求头读取，可处理分段到达；浏览器启动失败会立即释放回调监听。身份和模型请求均禁止自动重定向，避免授权令牌或上游密钥跟随重定向发往其他地址。桌面查询登录状态时尝试刷新到期令牌；授权码错误、401 或 403 会撤销本地凭据，服务暂时不可达则保留凭据并显示错误。
@@ -15,7 +15,7 @@
 
 - 图源：USGS `USGSNAIPPlus/ImageServer/exportImage`；测试范围为美国本土华盛顿区域 `[-77.05, 38.85, -77.04, 38.86]`，Z12。源服务返回 `image/png`，本机成功下载、拼接并重新检查 GeoTIFF、MBTiles、预览和 manifest。
 - 裁剪后 GeoTIFF 为 30×38 像素；像素边缘足迹 `[-77.0502090454, 38.8498686695, -77.0399093628, 38.8600282742]`。MBTiles 含 1 个原始完整瓦片；manifest `missingTiles=0`。
-- 512 像素同源样本用 `cargo run --example usgs_naip -- <new-absolute-output-directory> 512` 验证，最新结果在 `artifacts/usgs-naip-20260928-dc-512-georef/`。GeoTIFF 59×76 像素，预览保持相同尺寸；重新打开后对 GeoTIFF 坐标系、比例尺、定位点、manifest 足迹与 SHA-256 做一致性检查，MBTiles 完整性检查通过，`missingTiles=0`。这是核心引擎的真实图源验证，尚不是安装后桌面全链验收。
+- 512 像素同源样本用 `cargo run --example usgs_naip -- <new-absolute-output-directory> 512` 验证，最新结果在 `artifacts/usgs-naip-20260928-dc-512-georef/`。GeoTIFF 59×76 像素，预览保持相同尺寸；重新打开后对 GeoTIFF 坐标系、比例尺、定位点、manifest 足迹与 SHA-256 做一致性检查，MBTiles 完整性检查通过，`missingTiles=0`。这是核心引擎的真实图源验证。
 - 同桌面后端的账本路径另用 `cargo run --example usgs_approved_job -- <new-output-dir> <new-sqlite-file> [256|512]` 完成真实图源登记→计划→批准→作业→成果按作业 ID 检查。256/512 两档均得到 `Completed`、1 瓦片、3 项成果、`missingTiles=0`；本地证据分别在 `artifacts/usgs-approved-20260928-256/`、`artifacts/usgs-approved-20260928-512/` 和同名 SQLite 文件。示例中的批准由测试程序显式执行，不等于桌面界面人工批准已验收。
 - 复现：`cd crates/geod-core; cargo run --example usgs_naip -- <new-absolute-output-directory>`。每次输出目录须不存在，避免覆盖。样本成果在本地 `artifacts/usgs-naip-20260928-dc-cropped/`，已从 Git 忽略。
 - [USGS National Map 许可说明](https://www.usgs.gov/faqs/what-are-terms-uselicensing-map-services-and-data-national-map)说明地图服务与数据属于公共领域并请求署名；[影像服务元数据](https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPPlus/ImageServer)描述了覆盖与来源。这个预设仅用于美国本土，其他地区及图源由用户核对授权。
@@ -29,17 +29,19 @@ npm run tauri:dev
 npm run tauri:build
 ```
 
-安装包在 `apps/geod-agent-desktop/src-tauri/target/release/bundle/nsis/GeoD Agent_0.1.0_x64-setup.exe`。2026-09-28 已在本机以 NSIS 静默模式安装到隔离测试目录：安装目录包含应用与卸载程序，HKCU 有 GeoD Agent 卸载记录；从安装目录启动后主窗口标题为 GeoD Agent、进程可响应，应用创建了 schema v2 的本地任务数据库。随后正常关闭窗口，静默卸载返回 0，安装目录与卸载记录消失；确认只含本次测试数据库后清理了测试 AppData。之后重建的安装包 SHA-256 为 `ad1f6f8db01afe6916427ce0d33d722817d5c5e98a0d4ae0e12e4db09e41ad72`，重建包尚未重复安装测试。浏览器 `npm run dev` 只提供界面预览，Tauri IPC 不可用。
+安装包在 `apps/geod-agent-desktop/src-tauri/target/release/bundle/nsis/GeoD Agent_0.1.0_x64-setup.exe`。早期包已在隔离目录完成 NSIS 安装、启动和卸载冒烟；用户批准的 USGS 样本随后通过原生窗口和安装后程序重开核验。当前含 OSM 底图、成果影像图层和账号授权入口的安装包 SHA-256 为 `7828f81c2e8a17d316a7116308edb7e0e4c13778ad4975487de4487441b41621`，已从 Release 可执行文件检查界面，尚未对这个最新安装包重复安装验收。浏览器 `npm run dev` 只提供界面预览，Tauri IPC 不可用。
 
-另以本次 Release 桌面可执行文件启动原生 WebView2 窗口，在 CDP 中确认 `window.__TAURI_INTERNALS__` 可用，并实际打开智能助手抽屉、图源登记弹窗。通过原生窗口提交非 HTTPS 公网身份地址后，Tauri 命令返回“服务地址必须是 HTTPS，或本机回环 HTTP”；没有保存服务配置或图源。截图在本地忽略目录 `artifacts/native-window.png`、`artifacts/native-agent.png`、`artifacts/native-source.png`、`artifacts/native-invalid-config.png`。测试进程与只含本次测试 SQLite 的 AppData 已清理。原生界面的图源保存、计划批准和下载交互仍待验收。
+用户另行批准了 USGS NAIP 公共领域小样本：`[-77.05, 38.85, -77.04, 38.86]`、Z12、256 px、1 瓦片，输出到新目录 `artifacts/native-approved-usgs-20260928`。原生桌面界面已登记图源、生成计划、按计划哈希批准、执行下载并到达 `completed`；安装后程序重开也显示了同一作业。作业 ID `9b53d49f-3880-4e4d-b5e2-8564cbcb8244`，1/1 瓦片、3 项成果、`missingTiles=0`。`artifacts/verify-native-approved.py` 独立检查 SQLite 审批与事件、文件 SHA-256、GeoTIFF 的 30×38 像素与 EPSG:3857、MBTiles 完整性及 1 瓦片。
 
-模型网关需先配置本地环境变量：`GEOD_IDENTITY_ORIGIN`、`GEOD_AGENT_GATEWAY_SECRET`（与身份服务相同且至少 32 字符）、`LAOGAO_BASE_URL`（优先本机加密隧道）、`LAOGAO_API_KEY`（本产品独立的 New API 下游密钥）、`LAOGAO_MODEL`、`GEOD_AGENT_TOKEN_LIMIT` 与数据库路径。参考 `services/geod-agent-model-gateway/.env.example`，密钥不得写入仓库。设置后运行 `npm ci; npm test; npm start`。桌面应用首次在智能助手内设置身份站点和模型网关的 HTTPS 地址；本地联调可用 `127.0.0.1` HTTP。
+最新 Release 原生 WebView2 已检查左侧对话列表、对话与地图主区、右侧成果页展开、蓝白亮色和黑色暗色切换；1024 px 与 390 px 视口没有整页横向溢出。MapLibre 实际请求 OSM 当前视窗瓦片，在 Windows 用户代理下成功显示街道底图；用户批准的 USGS 30×38 裁剪预览由本地成果清单校验后作为 MapLibre 影像图层，按坐标叠加在计划范围。由于该样本只有 Z12 一瓦片，放大影像模糊属于源分辨率限制。OSM 请求设置 GeoD User-Agent，在本机缓存至少 7 天，不进入任务成果或离线包；地图显示 OSM 和 USGS 署名。授权图源弹窗使用 Radix Dialog/Select；在 390 px 下拉能避让边缘，Esc 关闭后焦点返回触发器。截图保存在本地忽略目录 `artifacts/native-window.png`、`native-theme-dark.png`、`native-inspect-completed.png`、`native-source-select.png`。本轮视觉检查没有重新下载 USGS 图源。开发预览曾因安装新依赖后 Vite 预构建缓存过期而返回 504；重启 1420 端口开发服务后已恢复。
+
+模型网关需先配置本地环境变量：`GEOD_IDENTITY_ORIGIN`、`GEOD_AGENT_GATEWAY_SECRET`（与身份服务相同且至少 32 字符）、`LAOGAO_BASE_URL`（优先本机加密隧道）、`LAOGAO_API_KEY`（本产品独立的 New API 下游密钥）、`LAOGAO_MODEL`、`GEOD_AGENT_TOKEN_LIMIT` 与数据库路径。参考 `services/geod-agent-model-gateway/.env.example`，密钥不得写入仓库。设置后运行 `npm ci; npm test; npm start`。桌面应用只呈现 GeoD 账号登录；身份站点和网关地址由打包时或开发环境的 `GEOD_AGENT_IDENTITY_ORIGIN`、`GEOD_AGENT_GATEWAY_ORIGIN` 提供，旧的本机 `agent-services.json` 仍可读取以保留已有开发配置。当前线上 `/api/geod/oauth/authorize` 返回 404，服务路由尚未发布；未配置的构建明确禁用登录按钮，不显示用户填写服务地址的表单。
 
 运营对账：`node reconcile.mjs --list` 查询待核对生成；根据供应商实际记录编写决定 JSON，使用 `node reconcile.mjs --decision-file <path>`。释放必须有未计费证据；结算必须有上游请求 ID 和实际输入/输出 token。所有决定进入 `reconciliation_audit`。勿凭超时自动释放或重复提交上游。
 
 ## 验证与未完成项
 
-- 已通过：`geod-core` 12 测试、`geod-task-engine` 17 测试、模型网关 7 测试、桌面服务 3 测试、GeoD OAuth 3 测试；桌面前端构建、Rust Clippy `-D warnings`、NSIS 安装包构建与隔离安装/启动/卸载冒烟。原生窗口已检查工作区、助手抽屉、图源表单与无效地址的 IPC 拒绝；计划批准和下载仍需交互测试。作业恢复及成果查看会核对成果的作业 ID，不会将其他作业的有效目录误认作自己的结果。
+- 已通过：`geod-core` 12 测试、`geod-task-engine` 17 测试、模型网关 7 测试、桌面服务 3 测试、GeoD OAuth 3 测试；桌面前端构建、Rust Clippy `-D warnings`、NSIS 安装包构建与隔离安装/启动/卸载冒烟。原生窗口中用户批准的计划已走完图源登记、批准、下载和成果核验。作业恢复及成果查看会核对成果的作业 ID，不会将其他作业的有效目录误认作自己的结果。
 - 模型网关的工具调用与续答目前使用本地假身份服务和假上游模型验证。尚缺产品独立 New API 密钥、选定真实模型的工具调用/用量测试以及部署后的真实 GeoD 登录验收。
 - 桌面任务已保存带计划和图源版本绑定的瓦片检查点；恢复时逐片核对大小、SHA-256 与像素尺寸，已校验瓦片不重复请求。网络暂时故障可在同一批准和作业 ID 下重试；主动暂停与崩溃后恢复均保留原批准和作业 ID。多边形导入、复杂边界掩膜、更多数据类型、源凭据引用与干净 Windows 安装回归尚未完成。
 - 安装包未签名，尚未向用户发布或部署身份服务、网关。
