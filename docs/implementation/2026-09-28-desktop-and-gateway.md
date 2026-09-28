@@ -29,7 +29,9 @@ npm run tauri:dev
 npm run tauri:build
 ```
 
-安装包在 `apps/geod-agent-desktop/src-tauri/target/release/bundle/nsis/GeoD Agent_0.1.0_x64-setup.exe`。2026-09-28 已在本机以 NSIS 静默模式安装到隔离测试目录：安装目录包含应用与卸载程序，HKCU 有 GeoD Agent 卸载记录；从安装目录启动后主窗口标题为 GeoD Agent、进程可响应，应用创建了 schema v2 的本地任务数据库。随后正常关闭窗口，静默卸载返回 0，安装目录与卸载记录消失；确认只含本次测试数据库后清理了测试 AppData。此项证明安装和启动，不证明原生界面的图源登记、批准、地图与下载交互已通过。浏览器 `npm run dev` 只提供界面预览，Tauri IPC 不可用。
+安装包在 `apps/geod-agent-desktop/src-tauri/target/release/bundle/nsis/GeoD Agent_0.1.0_x64-setup.exe`。2026-09-28 已在本机以 NSIS 静默模式安装到隔离测试目录：安装目录包含应用与卸载程序，HKCU 有 GeoD Agent 卸载记录；从安装目录启动后主窗口标题为 GeoD Agent、进程可响应，应用创建了 schema v2 的本地任务数据库。随后正常关闭窗口，静默卸载返回 0，安装目录与卸载记录消失；确认只含本次测试数据库后清理了测试 AppData。之后重建的安装包 SHA-256 为 `ad1f6f8db01afe6916427ce0d33d722817d5c5e98a0d4ae0e12e4db09e41ad72`，重建包尚未重复安装测试。浏览器 `npm run dev` 只提供界面预览，Tauri IPC 不可用。
+
+另以本次 Release 桌面可执行文件启动原生 WebView2 窗口，在 CDP 中确认 `window.__TAURI_INTERNALS__` 可用，并实际打开智能助手抽屉、图源登记弹窗。通过原生窗口提交非 HTTPS 公网身份地址后，Tauri 命令返回“服务地址必须是 HTTPS，或本机回环 HTTP”；没有保存服务配置或图源。截图在本地忽略目录 `artifacts/native-window.png`、`artifacts/native-agent.png`、`artifacts/native-source.png`、`artifacts/native-invalid-config.png`。测试进程与只含本次测试 SQLite 的 AppData 已清理。原生界面的图源保存、计划批准和下载交互仍待验收。
 
 模型网关需先配置本地环境变量：`GEOD_IDENTITY_ORIGIN`、`GEOD_AGENT_GATEWAY_SECRET`（与身份服务相同且至少 32 字符）、`LAOGAO_BASE_URL`（优先本机加密隧道）、`LAOGAO_API_KEY`（本产品独立的 New API 下游密钥）、`LAOGAO_MODEL`、`GEOD_AGENT_TOKEN_LIMIT` 与数据库路径。参考 `services/geod-agent-model-gateway/.env.example`，密钥不得写入仓库。设置后运行 `npm ci; npm test; npm start`。桌面应用首次在智能助手内设置身份站点和模型网关的 HTTPS 地址；本地联调可用 `127.0.0.1` HTTP。
 
@@ -37,7 +39,7 @@ npm run tauri:build
 
 ## 验证与未完成项
 
-- 已通过：`geod-core` 12 测试、`geod-task-engine` 17 测试、模型网关 7 测试、桌面服务 3 测试、GeoD OAuth 3 测试；桌面前端构建、Rust Clippy `-D warnings`、NSIS 安装包构建与隔离安装/启动/卸载冒烟。浏览器预览已检查助手抽屉；原生窗口仍需交互测试。作业恢复及成果查看会核对成果的作业 ID，不会将其他作业的有效目录误认作自己的结果。
+- 已通过：`geod-core` 12 测试、`geod-task-engine` 17 测试、模型网关 7 测试、桌面服务 3 测试、GeoD OAuth 3 测试；桌面前端构建、Rust Clippy `-D warnings`、NSIS 安装包构建与隔离安装/启动/卸载冒烟。原生窗口已检查工作区、助手抽屉、图源表单与无效地址的 IPC 拒绝；计划批准和下载仍需交互测试。作业恢复及成果查看会核对成果的作业 ID，不会将其他作业的有效目录误认作自己的结果。
 - 模型网关的工具调用与续答目前使用本地假身份服务和假上游模型验证。尚缺产品独立 New API 密钥、选定真实模型的工具调用/用量测试以及部署后的真实 GeoD 登录验收。
 - 桌面任务已保存带计划和图源版本绑定的瓦片检查点；恢复时逐片核对大小、SHA-256 与像素尺寸，已校验瓦片不重复请求。网络暂时故障可在同一批准和作业 ID 下重试；主动暂停与崩溃后恢复均保留原批准和作业 ID。多边形导入、复杂边界掩膜、更多数据类型、源凭据引用与干净 Windows 安装回归尚未完成。
 - 安装包未签名，尚未向用户发布或部署身份服务、网关。
