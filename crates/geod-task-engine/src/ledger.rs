@@ -1,12 +1,15 @@
-//! Durable plan, approval and queued-job ledger. Execution is added by a worker;
-//! no download is started just because a model asks for one.
+//! Durable plan, approval and job ledger. A model cannot grant approval.
 
-use crate::{plan, Plan, SourceDescriptor, TaskSpec};
+use crate::{plan, OutputFormat, Plan, SourceDescriptor, TaskSpec, TileScheme};
 use chrono::{DateTime, Utc};
+use geod_core::imagery::{self, HttpSource, ImageryRequest, Manifest};
 use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::{path::Path, time::Duration};
+use std::{
+    path::{Path, PathBuf},
+    time::Duration,
+};
 use uuid::Uuid;
 
 const DB_VERSION: i64 = 1;
@@ -90,6 +93,8 @@ pub struct JobEvent {
     pub seq: u64,
     pub occurred_at: DateTime<Utc>,
     pub state: JobState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error_code: Option<String>,
 }
 
 pub struct TaskStore {
@@ -317,6 +322,7 @@ impl TaskStore {
             seq: 1,
             occurred_at: now,
             state: JobState::Queued,
+            error_code: None,
         };
         let insert = tx.execute(
             "INSERT INTO jobs(job_id, plan_id, approval_id, plan_hash, idempotency_key, state, version, created_at)
@@ -360,6 +366,159 @@ impl TaskStore {
                 row.get::<_, String>(0)
             })?;
         rows.map(|row| Ok(serde_json::from_str(&row?)?)).collect()
+    }
+
+    fn transition(
+        &mut self,
+        job_id: &str,
+        expected: JobState,
+        next: JobState,
+        error_code: Option<&str>,
+        now: DateTime<Utc>,
+    ) -> Result<Job, LedgerError> {
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let current = read_job(&tx, job_id)?
+            .ok_or_else(|| LedgerError::new("JOB_NOT_FOUND", "Job was not found"))?;
+        if current.state != expected {
+            return Err(LedgerError::new(
+                "JOB_STATE_CONFLICT",
+                "Job state changed; reload it",
+            ));
+        }
+        let seq = current.version + 1;
+        let state = serde_json::to_value(next)?
+            .as_str()
+            .expect("state serializes as a string")
+            .to_owned();
+        tx.execute(
+            "UPDATE jobs SET state=?1, version=?2 WHERE job_id=?3 AND version=?4",
+            params![state, seq, job_id, current.version],
+        )?;
+        let event = JobEvent {
+            job_id: job_id.into(),
+            seq,
+            occurred_at: now,
+            state: next,
+            error_code: error_code.map(str::to_owned),
+        };
+        tx.execute(
+            "INSERT INTO job_events(job_id, seq, body) VALUES (?1, ?2, ?3)",
+            params![job_id, seq, serde_json::to_string(&event)?],
+        )?;
+        tx.commit()?;
+        self.get_job(job_id)?
+            .ok_or_else(|| LedgerError::new("STORAGE_ERROR", "Job disappeared after state update"))
+    }
+
+    /// Execute a previously approved job on this computer. The endpoint must
+    /// come from the same trusted registry as its public descriptor.
+    pub async fn run_job(
+        &mut self,
+        job_id: &str,
+        current_source: &SourceDescriptor,
+        endpoint: &HttpSource,
+        now: DateTime<Utc>,
+    ) -> Result<Manifest, LedgerError> {
+        let mut job = self
+            .get_job(job_id)?
+            .ok_or_else(|| LedgerError::new("JOB_NOT_FOUND", "Job was not found"))?;
+        if !matches!(job.state, JobState::Queued | JobState::Downloading) {
+            return Err(LedgerError::new(
+                "JOB_STATE_CONFLICT",
+                "Job is not runnable",
+            ));
+        }
+        let stored = self
+            .get_plan(&job.plan_id)?
+            .ok_or_else(|| LedgerError::new("PLAN_NOT_FOUND", "Plan was not found"))?;
+        let refreshed = plan(stored.plan.spec.clone(), current_source, now)
+            .map_err(|e| LedgerError::new(e.code, e.message))?;
+        let scheme_matches = matches!(
+            (current_source.scheme, endpoint.scheme),
+            (TileScheme::XYZ, imagery::TileScheme::XYZ)
+                | (TileScheme::TMS, imagery::TileScheme::TMS)
+        );
+        if refreshed.plan_hash != job.plan_hash
+            || endpoint.id != current_source.id
+            || endpoint.name != current_source.display_name
+            || endpoint.attribution != current_source.attribution
+            || endpoint.license != current_source.license
+            || endpoint.tile_size != current_source.tile_size
+            || endpoint.configuration_revision() != current_source.config_revision
+            || !scheme_matches
+        {
+            return Err(LedgerError::new(
+                "PLAN_STALE",
+                "Source or approved plan changed before execution",
+            ));
+        }
+        let destination = PathBuf::from(&stored.plan.spec.output_directory);
+        let request = ImageryRequest {
+            name: endpoint.name.clone(),
+            bounds: stored.plan.spec.bounds,
+            grids: stored.plan.tile_grids.iter().map(Into::into).collect(),
+            output_geotiff: stored
+                .plan
+                .spec
+                .output_formats
+                .contains(&OutputFormat::GeoTiff),
+            output_mbtiles: stored
+                .plan
+                .spec
+                .output_formats
+                .contains(&OutputFormat::Mbtiles),
+            max_tiles: stored.plan.spec.limits.max_tiles,
+            max_decoded_rgba_bytes: stored.plan.spec.limits.max_decoded_rgba_bytes,
+            destination: destination.clone(),
+            deadline: Duration::from_secs(1800),
+        };
+        if job.state == JobState::Queued {
+            job = self.transition(job_id, JobState::Queued, JobState::Downloading, None, now)?;
+        }
+        let result = if destination.exists() {
+            imagery::inspect_bundle(&destination)
+        } else {
+            imagery::fetch_bundle(&request, endpoint).await
+        };
+        match result {
+            Ok(_) => {
+                self.transition(job_id, job.state, JobState::Verifying, None, Utc::now())?;
+                match imagery::inspect_bundle(&destination) {
+                    Ok(manifest) => {
+                        self.transition(
+                            job_id,
+                            JobState::Verifying,
+                            JobState::Completed,
+                            None,
+                            Utc::now(),
+                        )?;
+                        Ok(manifest)
+                    }
+                    Err(error) => {
+                        self.transition(
+                            job_id,
+                            JobState::Verifying,
+                            JobState::Failed,
+                            Some(error.code),
+                            Utc::now(),
+                        )?;
+                        Err(LedgerError::new(error.code, error.message))
+                    }
+                }
+            }
+            Err(error) => {
+                self.transition(
+                    job_id,
+                    job.state,
+                    JobState::Failed,
+                    Some(error.code),
+                    Utc::now(),
+                )?;
+                Err(LedgerError::new(error.code, error.message))
+            }
+        }
     }
 }
 

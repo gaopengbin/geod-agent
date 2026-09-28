@@ -10,7 +10,7 @@ use std::path::{Component, Path};
 pub mod ledger;
 
 const MAX_PLAN_TILES: u64 = 4096;
-const MAX_PLAN_RGBA_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+const MAX_PLAN_RGBA_BYTES: u64 = 512 * 1024 * 1024;
 const POLICY_VERSION: &str = "imagery-plan-0.1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -120,6 +120,24 @@ pub struct PlanTileGrid {
 
 impl From<TileGrid> for PlanTileGrid {
     fn from(g: TileGrid) -> Self {
+        Self {
+            zoom: g.zoom,
+            x_min: g.x_min,
+            y_min: g.y_min,
+            x_max: g.x_max,
+            y_max: g.y_max,
+            columns: g.columns,
+            rows: g.rows,
+            tile_count: g.tile_count,
+            pixel_width: g.pixel_width,
+            pixel_height: g.pixel_height,
+            actual_bounds: g.actual_bounds,
+        }
+    }
+}
+
+impl From<&PlanTileGrid> for TileGrid {
+    fn from(g: &PlanTileGrid) -> Self {
         Self {
             zoom: g.zoom,
             x_min: g.x_min,

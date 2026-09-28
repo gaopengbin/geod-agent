@@ -2,13 +2,13 @@
 
 GeoD Agent 是面向地理数据获取与交付的独立桌面产品。用户描述目标，检查图源、区域和资源预算，确认后由自己的电脑下载、拼接、裁剪并核验成果。GeoD 托管模型负责理解需求和提出工具调用；影像瓦片不经 GeoD 模型服务器中转。
 
-**当前状态：已有本地影像计划与持久任务账本；尚无下载执行、托管模型或可安装程序。**
+**当前状态：已有本地影像计划、持久任务账本和合成图源执行链；尚无真实图源验收、托管模型或可安装程序。**
 
 ## 已实现的第一步
 
 本仓库现在有独立的 [`geod-core`](crates/geod-core) 格网计算和 [`geod-task-engine`](crates/geod-task-engine) 确定性计划。它们使用有版本的 [任务合同](contracts/0.1)，对授权图源元数据、范围、等级、输出目录和资源预算做校验，给出瓦片格网与 `planHash`。可运行样本和验证命令见[实施记录](docs/implementation/2026-09-28-planning-slice.md)。样本是合成数据，不下载第三方瓦片。
 
-本地 [SQLite 任务账本](docs/implementation/2026-09-28-task-ledger.md)进一步保存计划、批准、作业 ID 与事件，并在启动事务中校验计划和来源版本。当前作业只进入排队状态，还没有下载 worker。
+本地 [SQLite 任务账本](docs/implementation/2026-09-28-task-ledger.md)进一步保存计划、批准、作业 ID 与事件，并在启动事务中校验计划和来源版本。[本机影像执行切片](docs/implementation/2026-09-28-imagery-worker.md)已用合成 HTTP 图源生成 GeoTIFF、MBTiles 和可核验 manifest。真实图源、恢复、桌面入口、账号与托管模型还需开发和验收。
 
 ## 设计资料
 

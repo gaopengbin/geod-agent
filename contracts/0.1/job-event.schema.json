@@ -3,6 +3,12 @@
   "title": "JobEvent",
   "type": "object",
   "properties": {
+    "errorCode": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "jobId": {
       "type": "string"
     },
