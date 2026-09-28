@@ -20,6 +20,8 @@
 
 上表 Linux 包是本机可信 Ubuntu WSL 构建，不从生产服务器下载依赖。静态覆盖包只含登录页及其资源；部署前还需在服务器新目录中验证页面资源与现有 Nginx 静态路径配合，并在域名上做浏览器登录冒烟。
 
+2026-09-28 再次只读核对：腾讯云主机剩余空间约 57 GiB，`nginx -t` 通过；`/srv/laogao/current/geod-studio` 仍指向 `geod-sources-20260927-0984aed`，`/srv/laogao/current/geod-website` 仍指向 `geod-source-sync-20260927-abc4b9b`。Studio 本机健康接口返回 200，OAuth 授权接口返回 404，9115 未监听；账号 `store.json` 解析通过、权限为 600，新 Agent 网关数据库尚不存在。三个本地包的 SHA-256 与上表一致；归档成员名无绝对或 `..` 越界路径，网关包内 3 个相对软链接均指向归档中的文件。模型网关 7 项测试与桌面服务 5 项测试再次通过。此检查只说明发布基线未漂移，不代表生产发布已获授权或完成。
+
 ## 获批后的顺序
 
 1. 再次核对当前 GeoD Studio、网站 symlink 及 Nginx 配置未漂移。对账号 `store.json` 做 JSON 解析检查；在有写入可能时先做一致性备份。备份现有 PM2 与 Nginx 配置。新网关 SQLite 创建后运行 `PRAGMA quick_check`。保留完整旧发布与回滚链接。
