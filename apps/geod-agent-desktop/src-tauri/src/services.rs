@@ -141,17 +141,15 @@ fn load_config(path: &PathBuf) -> Result<ServiceConfig, ServiceError> {
         Err(io_error) if io_error.kind() == std::io::ErrorKind::NotFound => {
             let identity_origin = std::env::var("GEOD_AGENT_IDENTITY_ORIGIN")
                 .ok()
-                .or_else(|| option_env!("GEOD_AGENT_IDENTITY_ORIGIN").map(str::to_string));
+                .or_else(|| option_env!("GEOD_AGENT_IDENTITY_ORIGIN").map(str::to_string))
+                .unwrap_or_else(|| "https://geod.laogao.xyz".to_string());
             let gateway_origin = std::env::var("GEOD_AGENT_GATEWAY_ORIGIN")
                 .ok()
-                .or_else(|| option_env!("GEOD_AGENT_GATEWAY_ORIGIN").map(str::to_string));
+                .or_else(|| option_env!("GEOD_AGENT_GATEWAY_ORIGIN").map(str::to_string))
+                .unwrap_or_else(|| "https://geod.laogao.xyz".to_string());
             ServiceConfig {
-                identity_origin: identity_origin.ok_or_else(|| {
-                    error("SERVICE_NOT_CONFIGURED", "GeoD 账号授权服务尚未接通")
-                })?,
-                gateway_origin: gateway_origin.ok_or_else(|| {
-                    error("SERVICE_NOT_CONFIGURED", "GeoD 模型服务尚未接通")
-                })?,
+                identity_origin,
+                gateway_origin,
             }
         }
         Err(_) => return Err(error("SERVICE_NOT_CONFIGURED", "读取服务配置失败")),
@@ -175,6 +173,26 @@ fn client(origin: &str) -> Result<Client, ServiceError> {
     builder
         .build()
         .map_err(|_| error("NETWORK_ERROR", "网络客户端初始化失败"))
+}
+fn ensure_identity_available(origin: &str) -> Result<(), ServiceError> {
+    let response = client(origin)?
+        .get(format!("{origin}/api/geod/oauth/authorize"))
+        .timeout(Duration::from_secs(8))
+        .send()
+        .map_err(|_| error("IDENTITY_UNAVAILABLE", "GeoD 账号授权服务暂时不可达"))?;
+    let status = response.status();
+    if status.is_server_error() {
+        return Err(error("IDENTITY_UNAVAILABLE", "GeoD 账号授权服务暂时不可达"));
+    }
+    let value: Value = response
+        .json()
+        .map_err(|_| error("IDENTITY_UNAVAILABLE", "GeoD 账号授权接口尚未上线"))?;
+    if status != reqwest::StatusCode::BAD_REQUEST
+        || value.pointer("/error/code").and_then(Value::as_str) != Some("INVALID_OAUTH_REQUEST")
+    {
+        return Err(error("IDENTITY_UNAVAILABLE", "GeoD 账号授权接口尚未上线"));
+    }
+    Ok(())
 }
 fn token_response(value: TokenResponse, identity_origin: String) -> Result<Tokens, ServiceError> {
     if value.access_token.len() != 43
@@ -449,6 +467,7 @@ pub fn auth_begin(
             return Err(error("AUTH_IN_PROGRESS", "登录窗口已经打开"));
         }
     }
+    ensure_identity_available(&config.identity_origin)?;
     let listener = TcpListener::bind("127.0.0.1:0")
         .map_err(|_| error("CALLBACK_UNAVAILABLE", "无法建立本机授权回调"))?;
     listener
@@ -560,6 +579,37 @@ mod tests {
         assert!(validate_origin("http://example.com").is_err());
         assert!(validate_origin("https://example.com/path").is_err());
         assert!(validate_origin("https://user:password@example.com").is_err());
+    }
+
+    #[test]
+    fn login_preflight_requires_the_geod_oauth_route() {
+        for (status, body, available) in [
+            (
+                "400 Bad Request",
+                r#"{"error":{"code":"INVALID_OAUTH_REQUEST"}}"#,
+                true,
+            ),
+            ("404 Not Found", "<html>Not found</html>", false),
+            ("503 Service Unavailable", "<html>Unavailable</html>", false),
+            (
+                "400 Bad Request",
+                r#"{"error":{"code":"WRONG_ENDPOINT"}}"#,
+                false,
+            ),
+        ] {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let origin = format!("http://{}", listener.local_addr().unwrap());
+            let server = thread::spawn(move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                let mut request = [0_u8; 2048];
+                let count = stream.read(&mut request).unwrap();
+                assert!(String::from_utf8_lossy(&request[..count])
+                    .starts_with("GET /api/geod/oauth/authorize "));
+                write!(stream, "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+            });
+            assert_eq!(ensure_identity_available(&origin).is_ok(), available);
+            server.join().unwrap();
+        }
     }
 
     #[test]

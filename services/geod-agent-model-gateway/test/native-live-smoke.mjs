@@ -14,7 +14,14 @@ assert.ok(process.env.DEEPSEEK_API_KEY, "Set DEEPSEEK_API_KEY for this optional 
 if (process.platform !== "win32") throw new Error("This smoke test requires Windows WebView2");
 const exe = process.env.GEOD_AGENT_EXE || resolve(import.meta.dirname, "../../../apps/geod-agent-desktop/src-tauri/target/release/geod-agent-desktop.exe");
 const folder = mkdtempSync(resolve(tmpdir(), "geod-native-deepseek-"));
-const gatewaySecret = randomBytes(32).toString("hex");
+const upstreamIdentity = process.env.GEOD_OAUTH_UPSTREAM_ORIGIN;
+const browserCookie = process.env.GEOD_OAUTH_BROWSER_COOKIE;
+if (upstreamIdentity && (!browserCookie || !process.env.GEOD_OAUTH_GATEWAY_SECRET)) throw new Error("Real identity smoke test needs the browser session cookie and gateway secret");
+if (upstreamIdentity) {
+  const upstream = new URL(upstreamIdentity);
+  if (upstream.protocol !== "http:" || !["127.0.0.1", "localhost", "[::1]"].includes(upstream.hostname) || upstream.pathname !== "/" || upstream.search || upstream.hash) throw new Error("Real identity smoke test accepts only a local loopback origin");
+}
+const gatewaySecret = process.env.GEOD_OAUTH_GATEWAY_SECRET || randomBytes(32).toString("hex");
 const code = randomBytes(32).toString("base64url");
 const accessToken = randomBytes(32).toString("base64url");
 const refreshToken = randomBytes(32).toString("base64url");
@@ -59,7 +66,38 @@ try {
   await ensureDebugPortFree();
   identityServer = createServer(async (request, response) => {
     const url = new URL(request.url, "http://localhost");
+    if (upstreamIdentity) {
+      try {
+        const headers = new Headers();
+        for (const [name, value] of Object.entries(request.headers)) {
+          if (!["host", "connection", "content-length", "accept-encoding"].includes(name) && typeof value === "string") headers.set(name, value);
+        }
+        if (url.pathname === "/api/geod/oauth/authorize") {
+          headers.set("cookie", browserCookie);
+          if (request.method === "POST") headers.set("origin", upstreamIdentity);
+        }
+        const chunks = [];
+        for await (const chunk of request) chunks.push(chunk);
+        const upstream = await fetch(`${upstreamIdentity}${request.url}`, { method: request.method, headers, body: chunks.length ? Buffer.concat(chunks) : undefined, redirect: "manual", signal: AbortSignal.timeout(15_000) });
+        let body = Buffer.from(await upstream.arrayBuffer());
+        const allowed = ["content-type", "location", "cache-control", "content-security-policy", "referrer-policy"];
+        const responseHeaders = Object.fromEntries(allowed.map(name => [name, upstream.headers.get(name)]).filter(([, value]) => value));
+        if (request.method === "GET" && url.pathname === "/api/geod/oauth/authorize" && upstream.status === 200) {
+          // The isolated test account gives consent through the real POST route.
+          body = Buffer.from(body.toString("utf8").replace("</html>", "<script>document.forms[0].submit()</script></html>"));
+          delete responseHeaders["content-security-policy"];
+        }
+        response.writeHead(upstream.status, responseHeaders);
+        response.end(body);
+      } catch (error) { response.writeHead(502); response.end(`OAuth test proxy: ${error.message}`); }
+      return;
+    }
     if (request.method === "GET" && url.pathname === "/api/geod/oauth/authorize") {
+      if (!url.searchParams.has("client_id")) {
+        response.writeHead(400, { "content-type": "application/json" });
+        response.end(JSON.stringify({ error: { code: "INVALID_OAUTH_REQUEST" } }));
+        return;
+      }
       assert.equal(url.searchParams.get("client_id"), "geod-agent-desktop");
       assert.equal(url.searchParams.get("code_challenge_method"), "S256");
       challenge = url.searchParams.get("code_challenge") || "";
@@ -123,6 +161,7 @@ try {
   await waitFor(async () => await evaluate("(() => { const button = document.querySelector('.agent-auth-landing button'); return button && !button.disabled; })()"), 10_000, "login button");
   await evaluate("document.querySelector('.agent-auth-landing button').click()");
   await waitFor(async () => (await evaluate("window.__TAURI_INTERNALS__.invoke('auth_status')")).state === "connected", 30_000, "OAuth callback");
+  tokenIssued = true;
   console.error("Native OAuth callback completed");
   const sources = await evaluate("window.__TAURI_INTERNALS__.invoke('sources_list')");
   assert.ok(Array.isArray(sources));
