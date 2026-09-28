@@ -50,6 +50,24 @@ impl Fixture {
         rate_limit_first: bool,
         retry_after_seconds: Option<u64>,
     ) -> Self {
+        Self::start_mode_with_transient_errors(
+            missing_right,
+            tile_size,
+            tms,
+            rate_limit_first,
+            retry_after_seconds,
+            0,
+        )
+    }
+
+    fn start_mode_with_transient_errors(
+        missing_right: bool,
+        tile_size: u16,
+        tms: bool,
+        rate_limit_first: bool,
+        retry_after_seconds: Option<u64>,
+        temporary_failures: usize,
+    ) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         listener.set_nonblocking(true).unwrap();
         let address = listener.local_addr().unwrap();
@@ -89,7 +107,9 @@ impl Fixture {
                 }
                 times_worker.lock().unwrap().push(Instant::now());
                 let attempt = count_worker.fetch_add(1, Ordering::Relaxed);
-                let (status, body): (&str, &[u8]) = if rate_limit_first && attempt == 0 {
+                let (status, body): (&str, &[u8]) = if attempt < temporary_failures {
+                    ("503 Service Unavailable", b"")
+                } else if rate_limit_first && attempt == 0 {
                     ("429 Too Many Requests", b"")
                 } else {
                     match path {
@@ -353,6 +373,18 @@ async fn retries_one_rate_limited_tile_and_publishes_complete_bundle() {
         .await
         .unwrap();
     assert_eq!(fixture.requests.load(Ordering::Relaxed), 3);
+    assert_eq!(inspect_bundle(&output).unwrap().quality.status, "complete");
+}
+
+#[tokio::test]
+async fn recovers_after_four_temporary_service_errors() {
+    let fixture = Fixture::start_mode_with_transient_errors(false, 256, false, false, None, 4);
+    let directory = tempfile::tempdir().unwrap();
+    let output = directory.path().join("temporary-service-recovery");
+    let mut planned = request(output.clone(), 256);
+    planned.deadline = Duration::from_secs(30);
+    fetch_bundle(&planned, &fixture.source()).await.unwrap();
+    assert_eq!(fixture.requests.load(Ordering::Relaxed), 6);
     assert_eq!(inspect_bundle(&output).unwrap().quality.status, "complete");
 }
 

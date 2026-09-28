@@ -1,6 +1,6 @@
 # GeoD Agent 账号与 DeepSeek 服务发布记录
 
-状态：2026-09-28 经用户授权后，GeoD 账号 OAuth、DeepSeek 网关及 GeoD 登录页已切换到 `geod.laogao.xyz`。公开接口、服务端密钥、数据库与旧账号匿名接口已核验；最新桌面安装包已在隔离目录升级，完成一项用户批准的 Z18 原生影像任务。现有正式账号令牌已用于生产网关和已安装桌面对话验证；本轮没有重新观察浏览器授权回跳，令牌过期后的自动刷新也尚未做生产实测。
+状态：2026-09-28 经用户授权后，GeoD 账号 OAuth、DeepSeek 网关及 GeoD 登录页已切换到 `geod.laogao.xyz`。公开接口、服务端密钥、数据库与旧账号匿名接口已核验；最新桌面安装包已在隔离目录升级，完成一项用户批准的 Z18 原生影像任务。现有正式账号令牌已用于生产网关和已安装桌面对话验证，且桌面完成了无网页弹窗的自动令牌刷新；本轮没有重新观察浏览器授权回跳的瞬间。
 
 ## 上线前基线
 
@@ -16,7 +16,7 @@
 | `artifacts/linux-gateway-build/geod-oauth-studio-linux-x64-20260928.tar.gz` | `65b5e65d8d18d4a32c15980a587d4e68a534ab7e8a1e0fc4d6523fe5e226dc88` | 基于现网 `0984aed` 加 OAuth `3ae9b71` 与 GeoD 品牌 `9fb6f9d`；账号测试 20/20；Linux standalone HTTP 匿名跳转、同意、授权码、换令牌、检查与撤销全通过 |
 | `artifacts/linux-gateway-build/geod-agent-gateway-linux-x64-20260928-pm2-entry.tar.gz` | `2e8d846933705c51c9261b9008b31ad515c4be6399cd331ffc9a1ab0194994b4` | Linux x64 生产依赖与显式 `start.mjs` 入口；GeoJSON 边界规划工具合同已更新；网关测试 7/7，生产 PM2 在 9115 监听，健康接口和匿名 401 已验证 |
 | `artifacts/linux-gateway-build/geod-login-static-overlay-20260928.tar.gz` | `1425f0e594a89bbec9d035540a7fa3f4b40fa71dd8b13f344281d52504e8c425` | GeoD 品牌登录页与静态资源；HTML 引用 14/14 存在。须叠加到现有网站的**新**不可变发布目录，保留其他页面 |
-| `apps/geod-agent-desktop/src-tauri/target/release/bundle/nsis/GeoD Agent_0.1.0_x64-setup.exe` | `23929a16ee1f6c55010139728e715589bf763ea56e5377d8fd1df54c73945abe` | Windows 最新构建；启动时先检查本机凭据，不短暂误报“授权接口尚未上线”；隔离安装后无 OAuth 启动，只读复检已批准 USGS 作业：`completed`、3 项成果、缺失瓦片 0、有效 PNG 预览。旧版核心和任务引擎测试记录仍见下文 |
+| `apps/geod-agent-desktop/src-tauri/target/release/bundle/nsis/GeoD Agent_0.1.0_x64-setup.exe` | `b10e9ff157395b73fdd946e5d0821539f119d6b5b2fdabb4ec4b3c8c558f2f29` | Windows 最新构建；已在隔离目录安装，用正式账号完成 AI 对话、计划、成果页审批、同一作业恢复、90 瓦片下载与地图成果核验。影像源临时 5xx 后的有界重试已加固；核心测试 22/22。详细记录见下文 |
 
 上表 Linux 包由本机可信 Ubuntu WSL 构建、补入显式 PM2 入口并在本地重新打包，不从生产服务器下载依赖。静态覆盖包只含登录页及其资源；新目录中的 14 个引用已验证，域名上的真实浏览器账号授权仍待验收。
 
@@ -79,9 +79,16 @@
 
 - Windows 凭据库中已有 GeoD 正式站点的有效桌面令牌；仅在本机进程内读取，不打印或保存令牌。用该令牌直接请求生产 `/api/agent/usage` 得到 200，再完成 `sources_list → 本机图源结果 → 最终回答` 两次模型生成，均为 `settled`，本次额度账本增加 1,622 token、预留归零。该结果验证账号令牌、Studio introspect、Agent 网关和官方 DeepSeek 的联合调用。
 - [桌面 UI 实测脚本](../../apps/geod-agent-desktop/test/native-production-chat.mjs) 在隔离安装的同一版本中确认 `auth_status=connected`，从聊天输入框发出只读请求，观察本机 `sources_list` 工具消息及含 USGS/NAIP 的最终回答。生产额度账本为该对话增加 1,453 token、预留归零；没有创建下载计划、授予审批或启动下载。[桌面截图](../../artifacts/native-production-chat-20260928.png) 显示黑色深色主题、左侧对话、中央聊天、MapLibre 地图与 OpenStreetMap 底图。调试进程结束后，应用已恢复为无调试端口的正常安装版进程。
-- 现有凭据能在应用重启后直接连接，未弹出新的授权页。此次没有捕获浏览器完成 PKCE 回跳的瞬间；访问令牌当时仍有效，因此过期后的刷新和再次启动仍需单独验证。AI 在聊天里创建计划、用户从成果页审批、再回到聊天查看同一作业成果的全程 UI 验收尚未覆盖；Z18 下载链路和正式账号对话链路目前分别通过。
+- 现有凭据能在应用重启后直接连接，未弹出新的授权页。此次没有捕获浏览器完成 PKCE 回跳的瞬间。随后多次启动的原生实测使凭据库在 UTC 14:36:55 写入新令牌，访问令牌有效期到 UTC 14:51:55；测试脚本只调用 `auth_status`，未调用 `auth_begin`，表明生产刷新令牌流程已由桌面自动完成且未打开授权网页。AI 在聊天里创建计划、用户从成果页审批、再回到聊天查看同一作业成果的全程 UI 验收尚未覆盖；Z18 下载链路和正式账号对话链路目前分别通过。
 - 同一已安装版本进一步通过真实对话提交范围 `[-77.05,38.85,-77.04,38.86]`、Z18、GeoTIFF 和 MBTiles。DeepSeek 调用本机 `sources_list` 与 `plan_imagery`，成果页自动展开、OSM 地图显示 90 瓦片格网；[计划界面截图](../../artifacts/native-production-plan-20260928.png)。本次模型账本增加 3,229 token。SQLite 中新计划哈希为 `57f3a91700b7fd96757b0a7e52cee8593857b6391609f09182fd0a546495deb8`，范围、Z18、90 瓦片与两种格式匹配；审批数和作业数均为 0，建议保存目录不存在。该计划的目录不同于此前获批的下载目录，因此没有点击确认或下载。
 - 再从桌面最近任务中选中此前批准并完成的 Z18 作业，右侧显示完整成果和缺失瓦片 0，MapLibre 在 OSM 底图正确范围叠加真实 NAIP 预览；[成果地图截图](../../artifacts/native-production-results-20260928.png)。这一操作仅读取已有作业与文件，未产生模型用量或瓦片请求。安装程序的原生任务、正式 AI 对话规划、成果页和地图展示均已分别完成真实环境验收；同一条新计划从 UI 审批到下载的端到端操作仍缺少与该新保存目录相符的用户批准。
+
+## 2026-09-28 同一对话的审批与下载闭环
+
+- 用户随后单独批准 AI 对话新生成的计划 `57f3a91700b7fd96757b0a7e52cee8593857b6391609f09182fd0a546495deb8`：USGS NAIP Plus、范围 `[-77.05,38.85,-77.04,38.86]`、Z18、90 瓦片，GeoTIFF 和 MBTiles 保存至 `C:\Users\Administrator\Documents\GeoD Agent\imagery-20260928-143511-e679111b`，不覆盖文件，最低空闲空间预算 114,098,176 字节。此目录与先前批准的 G: 盘目录不同，获得新批准后才在界面勾选并点击“确认并开始下载”。
+- 首次界面下载在图源 HTTP 5xx 后以 `SOURCE_TEMPORARY` 失败，缓存保留 25 瓦片；沿用原作业、原审批点击“重试作业”后再次遇到图源临时 5xx，缓存累计 47 瓦片。邻近失败位置的单瓦片探针随后返回 HTTP 200、PNG，说明此时图源可达。未创建第二个作业，也未清空缓存。生产图源的具体 5xx 状态没有写入任务事件，事件只保留安全错误码。
+- 桌面核心将临时 5xx/网络/429 的单瓦片最大尝试次数由 4 增至 6，等待仍按指数退避、遵守 `Retry-After`、总作业时限及暂停/取消。新增“四次 503 后恢复”的真实本机 HTTP 测试；`geod-core` 全部 22 项测试通过。新 NSIS 安装包 SHA-256 见上表；隔离升级退出码 0，安装后 EXE SHA-256 为 `0d57712496160e94eb5c45694a5b00f099f2ad553597f8fb9d90c13ef3d173a2`，与同次 Release EXE 仅 Tauri 的 3 字节包标记不同。
+- [桌面界面实测脚本](../../apps/geod-agent-desktop/test/native-approved-ui-flow.mjs) 再次从该对话的成果页点击“重试作业”，沿用作业 `93fb7a0b-7cf8-45c1-99c6-353e6ea19487`，完成 90/90 瓦片、缺失 0。独立复算三项成果 SHA-256，MBTiles 完整性和 90 个 Z18 瓦片、USGS 署名、GeoTIFF EPSG:3857 及 1866×2395 像素、WGS84 边界、非空白像素、预览图、SQLite 计划哈希与审批账本均通过；任务事件 49 条。界面右侧显示已核验成果，地图在 OSM 底图上叠加真实影像：[最终界面截图](../../artifacts/native-approved-ui-flow-20260928.png)。测试结束后关闭临时调试进程并恢复普通安装版窗口。
 
 ## 原定获批发布顺序（供复盘）
 

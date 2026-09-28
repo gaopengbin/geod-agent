@@ -691,7 +691,10 @@ async fn get_tile_with_retry(
     started: Instant,
     deadline: Duration,
 ) -> Result<RgbaImage, CoreError> {
-    for attempt in 0..4 {
+    // ImageServer 5xx responses can outlast the first few short retries. Keep
+    // the wait bounded by the job deadline and interruptible by pause/cancel.
+    const MAX_TRANSIENT_ATTEMPTS: u32 = 6;
+    for attempt in 0..MAX_TRANSIENT_ATTEMPTS {
         if cancelled.load(Ordering::Relaxed) {
             return Err(CoreError::new(
                 "CANCELLED",
@@ -714,13 +717,14 @@ async fn get_tile_with_retry(
         match get_tile(client, url.clone(), tile_size, &mut retry_after).await {
             Ok(image) => return Ok(image),
             Err(error)
-                if attempt < 3
+                if attempt + 1 < MAX_TRANSIENT_ATTEMPTS
                     && matches!(
                         error.code,
                         "SOURCE_RATE_LIMITED" | "SOURCE_TEMPORARY" | "SOURCE_NETWORK"
                     ) =>
             {
-                let delay = Duration::from_secs(1 << attempt).max(retry_after.unwrap_or_default());
+                let delay =
+                    Duration::from_secs(1u64 << attempt).max(retry_after.unwrap_or_default());
                 if delay >= deadline.saturating_sub(started.elapsed()) {
                     return Err(error);
                 }
