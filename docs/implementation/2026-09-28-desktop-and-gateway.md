@@ -29,7 +29,7 @@ npm run tauri:dev
 npm run tauri:build
 ```
 
-安装包在 `apps/geod-agent-desktop/src-tauri/target/release/bundle/nsis/GeoD Agent_0.1.0_x64-setup.exe`，SHA-256 为 `37d28daf1deecaf114c70946f34f2f946c2eb9bb707efa2e96dbe295a4bf6c98`。早期包已在隔离目录完成 NSIS 安装、启动和卸载冒烟；用户批准的 USGS 样本随后通过原生窗口和安装后程序重开核验。当前构建默认使用 `https://geod.laogao.xyz` 作为身份与模型服务来源；登录前先检查 GeoD OAuth 路由，尚未上线时立即提示，不打开会等待超时的浏览器授权页。当前 Release 可执行文件已完成本地模拟账号授权、GeoJSON 附件和真实 DeepSeek 联调；最新安装包尚未重复安装验收。浏览器 `npm run dev` 只提供界面预览，Tauri IPC 不可用。
+安装包在 `apps/geod-agent-desktop/src-tauri/target/release/bundle/nsis/GeoD Agent_0.1.0_x64-setup.exe`，SHA-256 为 `37d28daf1deecaf114c70946f34f2f946c2eb9bb707efa2e96dbe295a4bf6c98`。早期包已在隔离目录完成 NSIS 安装、启动和卸载冒烟；用户批准的 USGS 样本随后通过原生窗口和安装后程序重开核验。最新 NSIS 包又在已有的隔离安装目录 `artifacts/install-native-approved/` 静默升级，安装器退出码为 0；旧版可执行文件与卸载器已先备份到 `artifacts/install-native-approved-backup-20260928/`。安装后的程序完成本地模拟账号授权、GeoJSON 附件导入/移除和真实 DeepSeek 工具调用，结算后模型额度预留为 0；本轮未运行新版卸载器。当前构建默认使用 `https://geod.laogao.xyz` 作为身份与模型服务来源；登录前先检查 GeoD OAuth 路由，尚未上线时立即提示，不打开会等待超时的浏览器授权页。浏览器 `npm run dev` 只提供界面预览，Tauri IPC 不可用。
 
 用户另行批准了 USGS NAIP 公共领域小样本：`[-77.05, 38.85, -77.04, 38.86]`、Z12、256 px、1 瓦片，输出到新目录 `artifacts/native-approved-usgs-20260928`。原生桌面界面已登记图源、生成计划、按计划哈希批准、执行下载并到达 `completed`；安装后程序重开也显示了同一作业。作业 ID `9b53d49f-3880-4e4d-b5e2-8564cbcb8244`，1/1 瓦片、3 项成果、`missingTiles=0`。`artifacts/verify-native-approved.py` 独立检查 SQLite 审批与事件、文件 SHA-256、GeoTIFF 的 30×38 像素与 EPSG:3857、MBTiles 完整性及 1 瓦片。
 
@@ -41,7 +41,7 @@ npm run tauri:build
 
 ## 验证与未完成项
 
-- 已通过：`geod-core` 15 测试、`geod-task-engine` 18 测试、模型网关 7 测试、桌面服务 4 测试、GeoD OAuth 3 测试；桌面前端构建、Rust Clippy `-D warnings`、NSIS 安装包构建与早期版本的隔离安装/启动/卸载冒烟。合成图源覆盖 GeoJSON 多边形、洞、透明 GeoTIFF/预览与完整瓦片 MBTiles；边界形状变化会改变审批哈希。原生窗口中用户批准的旧矩形计划已走完图源登记、批准、下载和成果核验。作业恢复及成果查看会核对成果的作业 ID，不会将其他作业的有效目录误认作自己的结果。
+- 已通过：`geod-core` 15 测试、`geod-task-engine` 18 测试、模型网关 7 测试、桌面服务 4 测试、GeoD OAuth 3 测试；桌面前端构建、Rust Clippy `-D warnings`、NSIS 安装包构建及最新包的隔离升级/启动冒烟。旧版安装包另通过隔离卸载冒烟。合成图源覆盖 GeoJSON 多边形、洞、透明 GeoTIFF/预览与完整瓦片 MBTiles；边界形状变化会改变审批哈希。原生窗口中用户批准的旧矩形计划已走完图源登记、批准、下载和成果核验。作业恢复及成果查看会核对成果的作业 ID，不会将其他作业的有效目录误认作自己的结果。
 - 网关单元测试使用本地假身份服务和假 DeepSeek 响应。另用旧 GeoD 网关本地配置中已有的 DeepSeek 密钥，只在测试进程内调用官方 API：真实 `deepseek-flash` 先发出 `sources_list` 工具调用，接收测试图源结果后续答；两次请求实际结算 1,552 token，保留额度归零。密钥未写入本仓库。可在服务端设置 `DEEPSEEK_API_KEY` 后运行 `npm run smoke:deepseek` 复验。
 - 原生桌面先用本地模拟 OAuth 服务联调，再连接本地真实 GeoD 账号 Next 服务、隔离注册的测试账号与真实 DeepSeek API：匿名登录跳转、同意授权、PKCE 换令牌、网关令牌检查、撤销均通过 HTTP；浏览器回跳进入 Windows 凭据库。桌面界面读取本机 1 个已授权 USGS 图源，并完成 `sources_list → 本机工具结果 → DeepSeek 续答`，最后一次真实账号联调结算 1,650 token，保留额度为 0。测试未发起下载，结束时调用登出并清理测试对话和账号数据。可先构建 Release 可执行文件，在网关目录设置 `DEEPSEEK_API_KEY` 后运行 `npm run smoke:native` 复验；完整账号路线的隔离测试脚本位于本地忽略目录 `artifacts/oauth-server-smoke.mjs`。线上 GeoD OAuth 路由仍未发布，生产账号登录后的完整链路尚未验收。
 - Linux x64 本地构建产物：`artifacts/linux-gateway-build/geod-agent-gateway-linux-x64-20260928-geojson-validated.tar.gz`，SHA-256 `69a6c52d87936f384b0763016531bb98c829ec80b92dc81b0a4ff9c819d5b405`，以 Node 22.23.2 在 Ubuntu WSL 安装生产依赖，更新 GeoJSON 工具合同后用 Node 22.22.3 再运行 7 项网关测试通过；`geod-oauth-studio-linux-x64-20260928.tar.gz`，SHA-256 `65b5e65d8d18d4a32c15980a587d4e68a534ab7e8a1e0fc4d6523fe5e226dc88`，基于现网 GeoD Studio 提交 `0984aed` 加两项 OAuth/品牌提交 `3ae9b71`、`9fb6f9d` 构建，20 项账号测试通过。Linux standalone 本地启动后，匿名跳转 303、用户同意 200、授权码交换 200、令牌检查 200、撤销后失效均通过；隔离账号数据在测试后清理。`geod-login-static-overlay-20260928.tar.gz`，SHA-256 `1425f0e594a89bbec9d035540a7fa3f4b40fa71dd8b13f344281d52504e8c425`，含 GeoD 品牌登录页及其 14 个引用的静态资源，引用完整性已检查。三个包均未上传生产服务器。

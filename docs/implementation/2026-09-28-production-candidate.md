@@ -16,7 +16,7 @@
 | `artifacts/linux-gateway-build/geod-oauth-studio-linux-x64-20260928.tar.gz` | `65b5e65d8d18d4a32c15980a587d4e68a534ab7e8a1e0fc4d6523fe5e226dc88` | 基于现网 `0984aed` 加 OAuth `3ae9b71` 与 GeoD 品牌 `9fb6f9d`；账号测试 20/20；Linux standalone HTTP 匿名跳转、同意、授权码、换令牌、检查与撤销全通过 |
 | `artifacts/linux-gateway-build/geod-agent-gateway-linux-x64-20260928-geojson-validated.tar.gz` | `69a6c52d87936f384b0763016531bb98c829ec80b92dc81b0a4ff9c819d5b405` | Linux x64 生产依赖；GeoJSON 边界规划工具合同已更新；Node 22.22.3 网关测试 7/7；桌面使用真实 DeepSeek 联调通过 |
 | `artifacts/linux-gateway-build/geod-login-static-overlay-20260928.tar.gz` | `1425f0e594a89bbec9d035540a7fa3f4b40fa71dd8b13f344281d52504e8c425` | GeoD 品牌登录页与静态资源；HTML 引用 14/14 存在。须叠加到现有网站的**新**不可变发布目录，保留其他页面 |
-| `apps/geod-agent-desktop/src-tauri/target/release/bundle/nsis/GeoD Agent_0.1.0_x64-setup.exe` | `37d28daf1deecaf114c70946f34f2f946c2eb9bb707efa2e96dbe295a4bf6c98` | Windows 构建、桌面服务测试 4/4；原生界面完成 GeoJSON 附件导入与移除、账号和真实 DeepSeek 工具调用联调；新安装包仍需隔离安装回归 |
+| `apps/geod-agent-desktop/src-tauri/target/release/bundle/nsis/GeoD Agent_0.1.0_x64-setup.exe` | `37d28daf1deecaf114c70946f34f2f946c2eb9bb707efa2e96dbe295a4bf6c98` | Windows 构建、桌面服务测试 4/4；原生界面完成 GeoJSON 附件导入与移除、账号和真实 DeepSeek 工具调用联调；已在现有隔离目录升级安装并从安装后程序复验，最新版卸载器未运行 |
 
 上表 Linux 包是本机可信 Ubuntu WSL 构建，不从生产服务器下载依赖。静态覆盖包只含登录页及其资源；部署前还需在服务器新目录中验证页面资源与现有 Nginx 静态路径配合，并在域名上做浏览器登录冒烟。
 
@@ -27,7 +27,7 @@
 3. 保留现有账号会话、支付和其他服务环境，给 GeoD Studio 增加一个独立共享的 `GEOD_AGENT_GATEWAY_SECRET`。新网关使用同一密钥、`GEOD_IDENTITY_ORIGIN=http://127.0.0.1:9114`、`DEEPSEEK_BASE_URL=https://api.deepseek.com`、默认 `deepseek-flash`、服务端 `DEEPSEEK_API_KEY` 和持久数据库路径。密钥文件放 `/srv/laogao/secrets/` 并限权；不得进入包、Git、PM2 输出或日志。
 4. 先在 loopback 启动新网关并验证 `/health` 与错误令牌 401。将 OAuth 版 Studio 作为新的不可变 release 切换 9114，验证既有 `/api/account/session`、`/api/geod-studio/health`、支付及图源入口无回归。账号 OAuth 路由先做 loopback 预检，再修改 Nginx；备份配置、`nginx -t` 通过才 reload。
 5. 将登录页覆盖包叠加到**由当前网站 release 复制而成**的新目录，核对 14 个引用、页面 GeoD 品牌与 `returnTo`。切换网站 symlink。随后验证 `https://geod.laogao.xyz/api/geod/oauth/authorize` 对缺参请求返回约定 400、浏览器登录与授权回跳、`/api/agent/usage` 的认证行为以及真实 DeepSeek 对话；下载功能仍须用户逐计划批准。
-6. 观察账号、网关、Nginx 的健康与错误、SQLite 完整性和额度结算；只报告已核实的上线功能。新的 Windows 安装包需要隔离安装/卸载回归和用户本机体验确认后再分发。
+6. 观察账号、网关、Nginx 的健康与错误、SQLite 完整性和额度结算；只报告已核实的上线功能。新的 Windows 安装包已完成隔离升级与启动，公开分发前仍需用户本机体验确认与最新版卸载回归。
 
 ## 回滚
 
