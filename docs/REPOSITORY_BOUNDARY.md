@@ -10,4 +10,4 @@ GeoD Agent 在本仓库独立开发、版本管理、测试和发布。旧 GeoD 
 
 ## 当前状态
 
-本仓库已有独立的瓦片格网计算、本地计划内核、版本化合同、[本地任务账本](implementation/2026-09-28-task-ledger.md)和[合成图源影像执行链](implementation/2026-09-28-imagery-worker.md)。没有桌面安装包、模型网关或真实第三方图源验收。
+本仓库已有独立的瓦片格网计算、本地计划内核、版本化合同、[本地任务账本](implementation/2026-09-28-task-ledger.md)、真实 USGS 图源的影像执行链、Windows 桌面安装包和直连 DeepSeek 的模型网关。GeoD OAuth 与模型服务已有本地端到端验证，但尚未发布上线；当前实现与未完成项见[实施记录](implementation/2026-09-28-desktop-and-gateway.md)。
