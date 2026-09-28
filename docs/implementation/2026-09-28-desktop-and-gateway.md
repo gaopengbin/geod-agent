@@ -29,7 +29,7 @@ npm run tauri:dev
 npm run tauri:build
 ```
 
-安装包在 `apps/geod-agent-desktop/src-tauri/target/release/bundle/nsis/GeoD Agent_0.1.0_x64-setup.exe`，SHA-256 为 `0c2428b79f6ce209c968f24330199258b863373ff61109f3f4b07850e0cc22e0`。早期包已在隔离目录完成 NSIS 安装、启动和卸载冒烟；用户批准的 USGS 样本随后通过原生窗口和安装后程序重开核验。最新 NSIS 包在已有的隔离安装目录 `artifacts/install-native-approved/` 静默升级，本次安装器退出码为 0；安装后已用原生程序启动和成果复检确认升级；已核对安装后程序含本次前端与 MapLibre worker 资源；未打开浏览器授权页。较早一版可执行文件保存在 `artifacts/install-before-auth-isolation-20260928.exe`。此前安装后的程序完成本地模拟账号授权、GeoJSON 附件导入/移除和真实 DeepSeek 工具调用，结算后模型额度预留为 0；当前包新增任务格网、读取覆盖层、模型成果工具隐私过滤及执行前磁盘空间检查。最新包已通过无 OAuth 的原生只读成果复检，但尚未重新执行会打开授权浏览器的真实模型联调。当前构建默认使用 `https://geod.laogao.xyz` 作为身份与模型服务来源；登录前先检查 GeoD OAuth 路由，尚未上线时立即提示，不打开会等待超时的浏览器授权页。浏览器 `npm run dev` 只提供界面预览，Tauri IPC 不可用。
+安装包在 `apps/geod-agent-desktop/src-tauri/target/release/bundle/nsis/GeoD Agent_0.1.0_x64-setup.exe`，SHA-256 为 `9ce6248aaf0d9ae91cb3e8150354a36df835ef363ed5bb746dee60a227fb0e0e`。早期包已在隔离目录完成 NSIS 安装、启动和卸载冒烟；用户批准的 USGS 样本随后通过原生窗口和安装后程序重开核验。最新 NSIS 包在已有的隔离安装目录 `artifacts/install-native-approved/` 静默升级，本次安装器退出码为 0；安装后已用原生程序启动和成果复检确认升级；已核对安装后程序含本次前端与 MapLibre worker 资源；未打开浏览器授权页。较早一版可执行文件保存在 `artifacts/install-before-auth-isolation-20260928.exe`。此前安装后的程序完成本地模拟账号授权、GeoJSON 附件导入/移除和真实 DeepSeek 工具调用，结算后模型额度预留为 0；当前包新增任务格网、读取覆盖层、模型成果工具隐私过滤及执行前磁盘空间检查。最新包已通过无 OAuth 的原生只读成果复检，但尚未重新执行会打开授权浏览器的真实模型联调。当前构建默认使用 `https://geod.laogao.xyz` 作为身份与模型服务来源；登录前先检查 GeoD OAuth 路由，尚未上线时立即提示，不打开会等待超时的浏览器授权页。浏览器 `npm run dev` 只提供界面预览，Tauri IPC 不可用。
 
 用户另行批准了 USGS NAIP 公共领域小样本：`[-77.05, 38.85, -77.04, 38.86]`、Z12、256 px、1 瓦片，输出到新目录 `artifacts/native-approved-usgs-20260928`。原生桌面界面已登记图源、生成计划、按计划哈希批准、执行下载并到达 `completed`；安装后程序重开也显示了同一作业。作业 ID `9b53d49f-3880-4e4d-b5e2-8564cbcb8244`，1/1 瓦片、3 项成果、`missingTiles=0`。`artifacts/verify-native-approved.py` 独立检查 SQLite 审批与事件、文件 SHA-256、GeoTIFF 的 30×38 像素与 EPSG:3857、MBTiles 完整性及 1 瓦片。
 
@@ -61,3 +61,4 @@ npm run tauri:build
 - 安装包未签名，尚未向用户发布或部署身份服务、网关。
 - 新版桌面壳先注册 Tauri 单实例插件。`test/single-instance.ps1` 分别对 Release 程序和隔离安装目录程序执行双启动：第二进程退出码均为 0，原进程保持唯一；测试只停止自己启动的进程。NSIS 包在隔离目录静默升级，安装后只读 IPC 复检已批准 USGS 作业仍为 `completed`、3 项成果、缺失瓦片 0、有效 PNG。未打开账号授权页或发起影像下载。窗口唤回代码已编译，焦点变化未单独做自动化断言。
 - 模型 `plan_imagery` 工具调用现在用生成请求 ID 与工具调用 ID 绑定本机计划 ID；应用崩溃后重新处理同一已结算工具调用时，先取回原计划，保留原输出目录、计划哈希与审批目标。账本测试跨进程重开、改变重放参数及另一工具调用，20 项通过；桌面 Rust 7 项、前端构建通过。新版 NSIS 在隔离目录安装后与包内程序一致，原生只读 IPC 复检旧 USGS 作业仍为 `completed`、3 项成果、缺失瓦片 0、有效 PNG。未运行会打开浏览器的模型联调，也未下载影像。
+- 桌面登录现在在网络预检前原子占用授权流程；同时发起的第二个请求立即返回 `AUTH_IN_PROGRESS`，预检或回调监听准备失败会释放占用，避免同一窗口开启两次网页登录。无浏览器的并发与失败清理测试使桌面 Rust 测试达到 8 项，Clippy 通过。最新版 NSIS 在隔离目录升级后与包内程序一致，原生只读检查旧 USGS 作业仍为 `completed`、3 项成果、缺失瓦片 0、有效 PNG。本次未打开授权页；真实网页授权和生产模型仍需上线后验收。

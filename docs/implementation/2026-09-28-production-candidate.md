@@ -16,7 +16,7 @@
 | `artifacts/linux-gateway-build/geod-oauth-studio-linux-x64-20260928.tar.gz` | `65b5e65d8d18d4a32c15980a587d4e68a534ab7e8a1e0fc4d6523fe5e226dc88` | 基于现网 `0984aed` 加 OAuth `3ae9b71` 与 GeoD 品牌 `9fb6f9d`；账号测试 20/20；Linux standalone HTTP 匿名跳转、同意、授权码、换令牌、检查与撤销全通过 |
 | `artifacts/linux-gateway-build/geod-agent-gateway-linux-x64-20260928-geojson-validated.tar.gz` | `69a6c52d87936f384b0763016531bb98c829ec80b92dc81b0a4ff9c819d5b405` | Linux x64 生产依赖；GeoJSON 边界规划工具合同已更新；Node 22.22.3 网关测试 7/7；桌面使用真实 DeepSeek 联调通过 |
 | `artifacts/linux-gateway-build/geod-login-static-overlay-20260928.tar.gz` | `1425f0e594a89bbec9d035540a7fa3f4b40fa71dd8b13f344281d52504e8c425` | GeoD 品牌登录页与静态资源；HTML 引用 14/14 存在。须叠加到现有网站的**新**不可变发布目录，保留其他页面 |
-| `apps/geod-agent-desktop/src-tauri/target/release/bundle/nsis/GeoD Agent_0.1.0_x64-setup.exe` | `0c2428b79f6ce209c968f24330199258b863373ff61109f3f4b07850e0cc22e0` | Windows 构建；桌面服务 7 项、前端 9 项、核心 21 项、任务引擎 19 项测试；加入缺块部分成果、磁盘检查、模型请求和成果核验恢复；隔离安装后无 OAuth 启动，只读复检已批准 USGS 作业：`completed`、3 项成果、缺失瓦片 0、有效 PNG 预览 |
+| `apps/geod-agent-desktop/src-tauri/target/release/bundle/nsis/GeoD Agent_0.1.0_x64-setup.exe` | `9ce6248aaf0d9ae91cb3e8150354a36df835ef363ed5bb746dee60a227fb0e0e` | Windows 构建；桌面服务 7 项、前端 9 项、核心 21 项、任务引擎 19 项测试；加入缺块部分成果、磁盘检查、模型请求和成果核验恢复；隔离安装后无 OAuth 启动，只读复检已批准 USGS 作业：`completed`、3 项成果、缺失瓦片 0、有效 PNG 预览 |
 
 上表 Linux 包是本机可信 Ubuntu WSL 构建，不从生产服务器下载依赖。静态覆盖包只含登录页及其资源；部署前还需在服务器新目录中验证页面资源与现有 Nginx 静态路径配合，并在域名上做浏览器登录冒烟。
 
@@ -37,6 +37,8 @@
 桌面版已加入单实例保护：重复启动不会创建第二个独立的登录回调或下载 worker。新 NSIS 包在隔离目录静默升级，Release 程序及安装后程序的双启动检查均得到一个留存进程；安装后原生 IPC 只读核验了既有 USGS 成果。未打开浏览器或访问图源；生产账号和模型服务仍未更改。
 
 模型工具的 `plan_imagery` 重放现复用原计划 ID、目录与审批目标，避免崩溃恢复生成第二份计划。账本重启测试、前端构建、桌面 Rust 测试和隔离安装后的既有成果只读复检通过；NSIS SHA-256 已更新至上表。此轮没有生产部署、网页登录或新影像下载。
+
+桌面 OAuth 的并发入口已收紧：预检前占用授权流程，第二次触发直接返回进行中；失败路径释放占用。无浏览器测试、NSIS 隔离升级和已批准 USGS 成果只读复检通过，安装包哈希已更新。此检查不代表生产账号服务上线。
 
 ## 获批后的顺序
 

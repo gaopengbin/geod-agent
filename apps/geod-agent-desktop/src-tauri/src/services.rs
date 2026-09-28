@@ -36,10 +36,47 @@ pub struct ServiceConfig {
     pub identity_origin: String,
     pub gateway_origin: String,
 }
-#[derive(Default)]
+#[derive(Debug, Default)]
 struct Flow {
     pending: bool,
     error: Option<String>,
+}
+#[derive(Debug)]
+struct FlowReservation {
+    flow: Arc<Mutex<Flow>>,
+    transferred: bool,
+}
+impl FlowReservation {
+    fn acquire(flow: &Arc<Mutex<Flow>>) -> Result<Self, ServiceError> {
+        let mut current = flow.lock().expect("flow mutex poisoned");
+        if current.pending {
+            return Err(error("AUTH_IN_PROGRESS", "GeoD 登录流程已在进行"));
+        }
+        current.pending = true;
+        current.error = None;
+        Ok(Self {
+            flow: Arc::clone(flow),
+            transferred: false,
+        })
+    }
+
+    fn fail(&mut self, message: &str) {
+        let mut current = self.flow.lock().expect("flow mutex poisoned");
+        current.pending = false;
+        current.error = Some(message.into());
+        self.transferred = true;
+    }
+
+    fn transfer(mut self) {
+        self.transferred = true;
+    }
+}
+impl Drop for FlowReservation {
+    fn drop(&mut self) {
+        if !self.transferred {
+            self.fail("登录准备失败，请重试");
+        }
+    }
 }
 pub struct ServiceState {
     config_path: PathBuf,
@@ -475,13 +512,11 @@ pub fn auth_begin(
             return Err(error("AUTH_ACTIVE", "请先退出当前 GeoD 账号"));
         }
     }
-    {
-        let flow = state.flow.lock().expect("flow mutex poisoned");
-        if flow.pending {
-            return Err(error("AUTH_IN_PROGRESS", "登录窗口已经打开"));
-        }
+    let mut reservation = FlowReservation::acquire(&state.flow)?;
+    if let Err(cause) = ensure_identity_available(&config.identity_origin) {
+        reservation.fail(&cause.message);
+        return Err(cause);
     }
-    ensure_identity_available(&config.identity_origin)?;
     let listener = TcpListener::bind("127.0.0.1:0")
         .map_err(|_| error("CALLBACK_UNAVAILABLE", "无法建立本机授权回调"))?;
     listener
@@ -513,30 +548,30 @@ pub fn auth_begin(
         .append_pair("code_challenge", &challenge)
         .append_pair("code_challenge_method", "S256")
         .append_pair("state", &nonce);
-    {
-        let mut flow = state.flow.lock().expect("flow mutex poisoned");
-        flow.pending = true;
-        flow.error = None;
-    }
     if app.opener().open_url(url.as_str(), None::<&str>).is_err() {
-        let mut flow = state.flow.lock().expect("flow mutex poisoned");
-        flow.pending = false;
-        flow.error = Some("无法打开系统浏览器".into());
+        reservation.fail("无法打开系统浏览器");
         return Err(error("BROWSER_UNAVAILABLE", "无法打开系统浏览器"));
     }
     let flow = Arc::clone(&state.flow);
     let credential_lock = Arc::clone(&state.credential_lock);
-    thread::spawn(move || {
-        complete_flow(
-            listener,
-            nonce,
-            verifier,
-            redirect_uri,
-            config,
-            flow,
-            credential_lock,
-        )
-    });
+    thread::Builder::new()
+        .name("geod-oauth-callback".into())
+        .spawn(move || {
+            complete_flow(
+                listener,
+                nonce,
+                verifier,
+                redirect_uri,
+                config,
+                flow,
+                credential_lock,
+            )
+        })
+        .map_err(|_| {
+            reservation.fail("无法等待本机授权回调");
+            error("CALLBACK_UNAVAILABLE", "无法等待本机授权回调")
+        })?;
+    reservation.transfer();
     Ok(AuthStatus {
         state: "waiting",
         user_id: None,
@@ -579,6 +614,24 @@ pub fn auth_logout(state: State<'_, ServiceState>) -> Result<AuthStatus, Service
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn authorization_reservation_rejects_parallel_starts_and_releases_failed_preflight() {
+        let flow = Arc::new(Mutex::new(Flow::default()));
+        let reservation = FlowReservation::acquire(&flow).unwrap();
+        let competing = Arc::clone(&flow);
+        let duplicate = thread::spawn(move || FlowReservation::acquire(&competing).err().unwrap());
+        assert_eq!(duplicate.join().unwrap().code, "AUTH_IN_PROGRESS");
+        drop(reservation);
+        assert!(!flow.lock().unwrap().pending);
+
+        let mut retry = FlowReservation::acquire(&flow).unwrap();
+        retry.fail("GeoD 授权接口尚未上线");
+        drop(retry);
+        let current = flow.lock().unwrap();
+        assert!(!current.pending);
+        assert_eq!(current.error.as_deref(), Some("GeoD 授权接口尚未上线"));
+    }
 
     #[test]
     fn service_origins_require_https_or_loopback() {
