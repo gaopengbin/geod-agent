@@ -25,14 +25,23 @@ function safeUrl(raw, label) {
   }
   return url.toString().replace(/\/$/, "");
 }
+function deepSeekUrl(raw) {
+  const base = safeUrl(raw, "DEEPSEEK_BASE_URL");
+  const url = new URL(base);
+  if (!["api.deepseek.com", "127.0.0.1", "localhost", "[::1]"].includes(url.hostname) ||
+      (url.hostname === "api.deepseek.com" && (url.protocol !== "https:" || url.port || url.pathname !== "/"))) {
+    throw new Error("DEEPSEEK_BASE_URL must be the official API or local loopback for testing");
+  }
+  return base;
+}
 export function readConfig(env = process.env) {
   const secret = env.GEOD_AGENT_GATEWAY_SECRET ?? "";
-  const apiKey = env.LAOGAO_API_KEY ?? "";
-  const model = env.LAOGAO_MODEL ?? "";
+  const apiKey = env.DEEPSEEK_API_KEY ?? "";
+  const model = env.DEEPSEEK_MODEL || "deepseek-flash";
   const host = env.GEOD_AGENT_LISTEN_HOST || "127.0.0.1";
-  if (secret.length < 32 || !apiKey || !model || !env.GEOD_IDENTITY_ORIGIN) throw new Error("GeoD identity, gateway secret, project API key and model must be configured");
+  if (secret.length < 32 || !apiKey || !env.GEOD_IDENTITY_ORIGIN) throw new Error("GeoD identity, gateway secret and DeepSeek API key must be configured");
   if (!["127.0.0.1", "localhost", "::1"].includes(host)) throw new Error("Gateway must listen on loopback behind a TLS reverse proxy");
-  if (!/^[a-zA-Z0-9._:/-]{1,128}$/.test(model)) throw new Error("LAOGAO_MODEL is invalid");
+  if (!["deepseek-flash", "deepseek-v4-pro"].includes(model)) throw new Error("DEEPSEEK_MODEL is invalid");
   const port = Number(env.GEOD_AGENT_LISTEN_PORT || 8786);
   if (!Number.isSafeInteger(port) || port < 1 || port > 65535) throw new Error("Gateway port is invalid");
   const tokenLimit = Number(env.GEOD_AGENT_TOKEN_LIMIT || 100_000);
@@ -40,7 +49,7 @@ export function readConfig(env = process.env) {
   return {
     host, port, secret, apiKey, model,
     identityOrigin: safeUrl(env.GEOD_IDENTITY_ORIGIN, "GEOD_IDENTITY_ORIGIN"),
-    upstreamBase: safeUrl(env.LAOGAO_BASE_URL || "http://127.0.0.1:19094/v1", "LAOGAO_BASE_URL"),
+    upstreamBase: deepSeekUrl(env.DEEPSEEK_BASE_URL || "https://api.deepseek.com"),
     dbPath: resolve(env.GEOD_AGENT_DB_PATH || "./data/agent-model.sqlite"),
     tokenLimit,
   };
@@ -121,7 +130,7 @@ export function createGatewayServer(config, { fetchImpl = fetch } = {}) {
       try {
         upstream = await fetchImpl(`${config.upstreamBase}/chat/completions`, {
           method: "POST", redirect: "error", headers: { authorization: `Bearer ${config.apiKey}`, "content-type": "application/json" },
-          body: JSON.stringify({ model: config.model, messages: [{ role: "system", content: SYSTEM }, ...messages], tools: TOOLS, tool_choice: "auto", max_tokens: 1024, stream: false }),
+          body: JSON.stringify({ model: config.model, messages: [{ role: "system", content: SYSTEM }, ...messages], tools: TOOLS, tool_choice: "auto", thinking: { type: "disabled" }, max_tokens: 1024, stream: false }),
           signal: AbortSignal.timeout(45_000),
         });
       } catch {

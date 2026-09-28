@@ -25,11 +25,12 @@ before(async () => {
     response.end(JSON.stringify({ active: JSON.parse(body).token === TOKEN ? { userId: "user-1", clientId: "geod-agent-desktop", scope: "geod:agent", expiresAt: Date.now() + 60_000 } : null }));
   });
   upstreamServer = createServer(async (request, response) => {
-    assert.equal(request.url, "/v1/chat/completions");
+    assert.equal(request.url, "/chat/completions");
     assert.equal(request.headers.authorization, "Bearer project-key");
     let body = ""; for await (const part of request) body += part;
     const payload = JSON.parse(body);
-    assert.equal(payload.model, "fake-geod-model");
+    assert.equal(payload.model, "deepseek-flash");
+    assert.deepEqual(payload.thinking, { type: "disabled" });
     assert.equal(payload.tools.some(tool => tool.function.name === "jobs_start"), false);
     calls++;
     if (failUpstream) { response.writeHead(503); response.end("service unavailable"); return; }
@@ -41,7 +42,7 @@ before(async () => {
   });
   const identityOrigin = await listen(identityServer);
   const upstreamOrigin = await listen(upstreamServer);
-  const config = readConfig({ GEOD_AGENT_GATEWAY_SECRET: SECRET, LAOGAO_API_KEY: "project-key", LAOGAO_MODEL: "fake-geod-model", GEOD_IDENTITY_ORIGIN: identityOrigin, LAOGAO_BASE_URL: `${upstreamOrigin}/v1`, GEOD_AGENT_DB_PATH: join(folder, "gateway.sqlite"), GEOD_AGENT_TOKEN_LIMIT: "40000" });
+  const config = readConfig({ GEOD_AGENT_GATEWAY_SECRET: SECRET, DEEPSEEK_API_KEY: "project-key", GEOD_IDENTITY_ORIGIN: identityOrigin, DEEPSEEK_BASE_URL: upstreamOrigin, GEOD_AGENT_DB_PATH: join(folder, "gateway.sqlite"), GEOD_AGENT_TOKEN_LIMIT: "40000" });
   gateway = createGatewayServer(config);
   base = await listen(gateway);
 });
@@ -88,7 +89,10 @@ test("ambiguous upstream failure remains reserved for reconciliation", async () 
 });
 
 test("public HTTP upstream and identity are rejected except loopback", () => {
-  assert.throws(() => readConfig({ GEOD_AGENT_GATEWAY_SECRET: SECRET, LAOGAO_API_KEY: "key", LAOGAO_MODEL: "model", GEOD_IDENTITY_ORIGIN: "http://example.com", LAOGAO_BASE_URL: "http://127.0.0.1:19094/v1" }), /HTTPS/);
+  assert.throws(() => readConfig({ GEOD_AGENT_GATEWAY_SECRET: SECRET, DEEPSEEK_API_KEY: "key", GEOD_IDENTITY_ORIGIN: "http://example.com" }), /HTTPS/);
+  assert.throws(() => readConfig({ GEOD_AGENT_GATEWAY_SECRET: SECRET, DEEPSEEK_API_KEY: "key", GEOD_IDENTITY_ORIGIN: "http://127.0.0.1:8787", DEEPSEEK_BASE_URL: "https://example.com" }), /official API/);
+  assert.throws(() => readConfig({ GEOD_AGENT_GATEWAY_SECRET: SECRET, DEEPSEEK_API_KEY: "key", GEOD_IDENTITY_ORIGIN: "http://127.0.0.1:8787", DEEPSEEK_BASE_URL: "https://api.deepseek.com:8443" }), /official API/);
+  assert.throws(() => readConfig({ GEOD_AGENT_GATEWAY_SECRET: SECRET, DEEPSEEK_API_KEY: "key", GEOD_IDENTITY_ORIGIN: "http://127.0.0.1:8787", DEEPSEEK_MODEL: "deepseek-chat" }), /DEEPSEEK_MODEL/);
 });
 
 test("identity and upstream redirects cannot forward credentials", async () => {
@@ -103,8 +107,8 @@ test("identity and upstream redirects cannot forward credentials", async () => {
     response.writeHead(307, { location: `${destinationOrigin}/upstream` }); response.end();
   });
   const upstreamOrigin = await listen(redirectUpstream);
-  const identityConfig = readConfig({ GEOD_AGENT_GATEWAY_SECRET: SECRET, LAOGAO_API_KEY: "project-key", LAOGAO_MODEL: "fake-geod-model", GEOD_IDENTITY_ORIGIN: identityOrigin, LAOGAO_BASE_URL: `${upstreamOrigin}/v1`, GEOD_AGENT_DB_PATH: join(folder, "identity-redirect.sqlite") });
-  const upstreamConfig = readConfig({ GEOD_AGENT_GATEWAY_SECRET: SECRET, LAOGAO_API_KEY: "project-key", LAOGAO_MODEL: "fake-geod-model", GEOD_IDENTITY_ORIGIN: `http://127.0.0.1:${identityServer.address().port}`, LAOGAO_BASE_URL: `${upstreamOrigin}/v1`, GEOD_AGENT_DB_PATH: join(folder, "upstream-redirect.sqlite") });
+  const identityConfig = readConfig({ GEOD_AGENT_GATEWAY_SECRET: SECRET, DEEPSEEK_API_KEY: "project-key", GEOD_IDENTITY_ORIGIN: identityOrigin, DEEPSEEK_BASE_URL: upstreamOrigin, GEOD_AGENT_DB_PATH: join(folder, "identity-redirect.sqlite") });
+  const upstreamConfig = readConfig({ GEOD_AGENT_GATEWAY_SECRET: SECRET, DEEPSEEK_API_KEY: "project-key", GEOD_IDENTITY_ORIGIN: `http://127.0.0.1:${identityServer.address().port}`, DEEPSEEK_BASE_URL: upstreamOrigin, GEOD_AGENT_DB_PATH: join(folder, "upstream-redirect.sqlite") });
   const identityGateway = createGatewayServer(identityConfig);
   const upstreamGateway = createGatewayServer(upstreamConfig);
   const identityBase = await listen(identityGateway);
@@ -122,7 +126,7 @@ test("identity and upstream redirects cannot forward credentials", async () => {
 });
 
 test("token limits reject invalid quota configuration", () => {
-  const config = { GEOD_AGENT_GATEWAY_SECRET: SECRET, LAOGAO_API_KEY: "key", LAOGAO_MODEL: "model", GEOD_IDENTITY_ORIGIN: "http://127.0.0.1:8787" };
+  const config = { GEOD_AGENT_GATEWAY_SECRET: SECRET, DEEPSEEK_API_KEY: "key", GEOD_IDENTITY_ORIGIN: "http://127.0.0.1:8787" };
   for (const limit of ["-1", "NaN", "19999", "100000001"]) {
     assert.throws(() => readConfig({ ...config, GEOD_AGENT_TOKEN_LIMIT: limit }), /token limit/);
   }
