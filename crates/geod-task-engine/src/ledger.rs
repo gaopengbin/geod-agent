@@ -562,13 +562,12 @@ impl TaskStore {
         });
         match inspected {
             Ok(manifest) => {
-                self.transition(
-                    job_id,
-                    JobState::Verifying,
-                    JobState::Completed,
-                    None,
-                    Utc::now(),
-                )?;
+                let final_state = if manifest.quality.status == "partial" {
+                    JobState::Partial
+                } else {
+                    JobState::Completed
+                };
+                self.transition(job_id, JobState::Verifying, final_state, None, Utc::now())?;
                 let cache_parent = self
                     .db_path
                     .parent()
@@ -616,8 +615,10 @@ impl TaskStore {
                 Ok(_) => completed += 1,
                 Err(error) => {
                     let state = self.get_job(&id)?.map(|job| job.state);
-                    if !matches!(state, Some(JobState::Completed | JobState::Failed))
-                        && error.code != "JOB_STATE_CONFLICT"
+                    if !matches!(
+                        state,
+                        Some(JobState::Completed | JobState::Partial | JobState::Failed)
+                    ) && error.code != "JOB_STATE_CONFLICT"
                     {
                         return Err(error);
                     }

@@ -356,6 +356,7 @@ fn jobs_resume(state: State<'_, AppState>, job_id: String) -> Result<Job, AppErr
                 if matches!(
                     current.state,
                     geod_task_engine::ledger::JobState::Completed
+                        | geod_task_engine::ledger::JobState::Partial
                         | geod_task_engine::ledger::JobState::Failed
                 ) =>
             {

@@ -35,8 +35,10 @@ async fn approved_job_downloads_and_only_then_completes() {
     let address = listener.local_addr().unwrap();
     listener.set_nonblocking(true).unwrap();
     let stop = Arc::new(AtomicBool::new(false));
+    let missing_right = Arc::new(AtomicBool::new(false));
     let requests = Arc::new(AtomicUsize::new(0));
     let stop_worker = stop.clone();
+    let missing_right_worker = missing_right.clone();
     let requests_worker = requests.clone();
     let left = png([40, 90, 130, 255]);
     let right = png([150, 60, 20, 255]);
@@ -64,13 +66,16 @@ async fn approved_job_downloads_and_only_then_completes() {
                 .lines()
                 .next()
                 .and_then(|line| line.split_whitespace().nth(1));
-            let body: &[u8] = match path {
-                Some("/1/0/0.png") => &left,
-                Some("/1/1/0.png") => &right,
+            let (status, body): (&str, &[u8]) = match path {
+                Some("/1/0/0.png") => ("200 OK", &left),
+                Some("/1/1/0.png") if missing_right_worker.load(Ordering::Relaxed) => {
+                    ("404 Not Found", &[])
+                }
+                Some("/1/1/0.png") => ("200 OK", &right),
                 _ => panic!("unexpected tile path: {path:?}"),
             };
             requests_worker.fetch_add(1, Ordering::Relaxed);
-            let header = format!("HTTP/1.1 200 OK\r\nContent-Type: image/png\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
+            let header = format!("HTTP/1.1 {status}\r\nContent-Type: image/png\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
             stream.write_all(header.as_bytes()).unwrap();
             stream.write_all(body).unwrap();
         }
@@ -296,11 +301,49 @@ async fn approved_job_downloads_and_only_then_completes() {
     assert!(alpha.contains(&0) && alpha.contains(&255));
     assert!(paused_output.join("boundary.geojson").exists());
 
+    let partial_output = directory.path().join("partial-result");
+    let mut partial_spec = planned.plan.spec.clone();
+    partial_spec.output_directory = partial_output.to_string_lossy().into_owned();
+    let partial_plan = store.create_plan(partial_spec, &descriptor, now()).unwrap();
+    let partial_approval = store
+        .grant_approval(
+            &partial_plan.plan_id,
+            &partial_plan.plan.plan_hash,
+            "local-user",
+            "test-ui",
+            now(),
+        )
+        .unwrap();
+    let partial_job = store
+        .start_job(
+            &partial_plan.plan_id,
+            &partial_plan.plan.plan_hash,
+            &partial_approval.approval_id,
+            "run-partial",
+            &descriptor,
+            now(),
+        )
+        .unwrap();
+    missing_right.store(true, Ordering::Relaxed);
+    let partial_manifest = store
+        .run_job(&partial_job.job_id, &descriptor, &endpoint, now())
+        .await
+        .unwrap();
+    missing_right.store(false, Ordering::Relaxed);
+    assert_eq!(partial_manifest.quality.status, "partial");
+    assert_eq!(partial_manifest.quality.missing_tiles, 1);
+    assert_eq!(
+        store.get_job(&partial_job.job_id).unwrap().unwrap().state,
+        JobState::Partial
+    );
+    assert!(store.inspect_job_artifact(&partial_job.job_id).is_ok());
+    assert_eq!(requests.load(Ordering::Relaxed), 6);
+
     // Emulate a process crash after publication but before the final ledger
-    // transition. Startup recovery must verify both bundles without HTTP.
+    // transition. Startup recovery must verify all bundles without HTTP.
     drop(store);
     let connection = rusqlite::Connection::open(directory.path().join("jobs.sqlite")).unwrap();
-    for id in [&queued.job_id, &paused_job.job_id] {
+    for id in [&queued.job_id, &paused_job.job_id, &partial_job.job_id] {
         connection
             .execute("UPDATE jobs SET state='verifying' WHERE job_id=?1", [id])
             .unwrap();
@@ -308,9 +351,9 @@ async fn approved_job_downloads_and_only_then_completes() {
     drop(connection);
     std::fs::write(paused_output.join("preview.png"), b"damaged preview").unwrap();
     let mut restarted = TaskStore::open(&directory.path().join("jobs.sqlite")).unwrap();
-    assert_eq!(restarted.recover_verifying_jobs().unwrap(), 1);
+    assert_eq!(restarted.recover_verifying_jobs().unwrap(), 2);
     assert_eq!(restarted.recover_verifying_jobs().unwrap(), 0);
-    assert_eq!(requests.load(Ordering::Relaxed), 4);
+    assert_eq!(requests.load(Ordering::Relaxed), 6);
     assert_eq!(
         restarted.get_job(&queued.job_id).unwrap().unwrap().state,
         JobState::Completed
@@ -323,7 +366,16 @@ async fn approved_job_downloads_and_only_then_completes() {
             .state,
         JobState::Failed
     );
+    assert_eq!(
+        restarted
+            .get_job(&partial_job.job_id)
+            .unwrap()
+            .unwrap()
+            .state,
+        JobState::Partial
+    );
     assert!(restarted.inspect_job_artifact(&queued.job_id).is_ok());
+    assert!(restarted.inspect_job_artifact(&partial_job.job_id).is_ok());
     assert_eq!(
         restarted
             .inspect_job_artifact(&paused_job.job_id)

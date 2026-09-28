@@ -117,7 +117,7 @@ export function AgentPanel({ onPlanned, onOpenSources, onSelectConversation }: {
         const id = stringArg(args.jobId);
         if (!id) return { error: "INVALID_JOB_ID" };
         const job = await api.jobsGet(id);
-        if (!job || job.state !== "completed") return { error: "JOB_NOT_COMPLETED" };
+        if (!job || (job.state !== "completed" && job.state !== "partial")) return { error: "JOB_NOT_COMPLETED" };
         const manifest = await api.artifactsInspect(id);
         return artifactResultForModel(id, manifest);
       }

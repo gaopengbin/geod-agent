@@ -229,11 +229,56 @@ async fn publishes_inspectable_geotiff_mbtiles_and_manifest() {
 }
 
 #[tokio::test]
-async fn failed_tile_never_publishes_output() {
+async fn a_missing_tile_publishes_an_explicit_partial_bundle() {
     let fixture = Fixture::start(true);
     let directory = tempfile::tempdir().unwrap();
     let output = directory.path().join("incomplete");
-    let error = fetch_bundle(&request(output.clone(), 256), &fixture.source())
+    let manifest = fetch_bundle(&request(output.clone(), 256), &fixture.source())
+        .await
+        .unwrap();
+    assert_eq!(manifest.quality.status, "partial");
+    assert_eq!(manifest.quality.missing_tiles, 1);
+    assert_eq!(fixture.requests.load(Ordering::Relaxed), 2);
+    assert_eq!(manifest.quality.missing.len(), 1);
+    assert_eq!(
+        (
+            manifest.quality.missing[0].zoom,
+            manifest.quality.missing[0].x,
+            manifest.quality.missing[0].y
+        ),
+        (1, 1, 0)
+    );
+    assert_eq!(inspect_bundle(&output).unwrap().quality.status, "partial");
+    let pixels = image::open(output.join("preview.png")).unwrap().to_rgba8();
+    assert_eq!(pixels.get_pixel(0, 0)[3], 255);
+    assert_eq!(pixels.get_pixel(3, 0)[3], 0);
+    let mbtiles = Connection::open(output.join("imagery.mbtiles")).unwrap();
+    let count: i64 = mbtiles
+        .query_row("SELECT count(*) FROM tiles", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(count, 1);
+
+    let path = output.join("manifest.json");
+    let mut tampered: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    tampered["quality"]["missingTiles"] = serde_json::json!(0);
+    std::fs::write(&path, serde_json::to_vec(&tampered).unwrap()).unwrap();
+    assert_eq!(
+        inspect_bundle(&output).unwrap_err().code,
+        "ARTIFACT_INCOMPLETE"
+    );
+}
+
+#[tokio::test]
+async fn all_missing_tiles_do_not_publish_an_empty_bundle() {
+    let fixture = Fixture::start(true);
+    let directory = tempfile::tempdir().unwrap();
+    let output = directory.path().join("empty");
+    let mut only_missing = request(output.clone(), 256);
+    only_missing.bounds = [0.1, 1.0, 1.0, 2.0];
+    only_missing.grids = vec![tile::grid(only_missing.bounds, 1, 256).unwrap()];
+    only_missing.max_tiles = 1;
+    let error = fetch_bundle(&only_missing, &fixture.source())
         .await
         .unwrap_err();
     assert_eq!(error.code, "SOURCE_UNAVAILABLE");

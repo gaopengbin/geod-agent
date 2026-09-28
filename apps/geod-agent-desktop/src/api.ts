@@ -74,7 +74,7 @@ export interface Approval { approvalId: string; planId: string; planHash: string
 export interface Job { jobId: string; planId: string; approvalId: string; planHash: string; state: JobState; version: number; createdAt: string }
 export interface JobEvent { jobId: string; seq: number; occurredAt: string; state: JobState; errorCode?: string; completedTiles?: number; totalTiles?: number }
 export interface Asset { id: string; kind: string; role: string; path: string; bytes: number; sha256: string; bounds: Bounds; width?: number; height?: number }
-export interface Manifest { name: string; bounds: Bounds; assets: Asset[]; quality: { status: string; missingTiles: number; warnings: string[] }; provenance: { source: string; attribution: string; retrievedAt: string }[] }
+export interface Manifest { name: string; bounds: Bounds; assets: Asset[]; quality: { status: string; missingTiles: number; missing?: { zoom: number; x: number; y: number }[]; warnings: string[] }; provenance: { source: string; attribution: string; retrievedAt: string }[] }
 export interface ArtifactPreview { dataUrl: string; bounds: Bounds; attribution: string }
 export interface AuthStatus { state: "unconfigured" | "disconnected" | "waiting" | "connected"; userId: string | null; error: string | null }
 export interface AgentToolCall { id: string; type: "function"; function: { name: string; arguments: string } }

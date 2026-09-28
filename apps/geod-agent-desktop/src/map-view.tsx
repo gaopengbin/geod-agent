@@ -78,7 +78,7 @@ function projectOverlay(map: Map, bounds: Bounds | null): Overlay {
   return { width, height, meridians, parallels, selection };
 }
 
-export function MapView({ bounds, boundary, tileGrids, completedTiles, preview, theme }: { bounds: Bounds | null; boundary: BoundaryGeometry | null; tileGrids: PlanTileGrid[]; completedTiles: number | null; preview: ArtifactPreview | null; theme: "light" | "dark" }) {
+export function MapView({ bounds, boundary, tileGrids, completedTiles, preview, missingTiles, theme }: { bounds: Bounds | null; boundary: BoundaryGeometry | null; tileGrids: PlanTileGrid[]; completedTiles: number | null; preview: ArtifactPreview | null; missingTiles: number; theme: "light" | "dark" }) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Map | null>(null);
   const boundsRef = useRef(bounds);
@@ -182,7 +182,7 @@ export function MapView({ bounds, boundary, tileGrids, completedTiles, preview, 
   }, [boundary, ready, theme]);
 
   const plannedTiles = tileGrids.reduce((total, grid) => total + grid.tileCount, 0);
-  const detail = imageryState === "ready" ? "本机影像 · OSM 底图" : imageryState === "loading" ? "正在加载本地影像" : imageryState === "error" ? "本地影像显示失败" : completedTiles !== null && plannedTiles ? `${completedTiles} / ${plannedTiles} 瓦片已读取 · 待核验` : plannedTiles ? `${plannedTiles} 张计划瓦片 · Z${tileGrids.map(grid => grid.zoom).join("/")}` : ready ? "OpenStreetMap 底图" : "地图正在加载";
+  const detail = imageryState === "ready" ? missingTiles ? `本机部分影像 · 缺失 ${missingTiles} 瓦片` : "本机影像 · OSM 底图" : imageryState === "loading" ? "正在加载本地影像" : imageryState === "error" ? "本地影像显示失败" : completedTiles !== null && plannedTiles ? `${completedTiles} / ${plannedTiles} 瓦片已读取 · 待核验` : plannedTiles ? `${plannedTiles} 张计划瓦片 · Z${tileGrids.map(grid => grid.zoom).join("/")}` : ready ? "OpenStreetMap 底图" : "地图正在加载";
 
   return <div className={`map-shell ${ready ? "" : "map-fallback"}`}>
     <div ref={container} className="map-canvas" aria-label="Agent 计划范围预览" />
@@ -191,7 +191,7 @@ export function MapView({ bounds, boundary, tileGrids, completedTiles, preview, 
       {overlay.selection && <rect className={tileGrids.length && !preview ? "map-selection map-selection-with-tiles" : "map-selection"} x={overlay.selection.x} y={overlay.selection.y} width={overlay.selection.width} height={overlay.selection.height} />}
     </svg>}
     {!ready && bounds && <div className="map-fallback-extent" aria-label="计划范围示意"><span>计划范围示意</span></div>}
-    <div className="map-overlay top-left"><span className="eyebrow">MAPLIBRE GL</span><strong>{imageryState === "ready" ? "已校验影像" : boundary ? "边界计划" : bounds ? "计划范围" : "地图工作区"}</strong><small>{detail}</small></div>
+    <div className="map-overlay top-left"><span className="eyebrow">MAPLIBRE GL</span><strong>{imageryState === "ready" ? missingTiles ? "已校验部分影像" : "已校验影像" : boundary ? "边界计划" : bounds ? "计划范围" : "地图工作区"}</strong><small>{detail}</small></div>
     <div className="map-controls"><div className="zoom-controls"><Button variant="secondary" size="icon" aria-label="放大地图" disabled={!ready} onClick={() => mapRef.current?.zoomIn()}><Plus size={16} /></Button><Button variant="secondary" size="icon" aria-label="缩小地图" disabled={!ready} onClick={() => mapRef.current?.zoomOut()}><Minus size={16} /></Button></div></div>
     <div className="map-overlay bottom-left"><span className="map-dot" />{bounds ? bounds.map(n => n.toFixed(3)).join(" / ") : "Agent 生成计划后显示范围"}</div>
     <div className="map-attribution">{preview && <span>{preview.attribution} · </span>}<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a></div>

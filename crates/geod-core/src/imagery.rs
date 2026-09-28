@@ -16,6 +16,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
+    collections::HashSet,
     fs::{self, File},
     io::{Cursor, Read},
     net::IpAddr,
@@ -336,7 +337,17 @@ pub struct Asset {
 pub struct Quality {
     pub status: String,
     pub missing_tiles: u64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub missing: Vec<MissingTile>,
     pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MissingTile {
+    pub zoom: u8,
+    pub x: u32,
+    pub y: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -597,10 +608,16 @@ async fn get_tile(
             .get(RETRY_AFTER)
             .and_then(retry_after_delay);
     }
-    if status.as_u16() == 403 {
+    if matches!(status.as_u16(), 401 | 403) {
         return Err(CoreError::new(
             "SOURCE_UNAUTHORIZED",
-            "Tile service returned HTTP 403",
+            format!("Tile service returned HTTP {}", status.as_u16()),
+        ));
+    }
+    if matches!(status.as_u16(), 404 | 410) {
+        return Err(CoreError::new(
+            "SOURCE_TILE_MISSING",
+            format!("Tile service returned HTTP {}", status.as_u16()),
         ));
     }
     if status.as_u16() == 429 {
@@ -994,6 +1011,7 @@ where
         quality: Quality {
             status: "complete".into(),
             missing_tiles: 0,
+            missing: Vec::new(),
             warnings: Vec::new(),
         },
         provenance: vec![Provenance {
@@ -1082,9 +1100,9 @@ where
                 let url = tile_url(source, grid, x, y)?;
                 let tile = match cache.as_mut() {
                     Some(cache) => match cache.load(grid.zoom, x, y, source.tile_size)? {
-                        Some(tile) => tile,
+                        Some(tile) => Ok(tile),
                         None => {
-                            let tile = get_tile_with_retry(
+                            let fetched = get_tile_with_retry(
                                 &client,
                                 url,
                                 source.tile_size,
@@ -1093,9 +1111,11 @@ where
                                 started,
                                 request.deadline,
                             )
-                            .await?;
-                            cache.save(grid.zoom, x, y, &tile)?;
-                            tile
+                            .await;
+                            if let Ok(tile) = &fetched {
+                                cache.save(grid.zoom, x, y, tile)?;
+                            }
+                            fetched
                         }
                     },
                     None => {
@@ -1108,8 +1128,21 @@ where
                             started,
                             request.deadline,
                         )
-                        .await?
+                        .await
                     }
+                };
+                let tile = match tile {
+                    Ok(tile) => tile,
+                    Err(error) if error.code == "SOURCE_TILE_MISSING" => {
+                        manifest.quality.missing.push(MissingTile {
+                            zoom: grid.zoom,
+                            x,
+                            y,
+                        });
+                        manifest.quality.missing_tiles += 1;
+                        continue;
+                    }
+                    Err(error) => return Err(error),
                 };
                 if let Some(image) = &mut mosaic {
                     image::imageops::replace(
@@ -1190,6 +1223,19 @@ where
             }
         }
     }
+    if completed_tiles == 0 {
+        return Err(CoreError::new(
+            "SOURCE_UNAVAILABLE",
+            "No imagery tiles were available for the approved plan",
+        ));
+    }
+    if manifest.quality.missing_tiles > 0 {
+        manifest.quality.status = "partial".into();
+        manifest.quality.warnings.push(format!(
+            "{} tile(s) were unavailable (HTTP 404/410); transparent GeoTIFF pixels and absent MBTiles rows mark missing coverage. Use a new plan for complete coverage.",
+            manifest.quality.missing_tiles
+        ));
+    }
     if let Some(conn) = mbtiles {
         let integrity: String = conn
             .query_row("PRAGMA integrity_check", [], |row| row.get(0))
@@ -1261,6 +1307,28 @@ pub fn inspect_bundle(root: &Path) -> Result<Manifest, CoreError> {
         return Err(CoreError::new(
             "ARTIFACT_INCOMPLETE",
             "Unsupported or empty GeoD bundle",
+        ));
+    }
+    let missing_count = u64::try_from(manifest.quality.missing.len()).unwrap_or(u64::MAX);
+    let quality_is_consistent = match manifest.quality.status.as_str() {
+        "complete" => manifest.quality.missing_tiles == 0 && missing_count == 0,
+        "partial" => {
+            manifest.quality.missing_tiles > 0 && manifest.quality.missing_tiles == missing_count
+        }
+        _ => false,
+    };
+    let mut seen_missing = HashSet::new();
+    if !quality_is_consistent
+        || manifest.quality.missing.iter().any(|tile| {
+            tile.zoom > tile::MAX_ZOOM
+                || tile.x >= 1u32 << tile.zoom
+                || tile.y >= 1u32 << tile.zoom
+                || !seen_missing.insert((tile.zoom, tile.x, tile.y))
+        })
+    {
+        return Err(CoreError::new(
+            "ARTIFACT_INCOMPLETE",
+            "Bundle missing-tile quality is inconsistent",
         ));
     }
     let canonical_root = fs::canonicalize(root).map_err(io_error)?;
@@ -1393,6 +1461,23 @@ pub fn inspect_bundle(root: &Path) -> Result<Manifest, CoreError> {
                 .map_err(io_error)?;
             if integrity != "ok" {
                 return Err(CoreError::new("ARTIFACT_INCOMPLETE", integrity));
+            }
+            for missing in &manifest.quality.missing {
+                let tms_y = (1u32 << missing.zoom) - 1 - missing.y;
+                let present: Option<u8> = conn
+                    .query_row(
+                        "SELECT 1 FROM tiles WHERE zoom_level=?1 AND tile_column=?2 AND tile_row=?3",
+                        params![missing.zoom, missing.x, tms_y],
+                        |row| row.get(0),
+                    )
+                    .optional()
+                    .map_err(io_error)?;
+                if present.is_some() {
+                    return Err(CoreError::new(
+                        "ARTIFACT_INCOMPLETE",
+                        "MBTiles includes a tile marked missing in the manifest",
+                    ));
+                }
             }
         }
     }
