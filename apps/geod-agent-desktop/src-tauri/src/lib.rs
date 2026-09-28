@@ -161,8 +161,15 @@ fn sources_save(
 }
 
 #[tauri::command]
-fn plans_create(state: State<'_, AppState>, spec: TaskSpec) -> Result<StoredPlan, AppError> {
+fn plans_create(
+    state: State<'_, AppState>,
+    spec: TaskSpec,
+    tool_execution_id: String,
+) -> Result<StoredPlan, AppError> {
     let mut store = open_store(&state)?;
+    if let Some(existing) = store.get_plan_for_tool_execution(&tool_execution_id)? {
+        return Ok(existing);
+    }
     let source = store
         .get_registered_source(&spec.source_id)?
         .ok_or_else(|| AppError {
@@ -170,7 +177,17 @@ fn plans_create(state: State<'_, AppState>, spec: TaskSpec) -> Result<StoredPlan
             message: "请先登记有权批量下载的图源".into(),
         })?;
     store
-        .create_plan(spec, &source.descriptor, Utc::now())
+        .create_plan_for_tool_execution(&tool_execution_id, spec, &source.descriptor, Utc::now())
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+fn plans_for_tool_execution(
+    state: State<'_, AppState>,
+    tool_execution_id: String,
+) -> Result<Option<StoredPlan>, AppError> {
+    open_store(&state)?
+        .get_plan_for_tool_execution(&tool_execution_id)
         .map_err(Into::into)
 }
 
@@ -713,6 +730,7 @@ pub fn run() {
             sources_list,
             sources_save,
             plans_create,
+            plans_for_tool_execution,
             plans_get,
             approvals_grant,
             jobs_start,

@@ -6,6 +6,7 @@ use geod_core::imagery::{self, HttpSource, ImageryRequest, Manifest};
 use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::{
     path::{Path, PathBuf},
     sync::atomic::AtomicBool,
@@ -301,6 +302,36 @@ impl TaskStore {
             ],
         )?;
         Ok(stored)
+    }
+
+    /// Bind a model tool call to one durable plan. A settled generation can be
+    /// replayed after a desktop crash, including after the plan was already
+    /// written but before its tool result reached the next model request.
+    pub fn create_plan_for_tool_execution(
+        &mut self,
+        tool_execution_id: &str,
+        spec: TaskSpec,
+        source: &SourceDescriptor,
+        now: DateTime<Utc>,
+    ) -> Result<StoredPlan, LedgerError> {
+        let plan_id = plan_id_for_tool_execution(tool_execution_id)?;
+        if let Some(existing) = self.get_plan(&plan_id)? {
+            return Ok(existing);
+        }
+        let planned = plan(spec, source, now).map_err(|e| LedgerError::new(e.code, e.message))?;
+        self.conn.execute(
+            "INSERT OR IGNORE INTO plans(plan_id, plan_hash, body) VALUES (?1, ?2, ?3)",
+            params![plan_id, planned.plan_hash, serde_json::to_string(&planned)?],
+        )?;
+        self.get_plan(&plan_id)?
+            .ok_or_else(|| LedgerError::new("STORAGE_ERROR", "Tool plan was not saved"))
+    }
+
+    pub fn get_plan_for_tool_execution(
+        &self,
+        tool_execution_id: &str,
+    ) -> Result<Option<StoredPlan>, LedgerError> {
+        self.get_plan(&plan_id_for_tool_execution(tool_execution_id)?)
     }
 
     pub fn get_plan(&self, plan_id: &str) -> Result<Option<StoredPlan>, LedgerError> {
@@ -995,6 +1026,23 @@ impl TaskStore {
             }
         }
     }
+}
+
+fn plan_id_for_tool_execution(tool_execution_id: &str) -> Result<String, LedgerError> {
+    if !(16..=200).contains(&tool_execution_id.len())
+        || !tool_execution_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b':'))
+    {
+        return Err(LedgerError::new(
+            "INVALID_TOOL_EXECUTION_ID",
+            "Model tool execution ID is invalid",
+        ));
+    }
+    Ok(format!(
+        "tool-{:x}",
+        Sha256::digest(tool_execution_id.as_bytes())
+    ))
 }
 
 fn read_job(conn: &Connection, job_id: &str) -> Result<Option<Job>, LedgerError> {

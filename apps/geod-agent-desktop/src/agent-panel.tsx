@@ -81,7 +81,7 @@ export function AgentPanel({ onPlanned, onOpenSources, onSelectConversation }: {
       setBoundary(await api.boundaryInspect(file.name, await file.text()));
     } catch (cause) { setError(errorMessage(cause)); }
   }
-  async function executeTool(call: AgentToolCall): Promise<unknown> {
+  async function executeTool(call: AgentToolCall, generationId: string): Promise<unknown> {
     let args: Record<string, unknown>;
     try { args = JSON.parse(call.function.arguments) as Record<string, unknown>; }
     catch { return { error: "INVALID_TOOL_ARGUMENTS" }; }
@@ -92,6 +92,12 @@ export function AgentPanel({ onPlanned, onOpenSources, onSelectConversation }: {
         return { sources: sources.map(source => ({ id: source.id, name: source.displayName, license: source.license, attribution: source.attribution, minZoom: source.minZoom, maxZoom: source.maxZoom })) };
       }
       if (call.function.name === "plan_imagery") {
+        const toolExecutionId = `${generationId}:${call.id}`;
+        const previous = await api.plansForToolExecution(toolExecutionId);
+        if (previous) {
+          onPlanned(previous); planIdRef.current = previous.planId; setPlanId(previous.planId); setPlanReady(true);
+          return compactPlan(previous);
+        }
         const sourceId = stringArg(args.sourceId);
         const sources: SourceDescriptor[] = await api.sourcesList();
         const source = sources.find(item => item.id === sourceId);
@@ -103,7 +109,7 @@ export function AgentPanel({ onPlanned, onOpenSources, onSelectConversation }: {
           typeof zoom !== "number" || !Number.isInteger(zoom) || zoom < source.minZoom || zoom > source.maxZoom ||
           !Array.isArray(formats) || !formats.length || !formats.every(value => value === "geotiff" || value === "mbtiles")) return { error: "INVALID_PLAN_ARGUMENTS" };
         const spec: TaskSpec = { schemaVersion: "0.1", kind: "imagery", sourceId: source.id, bounds: boundary?.bounds ?? bounds as Bounds, ...(boundary ? { boundary: boundary.geometry } : {}), zoomLevels: [zoom], outputFormats: [...new Set(formats)] as OutputFormat[], outputDirectory: await api.outputDirectorySuggest(), limits: { maxTiles: 4096, maxDecodedRgbaBytes: 512 * 1024 * 1024 } };
-        const plan = await api.plansCreate(spec);
+        const plan = await api.plansCreate(spec, toolExecutionId);
         onPlanned(plan); planIdRef.current = plan.planId; setPlanId(plan.planId); setPlanReady(true);
         return compactPlan(plan);
       }
@@ -166,7 +172,7 @@ export function AgentPanel({ onPlanned, onOpenSources, onSelectConversation }: {
       setMessages(context);
       if (!result.toolCalls.length) { commitFinalGeneration(generation.generationId, context); return; }
       for (const call of result.toolCalls) {
-        const output = await executeTool(call);
+        const output = await executeTool(call, generation.generationId);
         context = [...context, { role: "tool", tool_call_id: call.id, content: JSON.stringify(output) }];
         setMessages(context);
         appendDisplay({ id: crypto.randomUUID(), role: "tool", content: `${call.function.name} · ${"error" in (output as object) ? "需要处理" : "已读取本机结果"}` });

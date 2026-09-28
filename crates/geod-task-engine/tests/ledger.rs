@@ -47,6 +47,66 @@ fn spec() -> TaskSpec {
 }
 
 #[test]
+fn model_tool_plan_replay_keeps_the_original_output_and_approval_target() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("tool-plans.sqlite");
+    let key = "generation-12345678:call_12345678";
+    let mut store = TaskStore::open(&path).unwrap();
+    assert!(store.get_plan_for_tool_execution(key).unwrap().is_none());
+
+    let first = store
+        .create_plan_for_tool_execution(key, spec(), &source(), now())
+        .unwrap();
+    let approval = store
+        .grant_approval(
+            &first.plan_id,
+            &first.plan.plan_hash,
+            "local-user",
+            "workspace-0.1",
+            now(),
+        )
+        .unwrap();
+    drop(store);
+
+    let mut reopened = TaskStore::open(&path).unwrap();
+    assert_eq!(
+        reopened.get_plan_for_tool_execution(key).unwrap(),
+        Some(first.clone())
+    );
+    let mut changed = spec();
+    changed.output_directory = dir
+        .path()
+        .join("different-output")
+        .to_string_lossy()
+        .into_owned();
+    let replay = reopened
+        .create_plan_for_tool_execution(key, changed.clone(), &source(), now())
+        .unwrap();
+    assert_eq!(replay, first);
+    assert_eq!(approval.plan_id, replay.plan_id);
+    let other_call = reopened
+        .create_plan_for_tool_execution(
+            "generation-12345678:call_87654321",
+            changed,
+            &source(),
+            now(),
+        )
+        .unwrap();
+    assert_ne!(other_call.plan_id, first.plan_id);
+    assert_ne!(
+        other_call.plan.spec.output_directory,
+        first.plan.spec.output_directory
+    );
+    assert_eq!(
+        reopened
+            .get_plan_for_tool_execution("bad id")
+            .unwrap_err()
+            .code,
+        "INVALID_TOOL_EXECUTION_ID"
+    );
+}
+
+#[test]
 fn approval_and_idempotent_queue_survive_restart() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("jobs.sqlite");
