@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "0.1",
+  "kind": "imagery",
+  "sourceId": "synthetic-xyz",
+  "bounds": [-1.0, 1.0, 1.0, 2.0],
+  "zoomLevels": [1],
+  "outputFormats": ["geotiff"],
+  "outputDirectory": "C:\\GeoD-Agent\\fixture",
+  "limits": {
+    "maxTiles": 16,
+    "maxDecodedRgbaBytes": 16777216
+  }
+}

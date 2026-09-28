@@ -1,0 +1,248 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Plan",
+  "type": "object",
+  "properties": {
+    "attribution": {
+      "type": "string"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "decodedRgbaBytes": {
+      "description": "Sum of tile count × tile pixels × four bytes; not peak memory, disk, or transfer size.",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0
+    },
+    "expiresAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "license": {
+      "type": "string"
+    },
+    "planHash": {
+      "type": "string"
+    },
+    "policyVersion": {
+      "type": "string"
+    },
+    "schemaVersion": {
+      "$ref": "#/$defs/SchemaVersion"
+    },
+    "sourceFingerprint": {
+      "type": "string"
+    },
+    "sourceName": {
+      "type": "string"
+    },
+    "spec": {
+      "$ref": "#/$defs/TaskSpec"
+    },
+    "tileGrids": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/PlanTileGrid"
+      }
+    },
+    "totalTiles": {
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "spec",
+    "sourceName",
+    "attribution",
+    "license",
+    "sourceFingerprint",
+    "policyVersion",
+    "tileGrids",
+    "totalTiles",
+    "decodedRgbaBytes",
+    "createdAt",
+    "expiresAt",
+    "planHash"
+  ],
+  "$defs": {
+    "OutputFormat": {
+      "type": "string",
+      "enum": [
+        "geotiff",
+        "mbtiles"
+      ]
+    },
+    "PlanTileGrid": {
+      "type": "object",
+      "properties": {
+        "actualBounds": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "format": "double"
+          },
+          "maxItems": 4,
+          "minItems": 4
+        },
+        "columns": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "pixelHeight": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "pixelWidth": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "rows": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "tileCount": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "xMax": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "xMin": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "yMax": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "yMin": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "zoom": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "zoom",
+        "xMin",
+        "yMin",
+        "xMax",
+        "yMax",
+        "columns",
+        "rows",
+        "tileCount",
+        "pixelWidth",
+        "pixelHeight",
+        "actualBounds"
+      ]
+    },
+    "ResourceLimits": {
+      "type": "object",
+      "properties": {
+        "maxDecodedRgbaBytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "maxTiles": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "maxTiles",
+        "maxDecodedRgbaBytes"
+      ]
+    },
+    "SchemaVersion": {
+      "type": "string",
+      "enum": [
+        "0.1"
+      ]
+    },
+    "TaskKind": {
+      "type": "string",
+      "enum": [
+        "imagery"
+      ]
+    },
+    "TaskSpec": {
+      "type": "object",
+      "properties": {
+        "bounds": {
+          "description": "WGS84 [west, south, east, north]. Antimeridian bounds must be split.",
+          "type": "array",
+          "items": {
+            "type": "number",
+            "format": "double"
+          },
+          "maxItems": 4,
+          "minItems": 4
+        },
+        "kind": {
+          "$ref": "#/$defs/TaskKind"
+        },
+        "limits": {
+          "$ref": "#/$defs/ResourceLimits"
+        },
+        "outputDirectory": {
+          "type": "string"
+        },
+        "outputFormats": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/OutputFormat"
+          }
+        },
+        "schemaVersion": {
+          "$ref": "#/$defs/SchemaVersion"
+        },
+        "sourceId": {
+          "type": "string"
+        },
+        "zoomLevels": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "kind",
+        "sourceId",
+        "bounds",
+        "zoomLevels",
+        "outputFormats",
+        "outputDirectory",
+        "limits"
+      ]
+    }
+  }
+}

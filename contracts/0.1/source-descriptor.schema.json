@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SourceDescriptor",
+  "description": "Supplied by a trusted local source registry, not copied from model output.\nCredential values and source URL templates are deliberately absent.",
+  "type": "object",
+  "properties": {
+    "attribution": {
+      "type": "string"
+    },
+    "bulkDownloadAllowed": {
+      "type": "boolean"
+    },
+    "configRevision": {
+      "description": "Local source registry increments this whenever the URL or policy changes.",
+      "type": "string"
+    },
+    "credentialRefVersion": {
+      "description": "Version of a credential reference, never the credential itself.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "displayName": {
+      "type": "string"
+    },
+    "id": {
+      "type": "string"
+    },
+    "license": {
+      "type": "string"
+    },
+    "maxZoom": {
+      "type": "integer",
+      "format": "uint8",
+      "maximum": 255,
+      "minimum": 0
+    },
+    "minZoom": {
+      "type": "integer",
+      "format": "uint8",
+      "maximum": 255,
+      "minimum": 0
+    },
+    "schemaVersion": {
+      "$ref": "#/$defs/SchemaVersion"
+    },
+    "scheme": {
+      "$ref": "#/$defs/TileScheme"
+    },
+    "tileSize": {
+      "type": "integer",
+      "format": "uint16",
+      "maximum": 65535,
+      "minimum": 0
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "displayName",
+    "attribution",
+    "license",
+    "bulkDownloadAllowed",
+    "scheme",
+    "tileSize",
+    "minZoom",
+    "maxZoom",
+    "configRevision"
+  ],
+  "$defs": {
+    "SchemaVersion": {
+      "type": "string",
+      "enum": [
+        "0.1"
+      ]
+    },
+    "TileScheme": {
+      "type": "string",
+      "enum": [
+        "XYZ",
+        "TMS"
+      ]
+    }
+  }
+}

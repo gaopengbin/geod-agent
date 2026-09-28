@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TaskSpec",
+  "type": "object",
+  "properties": {
+    "bounds": {
+      "description": "WGS84 [west, south, east, north]. Antimeridian bounds must be split.",
+      "type": "array",
+      "items": {
+        "type": "number",
+        "format": "double"
+      },
+      "maxItems": 4,
+      "minItems": 4
+    },
+    "kind": {
+      "$ref": "#/$defs/TaskKind"
+    },
+    "limits": {
+      "$ref": "#/$defs/ResourceLimits"
+    },
+    "outputDirectory": {
+      "type": "string"
+    },
+    "outputFormats": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/OutputFormat"
+      }
+    },
+    "schemaVersion": {
+      "$ref": "#/$defs/SchemaVersion"
+    },
+    "sourceId": {
+      "type": "string"
+    },
+    "zoomLevels": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "format": "uint8",
+        "maximum": 255,
+        "minimum": 0
+      }
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "sourceId",
+    "bounds",
+    "zoomLevels",
+    "outputFormats",
+    "outputDirectory",
+    "limits"
+  ],
+  "$defs": {
+    "OutputFormat": {
+      "type": "string",
+      "enum": [
+        "geotiff",
+        "mbtiles"
+      ]
+    },
+    "ResourceLimits": {
+      "type": "object",
+      "properties": {
+        "maxDecodedRgbaBytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "maxTiles": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "maxTiles",
+        "maxDecodedRgbaBytes"
+      ]
+    },
+    "SchemaVersion": {
+      "type": "string",
+      "enum": [
+        "0.1"
+      ]
+    },
+    "TaskKind": {
+      "type": "string",
+      "enum": [
+        "imagery"
+      ]
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "0.1",
+  "id": "synthetic-xyz",
+  "displayName": "Synthetic XYZ fixture",
+  "attribution": "Generated pixels for tests",
+  "license": "Synthetic test data",
+  "bulkDownloadAllowed": true,
+  "scheme": "XYZ",
+  "tileSize": 256,
+  "minZoom": 0,
+  "maxZoom": 22,
+  "configRevision": "fixture-v1",
+  "credentialRefVersion": null
+}
