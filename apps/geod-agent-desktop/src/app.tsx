@@ -90,6 +90,15 @@ export function App() {
     if (!plan || !approved || busy.current) return;
     busy.current = true; setWorking(true); setError("");
     try {
+      const existing = await api.jobsForPlan(plan.planId);
+      if (existing) {
+        eventSeq.current = 0;
+        setJob(existing); setEvents([]); setManifest(null); setPreview(null); previewLoaded.current = null;
+        setApproved(false);
+        setNotice("该计划已有本机作业，已恢复其状态；不会重复下载。");
+        await refreshJobs();
+        return;
+      }
       const approval = await api.approvalsGrant(plan.planId, plan.plan.planHash);
       const started = await api.jobsStart(plan.planId, plan.plan.planHash, approval.approvalId, crypto.randomUUID());
       eventSeq.current = 0;
@@ -115,10 +124,10 @@ export function App() {
     setPlan(null); setJob(null); setManifest(null); setPreview(null); previewLoaded.current = null; setEvents([]); setApproved(false); setNotice(""); setError("");
     if (!planId) { setResultsOpen(false); return; }
     try {
-      const stored = await api.plansGet(planId);
+      const [stored, existingJob] = await Promise.all([api.plansGet(planId), api.jobsForPlan(planId)]);
       if (choice !== conversationChoice.current) return;
       setPlan(stored);
-      setJob(jobs.find(item => item.planId === planId) ?? null);
+      setJob(existingJob);
       setResultsOpen(true);
     } catch (cause) { if (choice === conversationChoice.current) setError(errorMessage(cause)); }
   }

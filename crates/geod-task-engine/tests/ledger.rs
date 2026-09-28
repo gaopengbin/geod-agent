@@ -61,6 +61,7 @@ fn approval_and_idempotent_queue_survive_restart() {
             now(),
         )
         .unwrap();
+    assert!(store.job_for_plan(&stored.plan_id).unwrap().is_none());
     let job = store
         .start_job(
             &stored.plan_id,
@@ -88,6 +89,10 @@ fn approval_and_idempotent_queue_survive_restart() {
         stored.plan.plan_hash
     );
     assert_eq!(reopened.get_job(&job.job_id).unwrap(), Some(job.clone()));
+    assert_eq!(
+        reopened.job_for_plan(&stored.plan_id).unwrap(),
+        Some(job.clone())
+    );
     let same = reopened
         .start_job(
             &stored.plan_id,
@@ -100,15 +105,64 @@ fn approval_and_idempotent_queue_survive_restart() {
         .unwrap();
     assert_eq!(same.job_id, job.job_id);
     assert_eq!(reopened.events_after(&job.job_id, 0, 10).unwrap().len(), 1);
+    let repeated = reopened
+        .start_job(
+            &stored.plan_id,
+            &stored.plan.plan_hash,
+            &approval.approval_id,
+            "request-2",
+            &source(),
+            now(),
+        )
+        .unwrap();
+    assert_eq!(repeated.job_id, job.job_id);
+    let second_approval = reopened
+        .grant_approval(
+            &stored.plan_id,
+            &stored.plan.plan_hash,
+            "local-user",
+            "workspace-0.1",
+            now(),
+        )
+        .unwrap();
+    let recovered = reopened
+        .start_job(
+            &stored.plan_id,
+            &stored.plan.plan_hash,
+            &second_approval.approval_id,
+            "request-3",
+            &source(),
+            now(),
+        )
+        .unwrap();
+    assert_eq!(recovered.job_id, job.job_id);
+    assert_eq!(reopened.list_jobs(10).unwrap().len(), 1);
+    assert_eq!(reopened.events_after(&job.job_id, 0, 10).unwrap().len(), 1);
+    let mut other_spec = spec();
+    other_spec.output_directory = dir
+        .path()
+        .join("other-output")
+        .to_string_lossy()
+        .into_owned();
+    let other_plan = reopened.create_plan(other_spec, &source(), now()).unwrap();
+    let other_approval = reopened
+        .grant_approval(
+            &other_plan.plan_id,
+            &other_plan.plan.plan_hash,
+            "local-user",
+            "workspace-0.1",
+            now(),
+        )
+        .unwrap();
     assert_eq!(
         reopened
             .start_job(
-                &stored.plan_id,
-                &stored.plan.plan_hash,
-                &approval.approval_id,
-                "request-2",
+                &other_plan.plan_id,
+                &other_plan.plan.plan_hash,
+                &other_approval.approval_id,
+                "request-1",
                 &source(),
-                now()
+                now(),
             )
             .unwrap_err()
             .code,

@@ -94,6 +94,7 @@ export const api = {
   approvalsGrant: (planId: string, planHash: string) => invoke<Approval>("approvals_grant", { planId, planHash }),
   jobsStart: (planId: string, planHash: string, approvalId: string, idempotencyKey: string) => invoke<Job>("jobs_start", { planId, planHash, approvalId, idempotencyKey }),
   jobsGet: (jobId: string) => invoke<Job | null>("jobs_get", { jobId }),
+  jobsForPlan: (planId: string) => invoke<Job | null>("jobs_for_plan", { planId }),
   jobsList: () => invoke<Job[]>("jobs_list"),
   jobsActive: () => invoke<string[]>("jobs_active"),
   jobsCancel: (jobId: string) => invoke<Job>("jobs_cancel", { jobId }),

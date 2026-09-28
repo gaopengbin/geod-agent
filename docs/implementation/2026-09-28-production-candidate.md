@@ -16,13 +16,15 @@
 | `artifacts/linux-gateway-build/geod-oauth-studio-linux-x64-20260928.tar.gz` | `65b5e65d8d18d4a32c15980a587d4e68a534ab7e8a1e0fc4d6523fe5e226dc88` | 基于现网 `0984aed` 加 OAuth `3ae9b71` 与 GeoD 品牌 `9fb6f9d`；账号测试 20/20；Linux standalone HTTP 匿名跳转、同意、授权码、换令牌、检查与撤销全通过 |
 | `artifacts/linux-gateway-build/geod-agent-gateway-linux-x64-20260928-geojson-validated.tar.gz` | `69a6c52d87936f384b0763016531bb98c829ec80b92dc81b0a4ff9c819d5b405` | Linux x64 生产依赖；GeoJSON 边界规划工具合同已更新；Node 22.22.3 网关测试 7/7；桌面使用真实 DeepSeek 联调通过 |
 | `artifacts/linux-gateway-build/geod-login-static-overlay-20260928.tar.gz` | `1425f0e594a89bbec9d035540a7fa3f4b40fa71dd8b13f344281d52504e8c425` | GeoD 品牌登录页与静态资源；HTML 引用 14/14 存在。须叠加到现有网站的**新**不可变发布目录，保留其他页面 |
-| `apps/geod-agent-desktop/src-tauri/target/release/bundle/nsis/GeoD Agent_0.1.0_x64-setup.exe` | `8860aae362bac5a8a7c27fc2e4c03463196cd3ca48ba4098705a04ddbeae4f7f` | Windows 构建；桌面服务 6 项测试（含隔离凭据的静默续期与重启复用）、MapLibre 格网与模型上下文 4 项测试；隔离目录安装后原生程序无 OAuth 启动并重新核验已批准 USGS 作业：`completed`、3 项成果、缺失瓦片 0、有效 PNG 预览；独立文件校验通过 |
+| `apps/geod-agent-desktop/src-tauri/target/release/bundle/nsis/GeoD Agent_0.1.0_x64-setup.exe` | `fbe4bc0139aaf4e16843eea4d140fe7cbb2713d57f7a472a8ed0b8f6f3f0721b` | Windows 构建；桌面服务 6 项测试（含隔离凭据的静默续期与重启复用）、MapLibre 格网与模型上下文 4 项测试；隔离目录安装后原生程序无 OAuth 启动并重新核验已批准 USGS 作业：`completed`、3 项成果、缺失瓦片 0、有效 PNG 预览；独立文件校验通过 |
 
 上表 Linux 包是本机可信 Ubuntu WSL 构建，不从生产服务器下载依赖。静态覆盖包只含登录页及其资源；部署前还需在服务器新目录中验证页面资源与现有 Nginx 静态路径配合，并在域名上做浏览器登录冒烟。
 
 2026-09-28 再次只读核对：腾讯云主机剩余空间约 57 GiB，`nginx -t` 通过；`/srv/laogao/current/geod-studio` 仍指向 `geod-sources-20260927-0984aed`，`/srv/laogao/current/geod-website` 仍指向 `geod-source-sync-20260927-abc4b9b`。Studio 本机健康接口返回 200，OAuth 授权接口返回 404，9115 未监听；账号 `store.json` 解析通过、权限为 600，新 Agent 网关数据库尚不存在。三个本地包的 SHA-256 与上表一致；归档成员名无绝对或 `..` 越界路径，网关包内 3 个相对软链接均指向归档中的文件。模型网关 7 项测试与桌面服务 6 项测试再次通过。此检查只说明发布基线未漂移，不代表生产发布已获授权或完成。
 
 安装包在此次候选审查后重新构建，加入 HTTP 429/5xx `Retry-After` 等待期间的取消与暂停。`geod-core` 和 `geod-task-engine` 分别 19、18 项测试及 Clippy 通过；在本地隔离安装目录升级后，原生程序只读复检已批准 USGS 作业为 `completed`、3 项成果、缺失瓦片 0、有效 PNG，独立文件校验再次通过。本次未打开授权浏览器或下载新瓦片；线上 OAuth 与 DeepSeek 仍未发布。
+
+桌面任务账本再加固了同计划去重：不同请求编号或第二次审批仍返回原作业；历史对话按计划 ID 读取本机作业。任务引擎 18 项与桌面服务 6 项测试、桌面前端构建通过；新 NSIS 包在隔离目录静默安装退出码为 0，原生 `jobs_for_plan` 读取到已批准 USGS 作业及完整成果。此次仅更新本地 Windows 包，三个 Linux 服务包未变，线上服务未改。
 
 ## 获批后的顺序
 

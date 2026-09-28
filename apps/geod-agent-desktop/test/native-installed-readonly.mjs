@@ -83,6 +83,8 @@ try {
   assert.match(auth.state, /^(unconfigured|disconnected|waiting|connected)$/);
   const job = await invoke("jobs_get", { jobId });
   assert.equal(job?.state, "completed");
+  const planJob = await invoke("jobs_for_plan", { planId: job.planId });
+  assert.equal(planJob?.jobId, jobId);
   const manifest = await invoke("artifacts_inspect", { jobId });
   assert.equal(manifest.quality.status, "complete");
   assert.equal(manifest.quality.missingTiles, 0);
@@ -90,7 +92,7 @@ try {
   assert.ok(manifest.assets.some(asset => asset.mimeType === "application/vnd.mbtiles"));
   const preview = await invoke("artifact_preview", { jobId });
   assert.match(preview?.dataUrl || "", /^data:image\/png;base64,/);
-  console.log(JSON.stringify({ installedExe: exe, authState: auth.state, jobId, jobState: job.state, assets: manifest.assets.length, missingTiles: manifest.quality.missingTiles, preview: "verified PNG" }));
+  console.log(JSON.stringify({ installedExe: exe, authState: auth.state, jobId, jobState: job.state, planLookup: "same job", assets: manifest.assets.length, missingTiles: manifest.quality.missingTiles, preview: "verified PNG" }));
 } finally {
   for (const request of pending.values()) { clearTimeout(request.timeout); request.fail(new Error("Smoke test closed")); }
   pending.clear();

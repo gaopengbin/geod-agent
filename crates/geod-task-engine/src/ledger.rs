@@ -388,15 +388,29 @@ impl TaskStore {
             .optional()?;
         if let Some(job_id) = existing {
             let job = read_job(&tx, &job_id)?.expect("indexed job must exist");
-            if job.plan_id == plan_id
-                && job.plan_hash == plan_hash
-                && job.approval_id == approval_id
-            {
+            if job.plan_id == plan_id && job.plan_hash == plan_hash {
                 return Ok(job);
             }
             return Err(LedgerError::new(
                 "JOB_STATE_CONFLICT",
                 "Idempotency key belongs to another request",
+            ));
+        }
+        let existing_plan_job = tx
+            .query_row(
+                "SELECT job_id FROM jobs WHERE plan_id=?1 ORDER BY created_at LIMIT 1",
+                [plan_id],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+        if let Some(job_id) = existing_plan_job {
+            let job = read_job(&tx, &job_id)?.expect("indexed job must exist");
+            if job.plan_hash == plan_hash {
+                return Ok(job);
+            }
+            return Err(LedgerError::new(
+                "PLAN_STALE",
+                "Plan hash does not match the existing job",
             ));
         }
         let body: String = tx
@@ -480,6 +494,21 @@ impl TaskStore {
 
     pub fn get_job(&self, job_id: &str) -> Result<Option<Job>, LedgerError> {
         read_job(&self.conn, job_id)
+    }
+
+    pub fn job_for_plan(&self, plan_id: &str) -> Result<Option<Job>, LedgerError> {
+        let job_id = self
+            .conn
+            .query_row(
+                "SELECT job_id FROM jobs WHERE plan_id=?1 ORDER BY created_at LIMIT 1",
+                [plan_id],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+        job_id
+            .map(|job_id| read_job(&self.conn, &job_id))
+            .transpose()
+            .map(Option::flatten)
     }
 
     pub fn inspect_job_artifact(&self, job_id: &str) -> Result<Manifest, LedgerError> {

@@ -654,7 +654,10 @@ mod tests {
         let persisted = read_tokens(&origin).unwrap().unwrap();
         assert_eq!(persisted.refresh_token, "s".repeat(43));
         let restarted_state = ServiceState::new(PathBuf::new());
-        assert_eq!(get_access_token(&restarted_state, &config).unwrap(), new_access);
+        assert_eq!(
+            get_access_token(&restarted_state, &config).unwrap(),
+            new_access
+        );
         drop(cleanup);
         assert!(read_tokens(&origin).unwrap().is_none());
     }

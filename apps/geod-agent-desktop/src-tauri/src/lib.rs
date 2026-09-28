@@ -409,6 +409,13 @@ fn jobs_get(state: State<'_, AppState>, job_id: String) -> Result<Option<Job>, A
 }
 
 #[tauri::command]
+fn jobs_for_plan(state: State<'_, AppState>, plan_id: String) -> Result<Option<Job>, AppError> {
+    open_store(&state)?
+        .job_for_plan(&plan_id)
+        .map_err(Into::into)
+}
+
+#[tauri::command]
 fn jobs_list(state: State<'_, AppState>) -> Result<Vec<Job>, AppError> {
     open_store(&state)?.list_jobs(100).map_err(Into::into)
 }
@@ -671,6 +678,7 @@ pub fn run() {
             jobs_pause,
             jobs_resume,
             jobs_get,
+            jobs_for_plan,
             jobs_list,
             jobs_active,
             jobs_events,
