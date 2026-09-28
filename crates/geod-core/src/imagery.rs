@@ -930,7 +930,11 @@ where
                 Some((image.width(), image.height())),
             )?);
             if manifest.assets.len() == 1 {
-                let preview = DynamicImage::ImageRgba8(image).thumbnail(1024, 1024);
+                let preview = if image.width() > 1024 || image.height() > 1024 {
+                    DynamicImage::ImageRgba8(image).thumbnail(1024, 1024)
+                } else {
+                    DynamicImage::ImageRgba8(image)
+                };
                 let preview_size = (preview.width(), preview.height());
                 preview
                     .save(stage.path().join("preview.png"))
@@ -1047,6 +1051,62 @@ pub fn inspect_bundle(root: &Path) -> Result<Manifest, CoreError> {
                 return Err(CoreError::new(
                     "ARTIFACT_INCOMPLETE",
                     "GeoTIFF dimensions do not match manifest",
+                ));
+            }
+            let keys = decoder
+                .get_tag_u16_vec(Tag::GeoKeyDirectoryTag)
+                .map_err(|_| CoreError::new("ARTIFACT_INCOMPLETE", "GeoTIFF CRS tag is missing"))?;
+            if item.crs != "EPSG:3857"
+                || keys.len() < 8
+                || !keys[4..]
+                    .chunks_exact(4)
+                    .any(|key| key == [3072, 0, 1, 3857])
+            {
+                return Err(CoreError::new(
+                    "ARTIFACT_INCOMPLETE",
+                    "GeoTIFF CRS does not match manifest",
+                ));
+            }
+            let scale = decoder.get_tag_f64_vec(Tag::ModelPixelScaleTag).map_err(|_| {
+                CoreError::new("ARTIFACT_INCOMPLETE", "GeoTIFF scale tag is missing")
+            })?;
+            let tie = decoder.get_tag_f64_vec(Tag::ModelTiepointTag).map_err(|_| {
+                CoreError::new("ARTIFACT_INCOMPLETE", "GeoTIFF tie point is missing")
+            })?;
+            let [west, south, east, north] = item.bounds;
+            if scale.len() != 3
+                || tie.len() != 6
+                || ![west, south, east, north]
+                    .iter()
+                    .all(|value| value.is_finite())
+                || west >= east
+                || south >= north
+                || south <= -85.051129
+                || north >= 85.051129
+            {
+                return Err(CoreError::new(
+                    "ARTIFACT_INCOMPLETE",
+                    "Invalid GeoTIFF footprint",
+                ));
+            }
+            let radius = 6_378_137.0;
+            let mercator_x = |longitude: f64| longitude.to_radians() * radius;
+            let mercator_y = |latitude: f64| {
+                radius
+                    * (std::f64::consts::FRAC_PI_4 + latitude.to_radians() / 2.0)
+                        .tan()
+                        .ln()
+            };
+            let expected_scale_x = (mercator_x(east) - mercator_x(west)) / f64::from(size.0);
+            let expected_scale_y = (mercator_y(north) - mercator_y(south)) / f64::from(size.1);
+            if (tie[3] - mercator_x(west)).abs() > 0.001
+                || (tie[4] - mercator_y(north)).abs() > 0.001
+                || (scale[0] - expected_scale_x).abs() > 0.001
+                || (scale[1] - expected_scale_y).abs() > 0.001
+            {
+                return Err(CoreError::new(
+                    "ARTIFACT_INCOMPLETE",
+                    "GeoTIFF geo-reference does not match manifest",
                 ));
             }
         }

@@ -49,8 +49,15 @@ async fn approved_job_downloads_and_only_then_completes() {
                 }
                 Err(error) => panic!("fixture accept failed: {error}"),
             };
+            stream.set_nonblocking(false).unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_millis(500)))
+                .unwrap();
             let mut request = [0u8; 4096];
-            let count = stream.read(&mut request).unwrap();
+            let count = stream.read(&mut request).unwrap_or(0);
+            if count == 0 {
+                continue;
+            }
             let line = String::from_utf8_lossy(&request[..count]);
             let path = line
                 .lines()
@@ -158,7 +165,11 @@ async fn approved_job_downloads_and_only_then_completes() {
     assert_eq!(events[3].completed_tiles, Some(2));
     assert_eq!(events[3].total_tiles, Some(2));
     assert!(output.join("manifest.json").exists());
-    let second_plan = store.create_plan(spec, &descriptor, now()).unwrap();
+    assert_eq!(
+        store.inspect_job_artifact(&queued.job_id).unwrap().id,
+        format!("geod-agent-job-{}", queued.job_id)
+    );
+    let second_plan = store.create_plan(spec.clone(), &descriptor, now()).unwrap();
     let second_approval = store
         .grant_approval(
             &second_plan.plan_id,
@@ -191,7 +202,85 @@ async fn approved_job_downloads_and_only_then_completes() {
         store.get_job(&second.job_id).unwrap().unwrap().state,
         JobState::Failed
     );
+    assert_eq!(
+        store.inspect_job_artifact(&second.job_id).unwrap_err().code,
+        "ARTIFACT_NOT_READY"
+    );
     assert!(geod_core::imagery::inspect_bundle(&output).is_ok());
+
+    let paused_output = directory.path().join("paused-result");
+    let mut paused_spec = spec;
+    paused_spec.output_directory = paused_output.to_string_lossy().into_owned();
+    let paused_plan = store.create_plan(paused_spec, &descriptor, now()).unwrap();
+    let paused_approval = store
+        .grant_approval(
+            &paused_plan.plan_id,
+            &paused_plan.plan.plan_hash,
+            "local-user",
+            "test-ui",
+            now(),
+        )
+        .unwrap();
+    let paused_job = store
+        .start_job(
+            &paused_plan.plan_id,
+            &paused_plan.plan.plan_hash,
+            &paused_approval.approval_id,
+            "run-3",
+            &descriptor,
+            now(),
+        )
+        .unwrap();
+    let cancelled = AtomicBool::new(false);
+    let paused = AtomicBool::new(true);
+    assert_eq!(
+        store
+            .run_job_with_control(
+                &paused_job.job_id,
+                &descriptor,
+                &endpoint,
+                now(),
+                &cancelled,
+                &paused
+            )
+            .await
+            .unwrap_err()
+            .code,
+        "PAUSED"
+    );
+    assert_eq!(
+        store.get_job(&paused_job.job_id).unwrap().unwrap().state,
+        JobState::Paused
+    );
+    assert!(!paused_output.exists());
+    assert_eq!(requests.load(Ordering::Relaxed), 3);
+    drop(store);
+    let mut store = TaskStore::open(&directory.path().join("jobs.sqlite")).unwrap();
+    let resumed = store.resume_paused_job(&paused_job.job_id).unwrap();
+    assert_eq!(resumed.job_id, paused_job.job_id);
+    assert_eq!(resumed.approval_id, paused_approval.approval_id);
+    paused.store(false, Ordering::Relaxed);
+    store
+        .run_job_with_control(
+            &paused_job.job_id,
+            &descriptor,
+            &endpoint,
+            now(),
+            &cancelled,
+            &paused,
+        )
+        .await
+        .unwrap();
+    assert_eq!(requests.load(Ordering::Relaxed), 4);
+    assert_eq!(
+        store.get_job(&paused_job.job_id).unwrap().unwrap().state,
+        JobState::Completed
+    );
+    assert_eq!(
+        store.inspect_job_artifact(&paused_job.job_id).unwrap().id,
+        format!("geod-agent-job-{}", paused_job.job_id)
+    );
+    assert!(geod_core::imagery::inspect_bundle(&paused_output).is_ok());
     stop.store(true, Ordering::Relaxed);
     worker.join().unwrap();
 }

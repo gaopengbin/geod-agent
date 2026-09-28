@@ -161,6 +161,10 @@ async fn publishes_inspectable_geotiff_mbtiles_and_manifest() {
     assert_eq!(manifest.quality.status, "complete");
     assert_eq!(manifest.quality.missing_tiles, 0);
     assert_eq!(manifest.assets.len(), 3);
+    assert_eq!(
+        (manifest.assets[1].width, manifest.assets[1].height),
+        (Some(4), Some(2))
+    );
     assert_eq!(inspect_bundle(&output).unwrap().assets.len(), 3);
 
     let mut tiff =
@@ -187,6 +191,16 @@ async fn publishes_inspectable_geotiff_mbtiles_and_manifest() {
         .query_row("SELECT tile_row FROM tiles LIMIT 1", [], |row| row.get(0))
         .unwrap();
     assert_eq!(y, 1);
+
+    let manifest_path = output.join("manifest.json");
+    let mut tampered: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&manifest_path).unwrap()).unwrap();
+    tampered["assets"][0]["bounds"][0] = serde_json::json!(-10.0);
+    std::fs::write(&manifest_path, serde_json::to_vec(&tampered).unwrap()).unwrap();
+    assert_eq!(
+        inspect_bundle(&output).unwrap_err().code,
+        "ARTIFACT_INCOMPLETE"
+    );
 }
 
 #[tokio::test]

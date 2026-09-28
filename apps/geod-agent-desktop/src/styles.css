@@ -138,6 +138,7 @@ button:disabled { cursor: not-allowed; }
 .job-title h3 { font-size: 13px; margin: 5px 0 0; }
 .state-pill { background: #eaf1f8; color: #607b98; border-radius: 20px; padding: 5px 9px; font-size: 10px; white-space: nowrap; }
 .state-downloading, .state-processing, .state-verifying { background: #e8f3ff; color: #1769e8; }
+.state-paused { background: #eef0fb; color: #5b60a9; }
 .state-completed { background: #e7f8ee; color: #239260; }
 .state-failed, .state-partial { background: #fff1e3; color: #b86b12; }
 .progress-track { height: 5px; border-radius: 4px; background: #eaf0f7; margin: 18px 0 6px; overflow: hidden; }

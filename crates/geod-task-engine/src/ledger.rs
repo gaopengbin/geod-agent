@@ -74,6 +74,7 @@ pub struct RegisteredSource {
 pub enum JobState {
     Queued,
     Downloading,
+    Paused,
     Processing,
     Verifying,
     Completed,
@@ -473,6 +474,30 @@ impl TaskStore {
         read_job(&self.conn, job_id)
     }
 
+    pub fn inspect_job_artifact(&self, job_id: &str) -> Result<Manifest, LedgerError> {
+        let job = self
+            .get_job(job_id)?
+            .ok_or_else(|| LedgerError::new("JOB_NOT_FOUND", "Job was not found"))?;
+        if !matches!(job.state, JobState::Completed | JobState::Partial) {
+            return Err(LedgerError::new(
+                "ARTIFACT_NOT_READY",
+                "Job has no completed artifact to inspect",
+            ));
+        }
+        let plan = self
+            .get_plan(&job.plan_id)?
+            .ok_or_else(|| LedgerError::new("PLAN_NOT_FOUND", "Plan was not found"))?;
+        let manifest = imagery::inspect_bundle(&PathBuf::from(plan.plan.spec.output_directory))
+            .map_err(|error| LedgerError::new(error.code, error.message))?;
+        if manifest.id != format!("geod-agent-job-{job_id}") {
+            return Err(LedgerError::new(
+                "ARTIFACT_OWNERSHIP",
+                "Artifact belongs to another job",
+            ));
+        }
+        Ok(manifest)
+    }
+
     /// Cancel a job left without an active worker, such as after app restart.
     /// Active workers use a cancellation flag and transition themselves.
     pub fn cancel_inactive_job(&mut self, job_id: &str) -> Result<Job, LedgerError> {
@@ -480,7 +505,7 @@ impl TaskStore {
             .get_job(job_id)?
             .ok_or_else(|| LedgerError::new("JOB_NOT_FOUND", "Job was not found"))?;
         match job.state {
-            JobState::Queued | JobState::Downloading => {
+            JobState::Queued | JobState::Downloading | JobState::Paused => {
                 self.transition(job_id, job.state, JobState::Cancelled, None, Utc::now())
             }
             _ => Err(LedgerError::new(
@@ -488,6 +513,25 @@ impl TaskStore {
                 "Job cannot be cancelled in this state",
             )),
         }
+    }
+
+    pub fn pause_inactive_job(&mut self, job_id: &str) -> Result<Job, LedgerError> {
+        let job = self
+            .get_job(job_id)?
+            .ok_or_else(|| LedgerError::new("JOB_NOT_FOUND", "Job was not found"))?;
+        match job.state {
+            JobState::Queued | JobState::Downloading => {
+                self.transition(job_id, job.state, JobState::Paused, None, Utc::now())
+            }
+            _ => Err(LedgerError::new(
+                "JOB_STATE_CONFLICT",
+                "Job cannot be paused in this state",
+            )),
+        }
+    }
+
+    pub fn resume_paused_job(&mut self, job_id: &str) -> Result<Job, LedgerError> {
+        self.transition(job_id, JobState::Paused, JobState::Queued, None, Utc::now())
     }
 
     /// Retry only transient failures under the same approval and job ID. The
@@ -656,6 +700,20 @@ impl TaskStore {
         now: DateTime<Utc>,
         cancelled: &AtomicBool,
     ) -> Result<Manifest, LedgerError> {
+        let paused = AtomicBool::new(false);
+        self.run_job_with_control(job_id, current_source, endpoint, now, cancelled, &paused)
+            .await
+    }
+
+    pub async fn run_job_with_control(
+        &mut self,
+        job_id: &str,
+        current_source: &SourceDescriptor,
+        endpoint: &HttpSource,
+        now: DateTime<Utc>,
+        cancelled: &AtomicBool,
+        paused: &AtomicBool,
+    ) -> Result<Manifest, LedgerError> {
         let mut job = self
             .get_job(job_id)?
             .ok_or_else(|| LedgerError::new("JOB_NOT_FOUND", "Job was not found"))?;
@@ -759,11 +817,23 @@ impl TaskStore {
                 cancelled,
                 &cache,
                 |completed, total| {
+                    if cancelled.load(std::sync::atomic::Ordering::Relaxed) {
+                        return Err(geod_core::imagery::CoreError::new(
+                            "CANCELLED",
+                            "Download cancelled",
+                        ));
+                    }
                     if completed <= 10 || completed % 16 == 0 || completed == total {
                         self.record_progress(job_id, completed, total)
                             .map_err(|error| {
                                 geod_core::imagery::CoreError::new(error.code, error.message)
                             })?;
+                    }
+                    if paused.load(std::sync::atomic::Ordering::Relaxed) {
+                        return Err(geod_core::imagery::CoreError::new(
+                            "PAUSED",
+                            "Download paused after saving the tile checkpoint",
+                        ));
                     }
                     Ok(())
                 },
@@ -805,10 +875,10 @@ impl TaskStore {
                 }
             }
             Err(error) => {
-                let next = if error.code == "CANCELLED" {
-                    JobState::Cancelled
-                } else {
-                    JobState::Failed
+                let next = match error.code {
+                    "CANCELLED" => JobState::Cancelled,
+                    "PAUSED" => JobState::Paused,
+                    _ => JobState::Failed,
                 };
                 self.transition(job_id, job.state, next, Some(error.code), Utc::now())?;
                 Err(LedgerError::new(error.code, error.message))

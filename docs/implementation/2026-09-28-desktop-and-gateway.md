@@ -4,7 +4,7 @@
 
 ## 已接通的本地链路
 
-- 独立 Tauri 2 桌面程序：登记授权来源、地图拖框和经纬度输入、计划估算、按计划哈希批准、作业启动/取消/恢复、事件进度、成果检查。
+- 独立 Tauri 2 桌面程序：登记授权来源、地图拖框和经纬度输入、计划估算、按计划哈希批准、作业启动/暂停/继续/取消、事件进度、成果检查。
 - `geod-core` 从 XYZ/TMS 与 ArcGIS ImageServer `exportImage` 读取 256/512 像素瓦片；GeoTIFF 按 WGS84 请求框对应的 Web Mercator 像素边界裁剪，MBTiles 保留完整瓦片，manifest 保存各资产实际足迹与 SHA-256。输出目录存在时拒绝覆盖。
 - GeoD 身份服务的 `/api/geod/oauth/*` 路由复用现有账号存储；桌面客户端采用授权码与 PKCE、本机回环回调、Windows 凭据库保存刷新令牌。已有网站 Cookie 继续有效。该路由目前位于 `G:\code\GIS-AI\geostyle-web` 的本地工作树，尚未发布。
 - Agent 模型网关逐次向身份服务检查令牌，按用户持久预留与结算 token。只把模型建议和只读工具调用返回桌面端；下载批准、图源保存和作业启动只由桌面界面执行。模型结果在网关数据库中使用 AES-GCM 加密，原始用户消息不存网关。
@@ -14,6 +14,7 @@
 
 - 图源：USGS `USGSNAIPPlus/ImageServer/exportImage`；测试范围为美国本土华盛顿区域 `[-77.05, 38.85, -77.04, 38.86]`，Z12。源服务返回 `image/png`，本机成功下载、拼接并重新检查 GeoTIFF、MBTiles、预览和 manifest。
 - 裁剪后 GeoTIFF 为 30×38 像素；像素边缘足迹 `[-77.0502090454, 38.8498686695, -77.0399093628, 38.8600282742]`。MBTiles 含 1 个原始完整瓦片；manifest `missingTiles=0`。
+- 512 像素同源样本用 `cargo run --example usgs_naip -- <new-absolute-output-directory> 512` 验证，最新结果在 `artifacts/usgs-naip-20260928-dc-512-georef/`。GeoTIFF 59×76 像素，预览保持相同尺寸；重新打开后对 GeoTIFF 坐标系、比例尺、定位点、manifest 足迹与 SHA-256 做一致性检查，MBTiles 完整性检查通过，`missingTiles=0`。这是核心引擎的真实图源验证，尚不是安装后桌面全链验收。
 - 复现：`cd crates/geod-core; cargo run --example usgs_naip -- <new-absolute-output-directory>`。每次输出目录须不存在，避免覆盖。样本成果在本地 `artifacts/usgs-naip-20260928-dc-cropped/`，已从 Git 忽略。
 - [USGS National Map 许可说明](https://www.usgs.gov/faqs/what-are-terms-uselicensing-map-services-and-data-national-map)说明地图服务与数据属于公共领域并请求署名；[影像服务元数据](https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPPlus/ImageServer)描述了覆盖与来源。这个预设仅用于美国本土，其他地区及图源由用户核对授权。
 
@@ -34,7 +35,7 @@ npm run tauri:build
 
 ## 验证与未完成项
 
-- 已通过：`geod-core` 12 测试、`geod-task-engine` 17 测试、模型网关 5 测试、GeoD OAuth 3 测试；桌面前端构建、Rust Clippy `-D warnings`、NSIS 安装包构建。浏览器预览已检查助手抽屉；原生窗口还需安装后交互测试。作业恢复会核对已有成果的作业 ID，不会将其他作业的有效目录误认作自己的结果。
+- 已通过：`geod-core` 12 测试、`geod-task-engine` 17 测试、模型网关 5 测试、GeoD OAuth 3 测试；桌面前端构建、Rust Clippy `-D warnings`、NSIS 安装包构建。浏览器预览已检查助手抽屉；原生窗口还需安装后交互测试。作业恢复及成果查看会核对成果的作业 ID，不会将其他作业的有效目录误认作自己的结果。
 - 模型网关的工具调用与续答目前使用本地假身份服务和假上游模型验证。尚缺产品独立 New API 密钥、选定真实模型的工具调用/用量测试以及部署后的真实 GeoD 登录验收。
-- 桌面任务已保存带计划和图源版本绑定的瓦片检查点；恢复时逐片核对大小、SHA-256 与像素尺寸，已校验瓦片不重复请求。网络暂时故障可在同一批准和作业 ID 下重试；崩溃后正在下载的任务可恢复。尚无主动暂停操作。多边形导入、复杂边界掩膜、更多数据类型、源凭据引用与干净 Windows 安装回归尚未完成。
+- 桌面任务已保存带计划和图源版本绑定的瓦片检查点；恢复时逐片核对大小、SHA-256 与像素尺寸，已校验瓦片不重复请求。网络暂时故障可在同一批准和作业 ID 下重试；主动暂停与崩溃后恢复均保留原批准和作业 ID。多边形导入、复杂边界掩膜、更多数据类型、源凭据引用与干净 Windows 安装回归尚未完成。
 - 安装包未签名，尚未向用户发布或部署身份服务、网关。

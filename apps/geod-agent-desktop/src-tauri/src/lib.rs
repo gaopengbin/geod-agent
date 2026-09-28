@@ -1,7 +1,7 @@
 mod services;
 
 use chrono::Utc;
-use geod_core::imagery::{self, CoreError, HttpSource, Manifest};
+use geod_core::imagery::{CoreError, HttpSource, Manifest};
 use geod_task_engine::{
     ledger::{Approval, Job, JobEvent, LedgerError, StoredPlan, TaskStore},
     SourceDescriptor, TaskSpec,
@@ -19,7 +19,13 @@ use tauri::{Manager, State};
 
 struct AppState {
     db_path: PathBuf,
-    running_jobs: Arc<Mutex<HashMap<String, Arc<AtomicBool>>>>,
+    running_jobs: Arc<Mutex<HashMap<String, Arc<WorkerControl>>>>,
+}
+
+#[derive(Default)]
+struct WorkerControl {
+    cancelled: AtomicBool,
+    paused: AtomicBool,
 }
 
 #[derive(Debug, Serialize)]
@@ -144,8 +150,8 @@ fn jobs_start(
     let should_spawn = !active.contains_key(&job.job_id)
         && job.state == geod_task_engine::ledger::JobState::Queued;
     if should_spawn {
-        let cancelled = Arc::new(AtomicBool::new(false));
-        active.insert(job.job_id.clone(), Arc::clone(&cancelled));
+        let control = Arc::new(WorkerControl::default());
+        active.insert(job.job_id.clone(), Arc::clone(&control));
         drop(active);
         let db_path = state.db_path.clone();
         let running_jobs = Arc::clone(&state.running_jobs);
@@ -153,12 +159,13 @@ fn jobs_start(
         tauri::async_runtime::spawn(async move {
             if let Ok(mut store) = TaskStore::open(&db_path) {
                 let _ = store
-                    .run_job_with_cancel(
+                    .run_job_with_control(
                         &job_id,
                         &source.descriptor,
                         &source.endpoint,
                         Utc::now(),
-                        &cancelled,
+                        &control.cancelled,
+                        &control.paused,
                     )
                     .await;
             }
@@ -183,23 +190,61 @@ fn jobs_cancel(state: State<'_, AppState>, job_id: String) -> Result<Job, AppErr
         job.state,
         geod_task_engine::ledger::JobState::Queued
             | geod_task_engine::ledger::JobState::Downloading
+            | geod_task_engine::ledger::JobState::Paused
     ) {
         return Err(AppError {
             code: "JOB_STATE_CONFLICT",
             message: "当前阶段无法取消".into(),
         });
     }
-    if let Some(flag) = state
+    if job.state == geod_task_engine::ledger::JobState::Paused {
+        return open_store(&state)?
+            .cancel_inactive_job(&job_id)
+            .map_err(Into::into);
+    }
+    if let Some(control) = state
         .running_jobs
         .lock()
         .expect("running-job mutex poisoned")
         .get(&job_id)
     {
-        flag.store(true, Ordering::Relaxed);
+        control.cancelled.store(true, Ordering::Relaxed);
         return Ok(job);
     }
     open_store(&state)?
         .cancel_inactive_job(&job_id)
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+fn jobs_pause(state: State<'_, AppState>, job_id: String) -> Result<Job, AppError> {
+    let job = open_store(&state)?
+        .get_job(&job_id)?
+        .ok_or_else(|| AppError {
+            code: "JOB_NOT_FOUND",
+            message: "任务不存在".into(),
+        })?;
+    if !matches!(
+        job.state,
+        geod_task_engine::ledger::JobState::Queued
+            | geod_task_engine::ledger::JobState::Downloading
+    ) {
+        return Err(AppError {
+            code: "JOB_STATE_CONFLICT",
+            message: "当前阶段无法暂停".into(),
+        });
+    }
+    if let Some(control) = state
+        .running_jobs
+        .lock()
+        .expect("running-job mutex poisoned")
+        .get(&job_id)
+    {
+        control.paused.store(true, Ordering::Relaxed);
+        return Ok(job);
+    }
+    open_store(&state)?
+        .pause_inactive_job(&job_id)
         .map_err(Into::into)
 }
 
@@ -210,8 +255,21 @@ fn jobs_resume(state: State<'_, AppState>, job_id: String) -> Result<Job, AppErr
         code: "JOB_NOT_FOUND",
         message: "任务不存在".into(),
     })?;
+    if state
+        .running_jobs
+        .lock()
+        .expect("running-job mutex poisoned")
+        .contains_key(&job_id)
+    {
+        return Err(AppError {
+            code: "JOB_STATE_CONFLICT",
+            message: "作业仍在停止中，请稍后继续".into(),
+        });
+    }
     if job.state == geod_task_engine::ledger::JobState::Failed {
         job = store.retry_failed_job(&job_id)?;
+    } else if job.state == geod_task_engine::ledger::JobState::Paused {
+        job = store.resume_paused_job(&job_id)?;
     }
     if !matches!(
         job.state,
@@ -241,20 +299,21 @@ fn jobs_resume(state: State<'_, AppState>, job_id: String) -> Result<Job, AppErr
     if active.contains_key(&job_id) {
         return Ok(job);
     }
-    let cancelled = Arc::new(AtomicBool::new(false));
-    active.insert(job_id.clone(), Arc::clone(&cancelled));
+    let control = Arc::new(WorkerControl::default());
+    active.insert(job_id.clone(), Arc::clone(&control));
     drop(active);
     let db_path = state.db_path.clone();
     let running_jobs = Arc::clone(&state.running_jobs);
     tauri::async_runtime::spawn(async move {
         if let Ok(mut store) = TaskStore::open(&db_path) {
             let _ = store
-                .run_job_with_cancel(
+                .run_job_with_control(
                     &job_id,
                     &source.descriptor,
                     &source.endpoint,
                     Utc::now(),
-                    &cancelled,
+                    &control.cancelled,
+                    &control.paused,
                 )
                 .await;
         }
@@ -300,16 +359,9 @@ fn jobs_events(
 
 #[tauri::command]
 fn artifacts_inspect(state: State<'_, AppState>, job_id: String) -> Result<Manifest, AppError> {
-    let store = open_store(&state)?;
-    let job = store.get_job(&job_id)?.ok_or_else(|| AppError {
-        code: "JOB_NOT_FOUND",
-        message: "任务不存在".into(),
-    })?;
-    let plan = store.get_plan(&job.plan_id)?.ok_or_else(|| AppError {
-        code: "PLAN_NOT_FOUND",
-        message: "计划不存在".into(),
-    })?;
-    imagery::inspect_bundle(&PathBuf::from(plan.plan.spec.output_directory)).map_err(Into::into)
+    open_store(&state)?
+        .inspect_job_artifact(&job_id)
+        .map_err(Into::into)
 }
 
 pub fn run() {
@@ -340,6 +392,7 @@ pub fn run() {
             approvals_grant,
             jobs_start,
             jobs_cancel,
+            jobs_pause,
             jobs_resume,
             jobs_get,
             jobs_list,

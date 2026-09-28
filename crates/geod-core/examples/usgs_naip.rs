@@ -11,16 +11,17 @@ use std::{path::PathBuf, time::Duration};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let destination = PathBuf::from(
-        std::env::args()
-            .nth(1)
-            .ok_or("Pass a new absolute output directory")?,
-    );
+    let mut args = std::env::args().skip(1);
+    let destination = PathBuf::from(args.next().ok_or("Pass a new absolute output directory")?);
+    let tile_size: u16 = args.next().unwrap_or_else(|| "256".into()).parse()?;
+    if !matches!(tile_size, 256 | 512) || args.next().is_some() {
+        return Err("Optional tile size must be 256 or 512".into());
+    }
     if !destination.is_absolute() || destination.exists() {
         return Err("Output must be a new absolute directory".into());
     }
     let bounds = [-77.05, 38.85, -77.04, 38.86];
-    let grid = tile::grid(bounds, 12, 256)?;
+    let grid = tile::grid(bounds, 12, tile_size)?;
     let request = ImageryRequest {
         name: "Washington DC NAIP acceptance sample".into(),
         bounds,
@@ -28,7 +29,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         output_geotiff: true,
         output_mbtiles: true,
         max_tiles: 4,
-        max_decoded_rgba_bytes: 4 * 256 * 256 * 4,
+        max_decoded_rgba_bytes: 4 * u64::from(tile_size).pow(2) * 4,
         destination: destination.clone(),
         deadline: Duration::from_secs(90),
     };
@@ -37,7 +38,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         attribution: "USGS, USDA, The National Map: Orthoimagery".into(),
         license: "USGS The National Map public-domain CONUS imagery".into(),
         url_template: "https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPPlus/ImageServer/exportImage".into(),
-        scheme: TileScheme::XYZ, tile_size: 256, network_policy: NetworkPolicy::PublicHttps,
+        scheme: TileScheme::XYZ, tile_size, network_policy: NetworkPolicy::PublicHttps,
         min_interval_ms: 500,
     };
     let produced = fetch_bundle(&request, &source)

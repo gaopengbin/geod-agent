@@ -2,7 +2,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 
 export type Bounds = [number, number, number, number];
 export type OutputFormat = "geotiff" | "mbtiles";
-export type JobState = "queued" | "downloading" | "processing" | "verifying" | "completed" | "partial" | "failed" | "cancelled";
+export type JobState = "queued" | "downloading" | "paused" | "processing" | "verifying" | "completed" | "partial" | "failed" | "cancelled";
 
 export interface SourceDescriptor {
   schemaVersion: "0.1";
@@ -91,6 +91,7 @@ export const api = {
   jobsList: () => invoke<Job[]>("jobs_list"),
   jobsActive: () => invoke<string[]>("jobs_active"),
   jobsCancel: (jobId: string) => invoke<Job>("jobs_cancel", { jobId }),
+  jobsPause: (jobId: string) => invoke<Job>("jobs_pause", { jobId }),
   jobsResume: (jobId: string) => invoke<Job>("jobs_resume", { jobId }),
   jobsEvents: (jobId: string, afterSeq: number) => invoke<JobEvent[]>("jobs_events", { jobId, afterSeq }),
   artifactsInspect: (jobId: string) => invoke<Manifest>("artifacts_inspect", { jobId }),
