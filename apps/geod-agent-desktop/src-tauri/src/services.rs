@@ -158,10 +158,21 @@ fn load_config(path: &PathBuf) -> Result<ServiceConfig, ServiceError> {
     };
     validate_config(config)
 }
-fn client() -> Result<Client, ServiceError> {
-    Client::builder()
+fn client(origin: &str) -> Result<Client, ServiceError> {
+    let mut builder = Client::builder()
         .redirect(reqwest::redirect::Policy::none())
-        .timeout(Duration::from_secs(55))
+        .timeout(Duration::from_secs(55));
+    #[cfg(windows)]
+    if Url::parse(origin)
+        .ok()
+        .and_then(|url| url.host_str().map(str::to_string))
+        .is_some_and(|host| !matches!(host.as_str(), "127.0.0.1" | "localhost" | "[::1]" | "::1"))
+    {
+        if let Some(proxy) = crate::windows_user_proxy() {
+            builder = builder.proxy(proxy);
+        }
+    }
+    builder
         .build()
         .map_err(|_| error("NETWORK_ERROR", "网络客户端初始化失败"))
 }
@@ -193,7 +204,7 @@ fn get_access_token(state: &ServiceState, config: &ServiceConfig) -> Result<Stri
     if tokens.access_expires_at > unix_seconds() + 30 {
         return Ok(tokens.access_token);
     }
-    let response = client()?
+    let response = client(&config.identity_origin)?
         .post(format!("{}/api/geod/oauth/token", config.identity_origin))
         .form(&[
             ("grant_type", "refresh_token"),
@@ -376,7 +387,7 @@ fn complete_flow(
                     {
                         return Err(error("INVALID_CODE", "授权码无效"));
                     }
-                    let response = client()?
+                    let response = client(&config.identity_origin)?
                         .post(format!("{}/api/geod/oauth/token", config.identity_origin))
                         .form(&[
                             ("grant_type", "authorization_code"),
@@ -511,7 +522,7 @@ pub fn auth_logout(state: State<'_, ServiceState>) -> Result<AuthStatus, Service
         .expect("credential mutex poisoned");
     if let Some(tokens) = read_tokens()? {
         if tokens.identity_origin == config.identity_origin {
-            let _ = client().and_then(|client| {
+            let _ = client(&config.identity_origin).and_then(|client| {
                 client
                     .post(format!("{}/api/geod/oauth/revoke", config.identity_origin))
                     .form(&[
@@ -564,7 +575,7 @@ mod tests {
             let _ = stream.read(&mut request).unwrap();
             write!(stream, "HTTP/1.1 302 Found\r\nLocation: {target_url}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").unwrap();
         });
-        let response = client()
+        let response = client(&redirect_url)
             .unwrap()
             .post(redirect_url)
             .bearer_auth("test-secret")
@@ -604,7 +615,7 @@ fn gateway_call(
 ) -> Result<Value, ServiceError> {
     let config = load_config(&state.config_path)?;
     let token = get_access_token(state, &config)?;
-    let client = client()?;
+    let client = client(&config.gateway_origin)?;
     let request = if let Some(body) = body {
         client
             .post(format!("{}{path}", config.gateway_origin))
