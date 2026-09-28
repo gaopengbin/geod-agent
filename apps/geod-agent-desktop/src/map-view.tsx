@@ -1,9 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import * as maplibregl from "maplibre-gl";
+import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import type { Map } from "maplibre-gl";
-import { api, desktopAvailable, type ArtifactPreview, type BoundaryGeometry, type Bounds } from "./api";
+import { api, desktopAvailable, type ArtifactPreview, type BoundaryGeometry, type Bounds, type PlanTileGrid } from "./api";
+import { taskGridLines, taskTileCoverage } from "./task-grid";
 import { Button } from "@/components/motion/button/base";
 import { Minus, Plus } from "lucide-react";
+
+maplibregl.setWorkerUrl(maplibreWorkerUrl);
 
 if (desktopAvailable) {
   maplibregl.addProtocol("geod-osm", async ({ url }) => {
@@ -30,7 +34,7 @@ function emptyStyle(theme: "light" | "dark") {
     },
     layers: [
       { id: "background", type: "background" as const, paint: { "background-color": theme === "dark" ? "#0e0f11" : "#edf4fa" } },
-      { id: "osm", type: "raster" as const, source: "osm" },
+      { id: "osm", type: "raster" as const, source: "osm", paint: { "raster-brightness-max": theme === "dark" ? 0.42 : 1, "raster-saturation": theme === "dark" ? -0.68 : 0 } },
     ],
   };
 }
@@ -74,7 +78,7 @@ function projectOverlay(map: Map, bounds: Bounds | null): Overlay {
   return { width, height, meridians, parallels, selection };
 }
 
-export function MapView({ bounds, boundary, preview, theme }: { bounds: Bounds | null; boundary: BoundaryGeometry | null; preview: ArtifactPreview | null; theme: "light" | "dark" }) {
+export function MapView({ bounds, boundary, tileGrids, completedTiles, preview, theme }: { bounds: Bounds | null; boundary: BoundaryGeometry | null; tileGrids: PlanTileGrid[]; completedTiles: number | null; preview: ArtifactPreview | null; theme: "light" | "dark" }) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Map | null>(null);
   const boundsRef = useRef(bounds);
@@ -90,7 +94,7 @@ export function MapView({ bounds, boundary, preview, theme }: { bounds: Bounds |
     const update = () => setOverlay(projectOverlay(map, boundsRef.current));
     map.on("move", update);
     map.on("resize", update);
-    map.on("style.load", () => {
+    map.on("load", () => {
       setReady(true);
       if (boundsRef.current) map.fitBounds([[boundsRef.current[0], boundsRef.current[1]], [boundsRef.current[2], boundsRef.current[3]]], { padding: 70, maxZoom: 15, duration: 0 });
       update();
@@ -101,6 +105,10 @@ export function MapView({ bounds, boundary, preview, theme }: { bounds: Bounds |
   useEffect(() => {
     const map = mapRef.current;
     if (map?.getLayer("background")) map.setPaintProperty("background", "background-color", theme === "dark" ? "#0e0f11" : "#edf4fa");
+    if (map?.getLayer("osm")) {
+      map.setPaintProperty("osm", "raster-brightness-max", theme === "dark" ? 0.42 : 1);
+      map.setPaintProperty("osm", "raster-saturation", theme === "dark" ? -0.68 : 0);
+    }
   }, [theme, ready]);
 
   useEffect(() => {
@@ -145,6 +153,26 @@ export function MapView({ bounds, boundary, preview, theme }: { bounds: Bounds |
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !ready) return;
+    for (const layer of ["task-grid-lines", "task-coverage-fill"]) if (map.getLayer(layer)) map.removeLayer(layer);
+    for (const source of ["task-grid", "task-coverage"]) if (map.getSource(source)) map.removeSource(source);
+    if (!tileGrids.length || preview) return;
+    map.addSource("task-grid", { type: "geojson", data: taskGridLines(tileGrids) });
+    map.addSource("task-coverage", { type: "geojson", data: taskTileCoverage(tileGrids, completedTiles ?? 0) });
+    map.addLayer({ id: "task-coverage-fill", type: "fill", source: "task-coverage", paint: { "fill-color": theme === "dark" ? "#8fdbaf" : "#24774f", "fill-opacity": 0.28 } });
+    map.addLayer({ id: "task-grid-lines", type: "line", source: "task-grid", paint: { "line-color": theme === "dark" ? "#78aaff" : "#1769e8", "line-opacity": 0.9, "line-width": 1.7, "line-dasharray": [2, 2] } });
+    if (map.getLayer("plan-boundary-fill")) map.moveLayer("plan-boundary-fill");
+    if (map.getLayer("plan-boundary-outline")) map.moveLayer("plan-boundary-outline");
+  }, [tileGrids, preview, ready, theme]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready || preview || !tileGrids.length) return;
+    (map.getSource("task-coverage") as maplibregl.GeoJSONSource | undefined)?.setData(taskTileCoverage(tileGrids, completedTiles ?? 0));
+  }, [tileGrids, completedTiles, preview, ready]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready) return;
     for (const layer of ["plan-boundary-outline", "plan-boundary-fill"]) if (map.getLayer(layer)) map.removeLayer(layer);
     if (map.getSource("plan-boundary")) map.removeSource("plan-boundary");
     if (!boundary) return;
@@ -153,14 +181,17 @@ export function MapView({ bounds, boundary, preview, theme }: { bounds: Bounds |
     map.addLayer({ id: "plan-boundary-outline", type: "line", source: "plan-boundary", paint: { "line-color": theme === "dark" ? "#78aaff" : "#1769e8", "line-width": 2.5 } });
   }, [boundary, ready, theme]);
 
+  const plannedTiles = tileGrids.reduce((total, grid) => total + grid.tileCount, 0);
+  const detail = imageryState === "ready" ? "本机影像 · OSM 底图" : imageryState === "loading" ? "正在加载本地影像" : imageryState === "error" ? "本地影像显示失败" : completedTiles !== null && plannedTiles ? `${completedTiles} / ${plannedTiles} 瓦片已读取 · 待核验` : plannedTiles ? `${plannedTiles} 张计划瓦片 · Z${tileGrids.map(grid => grid.zoom).join("/")}` : ready ? "OpenStreetMap 底图" : "地图正在加载";
+
   return <div className={`map-shell ${ready ? "" : "map-fallback"}`}>
     <div ref={container} className="map-canvas" aria-label="Agent 计划范围预览" />
     {!ready && <div className="map-fallback-grid" aria-hidden="true" />}
     {ready && overlay.width > 0 && overlay.height > 0 && <svg className="map-data-overlay" viewBox={`0 0 ${overlay.width} ${overlay.height}`} preserveAspectRatio="none" aria-hidden="true">
-      {overlay.selection && <rect className="map-selection" x={overlay.selection.x} y={overlay.selection.y} width={overlay.selection.width} height={overlay.selection.height} />}
+      {overlay.selection && <rect className={tileGrids.length && !preview ? "map-selection map-selection-with-tiles" : "map-selection"} x={overlay.selection.x} y={overlay.selection.y} width={overlay.selection.width} height={overlay.selection.height} />}
     </svg>}
     {!ready && bounds && <div className="map-fallback-extent" aria-label="计划范围示意"><span>计划范围示意</span></div>}
-    <div className="map-overlay top-left"><span className="eyebrow">MAPLIBRE GL</span><strong>{imageryState === "ready" ? "已校验影像" : boundary ? "边界计划" : bounds ? "计划范围" : "地图工作区"}</strong><small>{imageryState === "ready" ? "本机影像 · OSM 底图" : imageryState === "loading" ? "正在加载本地影像" : imageryState === "error" ? "本地影像显示失败" : boundary ? `${boundary.polygons.length} 个面 · 边界外透明裁剪` : ready ? "OpenStreetMap 底图" : "地图正在加载"}</small></div>
+    <div className="map-overlay top-left"><span className="eyebrow">MAPLIBRE GL</span><strong>{imageryState === "ready" ? "已校验影像" : boundary ? "边界计划" : bounds ? "计划范围" : "地图工作区"}</strong><small>{detail}</small></div>
     <div className="map-controls"><div className="zoom-controls"><Button variant="secondary" size="icon" aria-label="放大地图" disabled={!ready} onClick={() => mapRef.current?.zoomIn()}><Plus size={16} /></Button><Button variant="secondary" size="icon" aria-label="缩小地图" disabled={!ready} onClick={() => mapRef.current?.zoomOut()}><Minus size={16} /></Button></div></div>
     <div className="map-overlay bottom-left"><span className="map-dot" />{bounds ? bounds.map(n => n.toFixed(3)).join(" / ") : "Agent 生成计划后显示范围"}</div>
     <div className="map-attribution">{preview && <span>{preview.attribution} · </span>}<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a></div>

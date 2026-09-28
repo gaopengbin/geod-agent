@@ -122,6 +122,7 @@ body { background: var(--background); color: var(--app-text); font-family: "Sego
 .map-attribution a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 .map-grid-line { stroke: var(--app-line); stroke-width: 1; opacity: .82; }
 .map-selection { fill: color-mix(in srgb, var(--app-blue) 17%, transparent); stroke: var(--app-blue); stroke-width: 2; }
+.map-selection-with-tiles { fill: transparent; stroke-dasharray: 5 3; stroke-width: 1.5; }
 .map-fallback-extent { position: absolute; z-index: 1; left: 27%; top: 28%; width: 46%; height: 42%; display: grid; place-items: center; border: 2px dashed var(--app-blue); border-radius: 3px; background: color-mix(in srgb, var(--app-blue) 9%, transparent); color: var(--app-blue-text); font-size: 11px; font-weight: 700; letter-spacing: .05em; pointer-events: none; }
 .map-overlay { background: color-mix(in srgb, var(--app-surface) 94%, transparent); border-color: var(--app-line); color: var(--app-text); box-shadow: 0 8px 24px var(--app-shadow); }
 .top-left small, .bottom-left, .map-footer { color: var(--app-soft-text); }

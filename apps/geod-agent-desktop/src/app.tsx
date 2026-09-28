@@ -4,12 +4,13 @@ import { Button } from "@/components/motion/button/base";
 import { AgentPanel } from "./agent-panel";
 import { MapView } from "./map-view";
 import { SourceDialog } from "./source-dialog";
-import { api, desktopAvailable, errorMessage, type ArtifactPreview, type Job, type JobEvent, type Manifest, type SourceDescriptor, type StoredPlan } from "./api";
+import { api, desktopAvailable, errorMessage, type ArtifactPreview, type Job, type JobEvent, type Manifest, type PlanTileGrid, type SourceDescriptor, type StoredPlan } from "./api";
 
 const stateName: Record<string, string> = { queued: "排队中", downloading: "下载中", paused: "已暂停", processing: "处理中", verifying: "核验中", completed: "已完成", partial: "部分完成", failed: "失败", cancelled: "已取消" };
 const count = (n: number) => new Intl.NumberFormat("zh-CN").format(n);
 const size = (n: number) => n >= 1024 ** 3 ? `${(n / 1024 ** 3).toFixed(2)} GB` : n >= 1024 ** 2 ? `${(n / 1024 ** 2).toFixed(1)} MB` : `${count(n)} B`;
 const time = (s: string) => new Date(s).toLocaleString("zh-CN", { hour12: false });
+const emptyTileGrids: PlanTileGrid[] = [];
 
 export function App() {
   const [theme, setTheme] = useState<"light" | "dark">(() => {
@@ -157,6 +158,7 @@ export function App() {
 
   const latestProgress = [...events].reverse().find(event => event.completedTiles !== undefined && event.totalTiles);
   const progressPercent = job?.state === "completed" ? 100 : latestProgress ? 100 * (latestProgress.completedTiles ?? 0) / (latestProgress.totalTiles ?? 1) : 0;
+  const mapCompletedTiles = job ? job.state === "completed" ? plan?.plan.totalTiles ?? 0 : latestProgress?.completedTiles ?? 0 : null;
 
   return <div className="app-shell">
     <header className="app-header">
@@ -169,7 +171,7 @@ export function App() {
         setResultsOpen(true);
         setNotice("Agent 已生成计划。请核对图源、范围、格式和本机保存路径，再确认下载。");
       }} />
-      <main className="map-column"><MapView bounds={plan?.plan.spec.bounds ?? null} boundary={plan?.plan.spec.boundary ?? null} preview={preview} theme={theme} /><div className="map-footer"><div><span className="small-dot" />WGS84 / EPSG:4326</div><span>{preview ? "OSM 底图上叠加已校验影像；可缩放和平移。" : "OSM 底图显示计划范围；成果按真实坐标叠加。"}</span></div></main>
+      <main className="map-column"><MapView bounds={plan?.plan.spec.bounds ?? null} boundary={plan?.plan.spec.boundary ?? null} tileGrids={plan?.plan.tileGrids ?? emptyTileGrids} completedTiles={mapCompletedTiles} preview={preview} theme={theme} /><div className="map-footer"><div><span className="small-dot" />WGS84 / EPSG:4326</div><span>{preview ? "OSM 底图上叠加已校验影像；可缩放和平移。" : plan ? "蓝色格网是计划瓦片；绿色范围表示已读取，成果仍需核验。" : "OSM 底图显示计划范围；成果按真实坐标叠加。"}</span></div></main>
       <aside id="agent-results" className="right-panel panel-scroll" aria-label="成果页" hidden={!resultsOpen}>
         <div className="right-heading"><div><span className="eyebrow">MISSION CONTROL</span><h2>计划与执行</h2></div><Button variant="ghost" size="icon" aria-label="刷新任务" disabled={!desktopAvailable} onClick={() => void refreshJobs().catch(cause => setError(errorMessage(cause)))}><RefreshCw size={17} /></Button></div>
         {error && <div className="error-box"><CircleAlert size={17} />{error}<button type="button" onClick={() => setError("")} aria-label="关闭错误"><X size={14} /></button></div>}

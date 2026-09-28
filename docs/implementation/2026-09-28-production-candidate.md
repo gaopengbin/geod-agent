@@ -16,7 +16,7 @@
 | `artifacts/linux-gateway-build/geod-oauth-studio-linux-x64-20260928.tar.gz` | `65b5e65d8d18d4a32c15980a587d4e68a534ab7e8a1e0fc4d6523fe5e226dc88` | 基于现网 `0984aed` 加 OAuth `3ae9b71` 与 GeoD 品牌 `9fb6f9d`；账号测试 20/20；Linux standalone HTTP 匿名跳转、同意、授权码、换令牌、检查与撤销全通过 |
 | `artifacts/linux-gateway-build/geod-agent-gateway-linux-x64-20260928-geojson-validated.tar.gz` | `69a6c52d87936f384b0763016531bb98c829ec80b92dc81b0a4ff9c819d5b405` | Linux x64 生产依赖；GeoJSON 边界规划工具合同已更新；Node 22.22.3 网关测试 7/7；桌面使用真实 DeepSeek 联调通过 |
 | `artifacts/linux-gateway-build/geod-login-static-overlay-20260928.tar.gz` | `1425f0e594a89bbec9d035540a7fa3f4b40fa71dd8b13f344281d52504e8c425` | GeoD 品牌登录页与静态资源；HTML 引用 14/14 存在。须叠加到现有网站的**新**不可变发布目录，保留其他页面 |
-| `apps/geod-agent-desktop/src-tauri/target/release/bundle/nsis/GeoD Agent_0.1.0_x64-setup.exe` | `ea1bffb4a44113228d748edad0532e3a0992d512654bef0ff8e8a397977ed8a4` | Windows 构建、桌面服务测试 5/5；本机测试 OAuth 与正式账号凭据隔离；已在现有隔离目录升级安装，不触发网页授权；之前安装后程序完成 GeoJSON 附件、真实 DeepSeek 及已批准成果复检，当前包未重复打开授权页 |
+| `apps/geod-agent-desktop/src-tauri/target/release/bundle/nsis/GeoD Agent_0.1.0_x64-setup.exe` | `561744ab56d3966bed1f342c951e0b27da1c956a7a7cb87d243b93a30b368565` | Windows 构建、桌面服务测试 5/5；MapLibre Vite worker 独立打包，计划格网和读取覆盖层通过 2 项几何测试与本地浏览器亮暗主题检查；本机测试 OAuth 与正式账号凭据隔离；已在现有隔离目录静默升级安装，未打开网页授权 |
 
 上表 Linux 包是本机可信 Ubuntu WSL 构建，不从生产服务器下载依赖。静态覆盖包只含登录页及其资源；部署前还需在服务器新目录中验证页面资源与现有 Nginx 静态路径配合，并在域名上做浏览器登录冒烟。
 
