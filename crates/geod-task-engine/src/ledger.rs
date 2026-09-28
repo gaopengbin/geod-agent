@@ -820,10 +820,11 @@ impl TaskStore {
                 Ok(manifest)
             })
         } else {
-            imagery::fetch_bundle_with_cache(
+            imagery::fetch_bundle_with_cache_control(
                 &request,
                 endpoint,
                 cancelled,
+                paused,
                 &cache,
                 |completed, total| {
                     if cancelled.load(std::sync::atomic::Ordering::Relaxed) {

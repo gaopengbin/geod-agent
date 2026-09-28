@@ -1,8 +1,9 @@
 use geod_core::{
     boundary::BoundaryGeometry,
     imagery::{
-        fetch_bundle, fetch_bundle_with_cache, fetch_bundle_with_cancel, inspect_bundle,
-        HttpSource, ImageryRequest, NetworkPolicy, TileCacheConfig, TileScheme,
+        fetch_bundle, fetch_bundle_with_cache, fetch_bundle_with_cache_control,
+        fetch_bundle_with_cancel, inspect_bundle, HttpSource, ImageryRequest, NetworkPolicy,
+        TileCacheConfig, TileScheme,
     },
     tile,
 };
@@ -13,10 +14,10 @@ use std::{
     net::{SocketAddr, TcpListener},
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
-        Arc,
+        Arc, Mutex,
     },
     thread::{self, JoinHandle},
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tiff::{
     decoder::{Decoder, DecodingResult},
@@ -27,6 +28,7 @@ struct Fixture {
     address: SocketAddr,
     stop: Arc<AtomicBool>,
     requests: Arc<AtomicUsize>,
+    request_times: Arc<Mutex<Vec<Instant>>>,
     worker: Option<JoinHandle<()>>,
     tile_size: u16,
     tms: bool,
@@ -38,13 +40,25 @@ impl Fixture {
     }
 
     fn start_mode(missing_right: bool, tile_size: u16, tms: bool, rate_limit_first: bool) -> Self {
+        Self::start_mode_with_retry_after(missing_right, tile_size, tms, rate_limit_first, None)
+    }
+
+    fn start_mode_with_retry_after(
+        missing_right: bool,
+        tile_size: u16,
+        tms: bool,
+        rate_limit_first: bool,
+        retry_after_seconds: Option<u64>,
+    ) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         listener.set_nonblocking(true).unwrap();
         let address = listener.local_addr().unwrap();
         let stop = Arc::new(AtomicBool::new(false));
         let requests = Arc::new(AtomicUsize::new(0));
+        let request_times = Arc::new(Mutex::new(Vec::new()));
         let stop_worker = stop.clone();
         let count_worker = requests.clone();
+        let times_worker = request_times.clone();
         let left = png([40, 90, 130, 255], tile_size);
         let right = png([150, 60, 20, 255], tile_size);
         let source_y = if tms { 1 } else { 0 };
@@ -73,6 +87,7 @@ impl Fixture {
                 if path.is_none() {
                     continue;
                 }
+                times_worker.lock().unwrap().push(Instant::now());
                 let attempt = count_worker.fetch_add(1, Ordering::Relaxed);
                 let (status, body): (&str, &[u8]) = if rate_limit_first && attempt == 0 {
                     ("429 Too Many Requests", b"")
@@ -83,7 +98,14 @@ impl Fixture {
                         _ => ("404 Not Found", b""),
                     }
                 };
-                let header = format!("HTTP/1.1 {status}\r\nContent-Type: image/png\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
+                let retry_after = if status.starts_with("429") {
+                    retry_after_seconds
+                        .map(|seconds| format!("Retry-After: {seconds}\r\n"))
+                        .unwrap_or_default()
+                } else {
+                    String::new()
+                };
+                let header = format!("HTTP/1.1 {status}\r\nContent-Type: image/png\r\n{retry_after}Content-Length: {}\r\nConnection: close\r\n\r\n", body.len());
                 stream.write_all(header.as_bytes()).unwrap();
                 stream.write_all(body).unwrap();
             }
@@ -92,6 +114,7 @@ impl Fixture {
             address,
             stop,
             requests,
+            request_times,
             worker: Some(worker),
             tile_size,
             tms,
@@ -286,6 +309,114 @@ async fn retries_one_rate_limited_tile_and_publishes_complete_bundle() {
         .unwrap();
     assert_eq!(fixture.requests.load(Ordering::Relaxed), 3);
     assert_eq!(inspect_bundle(&output).unwrap().quality.status, "complete");
+}
+
+#[tokio::test]
+async fn respects_retry_after_before_requesting_the_rate_limited_tile_again() {
+    let fixture = Fixture::start_mode_with_retry_after(false, 256, false, true, Some(2));
+    let directory = tempfile::tempdir().unwrap();
+    let output = directory.path().join("retry-after-complete");
+    fetch_bundle(&request(output.clone(), 256), &fixture.source())
+        .await
+        .unwrap();
+    let times = fixture.request_times.lock().unwrap();
+    assert_eq!(times.len(), 3);
+    assert!(times[1].duration_since(times[0]) >= Duration::from_millis(1900));
+    assert_eq!(inspect_bundle(&output).unwrap().quality.status, "complete");
+}
+
+#[tokio::test]
+async fn retry_after_beyond_job_deadline_does_not_retry_early() {
+    let fixture = Fixture::start_mode_with_retry_after(false, 256, false, true, Some(30));
+    let directory = tempfile::tempdir().unwrap();
+    let output = directory.path().join("rate-limit-beyond-deadline");
+    let started = Instant::now();
+    let error = fetch_bundle(&request(output.clone(), 256), &fixture.source())
+        .await
+        .unwrap_err();
+    assert_eq!(error.code, "SOURCE_RATE_LIMITED");
+    assert!(started.elapsed() < Duration::from_secs(3));
+    assert_eq!(fixture.requests.load(Ordering::Relaxed), 1);
+    assert!(!output.exists());
+}
+
+#[tokio::test]
+async fn cancel_interrupts_retry_after_without_another_tile_request() {
+    let fixture = Fixture::start_mode_with_retry_after(false, 256, false, true, Some(30));
+    let directory = tempfile::tempdir().unwrap();
+    let output = directory.path().join("cancelled-during-rate-limit");
+    let cancelled = Arc::new(AtomicBool::new(false));
+    let watcher_cancelled = cancelled.clone();
+    let requests = fixture.requests.clone();
+    let watcher = thread::spawn(move || {
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while requests.load(Ordering::Relaxed) == 0 {
+            if Instant::now() >= deadline {
+                return false;
+            }
+            thread::sleep(Duration::from_millis(5));
+        }
+        thread::sleep(Duration::from_millis(250));
+        watcher_cancelled.store(true, Ordering::Relaxed);
+        true
+    });
+    let mut job = request(output.clone(), 256);
+    job.deadline = Duration::from_secs(60);
+    let started = Instant::now();
+    let error = fetch_bundle_with_cancel(&job, &fixture.source(), &cancelled)
+        .await
+        .unwrap_err();
+    assert!(watcher.join().unwrap());
+    assert_eq!(error.code, "CANCELLED");
+    assert!(started.elapsed() < Duration::from_secs(3));
+    assert_eq!(fixture.requests.load(Ordering::Relaxed), 1);
+    assert!(!output.exists());
+}
+
+#[tokio::test]
+async fn pause_interrupts_retry_after_and_keeps_the_job_unpublished() {
+    let fixture = Fixture::start_mode_with_retry_after(false, 256, false, true, Some(30));
+    let directory = tempfile::tempdir().unwrap();
+    let output = directory.path().join("paused-during-rate-limit");
+    let cancelled = AtomicBool::new(false);
+    let paused = Arc::new(AtomicBool::new(false));
+    let watcher_paused = paused.clone();
+    let requests = fixture.requests.clone();
+    let watcher = thread::spawn(move || {
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while requests.load(Ordering::Relaxed) == 0 {
+            if Instant::now() >= deadline {
+                return false;
+            }
+            thread::sleep(Duration::from_millis(5));
+        }
+        thread::sleep(Duration::from_millis(250));
+        watcher_paused.store(true, Ordering::Relaxed);
+        true
+    });
+    let cache = TileCacheConfig {
+        root: directory.path().join("checkpoints"),
+        plan_hash: "a".repeat(64),
+        job_id: "f76cfda5-2879-4293-9c0b-ec60d595210f".into(),
+    };
+    let mut job = request(output.clone(), 256);
+    job.deadline = Duration::from_secs(60);
+    let started = Instant::now();
+    let error = fetch_bundle_with_cache_control(
+        &job,
+        &fixture.source(),
+        &cancelled,
+        &paused,
+        &cache,
+        |_, _| Ok(()),
+    )
+    .await
+    .unwrap_err();
+    assert!(watcher.join().unwrap());
+    assert_eq!(error.code, "PAUSED");
+    assert!(started.elapsed() < Duration::from_secs(3));
+    assert_eq!(fixture.requests.load(Ordering::Relaxed), 1);
+    assert!(!output.exists());
 }
 
 #[tokio::test]

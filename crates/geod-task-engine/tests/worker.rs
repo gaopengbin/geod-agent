@@ -261,7 +261,7 @@ async fn approved_job_downloads_and_only_then_completes() {
         JobState::Paused
     );
     assert!(!paused_output.exists());
-    assert_eq!(requests.load(Ordering::Relaxed), 3);
+    assert_eq!(requests.load(Ordering::Relaxed), 2);
     drop(store);
     let mut store = TaskStore::open(&directory.path().join("jobs.sqlite")).unwrap();
     let resumed = store.resume_paused_job(&paused_job.job_id).unwrap();

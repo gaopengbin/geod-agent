@@ -7,7 +7,11 @@ use crate::{
 };
 use chrono::Utc;
 use image::{DynamicImage, ImageReader, RgbaImage};
-use reqwest::{header::CONTENT_TYPE, redirect::Policy, Client, Url};
+use reqwest::{
+    header::{HeaderValue, CONTENT_TYPE, RETRY_AFTER},
+    redirect::Policy,
+    Client, Url,
+};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -506,13 +510,37 @@ fn tile_url(source: &HttpSource, grid: &TileGrid, x: u32, y: u32) -> Result<Url,
     Url::parse(&value).map_err(|_| CoreError::new("INVALID_SOURCE", "Invalid generated tile URL"))
 }
 
-async fn get_tile(client: &Client, url: Url, tile_size: u16) -> Result<RgbaImage, CoreError> {
+fn retry_after_delay(header: &HeaderValue) -> Option<Duration> {
+    let value = header.to_str().ok()?.trim();
+    if let Ok(seconds) = value.parse::<u64>() {
+        return Some(Duration::from_secs(seconds));
+    }
+    let date = chrono::DateTime::parse_from_rfc2822(value).ok()?;
+    Some(
+        date.signed_duration_since(Utc::now())
+            .to_std()
+            .unwrap_or_default(),
+    )
+}
+
+async fn get_tile(
+    client: &Client,
+    url: Url,
+    tile_size: u16,
+    retry_after: &mut Option<Duration>,
+) -> Result<RgbaImage, CoreError> {
     let mut response = client
         .get(url)
         .send()
         .await
         .map_err(|e| CoreError::new("SOURCE_NETWORK", e.without_url().to_string()))?;
     let status = response.status();
+    if status.as_u16() == 429 || status.is_server_error() {
+        *retry_after = response
+            .headers()
+            .get(RETRY_AFTER)
+            .and_then(retry_after_delay);
+    }
     if status.as_u16() == 403 {
         return Err(CoreError::new(
             "SOURCE_UNAUTHORIZED",
@@ -586,6 +614,9 @@ async fn get_tile_with_retry(
     url: Url,
     tile_size: u16,
     cancelled: &AtomicBool,
+    paused: Option<&AtomicBool>,
+    started: Instant,
+    deadline: Duration,
 ) -> Result<RgbaImage, CoreError> {
     for attempt in 0..4 {
         if cancelled.load(Ordering::Relaxed) {
@@ -594,7 +625,20 @@ async fn get_tile_with_retry(
                 "Download cancelled before publication",
             ));
         }
-        match get_tile(client, url.clone(), tile_size).await {
+        if paused.is_some_and(|flag| flag.load(Ordering::Relaxed)) {
+            return Err(CoreError::new(
+                "PAUSED",
+                "Download paused before publication",
+            ));
+        }
+        if started.elapsed() >= deadline {
+            return Err(CoreError::new(
+                "TIMEOUT",
+                "Job deadline exceeded before publication",
+            ));
+        }
+        let mut retry_after = None;
+        match get_tile(client, url.clone(), tile_size, &mut retry_after).await {
             Ok(image) => return Ok(image),
             Err(error)
                 if attempt < 3
@@ -603,7 +647,27 @@ async fn get_tile_with_retry(
                         "SOURCE_RATE_LIMITED" | "SOURCE_TEMPORARY" | "SOURCE_NETWORK"
                     ) =>
             {
-                tokio::time::sleep(Duration::from_secs(1 << attempt)).await;
+                let delay = Duration::from_secs(1 << attempt).max(retry_after.unwrap_or_default());
+                if delay >= deadline.saturating_sub(started.elapsed()) {
+                    return Err(error);
+                }
+                let wait_until = Instant::now() + delay;
+                while Instant::now() < wait_until {
+                    if cancelled.load(Ordering::Relaxed) {
+                        return Err(CoreError::new(
+                            "CANCELLED",
+                            "Download cancelled before publication",
+                        ));
+                    }
+                    if paused.is_some_and(|flag| flag.load(Ordering::Relaxed)) {
+                        return Err(CoreError::new(
+                            "PAUSED",
+                            "Download paused before publication",
+                        ));
+                    }
+                    let remaining = wait_until.saturating_duration_since(Instant::now());
+                    tokio::time::sleep(remaining.min(Duration::from_millis(100))).await;
+                }
             }
             Err(error) => return Err(error),
         }
@@ -784,7 +848,7 @@ pub async fn fetch_bundle_with_progress<F>(
 where
     F: FnMut(u64, u64) -> Result<(), CoreError>,
 {
-    fetch_bundle_internal(request, source, cancelled, None, on_tile).await
+    fetch_bundle_internal(request, source, cancelled, None, None, on_tile).await
 }
 
 pub async fn fetch_bundle_with_cache<F>(
@@ -797,13 +861,36 @@ pub async fn fetch_bundle_with_cache<F>(
 where
     F: FnMut(u64, u64) -> Result<(), CoreError>,
 {
-    fetch_bundle_internal(request, source, cancelled, Some(cache), on_tile).await
+    fetch_bundle_internal(request, source, cancelled, None, Some(cache), on_tile).await
+}
+
+pub async fn fetch_bundle_with_cache_control<F>(
+    request: &ImageryRequest,
+    source: &HttpSource,
+    cancelled: &AtomicBool,
+    paused: &AtomicBool,
+    cache: &TileCacheConfig,
+    on_tile: F,
+) -> Result<Manifest, CoreError>
+where
+    F: FnMut(u64, u64) -> Result<(), CoreError>,
+{
+    fetch_bundle_internal(
+        request,
+        source,
+        cancelled,
+        Some(paused),
+        Some(cache),
+        on_tile,
+    )
+    .await
 }
 
 async fn fetch_bundle_internal<F>(
     request: &ImageryRequest,
     source: &HttpSource,
     cancelled: &AtomicBool,
+    paused: Option<&AtomicBool>,
     cache_config: Option<&TileCacheConfig>,
     mut on_tile: F,
 ) -> Result<Manifest, CoreError>
@@ -919,6 +1006,12 @@ where
                         "Download cancelled before publication",
                     ));
                 }
+                if paused.is_some_and(|flag| flag.load(Ordering::Relaxed)) {
+                    return Err(CoreError::new(
+                        "PAUSED",
+                        "Download paused before publication",
+                    ));
+                }
                 if started.elapsed() >= request.deadline {
                     return Err(CoreError::new(
                         "TIMEOUT",
@@ -930,14 +1023,32 @@ where
                     Some(cache) => match cache.load(grid.zoom, x, y, source.tile_size)? {
                         Some(tile) => tile,
                         None => {
-                            let tile =
-                                get_tile_with_retry(&client, url, source.tile_size, cancelled)
-                                    .await?;
+                            let tile = get_tile_with_retry(
+                                &client,
+                                url,
+                                source.tile_size,
+                                cancelled,
+                                paused,
+                                started,
+                                request.deadline,
+                            )
+                            .await?;
                             cache.save(grid.zoom, x, y, &tile)?;
                             tile
                         }
                     },
-                    None => get_tile_with_retry(&client, url, source.tile_size, cancelled).await?,
+                    None => {
+                        get_tile_with_retry(
+                            &client,
+                            url,
+                            source.tile_size,
+                            cancelled,
+                            paused,
+                            started,
+                            request.deadline,
+                        )
+                        .await?
+                    }
                 };
                 if let Some(image) = &mut mosaic {
                     image::imageops::replace(
@@ -1049,6 +1160,12 @@ where
         return Err(CoreError::new(
             "CANCELLED",
             "Download cancelled before publication",
+        ));
+    }
+    if paused.is_some_and(|flag| flag.load(Ordering::Relaxed)) {
+        return Err(CoreError::new(
+            "PAUSED",
+            "Download paused before publication",
         ));
     }
     fs::write(
