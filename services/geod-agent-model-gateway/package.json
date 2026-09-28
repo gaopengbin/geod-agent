@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "start": "node server.mjs",
+    "start": "node start.mjs",
     "reconcile": "node reconcile.mjs",
     "test": "node --test test/*.test.mjs",
     "smoke:deepseek": "node test/live-smoke.mjs",

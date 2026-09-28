@@ -41,6 +41,7 @@ export function AgentPanel({ onPlanned, onOpenSources, onSelectConversation }: {
   const [draft, setDraft] = useState("");
   const [boundary, setBoundary] = useState<BoundaryImport | null>(null);
   const [status, setStatus] = useState<AuthStatus>(blankStatus);
+  const [statusReady, setStatusReady] = useState(false);
   const [usage, setUsage] = useState<ModelUsage | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -49,7 +50,13 @@ export function AgentPanel({ onPlanned, onOpenSources, onSelectConversation }: {
   const boundaryInput = useRef<HTMLInputElement>(null);
   const sending = useRef(false);
 
-  useEffect(() => { if (desktopAvailable) void api.authStatus().then(setStatus).catch(cause => setError(errorMessage(cause))); }, []);
+  useEffect(() => {
+    if (!desktopAvailable) return;
+    void api.authStatus()
+      .then(setStatus)
+      .catch(cause => setError(errorMessage(cause)))
+      .finally(() => setStatusReady(true));
+  }, []);
   useEffect(() => { if (!desktopAvailable || status.state !== "waiting") return; const timer = window.setInterval(() => { void api.authStatus().then(setStatus).catch(cause => setError(errorMessage(cause))); }, 1200); return () => window.clearInterval(timer); }, [status.state]);
   useEffect(() => { if (status.state === "connected") void api.agentUsage().then(setUsage).catch(cause => setError(errorMessage(cause))); }, [status.state]);
   useEffect(() => { setChatRecords(current => current.map(item => item.conversationId === conversationId ? { conversationId, messages: messages.slice(-24), display: display.slice(-60), pendingId, planId } : item)); }, [conversationId, messages, display, pendingId, planId]);
@@ -233,7 +240,7 @@ export function AgentPanel({ onPlanned, onOpenSources, onSelectConversation }: {
     <div className="agent-header"><div className="agent-icon"><Bot size={21} /></div><div><strong>GeoD Agent</strong><small>描述需求 · 核对计划 · 本机交付</small></div><Button variant="outline" size="sm" onClick={onOpenSources}><ShieldCheck size={15} />授权图源</Button></div>
     {error && <div className="agent-error"><CircleAlert size={16} />{error}</div>}
     {status.error && <div className="agent-error"><CircleAlert size={16} />{status.error}</div>}
-    {(!desktopAvailable || status.state !== "connected") && <div className="agent-auth-landing"><div className="agent-auth-mark"><Bot size={26} /></div><span className="eyebrow">GEOD ACCOUNT</span><h3>登录 GeoD，开始对话</h3><p>在浏览器完成 GeoD 账号授权后，回到这里使用托管模型规划任务。地图和本机已有成果可以先查看。</p>{status.state === "unconfigured" && desktopAvailable && <div className="agent-auth-note">GeoD 桌面授权接口尚未上线，暂时无法登录。</div>}{!desktopAvailable && <div className="agent-auth-note">当前是浏览器界面预览，请在桌面应用中登录。</div>}<Button onClick={beginAuth} disabled={!desktopAvailable || status.state === "unconfigured" || status.state === "waiting" || busy}><LogIn size={16} />{status.state === "waiting" ? "等待浏览器授权…" : "登录 GeoD"}</Button></div>}
+    {(!desktopAvailable || !statusReady || status.state !== "connected") && <div className="agent-auth-landing"><div className="agent-auth-mark"><Bot size={26} /></div><span className="eyebrow">GEOD ACCOUNT</span><h3>{desktopAvailable && !statusReady ? "正在检查 GeoD 登录状态" : "登录 GeoD，开始对话"}</h3><p>{desktopAvailable && !statusReady ? "正在读取本机保存的授权，无需重复打开浏览器。" : "在浏览器完成 GeoD 账号授权后，回到这里使用托管模型规划任务。地图和本机已有成果可以先查看。"}</p>{statusReady && status.state === "unconfigured" && desktopAvailable && <div className="agent-auth-note">GeoD 桌面授权接口尚未上线，暂时无法登录。</div>}{!desktopAvailable && <div className="agent-auth-note">当前是浏览器界面预览，请在桌面应用中登录。</div>}<Button onClick={beginAuth} disabled={!desktopAvailable || !statusReady || status.state === "unconfigured" || status.state === "waiting" || busy}><LogIn size={16} />{status.state === "waiting" ? "等待浏览器授权…" : "登录 GeoD"}</Button></div>}
     {desktopAvailable && status.state === "connected" && <>
       <div className="agent-account"><div><ShieldCheck size={16} /><span>已登录 GeoD · {status.userId?.slice(0, 12) ?? ""}</span></div><button type="button" onClick={logout} disabled={busy} title="退出 GeoD"><LogOut size={16} /></button></div>
       <div className="agent-usage"><span>模型额度</span><strong>{usage ? `${usage.remainingTokens.toLocaleString()} / ${usage.limitTokens.toLocaleString()} token` : "查询中…"}</strong>{usage && usage.pendingReconcile > 0 && <small>{usage.pendingReconcile} 个请求待核对</small>}</div><div className="agent-messages" ref={scroll}>{display.length ? display.map(item => <div className={`agent-message ${item.role}`} key={item.id}><span>{item.role === "user" ? "你" : item.role === "tool" ? "本机工具" : "GeoD Agent"}</span><p>{item.content}</p></div>) : <div className="agent-welcome"><Bot size={28} /><h3>描述你要获取的影像</h3><p>GeoD Agent 会读取已授权图源、整理范围与格式，生成可核对的计划。下载仅在你确认计划后开始。</p></div>}{busy && <div className="agent-thinking">正在读取与整理…</div>}</div>{pendingId && <Button className="agent-plan-link" variant="outline" onClick={checkPending} disabled={busy}>核对未完成请求 · {pendingId.slice(0, 8)}</Button>}{planReady && <div className="agent-plan-ready">计划已生成，请在成果页核对并确认。</div>}{boundary && <div className="agent-attachment"><span><Paperclip size={14} />{boundary.name}<small>{boundary.polygonCount} 个面 · 边界外透明</small></span><Button type="button" variant="ghost" size="icon" aria-label="移除边界附件" disabled={busy || !!pendingId} onClick={() => setBoundary(null)}><X size={15} /></Button></div>}<form className="agent-composer" onSubmit={send}><input className="agent-boundary-input" ref={boundaryInput} type="file" accept=".geojson,.json" hidden onChange={event => void attachBoundary(event)} /><Button type="button" variant="secondary" size="icon" aria-label="附加 GeoJSON 边界" title="附加 GeoJSON 边界" disabled={busy || !!pendingId} onClick={() => boundaryInput.current?.click()}><Paperclip size={17} /></Button><textarea value={draft} onChange={event => setDraft(event.target.value)} placeholder="描述区域与影像需求，或附加 GeoJSON 边界" maxLength={3000} disabled={busy || !!pendingId} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} /><Button type="submit" size="icon" aria-label="发送消息" disabled={busy || !!pendingId || (!draft.trim() && !boundary)}><Send size={17} /></Button></form>
