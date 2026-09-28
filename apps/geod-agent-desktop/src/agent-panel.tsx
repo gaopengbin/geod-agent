@@ -3,7 +3,7 @@ import { Bot, CircleAlert, LogIn, LogOut, MessageSquare, Paperclip, Plus, Send, 
 import { Button } from "@/components/motion/button/base";
 import { api, desktopAvailable, errorMessage, type AgentMessage, type AgentToolCall, type AuthStatus, type BoundaryImport, type Bounds, type Generation, type ModelUsage, type OutputFormat, type SourceDescriptor, type StoredPlan, type TaskSpec } from "./api";
 import { artifactResultForModel, modelMessagesWithoutArtifactPaths } from "./model-artifacts";
-import { accountChatStore, CHAT_LIST_KEY, clearPending, commitPending, importLegacyChats, LEGACY_IMPORT_MARKER, legacyChats, persistCompletedChat, readPending, restorePendingChats, savePending, type DisplayMessage, type SavedChat } from "./pending-generations";
+import { accountChatStore, CHAT_LIST_KEY, clearPending, commitPending, importLegacyChats, LEGACY_IMPORT_MARKER, legacyChats, pendingBoundary, persistCompletedChat, readPending, restorePendingChats, savePending, type DisplayMessage, type SavedChat } from "./pending-generations";
 
 const blankStatus: AuthStatus = { state: "unconfigured", userId: null, error: null };
 function restoreChats(store: Pick<Storage, "getItem" | "setItem">): SavedChat[] {
@@ -69,7 +69,10 @@ export function AgentPanel({ onPlanned, onOpenSources, onSelectConversation }: {
       setChatRecords(restored); setConversationId(first.conversationId); setMessages(first.messages);
       displayRef.current = first.display; setDisplay(first.display);
       setPendingId(first.pendingId ?? ""); setPlanId(first.planId ?? ""); planIdRef.current = first.planId ?? "";
-      setBoundary(null); setPlanReady(!!first.planId); setAccountId(status.userId);
+      const pending = readPending(scoped)?.[first.conversationId];
+      try { setBoundary(pending ? pendingBoundary(pending) : null); }
+      catch { setBoundary(null); }
+      setPlanReady(!!first.planId); setAccountId(status.userId);
       setLegacyImportReady(legacyChats(localStorage).length > 0 && scoped.getItem(LEGACY_IMPORT_MARKER) !== "1");
       onSelectConversation(first.planId ?? null);
     } catch (cause) { setError(errorMessage(cause)); }
@@ -101,7 +104,7 @@ export function AgentPanel({ onPlanned, onOpenSources, onSelectConversation }: {
     finally { setBusy(false); }
   }
   function newChat() { if (sending.current || busy) return; const next: SavedChat = { conversationId: crypto.randomUUID(), messages: [], display: [] }; setChatRecords(current => [next, ...current].slice(0, 30)); setConversationId(next.conversationId); setMessages([]); displayRef.current = []; setDisplay([]); setBoundary(null); setPlanReady(false); setPendingId(""); planIdRef.current = ""; setPlanId(""); setError(""); onSelectConversation(null); }
-  function selectChat(chat: SavedChat) { if (sending.current || busy || chat.conversationId === conversationId) return; const pending = readPending(chatStore())?.[chat.conversationId]; setConversationId(chat.conversationId); setMessages(pending?.messages ?? chat.messages); displayRef.current = pending?.committed?.display ?? chat.display; setDisplay(displayRef.current); setBoundary(null); setPendingId(pending?.committed ? "" : pending?.generationId ?? ""); planIdRef.current = pending?.committed?.planId ?? chat.planId ?? ""; setPlanId(planIdRef.current); setPlanReady(!!planIdRef.current); setError(""); onSelectConversation(planIdRef.current || null); }
+  function selectChat(chat: SavedChat) { if (sending.current || busy || chat.conversationId === conversationId) return; const pending = readPending(chatStore())?.[chat.conversationId]; setConversationId(chat.conversationId); setMessages(pending?.messages ?? chat.messages); displayRef.current = pending?.committed?.display ?? chat.display; setDisplay(displayRef.current); try { setBoundary(pending ? pendingBoundary(pending) : null); } catch { setBoundary(null); } setPendingId(pending?.committed ? "" : pending?.generationId ?? ""); planIdRef.current = pending?.committed?.planId ?? chat.planId ?? ""; setPlanId(planIdRef.current); setPlanReady(!!planIdRef.current); setError(""); onSelectConversation(planIdRef.current || null); }
   function importOlderChats() {
     if (!accountId || sending.current || busy) return;
     try {
@@ -120,7 +123,7 @@ export function AgentPanel({ onPlanned, onOpenSources, onSelectConversation }: {
       setBoundary(await api.boundaryInspect(file.name, await file.text()));
     } catch (cause) { setError(errorMessage(cause)); }
   }
-  async function executeTool(call: AgentToolCall, generationId: string): Promise<unknown> {
+  async function executeTool(call: AgentToolCall, generationId: string, activeBoundary: BoundaryImport | null): Promise<unknown> {
     let args: Record<string, unknown>;
     try { args = JSON.parse(call.function.arguments) as Record<string, unknown>; }
     catch { return { error: "INVALID_TOOL_ARGUMENTS" }; }
@@ -144,10 +147,10 @@ export function AgentPanel({ onPlanned, onOpenSources, onSelectConversation }: {
         const zoom = args.zoom;
         const formats = args.outputFormats;
         const validBounds = Array.isArray(bounds) && bounds.length === 4 && bounds.every(value => typeof value === "number" && Number.isFinite(value));
-        if (!source || (!boundary && !validBounds) ||
+        if (!source || (!activeBoundary && !validBounds) ||
           typeof zoom !== "number" || !Number.isInteger(zoom) || zoom < source.minZoom || zoom > source.maxZoom ||
           !Array.isArray(formats) || !formats.length || !formats.every(value => value === "geotiff" || value === "mbtiles")) return { error: "INVALID_PLAN_ARGUMENTS" };
-        const spec: TaskSpec = { schemaVersion: "0.1", kind: "imagery", sourceId: source.id, bounds: boundary?.bounds ?? bounds as Bounds, ...(boundary ? { boundary: boundary.geometry } : {}), zoomLevels: [zoom], outputFormats: [...new Set(formats)] as OutputFormat[], outputDirectory: await api.outputDirectorySuggest(), limits: { maxTiles: 4096, maxDecodedRgbaBytes: 512 * 1024 * 1024 } };
+        const spec: TaskSpec = { schemaVersion: "0.1", kind: "imagery", sourceId: source.id, bounds: activeBoundary?.bounds ?? bounds as Bounds, ...(activeBoundary ? { boundary: activeBoundary.geometry } : {}), zoomLevels: [zoom], outputFormats: [...new Set(formats)] as OutputFormat[], outputDirectory: await api.outputDirectorySuggest(), limits: { maxTiles: 4096, maxDecodedRgbaBytes: 512 * 1024 * 1024 } };
         const plan = await api.plansCreate(spec, toolExecutionId);
         onPlanned(plan); planIdRef.current = plan.planId; setPlanId(plan.planId); setPlanReady(true);
         return compactPlan(plan);
@@ -184,15 +187,15 @@ export function AgentPanel({ onPlanned, onOpenSources, onSelectConversation }: {
     setChatRecords(updated);
     releasePending();
   }
-  async function requestGeneration(context: AgentMessage[], visible?: DisplayMessage[]) {
+  async function requestGeneration(context: AgentMessage[], activeBoundary: BoundaryImport | null, visible?: DisplayMessage[]) {
     if (!status.userId) throw new Error("GeoD 账号状态未确认，请重新检查登录状态。");
     const generationId = crypto.randomUUID();
     const prior = readPending(chatStore())?.[conversationId];
-    savePending(chatStore(), { conversationId, generationId, userId: status.userId, messages: context, display: visible ?? prior?.display ?? display });
+    savePending(chatStore(), { conversationId, generationId, userId: status.userId, messages: context, display: visible ?? prior?.display ?? display, boundary: activeBoundary, boundaryRequired: !!activeBoundary });
     setPendingId(generationId);
     return api.agentGenerate(generationId, conversationId, modelMessagesWithoutArtifactPaths(context));
   }
-  async function finishGeneration(first: Generation, startingContext: AgentMessage[]) {
+  async function finishGeneration(first: Generation, startingContext: AgentMessage[], activeBoundary: BoundaryImport | null) {
     let context = startingContext;
     let generation = first;
     for (let round = 0; round < 4; round++) {
@@ -211,13 +214,13 @@ export function AgentPanel({ onPlanned, onOpenSources, onSelectConversation }: {
       setMessages(context);
       if (!result.toolCalls.length) { commitFinalGeneration(generation.generationId, context); return; }
       for (const call of result.toolCalls) {
-        const output = await executeTool(call, generation.generationId);
+        const output = await executeTool(call, generation.generationId, activeBoundary);
         context = [...context, { role: "tool", tool_call_id: call.id, content: JSON.stringify(output) }];
         setMessages(context);
         appendDisplay({ id: crypto.randomUUID(), role: "tool", content: `${call.function.name} · ${"error" in (output as object) ? "需要处理" : "已读取本机结果"}` });
       }
       if (round === 3) { releasePending(); setError("本轮工具调用已达到上限。请继续提问。"); return; }
-      generation = await requestGeneration(context);
+      generation = await requestGeneration(context, activeBoundary);
     }
   }
   async function checkPending() {
@@ -238,13 +241,15 @@ export function AgentPanel({ onPlanned, onOpenSources, onSelectConversation }: {
         setPendingId("");
         return;
       }
+      const activeBoundary = pendingBoundary(saved);
+      setBoundary(activeBoundary);
       let generation: Generation;
       try { generation = await api.agentGenerationGet(pendingId); }
       catch (cause) {
         if (!saved.userId || saved.userId !== status.userId || !cause || typeof cause !== "object" || !("code" in cause) || cause.code !== "GENERATION_NOT_FOUND") throw cause;
         generation = await api.agentGenerate(pendingId, conversationId, modelMessagesWithoutArtifactPaths(saved.messages));
       }
-      await finishGeneration(generation, saved.messages);
+      await finishGeneration(generation, saved.messages, activeBoundary);
       setUsage(await api.agentUsage());
     }
     catch (cause) { setError(errorMessage(cause)); }
@@ -262,7 +267,8 @@ export function AgentPanel({ onPlanned, onOpenSources, onSelectConversation }: {
     const context: AgentMessage[] = [...messages, { role: "user", content: modelText }];
     setMessages(context);
     try {
-      await finishGeneration(await requestGeneration(context, visible), context);
+      const activeBoundary = boundary;
+      await finishGeneration(await requestGeneration(context, activeBoundary, visible), context, activeBoundary);
       setUsage(await api.agentUsage());
     } catch (cause) { setError(errorMessage(cause)); }
     finally { sending.current = false; setBusy(false); }

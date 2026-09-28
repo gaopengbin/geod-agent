@@ -61,10 +61,11 @@
 - 用户实际授权时遇到 `ORIGIN_REJECTED`。旧确认页返回 `Referrer-Policy: no-referrer`，导致浏览器的同站表单提交携带 `Origin: null`，被服务端的 CSRF 校验拒绝。先备份并限定修复 Nginx OAuth 路由的响应头；公开匿名同源 POST 随后返回预期的 `401 AUTH_REQUIRED`。
 - 正式身份服务改用 GeoD 官网视觉的授权确认页、HTML 转义后的账号及 OAuth 表单值，以及 `Referrer-Policy: origin`。GeoD Studio 源码位于 `geostyle-web` 提交 `b54686a`，独立 Linux 发布工作树提交 `21157c1`。4 项 OAuth 测试和 TypeScript 检查通过；授权页在 390px 与桌面视口无横向溢出。
 - 新 Linux Studio 包 `geod-oauth-studio-consent-linux-x64-20260928.tar.gz` 的 SHA-256 为 `d408012d2c89ac94f8781c1e64a10d8a5597c7008eb644794438637d2e4e810b`。服务器复核哈希并解包到 `geod-oauth-consent-20260928-d408012d`；9116 候选通过 OAuth 站内跳转、同源 POST 守卫与旧账号会话检查。备份当前账号 JSON 与旧 release 指针后，9114 切换到新 release，PM2 在线且重启次数为 0。公开 OAuth 匿名 GET 为站内 303，匿名同源 POST 为 `401 AUTH_REQUIRED`，公开 `/login` 为 200。旧 Studio release 与备份保留。
-- 桌面本机对话已按 GeoD 账号隔离；旧版未归属对话只在用户点击“导入到当前账号”后复制，旧版未完成生成不会自动归属。桌面构建及 11 项测试通过。新 NSIS 包位于 `apps/geod-agent-desktop/src-tauri/target/release/bundle/nsis/GeoD Agent_0.1.0_x64-setup.exe`，SHA-256 为 `0085ac02008fd6ca33708581a247c250aac8701cf6cd3efbf578a4191ce93bab`；当前用户正在测试的安装版没有被替换。
+- 桌面本机对话已按 GeoD 账号隔离；旧版未归属对话只在用户点击“导入到当前账号”后复制，旧版未完成生成不会自动归属。桌面构建及 11 项测试通过。该轮 NSIS 包 SHA-256 为 `0085ac02008fd6ca33708581a247c250aac8701cf6cd3efbf578a4191ce93bab`；当前用户正在测试的安装版没有被替换。
 - 用户反馈“同意并返回 GeoD Agent”按钮点击后页面停留原处。独立 Edge 浏览器对照复现：`form-action 'self'` 阻止 303 跳往本机回调；仅增加已校验 OAuth `redirect_uri` 的 `http://127.0.0.1:<本次端口>` 后回调成功到达。服务端只放行该单次请求的本机端口，保持其他 CSP 限制。源码为 `geostyle-web` 提交 `445e91d`、Linux 发布工作树提交 `e9133eb`，4 项 OAuth 测试、TypeScript 和 Linux 构建通过。
 - 第二次不可变发布为 `geod-oauth-callback-20260928-cce65916`，包 SHA-256 为 `cce6591630fc1ea7ee8f3fd59879b00d8da32944b0185004142b8842a91d237c`。服务器复核哈希、9116 候选通过 OAuth 与旧账号会话检查，备份账号 JSON 与旧 release 指针后切换 9114。PM2 在线且重启次数为 0；公开匿名 OAuth 仍为站内 303，同源 POST 为预期的 `401 AUTH_REQUIRED`。此前已加载的授权页仍持有旧 CSP，用户须从桌面重新发起一次授权才能验收真实回跳。
 - 以上不代表真实账号完成 PKCE 回跳或 DeepSeek 对话。需要用户在已安装的桌面应用中重试一次授权并发送一条普通对话，才能验收完整闭环；不得自动弹出新的授权网页。
+- 桌面后续修复了附加 GeoJSON 边界的恢复：模型请求与连续工具调用使用同一份本机边界快照；切换对话或应用重启后从账号隔离的待处理记录恢复。旧记录若缺失边界，禁止以外接矩形继续生成审批计划。前端 12 项测试、生产构建及 NSIS 构建通过。当前候选安装包为 `apps/geod-agent-desktop/src-tauri/target/release/bundle/nsis/GeoD Agent_0.1.0_x64-setup.exe`，SHA-256 `0c9fb4f41cda721b5f8315f337c7d15ee932d9eac0e8d15e104b4e73ca0e326d`。用户窗口仍运行旧隔离安装版，尚未以此候选做原生复检。
 
 ## 原定获批发布顺序（供复盘）
 

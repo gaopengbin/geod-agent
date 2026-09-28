@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { accountChatStore, CHAT_LIST_KEY, clearPending, commitPending, importLegacyChats, legacyChats, PENDING_KEY, persistCompletedChat, readPending, restorePendingChats, savePending } from "../src/pending-generations.ts";
+import { accountChatStore, CHAT_LIST_KEY, clearPending, commitPending, importLegacyChats, legacyChats, PENDING_KEY, pendingBoundary, persistCompletedChat, readPending, restorePendingChats, savePending } from "../src/pending-generations.ts";
 
 function store() {
   const values = new Map();
@@ -66,6 +66,21 @@ test("settled answer survives a crash between committing and clearing recovery",
 test("a request is not sent when its recovery record cannot be saved", () => {
   const storage = { getItem: () => null, setItem: () => { throw new Error("disk unavailable"); } };
   assert.throws(() => savePending(storage, { conversationId: "chat", generationId: "generation", userId: "geod-user", messages: [] }), /disk unavailable/);
+});
+
+test("an attached GeoJSON boundary survives pending recovery and cannot silently become a rectangle", () => {
+  const storage = store();
+  const boundary = { name: "study.geojson", bounds: [-77.05, 38.85, -77.04, 38.86], polygonCount: 1, geometry: { polygons: [[[[-77.05, 38.85], [-77.04, 38.85], [-77.04, 38.86], [-77.05, 38.85]]]] } };
+  const request = { conversationId: "boundary-chat", generationId: "boundary-generation", userId: "geod-user", messages: [{ role: "user", content: "本机已附加 GeoJSON 多边形" }], boundary, boundaryRequired: true };
+  savePending(storage, request);
+  assert.deepEqual(pendingBoundary(readPending(storage)["boundary-chat"]), boundary);
+  restorePendingChats(storage, [{ conversationId: "boundary-chat", messages: [], display: [] }]);
+  assert.deepEqual(pendingBoundary(readPending(storage)["boundary-chat"]), boundary);
+
+  storage.setItem(PENDING_KEY, JSON.stringify({ "boundary-chat": { ...request, boundary: null } }));
+  assert.throws(() => pendingBoundary(readPending(storage)["boundary-chat"]), /不能按外接矩形继续规划/);
+  storage.setItem(PENDING_KEY, JSON.stringify({ "boundary-chat": { conversationId: request.conversationId, generationId: request.generationId, userId: request.userId, messages: request.messages } }));
+  assert.throws(() => pendingBoundary(readPending(storage)["boundary-chat"]), /不能按外接矩形继续规划/);
 });
 
 test("conversation history and interrupted requests stay within one GeoD account", () => {

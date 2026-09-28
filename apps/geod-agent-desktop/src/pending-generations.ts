@@ -1,9 +1,9 @@
-import type { AgentMessage } from "./api";
+import type { AgentMessage, BoundaryImport } from "./api";
 
 export interface DisplayMessage { id: string; role: "user" | "assistant" | "tool"; content: string }
 export interface SavedChat { conversationId: string; messages: AgentMessage[]; display: DisplayMessage[]; pendingId?: string; planId?: string }
 export interface CompletedGeneration { messages: AgentMessage[]; display: DisplayMessage[]; planId?: string }
-export interface PendingGeneration { conversationId: string; generationId: string; userId: string | null; messages: AgentMessage[]; display?: DisplayMessage[]; committed?: CompletedGeneration }
+export interface PendingGeneration { conversationId: string; generationId: string; userId: string | null; messages: AgentMessage[]; display?: DisplayMessage[]; boundary?: BoundaryImport | null; boundaryRequired?: boolean; committed?: CompletedGeneration }
 
 export const PENDING_KEY = "geod-agent-pending-generations-0.1";
 export const CHAT_LIST_KEY = "geod-agent-conversations-0.1";
@@ -59,6 +59,25 @@ function validPending(value: unknown): value is PendingGeneration {
     && (item.userId === null || typeof item.userId === "string") && Array.isArray(item.messages)
     && (item.display === undefined || Array.isArray(item.display))
     && (item.committed === undefined || (item.committed !== null && typeof item.committed === "object" && Array.isArray(item.committed.messages) && Array.isArray(item.committed.display)));
+}
+
+function validBoundary(value: unknown): value is BoundaryImport {
+  if (!value || typeof value !== "object") return false;
+  const boundary = value as Partial<BoundaryImport>;
+  return typeof boundary.name === "string" && boundary.name.length > 0
+    && Array.isArray(boundary.bounds) && boundary.bounds.length === 4
+    && boundary.bounds.every(value => typeof value === "number" && Number.isFinite(value))
+    && typeof boundary.polygonCount === "number" && Number.isInteger(boundary.polygonCount) && boundary.polygonCount > 0
+    && !!boundary.geometry && Array.isArray(boundary.geometry.polygons) && boundary.geometry.polygons.length > 0;
+}
+
+export function pendingBoundary(pending: PendingGeneration): BoundaryImport | null {
+  if (validBoundary(pending.boundary)) return pending.boundary;
+  const lastUserMessage = [...pending.messages].reverse().find(message => message.role === "user");
+  if (pending.boundaryRequired || lastUserMessage?.content?.includes("本机已附加 GeoJSON 多边形")) {
+    throw new Error("本机 GeoJSON 边界恢复记录缺失或损坏。请新建对话、重新附加边界后发送，不能按外接矩形继续规划。");
+  }
+  return null;
 }
 
 export function readPending(store: Store): PendingMap | null {
