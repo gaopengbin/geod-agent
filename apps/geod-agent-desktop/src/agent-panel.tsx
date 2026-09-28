@@ -26,7 +26,7 @@ function restoreChats(): SavedChat[] {
 function chatTitle(chat: SavedChat) { return chat.display.find(item => item.role === "user")?.content.slice(0, 34) || "新对话"; }
 function compactPlan(stored: StoredPlan) {
   const plan = stored.plan;
-  return { planId: stored.planId, planHash: plan.planHash, source: plan.sourceName, bounds: plan.spec.bounds, boundary: plan.spec.boundary ? `${plan.spec.boundary.polygons.length} 个面；GeoTIFF 按边界透明裁剪，MBTiles 保留整瓦片` : null, zoomLevels: plan.spec.zoomLevels, outputFormats: plan.spec.outputFormats, outputLocation: "用户本机选择的位置，模型不可读取路径", totalTiles: plan.totalTiles, decodedRgbaBytes: plan.decodedRgbaBytes, license: plan.license, attribution: plan.attribution, expiresAt: plan.expiresAt, approval: "尚未批准。必须由用户在桌面计划卡片中核对并确认。" };
+  return { planId: stored.planId, planHash: plan.planHash, source: plan.sourceName, bounds: plan.spec.bounds, boundary: plan.spec.boundary ? `${plan.spec.boundary.polygons.length} 个面；GeoTIFF 按边界透明裁剪，MBTiles 保留整瓦片` : null, zoomLevels: plan.spec.zoomLevels, outputFormats: plan.spec.outputFormats, outputLocation: "用户本机选择的位置，模型不可读取路径", totalTiles: plan.totalTiles, decodedRgbaBytes: plan.decodedRgbaBytes, requiredFreeDiskBytes: plan.requiredFreeDiskBytes, license: plan.license, attribution: plan.attribution, expiresAt: plan.expiresAt, approval: "尚未批准。必须由用户在桌面计划卡片中核对并确认。" };
 }
 function stringArg(value: unknown) { return typeof value === "string" && value.length > 0 && value.length <= 100 ? value : null; }
 

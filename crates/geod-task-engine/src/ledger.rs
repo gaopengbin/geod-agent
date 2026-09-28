@@ -571,8 +571,9 @@ impl TaskStore {
         self.transition(job_id, JobState::Paused, JobState::Queued, None, Utc::now())
     }
 
-    /// Retry only transient failures under the same approval and job ID. The
-    /// tile cache is bound to this job's plan hash and source revision.
+    /// Retry transient failures or insufficient disk space after the user frees
+    /// capacity, under the same approval and job ID. The tile cache remains
+    /// bound to this job's plan hash and source revision.
     pub fn retry_failed_job(&mut self, job_id: &str) -> Result<Job, LedgerError> {
         let job = self
             .get_job(job_id)?
@@ -591,7 +592,13 @@ impl TaskStore {
         let event: JobEvent = serde_json::from_str(&latest)?;
         if !matches!(
             event.error_code.as_deref(),
-            Some("SOURCE_NETWORK" | "SOURCE_RATE_LIMITED" | "SOURCE_TEMPORARY" | "TIMEOUT")
+            Some(
+                "SOURCE_NETWORK"
+                    | "SOURCE_RATE_LIMITED"
+                    | "SOURCE_TEMPORARY"
+                    | "TIMEOUT"
+                    | "DISK_INSUFFICIENT"
+            )
         ) {
             return Err(LedgerError::new(
                 "JOB_NOT_RETRYABLE",

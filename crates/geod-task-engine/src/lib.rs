@@ -100,6 +100,9 @@ pub struct Plan {
     pub total_tiles: u64,
     /// Sum of tile count × tile pixels × four bytes; not peak memory, disk, or transfer size.
     pub decoded_rgba_bytes: u64,
+    /// Conservative free-space preflight budget; older stored 0.1 plans omit this field.
+    #[serde(default)]
+    pub required_free_disk_bytes: u64,
     pub created_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
     pub plan_hash: String,
@@ -303,6 +306,9 @@ pub fn plan(
             format!("{decoded_rgba_bytes} decoded bytes exceed the selected limit"),
         ));
     }
+    let required_free_disk_bytes =
+        geod_core::imagery::required_free_disk_bytes(total_tiles, source.tile_size)
+            .map_err(|cause| PlanError::new(cause.code, cause.message))?;
 
     let source_fingerprint = hash_json(source);
     // Struct field order is stable. Normalized numeric values and sorted sets
@@ -319,6 +325,7 @@ pub fn plan(
         tile_grids,
         total_tiles,
         decoded_rgba_bytes,
+        required_free_disk_bytes,
         created_at: now,
         expires_at: now + Duration::minutes(30),
         plan_hash,

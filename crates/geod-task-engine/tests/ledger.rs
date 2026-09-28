@@ -246,13 +246,32 @@ fn transient_failure_requeues_same_approved_job_after_restart() {
         [&job.job_id],
     )
     .unwrap();
-    let stale = JobEvent {
+    let disk_full = JobEvent {
         seq: 4,
+        error_code: Some("DISK_INSUFFICIENT".into()),
+        ..failure.clone()
+    };
+    conn.execute(
+        "INSERT INTO job_events(job_id,seq,body) VALUES (?1,4,?2)",
+        (&job.job_id, serde_json::to_string(&disk_full).unwrap()),
+    )
+    .unwrap();
+    let retried_after_freeing_space = reopened.retry_failed_job(&job.job_id).unwrap();
+    assert_eq!(retried_after_freeing_space.job_id, job.job_id);
+    assert_eq!(retried_after_freeing_space.state, JobState::Queued);
+
+    conn.execute(
+        "UPDATE jobs SET state='failed', version=6 WHERE job_id=?1",
+        [&job.job_id],
+    )
+    .unwrap();
+    let stale = JobEvent {
+        seq: 6,
         error_code: Some("PLAN_STALE".into()),
         ..failure
     };
     conn.execute(
-        "INSERT INTO job_events(job_id,seq,body) VALUES (?1,4,?2)",
+        "INSERT INTO job_events(job_id,seq,body) VALUES (?1,6,?2)",
         (&job.job_id, serde_json::to_string(&stale).unwrap()),
     )
     .unwrap();

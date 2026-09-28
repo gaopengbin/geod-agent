@@ -62,10 +62,27 @@ fn plans_legacy_grid_and_normalizes_sets() {
     assert_eq!(planned.tile_grids[1].pixel_width, 512);
     assert_eq!(planned.decoded_rgba_bytes, 3 * 256 * 256 * 4);
     assert_eq!(
+        planned.required_free_disk_bytes,
+        16 * 1024 * 1024 + 3 * (4 * 256 * 256 * 4 + 32 * 1024)
+    );
+    assert_eq!(
         planned.expires_at.timestamp() - planned.created_at.timestamp(),
         1800
     );
     assert_eq!(planned.plan_hash.len(), 64);
+}
+
+#[test]
+fn plans_saved_before_disk_budget_remain_readable() {
+    let current = plan(spec(), &source(), now()).unwrap();
+    let mut legacy = serde_json::to_value(&current).unwrap();
+    legacy
+        .as_object_mut()
+        .unwrap()
+        .remove("requiredFreeDiskBytes");
+    let restored: geod_task_engine::Plan = serde_json::from_value(legacy).unwrap();
+    assert_eq!(restored.required_free_disk_bytes, 0);
+    assert_eq!(restored.plan_hash, current.plan_hash);
 }
 
 #[test]

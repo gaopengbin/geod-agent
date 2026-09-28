@@ -33,6 +33,62 @@ use uuid::Uuid;
 const MAX_TILE_BYTES: usize = 16 * 1024 * 1024;
 const MAX_DECODED_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_MANIFEST_BYTES: u64 = 1024 * 1024;
+const DISK_FIXED_RESERVE_BYTES: u64 = 16 * 1024 * 1024;
+const DISK_TILE_OVERHEAD_BYTES: u64 = 32 * 1024;
+
+/// Conservative free-space budget for cache, staged raster outputs, and metadata.
+/// This is a preflight guard, not an exact output-size prediction.
+pub fn required_free_disk_bytes(tile_count: u64, tile_size: u16) -> Result<u64, CoreError> {
+    tile_count
+        .checked_mul(u64::from(tile_size).pow(2))
+        .and_then(|pixels| pixels.checked_mul(4))
+        .and_then(|rgba| rgba.checked_mul(4))
+        .and_then(|bytes| {
+            tile_count
+                .checked_mul(DISK_TILE_OVERHEAD_BYTES)
+                .and_then(|overhead| bytes.checked_add(overhead))
+        })
+        .and_then(|bytes| bytes.checked_add(DISK_FIXED_RESERVE_BYTES))
+        .ok_or_else(|| CoreError::new("RESOURCE_LIMIT", "Disk budget overflow"))
+}
+
+fn ensure_disk_budget(path: &Path, required: u64) -> Result<(), CoreError> {
+    let available = fs4::available_space(path).map_err(|cause| {
+        CoreError::new(
+            "DISK_CHECK_FAILED",
+            format!("Cannot check free disk space: {cause}"),
+        )
+    })?;
+    if available < required {
+        return Err(CoreError::new(
+            "DISK_INSUFFICIENT",
+            format!(
+                "Need at least {required} free bytes; {available} available at {}",
+                path.display()
+            ),
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod disk_tests {
+    use super::*;
+
+    #[test]
+    fn disk_preflight_rejects_unavailable_budget() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(
+            ensure_disk_budget(dir.path(), u64::MAX).unwrap_err().code,
+            "DISK_INSUFFICIENT"
+        );
+        assert!(ensure_disk_budget(dir.path(), 0).is_ok());
+        assert_eq!(
+            required_free_disk_bytes(u64::MAX, 512).unwrap_err().code,
+            "RESOURCE_LIMIT"
+        );
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NetworkPolicy {
@@ -898,15 +954,21 @@ where
     F: FnMut(u64, u64) -> Result<(), CoreError>,
 {
     validate_request(request, source)?;
-    let mut cache = cache_config
-        .map(|config| TileCache::open(config, source))
-        .transpose()?;
-    let started = Instant::now();
     let parent = request
         .destination
         .parent()
         .ok_or_else(|| CoreError::new("INVALID_SPEC", "Output has no parent"))?;
     fs::create_dir_all(parent).map_err(io_error)?;
+    let total_tiles: u64 = request.grids.iter().map(|grid| grid.tile_count).sum();
+    let required_disk = required_free_disk_bytes(total_tiles, source.tile_size)?;
+    ensure_disk_budget(parent, required_disk)?;
+    let mut cache = cache_config
+        .map(|config| TileCache::open(config, source))
+        .transpose()?;
+    if let Some(cache) = &cache {
+        ensure_disk_budget(&cache.root, required_disk)?;
+    }
+    let started = Instant::now();
     let stage = tempfile::Builder::new()
         .prefix(".geod-agent-stage-")
         .tempdir_in(parent)
@@ -987,7 +1049,6 @@ where
     } else {
         None
     };
-    let total_tiles: u64 = request.grids.iter().map(|grid| grid.tile_count).sum();
     let mut completed_tiles = 0u64;
     for grid in &request.grids {
         let mut mosaic = if request.output_geotiff {

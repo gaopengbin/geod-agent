@@ -63,6 +63,7 @@ export interface Plan {
   tileGrids: PlanTileGrid[];
   totalTiles: number;
   decodedRgbaBytes: number;
+  requiredFreeDiskBytes?: number;
   createdAt: string;
   expiresAt: string;
   planHash: string;

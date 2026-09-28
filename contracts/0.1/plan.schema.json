@@ -29,6 +29,13 @@
     "policyVersion": {
       "type": "string"
     },
+    "requiredFreeDiskBytes": {
+      "description": "Conservative free-space preflight budget; older stored 0.1 plans omit this field.",
+      "type": "integer",
+      "format": "uint64",
+      "default": 0,
+      "minimum": 0
+    },
     "schemaVersion": {
       "$ref": "#/$defs/SchemaVersion"
     },

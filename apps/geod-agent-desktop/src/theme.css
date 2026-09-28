@@ -113,6 +113,10 @@ body { background: var(--background); color: var(--app-text); font-family: "Sego
 .agent-attachment small { margin-left: auto; flex: none; font-size: 11px; color: var(--app-soft-text); }
 .agent-attachment > button { flex: none; }
 .boundary-plan-note { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--app-blue-line); border-radius: 8px; color: var(--app-blue-text); background: var(--app-blue-soft); font-size: 11px; line-height: 1.6; }
+.disk-budget { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; margin: -3px 0 12px; padding: 0 2px; color: var(--app-soft-text); font-size: 12px; line-height: 1.5; }
+.disk-budget strong { color: var(--app-text); font-size: 13px; }
+.disk-budget small { grid-column: 1 / -1; color: var(--app-faint-text); font-size: 11px; }
+.disk-failure { margin: -3px 0 14px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--app-warning) 28%, transparent); border-radius: 8px; background: var(--app-warning-soft); color: var(--app-warning); font-size: 12px; line-height: 1.55; }
 .boundary-plan-note svg { flex: none; margin-top: 1px; }
 @media (max-width: 480px) { .agent-attachment small { display: none; } }
 .map-column { background: var(--app-map); }
