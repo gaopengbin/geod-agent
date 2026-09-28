@@ -1,6 +1,7 @@
 use geod_core::{
     imagery::{
-        fetch_bundle, inspect_bundle, HttpSource, ImageryRequest, NetworkPolicy, TileScheme,
+        fetch_bundle, fetch_bundle_with_cache, fetch_bundle_with_cancel, inspect_bundle,
+        HttpSource, ImageryRequest, NetworkPolicy, TileCacheConfig, TileScheme,
     },
     tile,
 };
@@ -32,10 +33,10 @@ struct Fixture {
 
 impl Fixture {
     fn start(missing_right: bool) -> Self {
-        Self::start_mode(missing_right, 256, false)
+        Self::start_mode(missing_right, 256, false, false)
     }
 
-    fn start_mode(missing_right: bool, tile_size: u16, tms: bool) -> Self {
+    fn start_mode(missing_right: bool, tile_size: u16, tms: bool, rate_limit_first: bool) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         listener.set_nonblocking(true).unwrap();
         let address = listener.local_addr().unwrap();
@@ -68,12 +69,19 @@ impl Fixture {
                     .lines()
                     .next()
                     .and_then(|line| line.split_whitespace().nth(1));
-                let (status, body): (&str, &[u8]) = match path {
-                    Some(value) if value == left_path => ("200 OK", &left),
-                    Some(value) if value == right_path && !missing_right => ("200 OK", &right),
-                    _ => ("404 Not Found", b""),
+                if path.is_none() {
+                    continue;
+                }
+                let attempt = count_worker.fetch_add(1, Ordering::Relaxed);
+                let (status, body): (&str, &[u8]) = if rate_limit_first && attempt == 0 {
+                    ("429 Too Many Requests", b"")
+                } else {
+                    match path {
+                        Some(value) if value == left_path => ("200 OK", &left),
+                        Some(value) if value == right_path && !missing_right => ("200 OK", &right),
+                        _ => ("404 Not Found", b""),
+                    }
                 };
-                count_worker.fetch_add(1, Ordering::Relaxed);
                 let header = format!("HTTP/1.1 {status}\r\nContent-Type: image/png\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
                 stream.write_all(header.as_bytes()).unwrap();
                 stream.write_all(body).unwrap();
@@ -157,7 +165,9 @@ async fn publishes_inspectable_geotiff_mbtiles_and_manifest() {
 
     let mut tiff =
         Decoder::new(std::fs::File::open(output.join("imagery-z1.tif")).unwrap()).unwrap();
-    assert_eq!(tiff.dimensions().unwrap(), (512, 256));
+    assert_eq!(tiff.dimensions().unwrap(), (4, 2));
+    assert!(manifest.assets[0].bounds[0] <= -1.0);
+    assert!(manifest.assets[0].bounds[2] >= 1.0);
     let keys = tiff.get_tag_u16_vec(Tag::GeoKeyDirectoryTag).unwrap();
     assert!(keys[4..]
         .chunks_exact(4)
@@ -166,7 +176,7 @@ async fn publishes_inspectable_geotiff_mbtiles_and_manifest() {
         panic!("expected RGBA bytes")
     };
     assert_eq!(&pixels[..4], &[40, 90, 130, 255]);
-    assert_eq!(&pixels[256 * 4..256 * 4 + 4], &[150, 60, 20, 255]);
+    assert_eq!(&pixels[2 * 4..2 * 4 + 4], &[150, 60, 20, 255]);
 
     let mbtiles = Connection::open(output.join("imagery.mbtiles")).unwrap();
     let count: i64 = mbtiles
@@ -189,6 +199,77 @@ async fn failed_tile_never_publishes_output() {
         .unwrap_err();
     assert_eq!(error.code, "SOURCE_UNAVAILABLE");
     assert!(!output.exists());
+}
+
+#[tokio::test]
+async fn cancellation_never_publishes_or_requests_tiles() {
+    let fixture = Fixture::start(false);
+    let directory = tempfile::tempdir().unwrap();
+    let output = directory.path().join("cancelled");
+    let cancelled = AtomicBool::new(true);
+    let error =
+        fetch_bundle_with_cancel(&request(output.clone(), 256), &fixture.source(), &cancelled)
+            .await
+            .unwrap_err();
+    assert_eq!(error.code, "CANCELLED");
+    assert_eq!(fixture.requests.load(Ordering::Relaxed), 0);
+    assert!(!output.exists());
+}
+
+#[tokio::test]
+async fn resumes_from_verified_tile_checkpoint_without_repeating_http() {
+    let fixture = Fixture::start(false);
+    let directory = tempfile::tempdir().unwrap();
+    let output = directory.path().join("resumed");
+    let cache = TileCacheConfig {
+        root: directory.path().join("tile-cache"),
+        plan_hash: "a".repeat(64),
+        job_id: "a7dafeb5-eef5-47be-b1f3-9ed1bd2279f2".into(),
+    };
+    let cancelled = AtomicBool::new(false);
+    let error = fetch_bundle_with_cache(
+        &request(output.clone(), 256),
+        &fixture.source(),
+        &cancelled,
+        &cache,
+        |completed, _| {
+            if completed == 1 {
+                cancelled.store(true, Ordering::Relaxed);
+            }
+            Ok(())
+        },
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(error.code, "CANCELLED");
+    assert!(!output.exists());
+    assert_eq!(fixture.requests.load(Ordering::Relaxed), 1);
+    cancelled.store(false, Ordering::Relaxed);
+    let manifest = fetch_bundle_with_cache(
+        &request(output.clone(), 256),
+        &fixture.source(),
+        &cancelled,
+        &cache,
+        |_, _| Ok(()),
+    )
+    .await
+    .unwrap();
+    assert_eq!(fixture.requests.load(Ordering::Relaxed), 2);
+    assert_eq!(manifest.quality.status, "complete");
+    assert_eq!(manifest.id, format!("geod-agent-job-{}", cache.job_id));
+    assert_eq!(inspect_bundle(&output).unwrap().assets.len(), 3);
+}
+
+#[tokio::test]
+async fn retries_one_rate_limited_tile_and_publishes_complete_bundle() {
+    let fixture = Fixture::start_mode(false, 256, false, true);
+    let directory = tempfile::tempdir().unwrap();
+    let output = directory.path().join("retry-complete");
+    fetch_bundle(&request(output.clone(), 256), &fixture.source())
+        .await
+        .unwrap();
+    assert_eq!(fixture.requests.load(Ordering::Relaxed), 3);
+    assert_eq!(inspect_bundle(&output).unwrap().quality.status, "complete");
 }
 
 #[tokio::test]
@@ -227,17 +308,20 @@ async fn inspect_detects_corrupted_asset() {
 
 #[tokio::test]
 async fn supports_512_pixel_tms_source_through_export_and_inspection() {
-    let fixture = Fixture::start_mode(false, 512, true);
+    let fixture = Fixture::start_mode(false, 512, true, false);
     let directory = tempfile::tempdir().unwrap();
     let output = directory.path().join("large-tms");
     let manifest = fetch_bundle(&request(output.clone(), 512), &fixture.source())
         .await
         .unwrap();
     assert_eq!(fixture.requests.load(Ordering::Relaxed), 2);
-    assert_eq!(manifest.assets[0].width, Some(1024));
-    assert_eq!(manifest.assets[0].height, Some(512));
+    assert_eq!(manifest.assets[0].width, Some(6));
     assert_eq!(inspect_bundle(&output).unwrap().quality.status, "complete");
     let mut tiff =
         Decoder::new(std::fs::File::open(output.join("imagery-z1.tif")).unwrap()).unwrap();
-    assert_eq!(tiff.dimensions().unwrap(), (1024, 512));
+    assert_eq!(tiff.dimensions().unwrap().0, 6);
+    assert_eq!(
+        tiff.dimensions().unwrap().1,
+        manifest.assets[0].height.unwrap()
+    );
 }

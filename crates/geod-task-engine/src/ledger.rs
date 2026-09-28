@@ -8,11 +8,12 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{
     path::{Path, PathBuf},
+    sync::atomic::AtomicBool,
     time::Duration,
 };
 use uuid::Uuid;
 
-const DB_VERSION: i64 = 1;
+const DB_VERSION: i64 = 2;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -60,6 +61,14 @@ pub struct Approval {
     pub approved_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RegisteredSource {
+    pub descriptor: SourceDescriptor,
+    pub endpoint: HttpSource,
+    pub permission_confirmed_at: DateTime<Utc>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum JobState {
@@ -95,10 +104,15 @@ pub struct JobEvent {
     pub state: JobState,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error_code: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub completed_tiles: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total_tiles: Option<u64>,
 }
 
 pub struct TaskStore {
     conn: Connection,
+    db_path: PathBuf,
 }
 
 impl TaskStore {
@@ -146,11 +160,116 @@ impl TaskStore {
                    body TEXT NOT NULL,
                    PRIMARY KEY(job_id, seq)
                  );
-                 PRAGMA user_version=1;
+                 CREATE TABLE sources (
+                   source_id TEXT PRIMARY KEY,
+                   body TEXT NOT NULL
+                 );
+                 PRAGMA user_version=2;
+                 COMMIT;",
+            )?;
+        } else if version == 1 {
+            let backup = path.with_extension(format!("pre-v2-{}.sqlite", Uuid::new_v4()));
+            conn.execute("VACUUM INTO ?1", [backup.to_string_lossy().as_ref()])?;
+            conn.execute_batch(
+                "BEGIN IMMEDIATE;
+                 CREATE TABLE sources (source_id TEXT PRIMARY KEY, body TEXT NOT NULL);
+                 PRAGMA user_version=2;
                  COMMIT;",
             )?;
         }
-        Ok(Self { conn })
+        let db_path = std::fs::canonicalize(path)
+            .map_err(|error| LedgerError::new("STORAGE_ERROR", error.to_string()))?;
+        Ok(Self { conn, db_path })
+    }
+
+    /// Register a credential-free tile source after an explicit user license
+    /// acknowledgement. Keep this command outside the model tool set.
+    pub fn save_source(
+        &mut self,
+        endpoint: HttpSource,
+        min_zoom: u8,
+        max_zoom: u8,
+        permission_acknowledged: bool,
+        now: DateTime<Utc>,
+    ) -> Result<SourceDescriptor, LedgerError> {
+        if !permission_acknowledged {
+            return Err(LedgerError::new(
+                "SOURCE_UNAUTHORIZED",
+                "Confirm source license and bulk download permission",
+            ));
+        }
+        endpoint
+            .validate()
+            .map_err(|e| LedgerError::new(e.code, e.message))?;
+        if endpoint.id.len() > 160
+            || !endpoint
+                .id
+                .bytes()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, b'-' | b'_'))
+            || min_zoom > max_zoom
+            || max_zoom > geod_core::tile::MAX_ZOOM
+            || endpoint.min_interval_ms > 60_000
+        {
+            return Err(LedgerError::new(
+                "INVALID_SOURCE",
+                "Invalid source ID, zoom range, or request interval",
+            ));
+        }
+        let descriptor = SourceDescriptor {
+            schema_version: crate::SchemaVersion::V0_1,
+            id: endpoint.id.clone(),
+            display_name: endpoint.name.clone(),
+            attribution: endpoint.attribution.clone(),
+            license: endpoint.license.clone(),
+            bulk_download_allowed: true,
+            scheme: match endpoint.scheme {
+                imagery::TileScheme::XYZ => TileScheme::XYZ,
+                imagery::TileScheme::TMS => TileScheme::TMS,
+            },
+            tile_size: endpoint.tile_size,
+            min_zoom,
+            max_zoom,
+            config_revision: endpoint.configuration_revision(),
+            credential_ref_version: None,
+        };
+        let entry = RegisteredSource {
+            descriptor: descriptor.clone(),
+            endpoint,
+            permission_confirmed_at: now,
+        };
+        self.conn.execute(
+            "INSERT INTO sources(source_id, body) VALUES (?1, ?2)
+             ON CONFLICT(source_id) DO UPDATE SET body=excluded.body",
+            params![descriptor.id, serde_json::to_string(&entry)?],
+        )?;
+        Ok(descriptor)
+    }
+
+    pub fn list_sources(&self) -> Result<Vec<SourceDescriptor>, LedgerError> {
+        let mut statement = self
+            .conn
+            .prepare("SELECT body FROM sources ORDER BY source_id")?;
+        let rows = statement.query_map([], |row| row.get::<_, String>(0))?;
+        rows.map(|row| {
+            let entry: RegisteredSource = serde_json::from_str(&row?)?;
+            Ok(entry.descriptor)
+        })
+        .collect()
+    }
+
+    pub fn get_registered_source(
+        &self,
+        source_id: &str,
+    ) -> Result<Option<RegisteredSource>, LedgerError> {
+        self.conn
+            .query_row(
+                "SELECT body FROM sources WHERE source_id=?1",
+                [source_id],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?
+            .map(|body| serde_json::from_str(&body).map_err(Into::into))
+            .transpose()
     }
 
     pub fn create_plan(
@@ -323,6 +442,8 @@ impl TaskStore {
             occurred_at: now,
             state: JobState::Queued,
             error_code: None,
+            completed_tiles: None,
+            total_tiles: None,
         };
         let insert = tx.execute(
             "INSERT INTO jobs(job_id, plan_id, approval_id, plan_hash, idempotency_key, state, version, created_at)
@@ -350,6 +471,66 @@ impl TaskStore {
 
     pub fn get_job(&self, job_id: &str) -> Result<Option<Job>, LedgerError> {
         read_job(&self.conn, job_id)
+    }
+
+    /// Cancel a job left without an active worker, such as after app restart.
+    /// Active workers use a cancellation flag and transition themselves.
+    pub fn cancel_inactive_job(&mut self, job_id: &str) -> Result<Job, LedgerError> {
+        let job = self
+            .get_job(job_id)?
+            .ok_or_else(|| LedgerError::new("JOB_NOT_FOUND", "Job was not found"))?;
+        match job.state {
+            JobState::Queued | JobState::Downloading => {
+                self.transition(job_id, job.state, JobState::Cancelled, None, Utc::now())
+            }
+            _ => Err(LedgerError::new(
+                "JOB_STATE_CONFLICT",
+                "Job cannot be cancelled in this state",
+            )),
+        }
+    }
+
+    /// Retry only transient failures under the same approval and job ID. The
+    /// tile cache is bound to this job's plan hash and source revision.
+    pub fn retry_failed_job(&mut self, job_id: &str) -> Result<Job, LedgerError> {
+        let job = self
+            .get_job(job_id)?
+            .ok_or_else(|| LedgerError::new("JOB_NOT_FOUND", "Job was not found"))?;
+        if job.state != JobState::Failed {
+            return Err(LedgerError::new(
+                "JOB_STATE_CONFLICT",
+                "Only a failed job can be retried",
+            ));
+        }
+        let latest: String = self.conn.query_row(
+            "SELECT body FROM job_events WHERE job_id=?1 ORDER BY seq DESC LIMIT 1",
+            [job_id],
+            |row| row.get(0),
+        )?;
+        let event: JobEvent = serde_json::from_str(&latest)?;
+        if !matches!(
+            event.error_code.as_deref(),
+            Some("SOURCE_NETWORK" | "SOURCE_RATE_LIMITED" | "SOURCE_TEMPORARY" | "TIMEOUT")
+        ) {
+            return Err(LedgerError::new(
+                "JOB_NOT_RETRYABLE",
+                "This failure needs a new plan or a corrected source",
+            ));
+        }
+        self.transition(job_id, JobState::Failed, JobState::Queued, None, Utc::now())
+    }
+
+    pub fn list_jobs(&self, limit: u32) -> Result<Vec<Job>, LedgerError> {
+        let mut statement = self
+            .conn
+            .prepare("SELECT job_id FROM jobs ORDER BY created_at DESC, rowid DESC LIMIT ?1")?;
+        let ids = statement.query_map([limit.clamp(1, 200)], |row| row.get::<_, String>(0))?;
+        ids.map(|id| {
+            let id = id?;
+            read_job(&self.conn, &id)?
+                .ok_or_else(|| LedgerError::new("STORAGE_ERROR", "Listed job disappeared"))
+        })
+        .collect()
     }
 
     pub fn events_after(
@@ -402,6 +583,8 @@ impl TaskStore {
             occurred_at: now,
             state: next,
             error_code: error_code.map(str::to_owned),
+            completed_tiles: None,
+            total_tiles: None,
         };
         tx.execute(
             "INSERT INTO job_events(job_id, seq, body) VALUES (?1, ?2, ?3)",
@@ -412,6 +595,45 @@ impl TaskStore {
             .ok_or_else(|| LedgerError::new("STORAGE_ERROR", "Job disappeared after state update"))
     }
 
+    fn record_progress(
+        &mut self,
+        job_id: &str,
+        completed: u64,
+        total: u64,
+    ) -> Result<(), LedgerError> {
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let job = read_job(&tx, job_id)?
+            .ok_or_else(|| LedgerError::new("JOB_NOT_FOUND", "Job was not found"))?;
+        if job.state != JobState::Downloading || completed > total {
+            return Err(LedgerError::new(
+                "JOB_STATE_CONFLICT",
+                "Progress cannot be recorded",
+            ));
+        }
+        let seq = job.version + 1;
+        tx.execute(
+            "UPDATE jobs SET version=?1 WHERE job_id=?2 AND version=?3",
+            params![seq, job_id, job.version],
+        )?;
+        let event = JobEvent {
+            job_id: job_id.into(),
+            seq,
+            occurred_at: Utc::now(),
+            state: JobState::Downloading,
+            error_code: None,
+            completed_tiles: Some(completed),
+            total_tiles: Some(total),
+        };
+        tx.execute(
+            "INSERT INTO job_events(job_id,seq,body) VALUES (?1,?2,?3)",
+            params![job_id, seq, serde_json::to_string(&event)?],
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
     /// Execute a previously approved job on this computer. The endpoint must
     /// come from the same trusted registry as its public descriptor.
     pub async fn run_job(
@@ -420,6 +642,19 @@ impl TaskStore {
         current_source: &SourceDescriptor,
         endpoint: &HttpSource,
         now: DateTime<Utc>,
+    ) -> Result<Manifest, LedgerError> {
+        let cancelled = AtomicBool::new(false);
+        self.run_job_with_cancel(job_id, current_source, endpoint, now, &cancelled)
+            .await
+    }
+
+    pub async fn run_job_with_cancel(
+        &mut self,
+        job_id: &str,
+        current_source: &SourceDescriptor,
+        endpoint: &HttpSource,
+        now: DateTime<Utc>,
+        cancelled: &AtomicBool,
     ) -> Result<Manifest, LedgerError> {
         let mut job = self
             .get_job(job_id)?
@@ -433,8 +668,19 @@ impl TaskStore {
         let stored = self
             .get_plan(&job.plan_id)?
             .ok_or_else(|| LedgerError::new("PLAN_NOT_FOUND", "Plan was not found"))?;
-        let refreshed = plan(stored.plan.spec.clone(), current_source, now)
-            .map_err(|e| LedgerError::new(e.code, e.message))?;
+        let refreshed = match plan(stored.plan.spec.clone(), current_source, now) {
+            Ok(value) => value,
+            Err(error) => {
+                self.transition(
+                    job_id,
+                    job.state,
+                    JobState::Failed,
+                    Some(error.code),
+                    Utc::now(),
+                )?;
+                return Err(LedgerError::new(error.code, error.message));
+            }
+        };
         let scheme_matches = matches!(
             (current_source.scheme, endpoint.scheme),
             (TileScheme::XYZ, imagery::TileScheme::XYZ)
@@ -449,12 +695,31 @@ impl TaskStore {
             || endpoint.configuration_revision() != current_source.config_revision
             || !scheme_matches
         {
+            self.transition(
+                job_id,
+                job.state,
+                JobState::Failed,
+                Some("PLAN_STALE"),
+                Utc::now(),
+            )?;
             return Err(LedgerError::new(
                 "PLAN_STALE",
                 "Source or approved plan changed before execution",
             ));
         }
         let destination = PathBuf::from(&stored.plan.spec.output_directory);
+        let cache_parent = self
+            .db_path
+            .parent()
+            .ok_or_else(|| LedgerError::new("STORAGE_ERROR", "Database has no parent"))?
+            .join("tile-cache");
+        std::fs::create_dir_all(&cache_parent)
+            .map_err(|error| LedgerError::new("STORAGE_ERROR", error.to_string()))?;
+        let cache = imagery::TileCacheConfig {
+            root: cache_parent.join(job_id),
+            plan_hash: job.plan_hash.clone(),
+            job_id: job_id.to_string(),
+        };
         let request = ImageryRequest {
             name: endpoint.name.clone(),
             bounds: stored.plan.spec.bounds,
@@ -478,9 +743,32 @@ impl TaskStore {
             job = self.transition(job_id, JobState::Queued, JobState::Downloading, None, now)?;
         }
         let result = if destination.exists() {
-            imagery::inspect_bundle(&destination)
+            imagery::inspect_bundle(&destination).and_then(|manifest| {
+                if manifest.id != format!("geod-agent-job-{job_id}") {
+                    return Err(geod_core::imagery::CoreError::new(
+                        "OUTPUT_CONFLICT",
+                        "Output belongs to another job",
+                    ));
+                }
+                Ok(manifest)
+            })
         } else {
-            imagery::fetch_bundle(&request, endpoint).await
+            imagery::fetch_bundle_with_cache(
+                &request,
+                endpoint,
+                cancelled,
+                &cache,
+                |completed, total| {
+                    if completed <= 10 || completed % 16 == 0 || completed == total {
+                        self.record_progress(job_id, completed, total)
+                            .map_err(|error| {
+                                geod_core::imagery::CoreError::new(error.code, error.message)
+                            })?;
+                    }
+                    Ok(())
+                },
+            )
+            .await
         };
         match result {
             Ok(_) => {
@@ -494,6 +782,14 @@ impl TaskStore {
                             None,
                             Utc::now(),
                         )?;
+                        if let (Ok(parent), Ok(root)) = (
+                            std::fs::canonicalize(&cache_parent),
+                            std::fs::canonicalize(&cache.root),
+                        ) {
+                            if root.parent() == Some(parent.as_path()) {
+                                let _ = std::fs::remove_dir_all(root);
+                            }
+                        }
                         Ok(manifest)
                     }
                     Err(error) => {
@@ -509,13 +805,12 @@ impl TaskStore {
                 }
             }
             Err(error) => {
-                self.transition(
-                    job_id,
-                    job.state,
-                    JobState::Failed,
-                    Some(error.code),
-                    Utc::now(),
-                )?;
+                let next = if error.code == "CANCELLED" {
+                    JobState::Cancelled
+                } else {
+                    JobState::Failed
+                };
+                self.transition(job_id, job.state, next, Some(error.code), Utc::now())?;
                 Err(LedgerError::new(error.code, error.message))
             }
         }

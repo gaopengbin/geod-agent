@@ -3,6 +3,14 @@
   "title": "JobEvent",
   "type": "object",
   "properties": {
+    "completedTiles": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint64",
+      "minimum": 0
+    },
     "errorCode": {
       "type": [
         "string",
@@ -23,6 +31,14 @@
     },
     "state": {
       "$ref": "#/$defs/JobState"
+    },
+    "totalTiles": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint64",
+      "minimum": 0
     }
   },
   "additionalProperties": false,

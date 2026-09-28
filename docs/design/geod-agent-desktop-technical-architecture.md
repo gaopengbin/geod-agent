@@ -1,6 +1,6 @@
 # GeoD Agent 桌面端技术架构
 
-日期：2026-09-27，模型方案与独立仓库边界更新于 2026-09-28。状态：实施设计；[本地计划内核](../implementation/2026-09-28-planning-slice.md)已开始实现，其余模块仍是设计。对应[产品方案](geod-agent-desktop-product-2026-09-27.md)与[仓库边界](../REPOSITORY_BOUNDARY.md)。本仓库只承载国内 GeoD Agent；既有 GeoD 和 GeoD Global 各自维护代码与发布渠道。
+日期：2026-09-27，模型方案与独立仓库边界更新于 2026-09-28。状态：实施设计；当前代码与验收进展见[桌面与网关实施记录](../implementation/2026-09-28-desktop-and-gateway.md)。对应[产品方案](geod-agent-desktop-product-2026-09-27.md)与[仓库边界](../REPOSITORY_BOUNDARY.md)。本仓库只承载国内 GeoD Agent；既有 GeoD 和 GeoD Global 各自维护代码与发布渠道。
 
 ## 1. 约束与现状
 
@@ -184,4 +184,4 @@ SQLite schema 至少含 `plans`、`approvals`、`jobs`、`job_events`、`tile_ch
 3. beUI 组件包与授权、地图底层是否迁移到纯 MapLibre，需要通过小型交互样机验证性能与许可。
 4. 旧桌面的任务文件、历史 DB 与新 Agent 账本是否共享：首发建议**不共享数据库**，只支持显式导入已完成 bundle；无损迁移方案经真实用户样本验证后再决定。
 
-本方案的大部分模块尚未实现，也未发布安装包。首个本地计划切片使用 `0.1` 预发布合同；本节的 v1 合同、其余路径、能力包和真实数据验收仍需在对应工作包完成。
+本方案的首条影像链和 Windows 安装包已在本地实现，未发布；真实账号与托管模型联调及其余能力包仍待验收。当前使用 `0.1` 预发布合同；本节的 v1 合同与其余路径需在对应工作包完成。

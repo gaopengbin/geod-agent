@@ -1,0 +1,28 @@
+[package]
+name = "geod-agent-desktop"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Independent GeoD Agent desktop application"
+
+[lib]
+name = "geod_agent_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+chrono = { version = "0.4", features = ["serde"] }
+base64 = "0.22"
+geod-core = { path = "../../../crates/geod-core" }
+geod-task-engine = { path = "../../../crates/geod-task-engine" }
+keyring = { version = "3.6", features = ["windows-native"] }
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+uuid = { version = "1", features = ["v4"] }

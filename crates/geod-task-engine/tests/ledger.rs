@@ -1,6 +1,7 @@
 use chrono::{TimeZone, Utc};
+use geod_core::imagery::{HttpSource, NetworkPolicy, TileScheme as HttpTileScheme};
 use geod_task_engine::{
-    ledger::{JobState, TaskStore},
+    ledger::{JobEvent, JobState, TaskStore},
     OutputFormat, ResourceLimits, SchemaVersion, SourceDescriptor, TaskKind, TaskSpec, TileScheme,
 };
 
@@ -111,6 +112,98 @@ fn approval_and_idempotent_queue_survive_restart() {
             .unwrap_err()
             .code,
         "JOB_STATE_CONFLICT"
+    );
+}
+
+#[test]
+fn transient_failure_requeues_same_approved_job_after_restart() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("jobs.sqlite");
+    let mut store = TaskStore::open(&path).unwrap();
+    let planned = store.create_plan(spec(), &source(), now()).unwrap();
+    let approval = store
+        .grant_approval(
+            &planned.plan_id,
+            &planned.plan.plan_hash,
+            "local-user",
+            "test-ui",
+            now(),
+        )
+        .unwrap();
+    let job = store
+        .start_job(
+            &planned.plan_id,
+            &planned.plan.plan_hash,
+            &approval.approval_id,
+            "request-1",
+            &source(),
+            now(),
+        )
+        .unwrap();
+    drop(store);
+
+    // Simulate a persisted worker failure while the process is down.
+    let conn = rusqlite::Connection::open(&path).unwrap();
+    conn.execute(
+        "UPDATE jobs SET state='failed', version=2 WHERE job_id=?1",
+        [&job.job_id],
+    )
+    .unwrap();
+    let failure = JobEvent {
+        job_id: job.job_id.clone(),
+        seq: 2,
+        occurred_at: now(),
+        state: JobState::Failed,
+        error_code: Some("SOURCE_NETWORK".into()),
+        completed_tiles: None,
+        total_tiles: None,
+    };
+    conn.execute(
+        "INSERT INTO job_events(job_id,seq,body) VALUES (?1,2,?2)",
+        (&job.job_id, serde_json::to_string(&failure).unwrap()),
+    )
+    .unwrap();
+    drop(conn);
+
+    let mut reopened = TaskStore::open(&path).unwrap();
+    let retried = reopened.retry_failed_job(&job.job_id).unwrap();
+    assert_eq!(retried.job_id, job.job_id);
+    assert_eq!(retried.approval_id, approval.approval_id);
+    assert_eq!(retried.plan_hash, planned.plan.plan_hash);
+    assert_eq!(retried.state, JobState::Queued);
+    assert_eq!(
+        reopened
+            .events_after(&job.job_id, 0, 10)
+            .unwrap()
+            .iter()
+            .map(|e| e.state)
+            .collect::<Vec<_>>(),
+        [JobState::Queued, JobState::Failed, JobState::Queued]
+    );
+    assert_eq!(
+        reopened.retry_failed_job(&job.job_id).unwrap_err().code,
+        "JOB_STATE_CONFLICT"
+    );
+
+    let conn = rusqlite::Connection::open(&path).unwrap();
+    conn.execute(
+        "UPDATE jobs SET state='failed', version=4 WHERE job_id=?1",
+        [&job.job_id],
+    )
+    .unwrap();
+    let stale = JobEvent {
+        seq: 4,
+        error_code: Some("PLAN_STALE".into()),
+        ..failure
+    };
+    conn.execute(
+        "INSERT INTO job_events(job_id,seq,body) VALUES (?1,4,?2)",
+        (&job.job_id, serde_json::to_string(&stale).unwrap()),
+    )
+    .unwrap();
+    assert_eq!(
+        reopened.retry_failed_job(&job.job_id).unwrap_err().code,
+        "JOB_NOT_RETRYABLE"
     );
 }
 
@@ -230,4 +323,99 @@ fn newer_database_is_not_written() {
         TaskStore::open(&path).err().unwrap().code,
         "STORAGE_VERSION_NEWER"
     );
+}
+
+fn endpoint() -> HttpSource {
+    HttpSource {
+        id: "authorized-example".into(),
+        name: "Authorized example".into(),
+        attribution: "Example owner".into(),
+        license: "Owner permits bulk use".into(),
+        url_template: "https://example.org/tiles/{z}/{x}/{y}.png".into(),
+        scheme: HttpTileScheme::XYZ,
+        tile_size: 256,
+        network_policy: NetworkPolicy::PublicHttps,
+        min_interval_ms: 200,
+    }
+}
+
+#[test]
+fn source_registration_requires_acknowledgement_and_persists_revision() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("jobs.sqlite");
+    let mut store = TaskStore::open(&path).unwrap();
+    assert_eq!(
+        store
+            .save_source(endpoint(), 0, 18, false, now())
+            .unwrap_err()
+            .code,
+        "SOURCE_UNAUTHORIZED"
+    );
+    let descriptor = store.save_source(endpoint(), 0, 18, true, now()).unwrap();
+    assert_eq!(
+        descriptor.config_revision,
+        endpoint().configuration_revision()
+    );
+    assert_eq!(store.list_sources().unwrap().len(), 1);
+    drop(store);
+
+    let mut reopened = TaskStore::open(&path).unwrap();
+    let saved = reopened
+        .get_registered_source("authorized-example")
+        .unwrap()
+        .unwrap();
+    assert_eq!(saved.endpoint.url_template, endpoint().url_template);
+    assert_eq!(saved.descriptor.config_revision, descriptor.config_revision);
+    let mut edited = endpoint();
+    edited.url_template = "https://example.org/new/{z}/{x}/{y}.png".into();
+    let revised = reopened.save_source(edited, 0, 18, true, now()).unwrap();
+    assert_ne!(revised.config_revision, descriptor.config_revision);
+    assert_eq!(reopened.list_sources().unwrap().len(), 1);
+}
+
+#[test]
+fn source_registration_rejects_inline_query_credentials() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = TaskStore::open(&dir.path().join("jobs.sqlite")).unwrap();
+    let mut source = endpoint();
+    source.url_template.push_str("?key=secret");
+    assert_eq!(
+        store
+            .save_source(source, 0, 18, true, now())
+            .unwrap_err()
+            .code,
+        "INVALID_SOURCE"
+    );
+}
+
+#[test]
+fn version_one_migration_saves_a_consistent_backup() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("jobs.sqlite");
+    let old = rusqlite::Connection::open(&path).unwrap();
+    old.execute_batch("CREATE TABLE marker (value TEXT); INSERT INTO marker VALUES ('kept'); PRAGMA user_version=1;").unwrap();
+    drop(old);
+    let mut store = TaskStore::open(&path).unwrap();
+    store.save_source(endpoint(), 0, 18, true, now()).unwrap();
+    drop(store);
+    let backups: Vec<_> = std::fs::read_dir(dir.path())
+        .unwrap()
+        .filter_map(|entry| {
+            let path = entry.unwrap().path();
+            path.file_name()
+                .unwrap()
+                .to_string_lossy()
+                .contains("pre-v2")
+                .then_some(path)
+        })
+        .collect();
+    assert_eq!(backups.len(), 1);
+    let backup = rusqlite::Connection::open(&backups[0]).unwrap();
+    let version: i64 = backup
+        .query_row("PRAGMA user_version", [], |row| row.get(0))
+        .unwrap();
+    let marker: String = backup
+        .query_row("SELECT value FROM marker", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!((version, marker.as_str()), (1, "kept"));
 }

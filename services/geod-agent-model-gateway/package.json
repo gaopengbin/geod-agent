@@ -1,0 +1,15 @@
+{
+  "name": "geod-agent-model-gateway",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "reconcile": "node reconcile.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.0.0"
+  },
+  "engines": { "node": ">=22.15.0" }
+}

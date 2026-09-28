@@ -109,7 +109,7 @@ async fn approved_job_downloads_and_only_then_completes() {
         },
     };
     let mut store = TaskStore::open(&directory.path().join("jobs.sqlite")).unwrap();
-    let planned = store.create_plan(spec, &descriptor, now()).unwrap();
+    let planned = store.create_plan(spec.clone(), &descriptor, now()).unwrap();
     let approval = store
         .grant_approval(
             &planned.plan_id,
@@ -148,11 +148,50 @@ async fn approved_job_downloads_and_only_then_completes() {
         [
             JobState::Queued,
             JobState::Downloading,
+            JobState::Downloading,
+            JobState::Downloading,
             JobState::Verifying,
             JobState::Completed
         ]
     );
+    assert_eq!(events[2].completed_tiles, Some(1));
+    assert_eq!(events[3].completed_tiles, Some(2));
+    assert_eq!(events[3].total_tiles, Some(2));
     assert!(output.join("manifest.json").exists());
+    let second_plan = store.create_plan(spec, &descriptor, now()).unwrap();
+    let second_approval = store
+        .grant_approval(
+            &second_plan.plan_id,
+            &second_plan.plan.plan_hash,
+            "local-user",
+            "test-ui",
+            now(),
+        )
+        .unwrap();
+    let second = store
+        .start_job(
+            &second_plan.plan_id,
+            &second_plan.plan.plan_hash,
+            &second_approval.approval_id,
+            "run-2",
+            &descriptor,
+            now(),
+        )
+        .unwrap();
+    assert_eq!(
+        store
+            .run_job(&second.job_id, &descriptor, &endpoint, now())
+            .await
+            .unwrap_err()
+            .code,
+        "OUTPUT_CONFLICT"
+    );
+    assert_eq!(requests.load(Ordering::Relaxed), 2);
+    assert_eq!(
+        store.get_job(&second.job_id).unwrap().unwrap().state,
+        JobState::Failed
+    );
+    assert!(geod_core::imagery::inspect_bundle(&output).is_ok());
     stop.store(true, Ordering::Relaxed);
     worker.join().unwrap();
 }
