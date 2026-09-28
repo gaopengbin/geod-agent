@@ -32,6 +32,7 @@ fn spec() -> TaskSpec {
         kind: TaskKind::Imagery,
         source_id: "synthetic".into(),
         bounds: [-1.0, 1.0, 1.0, 2.0],
+        boundary: None,
         zoom_levels: vec![1],
         output_formats: vec![OutputFormat::GeoTiff],
         output_directory: std::env::temp_dir()

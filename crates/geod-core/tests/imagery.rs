@@ -1,4 +1,5 @@
 use geod_core::{
+    boundary::BoundaryGeometry,
     imagery::{
         fetch_bundle, fetch_bundle_with_cache, fetch_bundle_with_cancel, inspect_bundle,
         HttpSource, ImageryRequest, NetworkPolicy, TileCacheConfig, TileScheme,
@@ -139,6 +140,7 @@ fn request(destination: std::path::PathBuf, tile_size: u16) -> ImageryRequest {
     ImageryRequest {
         name: "Synthetic fixture".into(),
         bounds: [-1.0, 1.0, 1.0, 2.0],
+        boundary: None,
         grids: vec![tile::grid([-1.0, 1.0, 1.0, 2.0], 1, tile_size).unwrap()],
         output_geotiff: true,
         output_mbtiles: true,
@@ -338,4 +340,71 @@ async fn supports_512_pixel_tms_source_through_export_and_inspection() {
         tiff.dimensions().unwrap().1,
         manifest.assets[0].height.unwrap()
     );
+}
+
+#[tokio::test]
+async fn geojson_boundary_masks_geotiff_and_preview_but_preserves_mbtiles() {
+    let fixture = Fixture::start(false);
+    let directory = tempfile::tempdir().unwrap();
+    let output = directory.path().join("polygon-clipped");
+    let boundary = BoundaryGeometry::from_geojson(
+        br#"{"type":"Polygon","coordinates":[[[-1,1],[1,1],[-1,2],[-1,1]]]}"#,
+    )
+    .unwrap();
+    let mut job = request(output.clone(), 256);
+    job.boundary = Some(boundary);
+    let manifest = fetch_bundle(&job, &fixture.source()).await.unwrap();
+    assert_eq!(manifest.assets.len(), 4);
+    assert!(manifest
+        .assets
+        .iter()
+        .any(|asset| asset.path == "boundary.geojson" && asset.kind == "vector"));
+    assert!(manifest
+        .quality
+        .warnings
+        .iter()
+        .any(|warning| warning.contains("MBTiles preserves complete source tiles")));
+    assert_eq!(inspect_bundle(&output).unwrap().assets.len(), 4);
+
+    let mut tiff =
+        Decoder::new(std::fs::File::open(output.join("imagery-z1.tif")).unwrap()).unwrap();
+    let DecodingResult::U8(pixels) = tiff.read_image().unwrap() else {
+        panic!("expected RGBA bytes")
+    };
+    let alpha: Vec<_> = pixels.chunks_exact(4).map(|pixel| pixel[3]).collect();
+    assert!(alpha.contains(&0) && alpha.contains(&255));
+    let preview = image::open(output.join("preview.png")).unwrap().to_rgba8();
+    assert_eq!(
+        preview
+            .as_raw()
+            .chunks_exact(4)
+            .map(|pixel| pixel[3])
+            .collect::<Vec<_>>(),
+        alpha
+    );
+    let db = Connection::open(output.join("imagery.mbtiles")).unwrap();
+    let tile: Vec<u8> = db
+        .query_row("SELECT tile_data FROM tiles LIMIT 1", [], |row| row.get(0))
+        .unwrap();
+    assert!(image::load_from_memory(&tile)
+        .unwrap()
+        .to_rgba8()
+        .pixels()
+        .all(|pixel| pixel[3] == 255));
+}
+
+#[test]
+fn geojson_boundary_rejects_non_polygon_and_ambiguous_coordinates() {
+    assert!(BoundaryGeometry::from_geojson(
+        br#"{"type":"LineString","coordinates":[[0,0],[1,1]]}"#
+    )
+    .is_err());
+    assert!(BoundaryGeometry::from_geojson(
+        br#"{"type":"Polygon","crs":{"type":"name"},"coordinates":[[[0,0],[1,0],[0,1],[0,0]]]}"#
+    )
+    .is_err());
+    assert!(BoundaryGeometry::from_geojson(
+        br#"{"type":"Polygon","coordinates":[[[179,0],[-179,0],[179,1],[179,0]]]}"#
+    )
+    .is_err());
 }

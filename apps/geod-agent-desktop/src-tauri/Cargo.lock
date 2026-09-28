@@ -1312,6 +1312,7 @@ dependencies = [
  "image",
  "reqwest 0.12.28",
  "rusqlite",
+ "schemars 1.2.2",
  "serde",
  "serde_json",
  "sha2",

@@ -2,6 +2,7 @@ mod services;
 
 use base64::Engine;
 use chrono::Utc;
+use geod_core::boundary::BoundaryGeometry;
 use geod_core::imagery::{CoreError, HttpSource, Manifest};
 use geod_task_engine::{
     ledger::{Approval, Job, JobEvent, LedgerError, StoredPlan, TaskStore},
@@ -82,6 +83,56 @@ fn output_directory_suggest(app: AppHandle) -> Result<String, AppError> {
         .join(name)
         .to_string_lossy()
         .into_owned())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BoundaryImport {
+    name: String,
+    bounds: [f64; 4],
+    polygon_count: usize,
+    geometry: BoundaryGeometry,
+}
+
+/// The model sees only a bounded extent and count. Geometry remains in the
+/// desktop plan and is never sent in an Agent tool result.
+#[tauri::command]
+fn boundary_inspect(name: String, text: String) -> Result<BoundaryImport, AppError> {
+    let file_name = PathBuf::from(name);
+    if text.len() > 1024 * 1024
+        || !matches!(
+            file_name
+                .extension()
+                .and_then(|value| value.to_str())
+                .map(str::to_ascii_lowercase)
+                .as_deref(),
+            Some("geojson" | "json")
+        )
+    {
+        return Err(AppError {
+            code: "INVALID_BOUNDARY",
+            message: "请选择本机 GeoJSON 文件".into(),
+        });
+    }
+    let mut geometry =
+        BoundaryGeometry::from_geojson(text.as_bytes()).map_err(|cause| AppError {
+            code: "INVALID_BOUNDARY",
+            message: cause.0.into(),
+        })?;
+    let bounds = geometry.normalize().map_err(|cause| AppError {
+        code: "INVALID_BOUNDARY",
+        message: cause.0.into(),
+    })?;
+    let name = file_name
+        .file_name()
+        .map(|value| value.to_string_lossy().chars().take(120).collect())
+        .unwrap_or_else(|| "boundary.geojson".into());
+    Ok(BoundaryImport {
+        name,
+        bounds,
+        polygon_count: geometry.polygons.len(),
+        geometry,
+    })
 }
 
 #[tauri::command]
@@ -469,11 +520,7 @@ fn windows_user_proxy() -> Option<reqwest::Proxy> {
     let server = configured
         .split(';')
         .find_map(|entry| entry.strip_prefix("https="))
-        .or_else(|| {
-            configured
-                .split(';')
-                .find(|entry| !entry.contains('='))
-        })?;
+        .or_else(|| configured.split(';').find(|entry| !entry.contains('=')))?;
     let address = if server.contains("://") {
         server.to_string()
     } else {
@@ -526,9 +573,7 @@ async fn osm_basemap_tile(app: AppHandle, z: u8, x: u32, y: u32) -> Result<Strin
         } else {
             builder
         };
-        builder
-            .build()
-            .expect("valid GeoD HTTP client")
+        builder.build().expect("valid GeoD HTTP client")
     });
     let response = client
         .get(format!("https://tile.openstreetmap.org/{z}/{x}/{y}.png"))
@@ -615,6 +660,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             output_directory_suggest,
+            boundary_inspect,
             sources_list,
             sources_save,
             plans_create,

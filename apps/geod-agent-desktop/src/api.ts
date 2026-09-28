@@ -3,6 +3,8 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 export type Bounds = [number, number, number, number];
 export type OutputFormat = "geotiff" | "mbtiles";
 export type JobState = "queued" | "downloading" | "paused" | "processing" | "verifying" | "completed" | "partial" | "failed" | "cancelled";
+export interface BoundaryGeometry { polygons: [number, number][][][] }
+export interface BoundaryImport { name: string; bounds: Bounds; polygonCount: number; geometry: BoundaryGeometry }
 
 export interface SourceDescriptor {
   schemaVersion: "0.1";
@@ -36,6 +38,7 @@ export interface TaskSpec {
   kind: "imagery";
   sourceId: string;
   bounds: Bounds;
+  boundary?: BoundaryGeometry;
   zoomLevels: number[];
   outputFormats: OutputFormat[];
   outputDirectory: string;
@@ -83,6 +86,7 @@ export const desktopAvailable = isTauri();
 export const api = {
   osmBasemapTile: (z: number, x: number, y: number) => invoke<string>("osm_basemap_tile", { z, x, y }),
   outputDirectorySuggest: () => invoke<string>("output_directory_suggest"),
+  boundaryInspect: (name: string, text: string) => invoke<BoundaryImport>("boundary_inspect", { name, text }),
   sourcesList: () => invoke<SourceDescriptor[]>("sources_list"),
   sourcesSave: (endpoint: HttpSource, minZoom: number, maxZoom: number) => invoke<SourceDescriptor>("sources_save", { endpoint, minZoom, maxZoom, permissionAcknowledged: true }),
   plansCreate: (spec: TaskSpec) => invoke<StoredPlan>("plans_create", { spec }),

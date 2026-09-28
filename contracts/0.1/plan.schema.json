@@ -70,6 +70,34 @@
     "planHash"
   ],
   "$defs": {
+    "BoundaryGeometry": {
+      "type": "object",
+      "properties": {
+        "polygons": {
+          "description": "Polygon → ring → WGS84 [longitude, latitude]. The first ring is the\nexterior; later rings are holes. MultiPolygon members are independent.",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "format": "double"
+                },
+                "maxItems": 2,
+                "minItems": 2
+              }
+            }
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "polygons"
+      ]
+    },
     "OutputFormat": {
       "type": "string",
       "enum": [
@@ -191,6 +219,16 @@
     "TaskSpec": {
       "type": "object",
       "properties": {
+        "boundary": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BoundaryGeometry"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "bounds": {
           "description": "WGS84 [west, south, east, north]. Antimeridian bounds must be split.",
           "type": "array",

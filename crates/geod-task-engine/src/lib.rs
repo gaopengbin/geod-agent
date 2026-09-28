@@ -1,6 +1,7 @@
 //! Local, deterministic planning. No model, network, or filesystem writes occur here.
 
 use chrono::{DateTime, Duration, Utc};
+use geod_core::boundary::BoundaryGeometry;
 use geod_core::tile::{self, TileGrid};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -56,6 +57,8 @@ pub struct TaskSpec {
     pub source_id: String,
     /// WGS84 [west, south, east, north]. Antimeridian bounds must be split.
     pub bounds: [f64; 4],
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub boundary: Option<BoundaryGeometry>,
     pub zoom_levels: Vec<u8>,
     pub output_formats: Vec<OutputFormat>,
     pub output_directory: String,
@@ -244,11 +247,22 @@ pub fn plan(
             "Resource limits exceed supported bounds",
         ));
     }
+    if let Some(boundary) = &mut spec.boundary {
+        spec.bounds = boundary
+            .normalize()
+            .map_err(|cause| PlanError::new("INVALID_BOUNDARY", cause.0))?;
+    }
     normalize_bounds(&mut spec.bounds)?;
     spec.zoom_levels.sort_unstable();
     spec.zoom_levels.dedup();
     spec.output_formats.sort_unstable();
     spec.output_formats.dedup();
+    if spec.boundary.is_some() && !spec.output_formats.contains(&OutputFormat::GeoTiff) {
+        return Err(PlanError::new(
+            "INVALID_BOUNDARY",
+            "Polygon clipping requires GeoTIFF output; MBTiles preserves complete source tiles",
+        ));
+    }
     if spec
         .zoom_levels
         .iter()

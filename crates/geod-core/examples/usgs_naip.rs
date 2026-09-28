@@ -25,6 +25,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let request = ImageryRequest {
         name: "Washington DC NAIP acceptance sample".into(),
         bounds,
+        boundary: None,
         grids: vec![grid],
         output_geotiff: true,
         output_mbtiles: true,

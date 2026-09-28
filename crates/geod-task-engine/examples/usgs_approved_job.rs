@@ -45,6 +45,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         kind: TaskKind::Imagery,
         source_id: descriptor.id.clone(),
         bounds: [-77.05, 38.85, -77.04, 38.86],
+        boundary: None,
         zoom_levels: vec![12],
         output_formats: vec![OutputFormat::GeoTiff, OutputFormat::Mbtiles],
         output_directory: output.to_string_lossy().into_owned(),

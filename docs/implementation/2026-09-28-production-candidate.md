@@ -14,9 +14,9 @@
 | 产物 | SHA-256 | 本地验证 |
 | --- | --- | --- |
 | `artifacts/linux-gateway-build/geod-oauth-studio-linux-x64-20260928.tar.gz` | `65b5e65d8d18d4a32c15980a587d4e68a534ab7e8a1e0fc4d6523fe5e226dc88` | 基于现网 `0984aed` 加 OAuth `3ae9b71` 与 GeoD 品牌 `9fb6f9d`；账号测试 20/20；Linux standalone HTTP 匿名跳转、同意、授权码、换令牌、检查与撤销全通过 |
-| `artifacts/linux-gateway-build/geod-agent-gateway-linux-x64-20260928.tar.gz` | `c3b4421717e97f6806d44a34cf5b653715d9500d72d5f9b50588d14ec6823b1c` | Linux x64 Node 22.23.2 生产依赖；网关测试 7/7；桌面使用真实 DeepSeek 联调通过 |
+| `artifacts/linux-gateway-build/geod-agent-gateway-linux-x64-20260928-geojson-validated.tar.gz` | `69a6c52d87936f384b0763016531bb98c829ec80b92dc81b0a4ff9c819d5b405` | Linux x64 生产依赖；GeoJSON 边界规划工具合同已更新；Node 22.22.3 网关测试 7/7；桌面使用真实 DeepSeek 联调通过 |
 | `artifacts/linux-gateway-build/geod-login-static-overlay-20260928.tar.gz` | `1425f0e594a89bbec9d035540a7fa3f4b40fa71dd8b13f344281d52504e8c425` | GeoD 品牌登录页与静态资源；HTML 引用 14/14 存在。须叠加到现有网站的**新**不可变发布目录，保留其他页面 |
-| `apps/geod-agent-desktop/src-tauri/target/release/bundle/nsis/GeoD Agent_0.1.0_x64-setup.exe` | `59c2a2a9b3e9eeadfdc1ea7d6b161fbf6387275c982e349c114918cbc73b9445` | Windows 构建、桌面服务测试 4/4；上一构建的原生界面通过真实账号与 DeepSeek 联调，本构建只调整 5xx 预检文案 |
+| `apps/geod-agent-desktop/src-tauri/target/release/bundle/nsis/GeoD Agent_0.1.0_x64-setup.exe` | `37d28daf1deecaf114c70946f34f2f946c2eb9bb707efa2e96dbe295a4bf6c98` | Windows 构建、桌面服务测试 4/4；原生界面完成 GeoJSON 附件导入与移除、账号和真实 DeepSeek 工具调用联调；新安装包仍需隔离安装回归 |
 
 上表 Linux 包是本机可信 Ubuntu WSL 构建，不从生产服务器下载依赖。静态覆盖包只含登录页及其资源；部署前还需在服务器新目录中验证页面资源与现有 Nginx 静态路径配合，并在域名上做浏览器登录冒烟。
 

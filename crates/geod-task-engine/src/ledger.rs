@@ -789,6 +789,7 @@ impl TaskStore {
         let request = ImageryRequest {
             name: endpoint.name.clone(),
             bounds: stored.plan.spec.bounds,
+            boundary: stored.plan.spec.boundary.clone(),
             grids: stored.plan.tile_grids.iter().map(Into::into).collect(),
             output_geotiff: stored
                 .plan

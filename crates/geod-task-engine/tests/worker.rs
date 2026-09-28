@@ -1,4 +1,5 @@
 use chrono::{TimeZone, Utc};
+use geod_core::boundary::BoundaryGeometry;
 use geod_core::imagery::{HttpSource, NetworkPolicy, TileScheme as HttpTileScheme};
 use geod_task_engine::{
     ledger::{JobState, TaskStore},
@@ -107,6 +108,7 @@ async fn approved_job_downloads_and_only_then_completes() {
         kind: TaskKind::Imagery,
         source_id: descriptor.id.clone(),
         bounds: [-1.0, 1.0, 1.0, 2.0],
+        boundary: None,
         zoom_levels: vec![1],
         output_formats: vec![OutputFormat::GeoTiff, OutputFormat::Mbtiles],
         output_directory: output.to_string_lossy().into_owned(),
@@ -211,6 +213,12 @@ async fn approved_job_downloads_and_only_then_completes() {
     let paused_output = directory.path().join("paused-result");
     let mut paused_spec = spec;
     paused_spec.output_directory = paused_output.to_string_lossy().into_owned();
+    paused_spec.boundary = Some(
+        BoundaryGeometry::from_geojson(
+            br#"{"type":"Polygon","coordinates":[[[-1,1],[1,1],[-1,2],[-1,1]]]}"#,
+        )
+        .unwrap(),
+    );
     let paused_plan = store.create_plan(paused_spec, &descriptor, now()).unwrap();
     let paused_approval = store
         .grant_approval(
@@ -281,6 +289,12 @@ async fn approved_job_downloads_and_only_then_completes() {
         format!("geod-agent-job-{}", paused_job.job_id)
     );
     assert!(geod_core::imagery::inspect_bundle(&paused_output).is_ok());
+    let clipped = image::open(paused_output.join("preview.png"))
+        .unwrap()
+        .to_rgba8();
+    let alpha: Vec<_> = clipped.pixels().map(|pixel| pixel[3]).collect();
+    assert!(alpha.contains(&0) && alpha.contains(&255));
+    assert!(paused_output.join("boundary.geojson").exists());
     stop.store(true, Ordering::Relaxed);
     worker.join().unwrap();
 }

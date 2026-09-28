@@ -4,7 +4,7 @@ import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { createServer } from "node:http";
 import { connect } from "node:net";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -14,6 +14,9 @@ assert.ok(process.env.DEEPSEEK_API_KEY, "Set DEEPSEEK_API_KEY for this optional 
 if (process.platform !== "win32") throw new Error("This smoke test requires Windows WebView2");
 const exe = process.env.GEOD_AGENT_EXE || resolve(import.meta.dirname, "../../../apps/geod-agent-desktop/src-tauri/target/release/geod-agent-desktop.exe");
 const folder = mkdtempSync(resolve(tmpdir(), "geod-native-deepseek-"));
+const boundaryPath = resolve(folder, "native-test-boundary.geojson");
+const boundaryText = JSON.stringify({ type: "Polygon", coordinates: [[[-77.05, 38.85], [-77.04, 38.85], [-77.04, 38.86], [-77.05, 38.86], [-77.05, 38.85]]] });
+writeFileSync(boundaryPath, boundaryText);
 const upstreamIdentity = process.env.GEOD_OAUTH_UPSTREAM_ORIGIN;
 const browserCookie = process.env.GEOD_OAUTH_BROWSER_COOKIE;
 if (upstreamIdentity && (!browserCookie || !process.env.GEOD_OAUTH_GATEWAY_SECRET)) throw new Error("Real identity smoke test needs the browser session cookie and gateway secret");
@@ -27,6 +30,7 @@ const accessToken = randomBytes(32).toString("base64url");
 const refreshToken = randomBytes(32).toString("base64url");
 const prompt = "请先调用 sources_list 查询本机已授权图源，再根据工具结果回答。不要猜测图源。";
 let challenge = ""; let redirectUri = ""; let tokenIssued = false;
+let smokeConversationId = "";
 let identityServer; let gateway; let app; let socket; let nextId = 0; let shuttingDown = false;
 const pending = new Map();
 const listen = server => new Promise(resolve => server.listen(0, "127.0.0.1", () => resolve(`http://127.0.0.1:${server.address().port}`)));
@@ -165,8 +169,31 @@ try {
   console.error("Native OAuth callback completed");
   const sources = await evaluate("window.__TAURI_INTERNALS__.invoke('sources_list')");
   assert.ok(Array.isArray(sources));
+  const originalConversationId = await evaluate("JSON.parse(localStorage.getItem('geod-agent-conversations-0.1') || '[]')[0]?.conversationId || null");
   await evaluate("document.querySelector('.conversation-sidebar-head button').click()");
   await waitFor(async () => await evaluate("!!document.querySelector('.agent-composer textarea')"), 10_000, "agent composer");
+  smokeConversationId = await waitFor(async () => await evaluate(`(() => { const id = JSON.parse(localStorage.getItem('geod-agent-conversations-0.1') || '[]')[0]?.conversationId; return id && id !== ${JSON.stringify(originalConversationId)} ? id : null; })()`), 10_000, "test conversation");
+  await waitFor(async () => await evaluate("!document.querySelector('[aria-label=\"附加 GeoJSON 边界\"]').disabled"), 10_000, "attachment button");
+  const inspected = await evaluate(`window.__TAURI_INTERNALS__.invoke('boundary_inspect', { name: 'native-test-boundary.geojson', text: ${JSON.stringify(boundaryText)} })`);
+  assert.equal(inspected.polygonCount, 1);
+  const document = await command("DOM.getDocument");
+  const input = await command("DOM.querySelector", { nodeId: document.root.nodeId, selector: ".agent-boundary-input" });
+  assert.ok(input.nodeId, "GeoJSON file input should exist in the native composer");
+  await command("DOM.setFileInputFiles", { files: [boundaryPath], nodeId: input.nodeId });
+  const attachment = await waitFor(async () => {
+    const state = await evaluate("({ attachment: document.querySelector('.agent-attachment')?.innerText || null, error: document.querySelector('.agent-error')?.innerText || null })");
+    if (state.error) throw new Error(`Native attachment error: ${state.error}`);
+    return state.attachment;
+  }, 10_000, "native GeoJSON attachment");
+  assert.match(attachment, /native-test-boundary\.geojson/);
+  assert.match(attachment, /1 个面/);
+  if (process.env.GEOD_NATIVE_CAPTURE_PATH) {
+    const capture = await command("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
+    writeFileSync(process.env.GEOD_NATIVE_CAPTURE_PATH, Buffer.from(capture.data, "base64"));
+  }
+  await evaluate("document.querySelector('[aria-label=\"移除边界附件\"]').click()");
+  await waitFor(async () => await evaluate("!document.querySelector('.agent-attachment')"), 10_000, "attachment removal");
+  console.error("Native GeoJSON attachment inspected and removed");
   await evaluate(`(() => { const field = document.querySelector('.agent-composer textarea'); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(field, ${JSON.stringify(prompt)}); field.dispatchEvent(new Event('input', { bubbles: true })); field.form.requestSubmit(); })()`);
   console.error("Native prompt submitted");
   const reply = await waitFor(async () => await evaluate("(() => { const items = [...document.querySelectorAll('.agent-message')]; const toolIndex = items.findIndex(item => item.classList.contains('tool')); const answer = items.slice(toolIndex + 1).find(item => item.classList.contains('assistant')); return toolIndex >= 0 && answer && !document.querySelector('.agent-thinking') ? answer.innerText : null; })()"), 100_000, "native tool call and DeepSeek reply");
@@ -181,7 +208,7 @@ try {
     catch (error) { console.error(`Fake OAuth credential cleanup failed: ${error.message}`); }
   }
   if (socket) {
-    try { await evaluate(`(() => { const key = 'geod-agent-conversations-0.1'; const chats = JSON.parse(localStorage.getItem(key) || '[]'); const kept = chats.filter(chat => { const userMessages = (chat.display || []).filter(message => message.role === 'user'); return !userMessages.length || !userMessages.every(message => message.content === ${JSON.stringify(prompt)}); }); localStorage.setItem(key, JSON.stringify(kept)); })()`); }
+    try { if (smokeConversationId) await evaluate(`(() => { const key = 'geod-agent-conversations-0.1'; const chats = JSON.parse(localStorage.getItem(key) || '[]'); localStorage.setItem(key, JSON.stringify(chats.filter(chat => chat.conversationId !== ${JSON.stringify(smokeConversationId)}))); })()`); }
     catch (error) { console.error(`Smoke conversation cleanup failed: ${error.message}`); }
   }
   socket?.close();

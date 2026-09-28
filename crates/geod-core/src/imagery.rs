@@ -1,7 +1,10 @@
 //! Bounded local raster acquisition and publication. The caller must supply an
 //! already approved plan and a source from the trusted local source registry.
 
-use crate::tile::{self, TileGrid};
+use crate::{
+    boundary::{mask_rgba, BoundaryGeometry},
+    tile::{self, TileGrid},
+};
 use chrono::Utc;
 use image::{DynamicImage, ImageReader, RgbaImage};
 use reqwest::{header::CONTENT_TYPE, redirect::Policy, Client, Url};
@@ -78,6 +81,7 @@ impl HttpSource {
 pub struct ImageryRequest {
     pub name: String,
     pub bounds: [f64; 4],
+    pub boundary: Option<BoundaryGeometry>,
     pub grids: Vec<TileGrid>,
     pub output_geotiff: bool,
     pub output_mbtiles: bool,
@@ -416,6 +420,18 @@ fn validate_request(request: &ImageryRequest, source: &HttpSource) -> Result<(),
             "Invalid output, limits, or grid selection",
         ));
     }
+    if let Some(boundary) = &request.boundary {
+        let mut normalized = boundary.clone();
+        let bounds = normalized
+            .normalize()
+            .map_err(|cause| CoreError::new("INVALID_BOUNDARY", cause.0))?;
+        if normalized != *boundary || bounds != request.bounds || !request.output_geotiff {
+            return Err(CoreError::new(
+                "INVALID_BOUNDARY",
+                "Boundary must be normalized, match the plan extent, and include GeoTIFF output",
+            ));
+        }
+    }
     let mut count = 0u64;
     let mut bytes = 0u64;
     let mut zooms = std::collections::HashSet::new();
@@ -699,6 +715,11 @@ fn sha256_file(path: &Path) -> Result<String, CoreError> {
     Ok(format!("{:x}", digest.finalize()))
 }
 
+struct AssetFootprint {
+    bounds: [f64; 4],
+    dimensions: Option<(u32, u32)>,
+}
+
 fn asset(
     stage: &Path,
     id: String,
@@ -706,13 +727,17 @@ fn asset(
     role: &str,
     mime: &str,
     grid: Option<&TileGrid>,
-    bounds: [f64; 4],
-    dimensions: Option<(u32, u32)>,
+    footprint: AssetFootprint,
 ) -> Result<Asset, CoreError> {
     let file = stage.join(&path);
     Ok(Asset {
         id,
-        kind: "raster".into(),
+        kind: if mime == "application/geo+json" {
+            "vector"
+        } else {
+            "raster"
+        }
+        .into(),
         role: role.into(),
         path,
         mime_type: mime.into(),
@@ -724,9 +749,9 @@ fn asset(
             "EPSG:4326"
         }
         .into(),
-        bounds,
-        width: dimensions.map(|size| size.0),
-        height: dimensions.map(|size| size.1),
+        bounds: footprint.bounds,
+        width: footprint.dimensions.map(|size| size.0),
+        height: footprint.dimensions.map(|size| size.1),
     })
 }
 
@@ -828,6 +853,32 @@ where
             retrieved_at: Utc::now().to_rfc3339(),
         }],
     };
+    if let Some(boundary) = &request.boundary {
+        let boundary_file = "boundary.geojson";
+        fs::write(
+            stage.path().join(boundary_file),
+            serde_json::to_vec_pretty(
+                &serde_json::json!({ "type": "MultiPolygon", "coordinates": boundary.polygons }),
+            )
+            .map_err(io_error)?,
+        )
+        .map_err(io_error)?;
+        manifest.assets.push(asset(
+            stage.path(),
+            "boundary".into(),
+            boundary_file.into(),
+            "input",
+            "application/geo+json",
+            None,
+            AssetFootprint {
+                bounds: request.bounds,
+                dimensions: None,
+            },
+        )?);
+        if request.output_mbtiles {
+            manifest.quality.warnings.push("MBTiles preserves complete source tiles; the boundary alpha mask applies to GeoTIFF and preview only".into());
+        }
+    }
     let mut mbtiles = if request.output_mbtiles {
         let conn = Connection::open(stage.path().join("imagery.mbtiles")).map_err(io_error)?;
         conn.execute_batch("CREATE TABLE metadata (name TEXT PRIMARY KEY, value TEXT);
@@ -914,9 +965,19 @@ where
         }
         if let Some(image) = mosaic {
             let crop = crop_pixels(request.bounds, grid, source.tile_size);
-            let image =
+            let mut image =
                 image::imageops::crop_imm(&image, crop.left, crop.top, crop.width, crop.height)
                     .to_image();
+            if let Some(boundary) = &request.boundary {
+                mask_rgba(
+                    &mut image,
+                    boundary,
+                    grid,
+                    source.tile_size,
+                    crop.left,
+                    crop.top,
+                );
+            }
             let filename = format!("imagery-z{}.tif", grid.zoom);
             write_tiff(&stage.path().join(&filename), &image, grid, &crop)?;
             manifest.assets.push(asset(
@@ -926,10 +987,12 @@ where
                 "analysis",
                 "image/tiff",
                 Some(grid),
-                crop.bounds,
-                Some((image.width(), image.height())),
+                AssetFootprint {
+                    bounds: crop.bounds,
+                    dimensions: Some((image.width(), image.height())),
+                },
             )?);
-            if manifest.assets.len() == 1 {
+            if !manifest.assets.iter().any(|item| item.role == "preview") {
                 let preview = if image.width() > 1024 || image.height() > 1024 {
                     DynamicImage::ImageRgba8(image).thumbnail(1024, 1024)
                 } else {
@@ -946,8 +1009,10 @@ where
                     "preview",
                     "image/png",
                     Some(grid),
-                    crop.bounds,
-                    Some(preview_size),
+                    AssetFootprint {
+                        bounds: crop.bounds,
+                        dimensions: Some(preview_size),
+                    },
                 )?;
                 manifest.assets.push(preview_asset);
             }
@@ -968,8 +1033,10 @@ where
             "offline",
             "application/vnd.mbtiles",
             None,
-            request.bounds,
-            None,
+            AssetFootprint {
+                bounds: request.bounds,
+                dimensions: None,
+            },
         )?);
     }
     if started.elapsed() >= request.deadline {
@@ -1042,6 +1109,31 @@ pub fn inspect_bundle(root: &Path) -> Result<Manifest, CoreError> {
                 "ARTIFACT_INCOMPLETE",
                 format!("Asset hash or length mismatch: {}", item.path),
             ));
+        }
+        if item.id == "boundary" {
+            if item.kind != "vector"
+                || item.role != "input"
+                || item.mime_type != "application/geo+json"
+                || item.crs != "EPSG:4326"
+                || item.bounds != manifest.bounds
+            {
+                return Err(CoreError::new(
+                    "ARTIFACT_INCOMPLETE",
+                    "Boundary metadata does not match the bundle",
+                ));
+            }
+            let mut boundary = BoundaryGeometry::from_geojson(&fs::read(&path).map_err(io_error)?)
+                .map_err(|cause| CoreError::new("ARTIFACT_INCOMPLETE", cause.0))?;
+            if boundary
+                .normalize()
+                .map_err(|cause| CoreError::new("ARTIFACT_INCOMPLETE", cause.0))?
+                != manifest.bounds
+            {
+                return Err(CoreError::new(
+                    "ARTIFACT_INCOMPLETE",
+                    "Boundary extent does not match the bundle",
+                ));
+            }
         }
         if item.mime_type == "image/tiff" {
             let mut decoder =

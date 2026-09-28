@@ -1,4 +1,5 @@
 use chrono::{TimeZone, Utc};
+use geod_core::boundary::BoundaryGeometry;
 use geod_task_engine::{
     plan, OutputFormat, ResourceLimits, SchemaVersion, SourceDescriptor, TaskKind, TaskSpec,
     TileScheme,
@@ -27,6 +28,7 @@ fn spec() -> TaskSpec {
         kind: TaskKind::Imagery,
         source_id: "synthetic-xyz".into(),
         bounds: [-1.0, 1.0, 1.0, 2.0],
+        boundary: None,
         zoom_levels: vec![1],
         output_formats: vec![OutputFormat::GeoTiff],
         output_directory: std::env::temp_dir()
@@ -107,6 +109,30 @@ fn plan_hash_is_stable_and_sensitive_to_effective_changes() {
         base.plan_hash,
         plan(changed, &source(), now()).unwrap().plan_hash
     );
+}
+
+#[test]
+fn imported_boundary_sets_extent_and_binds_shape_to_approval_hash() {
+    let mut with_boundary = spec();
+    with_boundary.bounds = [0.0, 0.0, 0.0, 0.0];
+    with_boundary.boundary = Some(
+        BoundaryGeometry::from_geojson(
+            br#"{"type":"Polygon","coordinates":[[[-1,1],[1,1],[-1,2],[-1,1]]]}"#,
+        )
+        .unwrap(),
+    );
+    let planned = plan(with_boundary.clone(), &source(), now()).unwrap();
+    assert_eq!(planned.spec.bounds, [-1.0, 1.0, 1.0, 2.0]);
+    assert_eq!(planned.total_tiles, 2);
+    with_boundary.boundary = Some(
+        BoundaryGeometry::from_geojson(
+            br#"{"type":"Polygon","coordinates":[[[-1,1],[1,1],[1,2],[-1,1]]]}"#,
+        )
+        .unwrap(),
+    );
+    let changed = plan(with_boundary, &source(), now()).unwrap();
+    assert_eq!(changed.spec.bounds, planned.spec.bounds);
+    assert_ne!(changed.plan_hash, planned.plan_hash);
 }
 
 #[test]

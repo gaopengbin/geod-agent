@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as maplibregl from "maplibre-gl";
 import type { Map } from "maplibre-gl";
-import { api, desktopAvailable, type ArtifactPreview, type Bounds } from "./api";
+import { api, desktopAvailable, type ArtifactPreview, type BoundaryGeometry, type Bounds } from "./api";
 import { Button } from "@/components/motion/button/base";
 import { Minus, Plus } from "lucide-react";
 
@@ -74,7 +74,7 @@ function projectOverlay(map: Map, bounds: Bounds | null): Overlay {
   return { width, height, meridians, parallels, selection };
 }
 
-export function MapView({ bounds, preview, theme }: { bounds: Bounds | null; preview: ArtifactPreview | null; theme: "light" | "dark" }) {
+export function MapView({ bounds, boundary, preview, theme }: { bounds: Bounds | null; boundary: BoundaryGeometry | null; preview: ArtifactPreview | null; theme: "light" | "dark" }) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Map | null>(null);
   const boundsRef = useRef(bounds);
@@ -128,6 +128,8 @@ export function MapView({ bounds, preview, theme }: { bounds: Bounds | null; pre
       source: "verified-imagery",
       paint: { "raster-opacity": 1, "raster-resampling": "linear", "raster-fade-duration": 0 },
     });
+    if (map.getLayer("plan-boundary-fill")) map.moveLayer("plan-boundary-fill");
+    if (map.getLayer("plan-boundary-outline")) map.moveLayer("plan-boundary-outline");
     let cancelled = false;
     const image = new Image();
     image.onload = () => {
@@ -140,6 +142,17 @@ export function MapView({ bounds, preview, theme }: { bounds: Bounds | null; pre
     return () => { cancelled = true; image.onload = null; image.onerror = null; };
   }, [preview, ready]);
 
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready) return;
+    for (const layer of ["plan-boundary-outline", "plan-boundary-fill"]) if (map.getLayer(layer)) map.removeLayer(layer);
+    if (map.getSource("plan-boundary")) map.removeSource("plan-boundary");
+    if (!boundary) return;
+    map.addSource("plan-boundary", { type: "geojson", data: { type: "Feature", properties: {}, geometry: { type: "MultiPolygon", coordinates: boundary.polygons } } });
+    map.addLayer({ id: "plan-boundary-fill", type: "fill", source: "plan-boundary", paint: { "fill-color": theme === "dark" ? "#78aaff" : "#1769e8", "fill-opacity": 0.12 } });
+    map.addLayer({ id: "plan-boundary-outline", type: "line", source: "plan-boundary", paint: { "line-color": theme === "dark" ? "#78aaff" : "#1769e8", "line-width": 2.5 } });
+  }, [boundary, ready, theme]);
+
   return <div className={`map-shell ${ready ? "" : "map-fallback"}`}>
     <div ref={container} className="map-canvas" aria-label="Agent 计划范围预览" />
     {!ready && <div className="map-fallback-grid" aria-hidden="true" />}
@@ -147,7 +160,7 @@ export function MapView({ bounds, preview, theme }: { bounds: Bounds | null; pre
       {overlay.selection && <rect className="map-selection" x={overlay.selection.x} y={overlay.selection.y} width={overlay.selection.width} height={overlay.selection.height} />}
     </svg>}
     {!ready && bounds && <div className="map-fallback-extent" aria-label="计划范围示意"><span>计划范围示意</span></div>}
-    <div className="map-overlay top-left"><span className="eyebrow">MAPLIBRE GL</span><strong>{imageryState === "ready" ? "已校验影像" : bounds ? "计划范围" : "地图工作区"}</strong><small>{imageryState === "ready" ? "USGS 影像 · OSM 底图" : imageryState === "loading" ? "正在加载本地影像" : imageryState === "error" ? "本地影像显示失败" : ready ? "OpenStreetMap 底图" : "地图正在加载"}</small></div>
+    <div className="map-overlay top-left"><span className="eyebrow">MAPLIBRE GL</span><strong>{imageryState === "ready" ? "已校验影像" : boundary ? "边界计划" : bounds ? "计划范围" : "地图工作区"}</strong><small>{imageryState === "ready" ? "本机影像 · OSM 底图" : imageryState === "loading" ? "正在加载本地影像" : imageryState === "error" ? "本地影像显示失败" : boundary ? `${boundary.polygons.length} 个面 · 边界外透明裁剪` : ready ? "OpenStreetMap 底图" : "地图正在加载"}</small></div>
     <div className="map-controls"><div className="zoom-controls"><Button variant="secondary" size="icon" aria-label="放大地图" disabled={!ready} onClick={() => mapRef.current?.zoomIn()}><Plus size={16} /></Button><Button variant="secondary" size="icon" aria-label="缩小地图" disabled={!ready} onClick={() => mapRef.current?.zoomOut()}><Minus size={16} /></Button></div></div>
     <div className="map-overlay bottom-left"><span className="map-dot" />{bounds ? bounds.map(n => n.toFixed(3)).join(" / ") : "Agent 生成计划后显示范围"}</div>
     <div className="map-attribution">{preview && <span>{preview.attribution} · </span>}<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a></div>
