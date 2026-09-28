@@ -737,6 +737,47 @@ mod tests {
             Some("GET /oauth/callback?code=abc HTTP/1.1\r\nHost: 127.0.0.1:12345\r\n\r\n")
         );
     }
+
+    #[test]
+    fn absent_generation_can_be_replayed_with_its_original_id() {
+        let missing = gateway_status_error(
+            reqwest::StatusCode::NOT_FOUND,
+            "/api/agent/generations/generation-01",
+            "NOT_FOUND",
+        );
+        assert_eq!(missing.code, "GENERATION_NOT_FOUND");
+        assert_eq!(
+            gateway_status_error(
+                reqwest::StatusCode::NOT_FOUND,
+                "/api/agent/usage",
+                "NOT_FOUND"
+            )
+            .code,
+            "GATEWAY_ERROR"
+        );
+    }
+}
+
+fn gateway_status_error(status: reqwest::StatusCode, path: &str, code: &str) -> ServiceError {
+    if status == reqwest::StatusCode::NOT_FOUND
+        && path.starts_with("/api/agent/generations/")
+        && code == "NOT_FOUND"
+    {
+        return error(
+            "GENERATION_NOT_FOUND",
+            "模型请求尚未到达服务端，可用原请求编号重试",
+        );
+    }
+    error(
+        "GATEWAY_ERROR",
+        match code {
+            "QUOTA_EXCEEDED" => "模型额度不足，请查看用量",
+            "UNAUTHORIZED" => "GeoD 登录已失效，请重新登录",
+            "UPSTREAM_UNKNOWN" => "模型请求状态待核对，请查看任务记录",
+            "UPSTREAM_REJECTED" => "模型服务拒绝了请求",
+            _ => "模型请求失败，请稍后重试",
+        },
+    )
 }
 
 fn gateway_call(
@@ -767,16 +808,7 @@ fn gateway_call(
             .get("error")
             .and_then(Value::as_str)
             .unwrap_or("GATEWAY_ERROR");
-        return Err(error(
-            "GATEWAY_ERROR",
-            match code {
-                "QUOTA_EXCEEDED" => "模型额度不足，请查看用量",
-                "UNAUTHORIZED" => "GeoD 登录已失效，请重新登录",
-                "UPSTREAM_UNKNOWN" => "模型请求状态待核对，请查看任务记录",
-                "UPSTREAM_REJECTED" => "模型服务拒绝了请求",
-                _ => "模型请求失败，请稍后重试",
-            },
-        ));
+        return Err(gateway_status_error(status, path, code));
     }
     Ok(value)
 }

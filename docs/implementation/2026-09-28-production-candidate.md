@@ -16,7 +16,7 @@
 | `artifacts/linux-gateway-build/geod-oauth-studio-linux-x64-20260928.tar.gz` | `65b5e65d8d18d4a32c15980a587d4e68a534ab7e8a1e0fc4d6523fe5e226dc88` | 基于现网 `0984aed` 加 OAuth `3ae9b71` 与 GeoD 品牌 `9fb6f9d`；账号测试 20/20；Linux standalone HTTP 匿名跳转、同意、授权码、换令牌、检查与撤销全通过 |
 | `artifacts/linux-gateway-build/geod-agent-gateway-linux-x64-20260928-geojson-validated.tar.gz` | `69a6c52d87936f384b0763016531bb98c829ec80b92dc81b0a4ff9c819d5b405` | Linux x64 生产依赖；GeoJSON 边界规划工具合同已更新；Node 22.22.3 网关测试 7/7；桌面使用真实 DeepSeek 联调通过 |
 | `artifacts/linux-gateway-build/geod-login-static-overlay-20260928.tar.gz` | `1425f0e594a89bbec9d035540a7fa3f4b40fa71dd8b13f344281d52504e8c425` | GeoD 品牌登录页与静态资源；HTML 引用 14/14 存在。须叠加到现有网站的**新**不可变发布目录，保留其他页面 |
-| `apps/geod-agent-desktop/src-tauri/target/release/bundle/nsis/GeoD Agent_0.1.0_x64-setup.exe` | `1482b15d2439c8a001dd0769db1789b7bd16a91e52e474ed21b2f1b1834f0fe2` | Windows 构建；桌面服务 6 项、核心 20 项、任务引擎 19 项测试；增加计划磁盘预算、执行前空间检查和不足后原作业重试；隔离安装后无 OAuth 启动，只读复检已批准 USGS 作业：`completed`、3 项成果、缺失瓦片 0、有效 PNG 预览 |
+| `apps/geod-agent-desktop/src-tauri/target/release/bundle/nsis/GeoD Agent_0.1.0_x64-setup.exe` | `1c7968dcc95724bd4d8d845457c8dc81a6cfaefaac2531988f14752e85089388` | Windows 构建；桌面服务 7 项、前端 9 项、核心 20 项、任务引擎 19 项测试；加入磁盘空间检查与模型请求恢复；隔离安装后无 OAuth 启动，只读复检已批准 USGS 作业：`completed`、3 项成果、缺失瓦片 0、有效 PNG 预览 |
 
 上表 Linux 包是本机可信 Ubuntu WSL 构建，不从生产服务器下载依赖。静态覆盖包只含登录页及其资源；部署前还需在服务器新目录中验证页面资源与现有 Nginx 静态路径配合，并在域名上做浏览器登录冒烟。
 
@@ -27,6 +27,8 @@
 桌面任务账本再加固了同计划去重：不同请求编号或第二次审批仍返回原作业；历史对话按计划 ID 读取本机作业。任务引擎 18 项与桌面服务 6 项测试、桌面前端构建通过；新 NSIS 包在隔离目录静默安装退出码为 0，原生 `jobs_for_plan` 读取到已批准 USGS 作业及完整成果。此次仅更新本地 Windows 包，三个 Linux 服务包未变，线上服务未改。
 
 随后增加磁盘空间预检：计划给出缓存与成果的保守空闲空间预算；下载前检查输出和缓存所在位置，低于预算报 `DISK_INSUFFICIENT`，用户释放空间后可沿用原审批和作业 ID 重试。旧 0.1 计划仍可读取。核心 20 项、任务引擎 19 项、桌面服务 6 项测试与前端构建通过；NSIS 包重新构建并在隔离目录静默升级，原生只读复检再次得到已批准作业的 3 项成果、缺失瓦片 0 和有效 PNG。此轮没有打开网页登录页，也没有下载新影像。空间预算只做开始前的保守检查，不保证运行期间磁盘可用量不变。
+
+桌面请求恢复现保留模型请求编号、账号与上下文。响应丢失时先查询网关，确认未接收后用原编号重试；结算后的回答同步落盘。本次重新构建的安装包 SHA-256 已更新至上表；桌面前端 9 项、服务 7 项测试通过，在隔离目录安装后只读检查既有 USGS 作业仍为 `completed`、3 项成果、缺失瓦片 0、有效 PNG。该检查不触发浏览器授权；生产 OAuth 和 DeepSeek 仍未上线验收。
 
 ## 获批后的顺序
 

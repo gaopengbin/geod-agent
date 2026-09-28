@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>GeoD Agent pending recovery fixture</title></head>
+  <body>
+    <div id="root"></div>
+    <script>
+      window.isTauri = true;
+      window.__fixtureCalls = [];
+      const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WHb3nIAAAAASUVORK5CYII=";
+      window.__TAURI_INTERNALS__ = {
+        invoke: async (command, args = {}) => {
+          window.__fixtureCalls.push({ command, args });
+          if (command === "auth_status") return { state: "connected", userId: "fixture-user", error: null };
+          if (command === "agent_usage") return { limitTokens: 10000, committedTokens: 0, reservedTokens: 0, remainingTokens: 10000, pendingReconcile: 0 };
+          if (command === "sources_list" || command === "jobs_list" || command === "jobs_active") return [];
+          if (command === "osm_basemap_tile") return png;
+          if (command === "agent_generation_get") throw { code: "GENERATION_NOT_FOUND", message: "模拟请求未到达服务端" };
+          if (command === "agent_generate") {
+            const attempts = window.__fixtureCalls.filter(call => call.command === "agent_generate");
+            if (attempts.length === 1 && !window.__fixtureCalls.some(call => call.command === "agent_generation_get")) throw { code: "GATEWAY_UNAVAILABLE", message: "模拟网络中断" };
+            return { generationId: args.generationId, conversationId: args.conversationId, state: "settled", errorCode: null, result: { role: "assistant", content: "同一请求编号已恢复。", toolCalls: [] } };
+          }
+          throw { code: "UNEXPECTED_FIXTURE_CALL", message: command };
+        },
+      };
+    </script>
+    <script type="module" src="../src/main.tsx"></script>
+  </body>
+</html>

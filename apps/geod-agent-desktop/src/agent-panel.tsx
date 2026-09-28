@@ -3,11 +3,9 @@ import { Bot, CircleAlert, LogIn, LogOut, MessageSquare, Paperclip, Plus, Send, 
 import { Button } from "@/components/motion/button/base";
 import { api, desktopAvailable, errorMessage, type AgentMessage, type AgentToolCall, type AuthStatus, type BoundaryImport, type Bounds, type Generation, type ModelUsage, type OutputFormat, type SourceDescriptor, type StoredPlan, type TaskSpec } from "./api";
 import { artifactResultForModel, modelMessagesWithoutArtifactPaths } from "./model-artifacts";
+import { CHAT_LIST_KEY, clearPending, commitPending, persistCompletedChat, readPending, restorePendingChats, savePending, type DisplayMessage, type SavedChat } from "./pending-generations";
 
-interface DisplayMessage { id: string; role: "user" | "assistant" | "tool"; content: string }
-interface SavedChat { conversationId: string; messages: AgentMessage[]; display: DisplayMessage[]; pendingId?: string; planId?: string }
 const STORAGE_KEY = "geod-agent-chat-0.1";
-const LIST_KEY = "geod-agent-conversations-0.1";
 const blankStatus: AuthStatus = { state: "unconfigured", userId: null, error: null };
 function restore(): SavedChat {
   try {
@@ -18,10 +16,10 @@ function restore(): SavedChat {
 }
 function restoreChats(): SavedChat[] {
   try {
-    const value = JSON.parse(localStorage.getItem(LIST_KEY) ?? "null") as SavedChat[];
-    if (Array.isArray(value) && value.length && value.every(item => typeof item.conversationId === "string" && Array.isArray(item.messages) && Array.isArray(item.display))) return value.slice(0, 30);
+    const value = JSON.parse(localStorage.getItem(CHAT_LIST_KEY) ?? "null") as SavedChat[];
+    if (Array.isArray(value) && value.length && value.every(item => typeof item.conversationId === "string" && Array.isArray(item.messages) && Array.isArray(item.display))) return restorePendingChats(localStorage, value.slice(0, 30));
   } catch { /* An invalid local index falls back to the previous single chat. */ }
-  return [restore()];
+  return restorePendingChats(localStorage, [restore()]);
 }
 function chatTitle(chat: SavedChat) { return chat.display.find(item => item.role === "user")?.content.slice(0, 34) || "新对话"; }
 function compactPlan(stored: StoredPlan) {
@@ -36,8 +34,10 @@ export function AgentPanel({ onPlanned, onOpenSources, onSelectConversation }: {
   const [conversationId, setConversationId] = useState(restored.current[0].conversationId);
   const [messages, setMessages] = useState<AgentMessage[]>(restored.current[0].messages);
   const [display, setDisplay] = useState<DisplayMessage[]>(restored.current[0].display);
+  const displayRef = useRef(restored.current[0].display);
   const [pendingId, setPendingId] = useState(restored.current[0].pendingId ?? "");
   const [planId, setPlanId] = useState(restored.current[0].planId ?? "");
+  const planIdRef = useRef(restored.current[0].planId ?? "");
   const [draft, setDraft] = useState("");
   const [boundary, setBoundary] = useState<BoundaryImport | null>(null);
   const [status, setStatus] = useState<AuthStatus>(blankStatus);
@@ -53,7 +53,7 @@ export function AgentPanel({ onPlanned, onOpenSources, onSelectConversation }: {
   useEffect(() => { if (!desktopAvailable || status.state !== "waiting") return; const timer = window.setInterval(() => { void api.authStatus().then(setStatus).catch(cause => setError(errorMessage(cause))); }, 1200); return () => window.clearInterval(timer); }, [status.state]);
   useEffect(() => { if (status.state === "connected") void api.agentUsage().then(setUsage).catch(cause => setError(errorMessage(cause))); }, [status.state]);
   useEffect(() => { setChatRecords(current => current.map(item => item.conversationId === conversationId ? { conversationId, messages: messages.slice(-24), display: display.slice(-60), pendingId, planId } : item)); }, [conversationId, messages, display, pendingId, planId]);
-  useEffect(() => { localStorage.setItem(LIST_KEY, JSON.stringify(chatRecords)); }, [chatRecords]);
+  useEffect(() => { localStorage.setItem(CHAT_LIST_KEY, JSON.stringify(chatRecords)); }, [chatRecords]);
   useEffect(() => { scroll.current?.scrollTo({ top: scroll.current.scrollHeight, behavior: "smooth" }); }, [display, busy]);
 
   async function beginAuth() {
@@ -68,8 +68,8 @@ export function AgentPanel({ onPlanned, onOpenSources, onSelectConversation }: {
     catch (cause) { setError(errorMessage(cause)); }
     finally { setBusy(false); }
   }
-  function newChat() { if (sending.current || busy) return; const next: SavedChat = { conversationId: crypto.randomUUID(), messages: [], display: [] }; setChatRecords(current => [next, ...current].slice(0, 30)); setConversationId(next.conversationId); setMessages([]); setDisplay([]); setBoundary(null); setPlanReady(false); setPendingId(""); setPlanId(""); setError(""); onSelectConversation(null); }
-  function selectChat(chat: SavedChat) { if (sending.current || busy || chat.conversationId === conversationId) return; setConversationId(chat.conversationId); setMessages(chat.messages); setDisplay(chat.display); setBoundary(null); setPendingId(chat.pendingId ?? ""); setPlanId(chat.planId ?? ""); setPlanReady(!!chat.planId); setError(""); onSelectConversation(chat.planId ?? null); }
+  function newChat() { if (sending.current || busy) return; const next: SavedChat = { conversationId: crypto.randomUUID(), messages: [], display: [] }; setChatRecords(current => [next, ...current].slice(0, 30)); setConversationId(next.conversationId); setMessages([]); displayRef.current = []; setDisplay([]); setBoundary(null); setPlanReady(false); setPendingId(""); planIdRef.current = ""; setPlanId(""); setError(""); onSelectConversation(null); }
+  function selectChat(chat: SavedChat) { if (sending.current || busy || chat.conversationId === conversationId) return; const pending = readPending(localStorage)?.[chat.conversationId]; setConversationId(chat.conversationId); setMessages(pending?.messages ?? chat.messages); displayRef.current = pending?.committed?.display ?? chat.display; setDisplay(displayRef.current); setBoundary(null); setPendingId(pending?.committed ? "" : pending?.generationId ?? ""); planIdRef.current = pending?.committed?.planId ?? chat.planId ?? ""; setPlanId(planIdRef.current); setPlanReady(!!planIdRef.current); setError(""); onSelectConversation(planIdRef.current || null); }
   async function attachBoundary(event: ChangeEvent<HTMLInputElement>) {
     if (!desktopAvailable || busy || pendingId) return;
     const file = event.target.files?.[0];
@@ -104,7 +104,7 @@ export function AgentPanel({ onPlanned, onOpenSources, onSelectConversation }: {
           !Array.isArray(formats) || !formats.length || !formats.every(value => value === "geotiff" || value === "mbtiles")) return { error: "INVALID_PLAN_ARGUMENTS" };
         const spec: TaskSpec = { schemaVersion: "0.1", kind: "imagery", sourceId: source.id, bounds: boundary?.bounds ?? bounds as Bounds, ...(boundary ? { boundary: boundary.geometry } : {}), zoomLevels: [zoom], outputFormats: [...new Set(formats)] as OutputFormat[], outputDirectory: await api.outputDirectorySuggest(), limits: { maxTiles: 4096, maxDecodedRgbaBytes: 512 * 1024 * 1024 } };
         const plan = await api.plansCreate(spec);
-        onPlanned(plan); setPlanId(plan.planId); setPlanReady(true);
+        onPlanned(plan); planIdRef.current = plan.planId; setPlanId(plan.planId); setPlanReady(true);
         return compactPlan(plan);
       }
       if (call.function.name === "jobs_get") {
@@ -124,39 +124,84 @@ export function AgentPanel({ onPlanned, onOpenSources, onSelectConversation }: {
       return { error: "TOOL_NOT_ALLOWED" };
     } catch (cause) { return { error: cause && typeof cause === "object" && "code" in cause && typeof cause.code === "string" ? cause.code : "LOCAL_TOOL_ERROR" }; }
   }
+  function appendDisplay(item: DisplayMessage) {
+    displayRef.current = [...displayRef.current, item];
+    setDisplay(displayRef.current);
+  }
+  function releasePending() {
+    clearPending(localStorage, conversationId);
+    setPendingId("");
+  }
+  function commitFinalGeneration(generationId: string, context: AgentMessage[]) {
+    const completed = { messages: context.slice(-24), display: displayRef.current.slice(-60), planId: planIdRef.current || undefined };
+    commitPending(localStorage, conversationId, generationId, completed);
+    const updated = persistCompletedChat(localStorage, { conversationId, ...completed });
+    setChatRecords(updated);
+    releasePending();
+  }
+  async function requestGeneration(context: AgentMessage[], visible?: DisplayMessage[]) {
+    if (!status.userId) throw new Error("GeoD 账号状态未确认，请重新检查登录状态。");
+    const generationId = crypto.randomUUID();
+    const prior = readPending(localStorage)?.[conversationId];
+    savePending(localStorage, { conversationId, generationId, userId: status.userId, messages: context, display: visible ?? prior?.display ?? display });
+    setPendingId(generationId);
+    return api.agentGenerate(generationId, conversationId, modelMessagesWithoutArtifactPaths(context));
+  }
   async function finishGeneration(first: Generation, startingContext: AgentMessage[]) {
     let context = startingContext;
     let generation = first;
     for (let round = 0; round < 4; round++) {
-      if (generation.state === "failed") { setPendingId(""); setError("该模型请求已失败，额度已按网关记录处理。可以继续提问。"); return; }
-      if (generation.state === "settled" && !generation.result) { setPendingId(""); setError("上游用量已核对，但原回答不可恢复。可以继续提问。"); return; }
+      if (generation.state === "failed") { releasePending(); setError("该模型请求已失败，额度已按网关记录处理。可以继续提问。"); return; }
+      if (generation.state === "settled" && !generation.result) { releasePending(); setError("上游用量已核对，但原回答不可恢复。可以继续提问。"); return; }
       if (generation.state !== "settled" || !generation.result) {
         setPendingId(generation.generationId);
         setError(`模型请求状态：${generation.state}。已保留请求编号，可稍后核对。`);
         return;
       }
-      setPendingId("");
       const result = generation.result;
       const reply = result.content?.trim();
-      if (reply) setDisplay(current => [...current, { id: crypto.randomUUID(), role: "assistant", content: reply }]);
-      else if (!result.toolCalls.length) setDisplay(current => [...current, { id: crypto.randomUUID(), role: "assistant", content: "模型没有返回可展示的内容，请再描述一次目标。" }]);
+      if (reply) appendDisplay({ id: crypto.randomUUID(), role: "assistant", content: reply });
+      else if (!result.toolCalls.length) appendDisplay({ id: crypto.randomUUID(), role: "assistant", content: "模型没有返回可展示的内容，请再描述一次目标。" });
       context = [...context, { role: "assistant", content: result.content, ...(result.toolCalls.length ? { tool_calls: result.toolCalls } : {}) }];
       setMessages(context);
-      if (!result.toolCalls.length) return;
+      if (!result.toolCalls.length) { commitFinalGeneration(generation.generationId, context); return; }
       for (const call of result.toolCalls) {
         const output = await executeTool(call);
         context = [...context, { role: "tool", tool_call_id: call.id, content: JSON.stringify(output) }];
         setMessages(context);
-        setDisplay(current => [...current, { id: crypto.randomUUID(), role: "tool", content: `${call.function.name} · ${"error" in (output as object) ? "需要处理" : "已读取本机结果"}` }]);
+        appendDisplay({ id: crypto.randomUUID(), role: "tool", content: `${call.function.name} · ${"error" in (output as object) ? "需要处理" : "已读取本机结果"}` });
       }
-      if (round === 3) { setError("本轮工具调用已达到上限。请继续提问。"); return; }
-      generation = await api.agentGenerate(crypto.randomUUID(), conversationId, modelMessagesWithoutArtifactPaths(context));
+      if (round === 3) { releasePending(); setError("本轮工具调用已达到上限。请继续提问。"); return; }
+      generation = await requestGeneration(context);
     }
   }
   async function checkPending() {
     if (!pendingId || busy) return;
     setBusy(true); setError("");
-    try { await finishGeneration(await api.agentGenerationGet(pendingId), messages); setUsage(await api.agentUsage()); }
+    try {
+      const saved = readPending(localStorage)?.[conversationId];
+      if (!saved || saved.generationId !== pendingId) throw new Error("未找到本机请求记录，无法安全重试。请保留当前对话并检查任务记录。");
+      if (saved.userId && saved.userId !== status.userId) throw new Error("此请求属于另一个 GeoD 账号，请切回原账号后核对。");
+      if (saved.committed) {
+        const updated = restorePendingChats(localStorage, chatRecords);
+        setChatRecords(updated);
+        setMessages(saved.committed.messages);
+        displayRef.current = saved.committed.display;
+        setDisplay(displayRef.current);
+        planIdRef.current = saved.committed.planId ?? "";
+        setPlanId(planIdRef.current);
+        setPendingId("");
+        return;
+      }
+      let generation: Generation;
+      try { generation = await api.agentGenerationGet(pendingId); }
+      catch (cause) {
+        if (!saved.userId || saved.userId !== status.userId || !cause || typeof cause !== "object" || !("code" in cause) || cause.code !== "GENERATION_NOT_FOUND") throw cause;
+        generation = await api.agentGenerate(pendingId, conversationId, modelMessagesWithoutArtifactPaths(saved.messages));
+      }
+      await finishGeneration(generation, saved.messages);
+      setUsage(await api.agentUsage());
+    }
     catch (cause) { setError(errorMessage(cause)); }
     finally { setBusy(false); }
   }
@@ -165,12 +210,14 @@ export function AgentPanel({ onPlanned, onOpenSources, onSelectConversation }: {
     const text = draft.trim() || (boundary ? "请根据附加边界规划影像任务，并补问缺少的信息。" : "");
     if (!text || sending.current || pendingId || status.state !== "connected") return;
     sending.current = true; setBusy(true); setError(""); setDraft("");
-    setDisplay(current => [...current, { id: crypto.randomUUID(), role: "user", content: boundary ? `${text}\n已附加边界：${boundary.name} · ${boundary.polygonCount} 个面` : text }]);
+    const visible = [...displayRef.current, { id: crypto.randomUUID(), role: "user" as const, content: boundary ? `${text}\n已附加边界：${boundary.name} · ${boundary.polygonCount} 个面` : text }];
+    displayRef.current = visible;
+    setDisplay(visible);
     const modelText = boundary ? `${text}\n[本机已附加 GeoJSON 多边形。WGS84 范围：${boundary.bounds.join(", ")}；共 ${boundary.polygonCount} 个面。规划时使用此范围；几何仅由本机处理，边界外在 GeoTIFF 中透明。请先读取已授权图源，缺少缩放级别或格式时向我确认。]` : text;
     const context: AgentMessage[] = [...messages, { role: "user", content: modelText }];
     setMessages(context);
     try {
-      await finishGeneration(await api.agentGenerate(crypto.randomUUID(), conversationId, modelMessagesWithoutArtifactPaths(context)), context);
+      await finishGeneration(await requestGeneration(context, visible), context);
       setUsage(await api.agentUsage());
     } catch (cause) { setError(errorMessage(cause)); }
     finally { sending.current = false; setBusy(false); }
