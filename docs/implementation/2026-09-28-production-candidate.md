@@ -55,6 +55,15 @@
 - 有效但匿名的公开 OAuth 请求曾返回 `https://localhost:9114/login`，原因是现有 Studio 构建按内部请求地址拼接了绝对跳转。已备份当前路由到 `routes.before-oauth-redirect.conf`，只在授权入口加入 Nginx `proxy_redirect`，`nginx -t` 通过并 reload；Windows 客户端再次请求得到 HTTP 303 和站点内 `/login`。Studio 源码同步改成相对跳转并通过 3 项 OAuth 测试；该源码修复尚未重新打入当前生产 Studio 包，当前线上由限定路由修正。
 - Windows NSIS 包重新构建为上表哈希，隔离安装目录升级后已通过原生 IPC 只读复检：已批准 USGS 作业仍为 `completed`，3 项成果、缺失瓦片 0、有效 PNG 预览。安装后的 EXE 与 Release EXE 同尺寸，二进制仅有 3 字节不同；构建日志显示 Tauri 对 Release EXE 写入 NSIS 包类型信息。检查未触发新授权或下载。
 
+## 2026-09-28 账号页面与 OAuth 修正
+
+- 网站登录页改用 GeoD 官网横向标识、蓝白视觉和一致的响应式布局，保留邀请码注册与安全的站内 `returnTo`。网站发布为 `geod-account-20260928-81122cd8`，原网站 release 记录在 `/srv/laogao/backups/geod-agent-20260928-65b5e65d/website-before-geod-account.txt`。桌面与 390px 真移动视口均完成视觉和表单交互检查，公开 `/login` 与静态资源返回 200。
+- 用户实际授权时遇到 `ORIGIN_REJECTED`。旧确认页返回 `Referrer-Policy: no-referrer`，导致浏览器的同站表单提交携带 `Origin: null`，被服务端的 CSRF 校验拒绝。先备份并限定修复 Nginx OAuth 路由的响应头；公开匿名同源 POST 随后返回预期的 `401 AUTH_REQUIRED`。
+- 正式身份服务改用 GeoD 官网视觉的授权确认页、HTML 转义后的账号及 OAuth 表单值，以及 `Referrer-Policy: origin`。GeoD Studio 源码位于 `geostyle-web` 提交 `b54686a`，独立 Linux 发布工作树提交 `21157c1`。4 项 OAuth 测试和 TypeScript 检查通过；授权页在 390px 与桌面视口无横向溢出。
+- 新 Linux Studio 包 `geod-oauth-studio-consent-linux-x64-20260928.tar.gz` 的 SHA-256 为 `d408012d2c89ac94f8781c1e64a10d8a5597c7008eb644794438637d2e4e810b`。服务器复核哈希并解包到 `geod-oauth-consent-20260928-d408012d`；9116 候选通过 OAuth 站内跳转、同源 POST 守卫与旧账号会话检查。备份当前账号 JSON 与旧 release 指针后，9114 切换到新 release，PM2 在线且重启次数为 0。公开 OAuth 匿名 GET 为站内 303，匿名同源 POST 为 `401 AUTH_REQUIRED`，公开 `/login` 为 200。旧 Studio release 与备份保留。
+- 桌面本机对话已按 GeoD 账号隔离；旧版未归属对话只在用户点击“导入到当前账号”后复制，旧版未完成生成不会自动归属。桌面构建及 11 项测试通过。这一源代码修正尚未重新封装为安装包；目前运行中的安装版仍是上一版。
+- 以上不代表真实账号完成 PKCE 回跳或 DeepSeek 对话。需要用户在已安装的桌面应用中重试一次授权并发送一条普通对话，才能验收完整闭环；不得自动弹出新的授权网页。
+
 ## 原定获批发布顺序（供复盘）
 
 1. 再次核对当前 GeoD Studio、网站 symlink 及 Nginx 配置未漂移。对账号 `store.json` 做 JSON 解析检查；在有写入可能时先做一致性备份。备份现有 PM2 与 Nginx 配置。新网关 SQLite 创建后运行 `PRAGMA quick_check`。保留完整旧发布与回滚链接。

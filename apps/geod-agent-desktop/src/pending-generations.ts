@@ -7,8 +7,50 @@ export interface PendingGeneration { conversationId: string; generationId: strin
 
 export const PENDING_KEY = "geod-agent-pending-generations-0.1";
 export const CHAT_LIST_KEY = "geod-agent-conversations-0.1";
+export const LEGACY_CHAT_KEY = "geod-agent-chat-0.1";
+export const LEGACY_IMPORT_MARKER = "geod-agent-legacy-chat-imported-0.1";
 type PendingMap = Record<string, PendingGeneration>;
 type Store = Pick<Storage, "getItem" | "setItem">;
+
+export function accountChatStore(store: Store, userId: string): Store {
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(userId)) throw new Error("GeoD 账号标识无效，无法读取本机对话。");
+  const suffix = `:account:${userId}`;
+  return {
+    getItem: key => store.getItem(`${key}${suffix}`),
+    setItem: (key, value) => store.setItem(`${key}${suffix}`, value),
+  };
+}
+
+function validChat(value: unknown): value is SavedChat {
+  if (!value || typeof value !== "object") return false;
+  const chat = value as Partial<SavedChat>;
+  return typeof chat.conversationId === "string" && Array.isArray(chat.messages) && Array.isArray(chat.display);
+}
+
+function chatList(store: Store, key: string): SavedChat[] {
+  try {
+    const value: unknown = JSON.parse(store.getItem(key) ?? "null");
+    return Array.isArray(value) ? value.filter(validChat).slice(0, 30) : validChat(value) ? [value] : [];
+  } catch { return []; }
+}
+
+export function legacyChats(store: Store): SavedChat[] {
+  const listed = chatList(store, CHAT_LIST_KEY);
+  if (listed.length) return listed;
+  return chatList(store, LEGACY_CHAT_KEY);
+}
+
+export function importLegacyChats(store: Store, userId: string): SavedChat[] {
+  const scoped = accountChatStore(store, userId);
+  const current = chatList(scoped, CHAT_LIST_KEY);
+  // Old records had no account owner. Only an explicit UI action may copy them;
+  // pending requests are not migrated because their owner cannot be proven.
+  const imported = legacyChats(store).map(({ pendingId: _pendingId, ...chat }) => chat);
+  const merged = [...current, ...imported.filter(chat => !current.some(item => item.conversationId === chat.conversationId))].slice(0, 30);
+  scoped.setItem(CHAT_LIST_KEY, JSON.stringify(merged));
+  scoped.setItem(LEGACY_IMPORT_MARKER, "1");
+  return merged;
+}
 
 function validPending(value: unknown): value is PendingGeneration {
   if (!value || typeof value !== "object") return false;

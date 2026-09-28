@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CHAT_LIST_KEY, clearPending, commitPending, PENDING_KEY, persistCompletedChat, readPending, restorePendingChats, savePending } from "../src/pending-generations.ts";
+import { accountChatStore, CHAT_LIST_KEY, clearPending, commitPending, importLegacyChats, legacyChats, PENDING_KEY, persistCompletedChat, readPending, restorePendingChats, savePending } from "../src/pending-generations.ts";
 
 function store() {
   const values = new Map();
@@ -66,4 +66,33 @@ test("settled answer survives a crash between committing and clearing recovery",
 test("a request is not sent when its recovery record cannot be saved", () => {
   const storage = { getItem: () => null, setItem: () => { throw new Error("disk unavailable"); } };
   assert.throws(() => savePending(storage, { conversationId: "chat", generationId: "generation", userId: "geod-user", messages: [] }), /disk unavailable/);
+});
+
+test("conversation history and interrupted requests stay within one GeoD account", () => {
+  const storage = store();
+  const first = accountChatStore(storage, "user-first");
+  const second = accountChatStore(storage, "user-second");
+  persistCompletedChat(first, { conversationId: "first-chat", messages: [], display: [] });
+  savePending(first, { conversationId: "first-chat", generationId: "first-generation", userId: "user-first", messages: [{ role: "user", content: "private context" }] });
+  assert.equal(second.getItem(CHAT_LIST_KEY), null);
+  assert.equal(readPending(second), null);
+  persistCompletedChat(second, { conversationId: "second-chat", messages: [], display: [] });
+  assert.equal(JSON.parse(first.getItem(CHAT_LIST_KEY))[0].conversationId, "first-chat");
+  assert.equal(readPending(first)?.["first-chat"].generationId, "first-generation");
+  assert.equal(JSON.parse(second.getItem(CHAT_LIST_KEY))[0].conversationId, "second-chat");
+});
+
+test("unowned legacy conversations require explicit import and do not resume pending generations", () => {
+  const storage = store();
+  const old = { conversationId: "old-chat", messages: [{ role: "user", content: "legacy context" }], display: [], pendingId: "unowned-request" };
+  storage.setItem(CHAT_LIST_KEY, JSON.stringify([old]));
+  savePending(storage, { conversationId: "old-chat", generationId: "unowned-request", userId: "user-unknown", messages: old.messages });
+  const current = accountChatStore(storage, "user-current");
+  assert.equal(current.getItem(CHAT_LIST_KEY), null);
+  assert.equal(legacyChats(storage).length, 1);
+  const imported = importLegacyChats(storage, "user-current");
+  assert.equal(imported[0].conversationId, "old-chat");
+  assert.equal(imported[0].pendingId, undefined);
+  assert.equal(readPending(current), null);
+  assert.equal(JSON.parse(storage.getItem(CHAT_LIST_KEY))[0].pendingId, "unowned-request");
 });

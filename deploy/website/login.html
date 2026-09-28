@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="origin">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'">
+  <title>登录 GeoD · 地理空间数据工作台</title>
+  <meta name="description" content="登录 GeoD 账号，继续使用浏览器产品和 GeoD Agent。">
+  <link rel="icon" href="/geod-site/logo-symbol.png">
+  <link rel="stylesheet" href="/account-assets/login.css">
+  <script type="module" src="/account-assets/login.js"></script>
+</head>
+<body>
+  <div class="page-shell">
+    <header class="site-header">
+      <div class="header-inner">
+        <a class="brand" href="/" aria-label="GeoD 官网首页"><img src="/geod-site/logo-horizontal.png" width="113" height="43" alt="GeoD"></a>
+        <nav class="site-nav" aria-label="官网导航">
+          <a href="/#download">桌面端</a><a href="/browser">浏览器版</a><a href="/cli">CLI</a><a href="/mcp">MCP</a><a href="/geod">地图创作</a>
+        </nav>
+        <a class="header-home" href="/">返回官网</a>
+      </div>
+    </header>
+
+    <main class="account-main">
+      <div class="main-inner">
+        <section class="intro" aria-labelledby="intro-title">
+          <div class="eyebrow"><span class="eyebrow-dot"></span> GEOD · 统一账号</div>
+          <h1 id="intro-title">从地图数据，<br><span>继续你的工作流。</span></h1>
+          <p>一个 GeoD 账号连接浏览器产品与桌面 Agent。登录后即可使用账号支持的 AI 能力；影像下载和成果处理仍在你的设备上完成。</p>
+          <div class="intro-note"><span class="note-line"></span><span>账号授权只确认身份，不代替具体图源和下载计划的许可。</span></div>
+        </section>
+
+        <section class="account-card" aria-labelledby="form-title">
+          <div class="card-kicker">GEOD ACCOUNT</div>
+          <h2 id="form-title">登录 GeoD</h2>
+          <p id="form-summary" class="card-summary">使用你的 GeoD 账号继续。</p>
+          <div class="mode-switch" role="tablist" aria-label="账号操作">
+            <button id="tab-login" class="mode-tab active" type="button" role="tab" aria-selected="true" aria-controls="account-form">登录</button>
+            <button id="tab-register" class="mode-tab" type="button" role="tab" aria-selected="false" aria-controls="account-form">邀请码注册</button>
+          </div>
+          <form id="account-form" novalidate>
+            <label for="account-email">邮箱</label>
+            <input id="account-email" name="email" type="email" autocomplete="email" inputmode="email" maxlength="254" placeholder="you@example.com" required>
+            <label for="account-password">密码</label>
+            <input id="account-password" name="password" type="password" autocomplete="current-password" maxlength="128" required>
+            <div id="invite-field" hidden>
+              <label for="account-invite">邀请码</label>
+              <input id="account-invite" name="inviteCode" type="text" autocomplete="off" maxlength="80">
+              <p class="field-hint">邀请码仅限受邀邮箱使用一次。</p>
+            </div>
+            <p id="form-error" class="form-error" role="alert" hidden></p>
+            <button id="submit-button" class="primary-button" type="submit"><span id="submit-label">登录</span></button>
+          </form>
+          <p class="account-help">忘记密码？请使用注册邮箱联系 <a href="mailto:pengbingao@gmail.com">pengbingao@gmail.com</a> 申请重置。</p>
+        </section>
+      </div>
+    </main>
+
+    <footer class="site-footer"><span>GeoD · 地理空间数据工作台</span><a href="/">返回官网</a></footer>
+  </div>
+</body>
+</html>

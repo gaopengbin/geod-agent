@@ -17,4 +17,5 @@ const destination = new URL(location, origin);
 if (destination.origin !== origin || !["/login", "/login.html"].includes(destination.pathname)) {
   throw new Error(`Unexpected OAuth redirect: HTTP ${response.status} -> ${destination.origin}${destination.pathname}`);
 }
-console.log(`Anonymous GeoD OAuth: HTTP ${response.status} -> ${destination.pathname}`);
+if (response.headers.get("referrer-policy") !== "origin") throw new Error("OAuth form referrer policy is not ready");
+console.log(`Anonymous GeoD OAuth: HTTP ${response.status} -> ${destination.pathname}; Referrer-Policy origin`);
