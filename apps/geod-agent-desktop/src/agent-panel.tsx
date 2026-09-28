@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "r
 import { Bot, CircleAlert, LogIn, LogOut, MessageSquare, Paperclip, Plus, Send, ShieldCheck, X } from "lucide-react";
 import { Button } from "@/components/motion/button/base";
 import { api, desktopAvailable, errorMessage, type AgentMessage, type AgentToolCall, type AuthStatus, type BoundaryImport, type Bounds, type Generation, type ModelUsage, type OutputFormat, type SourceDescriptor, type StoredPlan, type TaskSpec } from "./api";
+import { artifactResultForModel, modelMessagesWithoutArtifactPaths } from "./model-artifacts";
 
 interface DisplayMessage { id: string; role: "user" | "assistant" | "tool"; content: string }
 interface SavedChat { conversationId: string; messages: AgentMessage[]; display: DisplayMessage[]; pendingId?: string; planId?: string }
@@ -118,7 +119,7 @@ export function AgentPanel({ onPlanned, onOpenSources, onSelectConversation }: {
         const job = await api.jobsGet(id);
         if (!job || job.state !== "completed") return { error: "JOB_NOT_COMPLETED" };
         const manifest = await api.artifactsInspect(id);
-        return { jobId: id, quality: manifest.quality, assets: manifest.assets.map(asset => ({ kind: asset.kind, bytes: asset.bytes, sha256: asset.sha256, path: asset.path })), provenance: manifest.provenance };
+        return artifactResultForModel(id, manifest);
       }
       return { error: "TOOL_NOT_ALLOWED" };
     } catch (cause) { return { error: cause && typeof cause === "object" && "code" in cause && typeof cause.code === "string" ? cause.code : "LOCAL_TOOL_ERROR" }; }
@@ -149,7 +150,7 @@ export function AgentPanel({ onPlanned, onOpenSources, onSelectConversation }: {
         setDisplay(current => [...current, { id: crypto.randomUUID(), role: "tool", content: `${call.function.name} · ${"error" in (output as object) ? "需要处理" : "已读取本机结果"}` }]);
       }
       if (round === 3) { setError("本轮工具调用已达到上限。请继续提问。"); return; }
-      generation = await api.agentGenerate(crypto.randomUUID(), conversationId, context);
+      generation = await api.agentGenerate(crypto.randomUUID(), conversationId, modelMessagesWithoutArtifactPaths(context));
     }
   }
   async function checkPending() {
@@ -169,7 +170,7 @@ export function AgentPanel({ onPlanned, onOpenSources, onSelectConversation }: {
     const context: AgentMessage[] = [...messages, { role: "user", content: modelText }];
     setMessages(context);
     try {
-      await finishGeneration(await api.agentGenerate(crypto.randomUUID(), conversationId, context), context);
+      await finishGeneration(await api.agentGenerate(crypto.randomUUID(), conversationId, modelMessagesWithoutArtifactPaths(context)), context);
       setUsage(await api.agentUsage());
     } catch (cause) { setError(errorMessage(cause)); }
     finally { sending.current = false; setBusy(false); }
