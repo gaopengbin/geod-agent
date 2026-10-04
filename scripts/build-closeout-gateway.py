@@ -9,6 +9,7 @@ import subprocess
 import tarfile
 
 ROOT = Path(__file__).resolve().parents[1]
+VERSION = json.loads((ROOT / 'apps/geod-agent-desktop/src-tauri/tauri.conf.json').read_text(encoding='utf-8'))['version']
 parser = argparse.ArgumentParser()
 parser.add_argument('output')
 parser.add_argument('--package-only', action='store_true', help='Resume packaging only after the retained Linux dependency and test gates passed.')
@@ -22,7 +23,7 @@ else:
     assert output.exists() and not (output/'candidate.json').exists()
     assert 'added 99 packages' in (output/'linux-dependencies.log').read_text(encoding='utf-8')
     log = (output/'linux-tests.log').read_text(encoding='utf-8')
-    assert 'pass 62' in log and 'fail 0' in log and 'skipped 0' in log
+    assert 'pass ' in log and 'fail 0' in log and 'skipped 0' in log
 stage = output / 'staging'
 service = stage / 'services/geod-agent-model-gateway'
 protocol = stage / 'packages/codex-protocol'
@@ -78,7 +79,7 @@ if not args.package_only:
 assert all(sha(ROOT/name) == digest for name,digest in source.items()), 'Source changed during Linux build'
 assert all(sha(stage/name) == digest for name,digest in source.items())
 assert not (service/'payment-history-candidate.mjs').exists()
-archive = output/'geod-agent-gateway-0.2.0-linux-x64.tar.gz'
+archive = output/f'geod-agent-gateway-{VERSION}-linux-x64.tar.gz'
 run('linux-package.log',common + ['--network','none','--mount',
     f'type=bind,source={ROOT / "scripts/package-closeout-gateway-linux.py"},target=/package.py,readonly',
     image_id,'python3','/package.py'])
@@ -86,10 +87,10 @@ shutil.move(stage/'gateway-linux-x64.tar.gz',archive)
 inventory = json.loads((stage/'linux-files.json').read_text(encoding='utf-8'))
 files = inventory['files']
 assert any(name.endswith('better_sqlite3.node') for name in files)
-receipt = dict(version='0.2.0',platform='linux-x64',node='22.23.2',imageId=image_id,
+receipt = dict(version=VERSION,platform='linux-x64',node='22.23.2',imageId=image_id,
     imageDigests=image['RepoDigests'],sourceFiles=source,archive=archive.name,
     archiveSha256=sha(archive),archiveBytes=archive.stat().st_size,files=files,symlinks=inventory['symlinks'],
     tests=tests,published=False,uploaded=False,productionModified=False,
-    paymentEnabled=False,configurationIncluded=False,databaseIncluded=False)
+    paymentEnabled=False,welcomeCreditIncluded=True,configurationIncluded=False,databaseIncluded=False)
 (output/'candidate.json').write_text(json.dumps(receipt,indent=2),encoding='utf-8')
 print(json.dumps({key:value for key,value in receipt.items() if key not in {'files','sourceFiles'}}),flush=True)

@@ -56,7 +56,7 @@ for source, name in runtime_directories(ROOT):
     "账号记录保存在当前 Windows 用户的应用目录，密钥保存在系统凭据库。\n"
     "当前测试版的托管模型需配套网关同步；可在“模型与渠道”配置自己的模型服务。\n"
     "正式收费入口尚未开放；使用方式以当前账号和所选模型渠道为准。\n"
-    "这是 0.2.0 首发测试版。具体已验证范围、已知问题和发行状态见随版本提供的说明。\n",
+    f"这是 {VERSION} 测试版。具体已验证范围、已知问题和发行状态见随版本提供的说明。\n",
     encoding="utf-8")
 files = {file.relative_to(bundle).as_posix(): {"bytes": file.stat().st_size, "sha256": digest(file)}
          for file in sorted(bundle.rglob("*")) if file.is_file()}

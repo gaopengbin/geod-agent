@@ -1,6 +1,7 @@
 // Server-owned candidate ledger. This is independent of local desktop receipts
 // and of the old virtual-payment candidate. The host starts it only with an
-// explicit payment configuration; the default development gateway stays free.
+// explicit payment or welcome-credit configuration. Credit-only wallets do
+// not need merchant keys and cannot create cash orders or refunds.
 import Database from 'better-sqlite3';
 import {randomUUID,createHash} from 'node:crypto';
 import {PaymentError,parseAlipayNotify} from './alipay-payment-candidate.mjs';
@@ -17,10 +18,11 @@ export const paymentProductsCandidate=Object.freeze([
   Object.freeze({id:'agent-month',name:'GeoD Agent 月订阅',kind:'subscription',priceFen:pricingCandidate.subscriptionCny*100,creditNanoCny:String(BigInt(pricingCandidate.includedAiCreditCny)*1_000_000_000n),days:30}),
 ]);
 
-export function createPaymentLedgerCandidate(path,{gateway,loadGeneration,products=paymentProductsCandidate,maxDailyFen,pricing=pricingCandidate,now=()=>Date.now()}={}){
-  if(!gateway||typeof loadGeneration!=='function'||!Number.isSafeInteger(maxDailyFen)||maxDailyFen<1||maxDailyFen>100_000_000)fail('PAYMENT_CONFIG_INVALID','Gateway, trusted generation reader and approved daily limit required');
+export function createPaymentLedgerCandidate(path,{gateway=null,loadGeneration,products=paymentProductsCandidate,maxDailyFen,welcomeCredit=null,creditOnly=false,pricing=pricingCandidate,now=()=>Date.now()}={}){
+  if(typeof loadGeneration!=='function'||(gateway&&(!Number.isSafeInteger(maxDailyFen)||maxDailyFen<1||maxDailyFen>100_000_000))||(!gateway&&!welcomeCredit&&!creditOnly))fail('PAYMENT_CONFIG_INVALID','Payment provider or welcome-credit policy and trusted generation reader required');
+  if(welcomeCredit&&(!/^[a-zA-Z0-9._-]{1,120}$/.test(welcomeCredit.policyId??'')||typeof welcomeCredit.creditNanoCny!=='string'||! /^[1-9][0-9]*$/.test(welcomeCredit.creditNanoCny)||nano(welcomeCredit.creditNanoCny)<=0n))fail('WELCOME_CREDIT_CONFIG_INVALID','Invalid server welcome-credit policy');
   const currentPricing=capturePricingSnapshot(pricing,'peak');
-  const catalog=new Map(products.map(product=>[product.id,Object.freeze({...product})]));
+  const catalog=new Map((gateway?products:[]).map(product=>[product.id,Object.freeze({...product})]));
   for(const p of catalog.values())if(!identity(p.id)||!['topup','subscription'].includes(p.kind)||!Number.isSafeInteger(p.priceFen)||p.priceFen<1||nano(p.creditNanoCny)<=0n||!Number.isSafeInteger(p.days)||p.days<0||p.days>365)fail('PAYMENT_CONFIG_INVALID','Invalid server product');
   const db=new Database(path);db.pragma('journal_mode = WAL');db.pragma('foreign_keys = ON');db.pragma('busy_timeout = 10000');
   db.exec(`CREATE TABLE IF NOT EXISTS geod_payment_meta(key TEXT PRIMARY KEY,value TEXT NOT NULL);
@@ -32,22 +34,45 @@ export function createPaymentLedgerCandidate(path,{gateway,loadGeneration,produc
     CREATE TABLE IF NOT EXISTS geod_credit_allocations(account TEXT NOT NULL,generation_id TEXT NOT NULL,lot_id TEXT NOT NULL,amount_nano INTEGER NOT NULL,PRIMARY KEY(account,generation_id,lot_id));
     CREATE TABLE IF NOT EXISTS geod_payment_subscriptions(account TEXT PRIMARY KEY,expires_at INTEGER NOT NULL,order_id TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS geod_cash_refunds(id TEXT PRIMARY KEY,order_id TEXT NOT NULL UNIQUE,account TEXT NOT NULL,amount_fen INTEGER NOT NULL,status TEXT NOT NULL,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);
-    CREATE TABLE IF NOT EXISTS geod_failure_refund_reviews(account TEXT NOT NULL,run_id TEXT NOT NULL,status TEXT NOT NULL,created_at INTEGER NOT NULL,PRIMARY KEY(account,run_id));`);
+    CREATE TABLE IF NOT EXISTS geod_failure_refund_reviews(account TEXT NOT NULL,run_id TEXT NOT NULL,status TEXT NOT NULL,created_at INTEGER NOT NULL,PRIMARY KEY(account,run_id));
+    CREATE TABLE IF NOT EXISTS geod_credit_grants(account TEXT NOT NULL,kind TEXT NOT NULL,policy_id TEXT NOT NULL,lot_id TEXT NOT NULL UNIQUE,amount_nano INTEGER NOT NULL,created_at INTEGER NOT NULL,PRIMARY KEY(account,kind),FOREIGN KEY(lot_id) REFERENCES geod_credit_lots(id));`);
   // Preserve legacy rows without inventing their original rates. Such pending
   // rows enter review; confirmed failed executions can still release a hold.
   if(!db.pragma('table_info(geod_credit_reservations)').some(column=>column.name==='pricing_snapshot'))
     db.exec('ALTER TABLE geod_credit_reservations ADD COLUMN pricing_snapshot TEXT');
   // Reopening a test ledger with a real merchant must never reinterpret fixtures
   // as money. Changing merchant/environment requires a distinct database.
-  const binding=JSON.stringify({version:1,product:'geod-agent',environment:gateway.environment,appId:gateway.appId,sellerId:gateway.sellerId});
-  const prior=db.prepare('SELECT value FROM geod_payment_meta WHERE key=\'merchant\'').get();
-  if(prior&&prior.value!==binding){db.close();fail('PAYMENT_LEDGER_SCOPE','Payment ledger belongs to a different merchant or environment');}
-  db.prepare('INSERT OR IGNORE INTO geod_payment_meta VALUES (\'merchant\',?)').run(binding);
+  if(gateway){
+    const binding=JSON.stringify({version:1,product:'geod-agent',environment:gateway.environment,appId:gateway.appId,sellerId:gateway.sellerId});
+    const prior=db.prepare('SELECT value FROM geod_payment_meta WHERE key=\'merchant\'').get();
+    if(prior&&prior.value!==binding){db.close();fail('PAYMENT_LEDGER_SCOPE','Payment ledger belongs to a different merchant or environment');}
+    db.prepare('INSERT OR IGNORE INTO geod_payment_meta VALUES (\'merchant\',?)').run(binding);
+  }else if(db.prepare('SELECT 1 FROM geod_payment_meta WHERE key=\'merchant\'').get()){
+    db.close();fail('PAYMENT_LEDGER_SCOPE','A merchant ledger cannot be reopened as a credit-only wallet');
+  }
+  if(welcomeCredit){
+    const key='welcome:'+welcomeCredit.policyId,terms=JSON.stringify({creditNanoCny:welcomeCredit.creditNanoCny});
+    db.prepare('INSERT OR IGNORE INTO geod_payment_meta VALUES (?,?)').run(key,terms);
+    if(db.prepare('SELECT value FROM geod_payment_meta WHERE key=?').get(key).value!==terms){db.close();fail('WELCOME_CREDIT_POLICY_CONFLICT','A welcome policy version cannot change its amount',409);}
+  }
   const priceKey='pricing:'+currentPricing.version,priceTerms=JSON.stringify(currentPricing);
   const priorPricing=db.prepare('SELECT value FROM geod_payment_meta WHERE key=?').get(priceKey);
   if(priorPricing&&priorPricing.value!==priceTerms){db.close();fail('BILLING_PRICE_VERSION_CONFLICT','A price version cannot change its original rates',409);}
   db.prepare('INSERT OR IGNORE INTO geod_payment_meta VALUES (?,?)').run(priceKey,priceTerms);
   const atomic=fn=>{const tx=db.transaction(fn);return(...args)=>tx.immediate(...args);};
+  const requirePayments=()=>{if(!gateway)fail('PAYMENT_DISABLED','Payments have not been enabled',409);};
+  const grantWelcome=atomic(account=>{
+    if(!identity(account))fail('WELCOME_CREDIT_ACCOUNT_INVALID','Verified GeoD account required');
+    if(!welcomeCredit)return {state:'disabled'};
+    const old=db.prepare('SELECT * FROM geod_credit_grants WHERE account=? AND kind=\'welcome\'').get(account);
+    if(old)return {state:'granted',replayed:true,creditNanoCny:String(old.amount_nano),createdAt:old.created_at};
+    // A wallet that already had paid/used credit is not a new Agent wallet.
+    if(db.prepare('SELECT 1 FROM geod_credit_lots WHERE account=? LIMIT 1').get(account))return {state:'existing-wallet'};
+    const id='GDCW'+createHash('sha256').update(account).digest('hex'),at=now(),credit=nano(welcomeCredit.creditNanoCny);
+    db.prepare('INSERT INTO geod_credit_lots VALUES (?,?,?,?,0,?)').run(id,account,credit,credit,at);
+    db.prepare('INSERT INTO geod_credit_grants VALUES (?,\'welcome\',?,?,?,?)').run(account,welcomeCredit.policyId,id,credit,at);
+    return {state:'granted',replayed:false,creditNanoCny:String(credit),createdAt:at};
+  });
   const row=id=>db.prepare('SELECT * FROM geod_payment_orders WHERE id=?').get(id);
   function owned(account,id){const order=row(id);if(!order||order.account!==account)fail('PAYMENT_ORDER_NOT_FOUND','Order not found',404);return order;}
   const safeOrder=order=>({orderId:order.id,product:JSON.parse(order.product),priceFen:order.amount_fen,creditNanoCny:String(order.credit_nano),currency:'CNY',status:order.status,createdAt:order.created_at,expiresAt:order.expires_at,paidAt:order.paid_at,environment:gateway.environment,fixture:gateway.fixture});
@@ -56,6 +81,7 @@ export function createPaymentLedgerCandidate(path,{gateway,loadGeneration,produc
   const frozen=account=>BigInt(db.prepare('SELECT COALESCE(SUM(remaining_nano),0) AS amount FROM geod_credit_lots WHERE account=? AND frozen=1').get(account).amount);
   const reserved=(account,except=null)=>BigInt(db.prepare('SELECT COALESCE(SUM(maximum_nano),0) AS amount FROM geod_credit_reservations WHERE account=? AND state=\'reserved\' AND (? IS NULL OR generation_id<>?)').get(account,except,except).amount);
   const createOrder=atomic((account,requestKey,productId)=>{
+    requirePayments();
     if(!identity(account)||!identity(requestKey)||!identity(productId))fail('PAYMENT_ORDER_INVALID','Account, request and product required');
     const old=db.prepare('SELECT * FROM geod_payment_orders WHERE account=? AND request_key=?').get(account,requestKey);
     if(old){if(JSON.parse(old.product).id!==productId)fail('PAYMENT_IDEMPOTENCY_CONFLICT','Request already belongs to another product',409);return {...safeOrder(old),replayed:true};}
@@ -143,7 +169,7 @@ export function createPaymentLedgerCandidate(path,{gateway,loadGeneration,produc
     const amount=nano(quote.retailNanoCny);
     if(amount>BigInt(reservation.maximum_nano)||balance(account)-reserved(account,generation.generationId)<amount)return {state:'settlement-review',reservationRetained:true};
     let remaining=amount;
-    for(const lot of db.prepare('SELECT * FROM geod_credit_lots WHERE account=? AND frozen=0 AND remaining_nano>0 ORDER BY created_at,id').all(account)){
+    for(const lot of db.prepare('SELECT * FROM geod_credit_lots WHERE account=? AND frozen=0 AND remaining_nano>0 ORDER BY CASE WHEN id IN (SELECT lot_id FROM geod_credit_grants) THEN 0 ELSE 1 END,created_at,id').all(account)){
       if(remaining===0n)break;const part=remaining<BigInt(lot.remaining_nano)?remaining:BigInt(lot.remaining_nano);
       db.prepare('UPDATE geod_credit_lots SET remaining_nano=remaining_nano-? WHERE id=?').run(part,lot.id);
       db.prepare('INSERT INTO geod_credit_allocations VALUES (?,?,?,?)').run(account,generation.generationId,lot.id,part);remaining-=part;
@@ -223,7 +249,7 @@ export function createPaymentLedgerCandidate(path,{gateway,loadGeneration,produc
     return {generationId:reservation.generation_id,maximumNanoCny:String(reservation.maximum_nano),createdAt:reservation.created_at,
       pricingVersion:price?.version??null,model:price?.model??null};
   };
-  const summary=db.transaction(account=>({environment:gateway.environment,fixture:gateway.fixture,currency:'CNY',
+  const summary=db.transaction(account=>({environment:gateway?.environment??'credits-only',fixture:gateway?.fixture??false,currency:'CNY',
     balanceNanoCny:String(balance(account)),reservedNanoCny:String(reserved(account)),frozenNanoCny:String(frozen(account)),availableNanoCny:String(balance(account)-reserved(account)),
     subscription:db.prepare('SELECT expires_at AS expiresAt FROM geod_payment_subscriptions WHERE account=?').get(account)??null,
     orders:db.prepare('SELECT * FROM geod_payment_orders WHERE account=? ORDER BY created_at DESC,id LIMIT 100').all(account).map(safeOrder),
@@ -231,6 +257,7 @@ export function createPaymentLedgerCandidate(path,{gateway,loadGeneration,produc
     charges:db.prepare('SELECT * FROM geod_credit_charges WHERE account=? ORDER BY created_at DESC,generation_id DESC LIMIT 100').all(account).map(safeCharge),
     chargeCount:db.prepare('SELECT COUNT(*) AS count FROM geod_credit_charges WHERE account=?').get(account).count,
     reservations:db.prepare('SELECT * FROM geod_credit_reservations WHERE account=? AND state=\'reserved\' ORDER BY created_at DESC,generation_id DESC LIMIT 100').all(account).map(safeReservation),
-    reservationCount:db.prepare('SELECT COUNT(*) AS count FROM geod_credit_reservations WHERE account=? AND state=\'reserved\'').get(account).count}));
-  return {fixture:gateway.fixture,environment:gateway.environment,products:()=>[...catalog.values()],createOrder,checkout,handleNotify,refreshOrder,cancelOrder,reserveGeneration,settleGeneration,refundOrder,requestFailedRunReview,summary,order:(account,id)=>safeOrder(owned(account,id)),close:()=>db.close()};
+    reservationCount:db.prepare('SELECT COUNT(*) AS count FROM geod_credit_reservations WHERE account=? AND state=\'reserved\'').get(account).count,
+    grants:db.prepare('SELECT g.kind,g.policy_id,g.amount_nano,g.created_at,l.remaining_nano FROM geod_credit_grants g JOIN geod_credit_lots l ON l.id=g.lot_id WHERE g.account=? ORDER BY g.created_at').all(account).map(g=>({kind:g.kind,policyId:g.policy_id,creditNanoCny:String(g.amount_nano),remainingNanoCny:String(g.remaining_nano),createdAt:g.created_at}))}));
+  return {fixture:gateway?.fixture??false,environment:gateway?.environment??'credits-only',products:()=>[...catalog.values()],grantWelcome,createOrder,checkout,handleNotify,refreshOrder,cancelOrder,reserveGeneration,settleGeneration,refundOrder,requestFailedRunReview,summary,order:(account,id)=>safeOrder(owned(account,id)),close:()=>db.close()};
 }

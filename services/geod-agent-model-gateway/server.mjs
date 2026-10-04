@@ -9,6 +9,8 @@ import { withRangeTools } from "../../packages/codex-protocol/range-tools.mjs";
 import { codexRequest, codexResult, ContractError } from "../../packages/codex-protocol/codex-contract.mjs";
 import {channelSnapshot,providerRequest,generateProvider} from '../../packages/codex-protocol/provider-adapter.mjs';
 import {createPaymentHostCandidate,readPaymentHostConfig} from './payment-host-candidate.mjs';
+import {readWelcomeCreditPolicy} from './welcome-credit-policy.mjs';
+import {creditWalletEnforced} from './payment-host-candidate.mjs';
 import {PaymentError} from './alipay-payment-candidate.mjs';
 
 const TOOL_NAMES = new Set(["data_connection_connect", "data_layer_inspect", "data_input_read", "data_connections_list", "workspace_status", "workspace_boundaries_list", "workspace_boundary_use", "workspace_gis_files_list", "workspace_skills_list", "workspace_skill_import", "sources_list", "source_configure", "source_registration_prepare", "us_county_boundary", "plan_imagery", "plans_get", "jobs_list", "jobs_start", "jobs_get", "jobs_events", "artifacts_inspect", "extensions_list", "skill_read", "skill_catalog_search", "skill_source_inspect", "skill_connect", "mcp_registry_search", "mcp_connect", "gdal_connect", "mcp_call", "mcp_result_read"]);
@@ -88,6 +90,8 @@ export function readConfig(env = process.env) {
   const maxOutputTokens = Number(env.GEOD_AGENT_MAX_OUTPUT_TOKENS || 8192);
   const codexThinking = env.GEOD_AGENT_CODEX_THINKING || "enabled";
   if (!Number.isSafeInteger(contextWindow) || contextWindow < 16000 || contextWindow > 1000000 || !Number.isSafeInteger(maxOutputTokens) || maxOutputTokens < 256 || maxOutputTokens > 32768 || maxOutputTokens >= contextWindow || !["enabled", "disabled"].includes(codexThinking)) throw new Error("Codex model capabilities are invalid");
+  const payment=readPaymentHostConfig(env);
+  const welcomeCredit=readWelcomeCreditPolicy(env,{quotaEnforced:quotaMode==='enforced',payment});
   return {
     host, port, secret, apiKey, model,
     identityOrigin: safeUrl(env.GEOD_IDENTITY_ORIGIN, "GEOD_IDENTITY_ORIGIN"),
@@ -95,7 +99,7 @@ export function readConfig(env = process.env) {
     dbPath: resolve(env.GEOD_AGENT_DB_PATH || "./data/agent-model.sqlite"),
     tokenLimit,
     quotaEnforced: quotaMode === "enforced",
-    contextWindow, maxOutputTokens, codexThinking,sponsors:readSponsors(env),payment:readPaymentHostConfig(env),
+    contextWindow, maxOutputTokens, codexThinking,sponsors:readSponsors(env),payment,welcomeCredit,
   };
 }
 function json(response, status, value) {
@@ -199,7 +203,7 @@ async function identity(config, token, fetchImpl) {
   let data;
   try { data = await response.json(); } catch { throw new HttpError(503, "IDENTITY_UNAVAILABLE"); }
   const active = data?.active;
-  if (!active || typeof active.userId !== "string" || active.clientId !== "geod-agent-desktop" || active.scope !== "geod:agent" || active.expiresAt <= Date.now()) throw new HttpError(401, "UNAUTHORIZED");
+  if (!active || typeof active.userId !== "string" || !active.userId.length || active.userId.length>160 || /[\x00-\x1f]/.test(active.userId) || active.clientId !== "geod-agent-desktop" || active.scope !== "geod:agent" || !Number.isSafeInteger(active.expiresAt) || active.expiresAt <= Date.now()) throw new HttpError(401, "UNAUTHORIZED");
   return active.userId;
 }
 function publicError(error) { return error instanceof HttpError || error instanceof ContractError || error instanceof SponsorError || error instanceof PaymentError ? error : new HttpError(500, "INTERNAL_ERROR"); }
@@ -233,7 +237,7 @@ function replayResponses(response,value){
 export function createGatewayServer(config, { fetchImpl = fetch } = {}) {
   // Reviewed prepaid policy replaces the legacy hosted token cap. Sponsors
   // retain their independent budgets; the ordinary test policy stays unlimited.
-  const ledger = openLedger(config.dbPath, config.tokenLimit, config.secret, config.payment?.billingMode==='enforced'?false:config.quotaEnforced);
+  const ledger = openLedger(config.dbPath, config.tokenLimit, config.secret, creditWalletEnforced(config)?false:config.quotaEnforced);
   const eventStore = openEventStore(config.dbPath);
   const eventRates = new Map();
   const authenticate=async request=>{
@@ -249,6 +253,7 @@ export function createGatewayServer(config, { fetchImpl = fetch } = {}) {
       if(await payments.handle(request,response))return;
       const bearer = request.headers.authorization?.match(/^Bearer (.+)$/)?.[1] ?? "";
       const userId = await identity(config, bearer, fetchImpl);
+      payments.onSignIn(userId);
       if (request.method === 'POST' && url.pathname === '/api/agent/events') {
         const minute = Math.floor(Date.now() / 60000);
         for (const [id, rate] of eventRates) if (rate.minute !== minute) eventRates.delete(id);

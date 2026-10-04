@@ -44,13 +44,51 @@ See [calendar budgets, real foreground/headless calls and restart evidence](../.
 
 ## Optional payment candidate
 
+### Welcome Credits
+
+The normal enforced gateway now starts each new Agent wallet with **20,000
+Credits**, equivalent to ¥20 of GeoD AI billing balance. The server grants it
+automatically after verifying the GeoD OAuth identity. No claim button or
+client-supplied account ID/amount is accepted. Existing GeoD identities can try
+Agent when first activating an Agent wallet; wallets with earlier credit lots
+do not receive another new-user gift.
+
+The grant and its wallet lot commit in one SQLite transaction, with a unique
+`(account, kind)` key. Device changes, simultaneous logins, service restarts,
+policy version changes and repeated balance reads cannot replenish the gift.
+Hosted model requests reserve and settle this balance from trusted provider
+usage. Uncertain responses retain their reservation. Personal keys and
+sponsored requests retain their independent funding. Gifts are recorded
+separately from paid orders and are consumed before paid credit.
+
+`GEOD_AGENT_WELCOME_CREDITS` defaults to `20000` for a normal enforced gateway
+without an existing payment configuration. Set it to `0` to stop new gifts;
+previously created credit-only wallets still open and can spend their existing
+balance. An explicit unlimited test configuration retains unlimited testing
+and grants nothing. A paid deployment opts in by specifying a positive gift
+amount together with its existing enforced payment configuration.
+
+The default wallet file is `<GEOD_AGENT_DB_PATH>-credits.sqlite`; a payment
+deployment uses its reviewed payment `dbPath`. Retain and back up this database
+to preserve grants and consumption history. `GEOD_AGENT_WELCOME_POLICY_ID`
+defaults to `geod-agent-welcome-v1`; a version cannot change its original amount,
+and a new version still cannot grant twice to the same account.
+
+Merchant setup and checkout remain optional and disabled on credit-only hosts.
+The authenticated wallet returns the actual grant receipt and remaining amount.
+The desktop displays these receipts only when the server returned them.
+
+This is included in the local implementation and requires deployment of the
+matching gateway before the existing hosted service can issue gifts.
+
 The desktop account menu opens **Balance & subscription**. The shared dialog
 contains plan preview, payment history and compact AI usage receipts. Payments
 are disabled on the ordinary test gateway; testing remains unlimited. Older
 gateways without the optional routes retain this honest disabled state.
 
 `GEOD_AGENT_PAYMENT_CONFIG` is an optional JSON file owned by the server operator.
-An empty variable starts no payment ledger or provider request. The example file
+An empty variable starts no cash-payment provider request. The welcome wallet
+can still be active independently. The example file
 has false approvals, zero limits and placeholders and intentionally cannot run.
 Do not put merchant keys in the desktop, this repository or logs. Relative paths
 are resolved against the server process working directory.
@@ -78,7 +116,7 @@ never credit money. Ambiguous payment/refund results reconcile the original ID.
 
 Keep `payment-host-candidate.mjs`, `payment-ledger-candidate.mjs`,
 `payment-http-candidate.mjs`, `alipay-payment-candidate.mjs`,
-`pricing-candidate.mjs` and the locked SDK dependencies with `server.mjs` when
+`pricing-candidate.mjs`, `welcome-credit-policy.mjs` and the locked SDK dependencies with `server.mjs` when
 preparing a candidate package. This wiring is still a locally verified candidate:
 merchant coverage, shared merchant budgets, final policy, external sandbox and
 authorized real-money acceptance remain release gates.

@@ -105,7 +105,7 @@ before(async () => {
   });
   const identityOrigin = await listen(identityServer);
   const upstreamOrigin = await listen(upstreamServer);
-  const config = readConfig({ GEOD_AGENT_GATEWAY_SECRET: SECRET, DEEPSEEK_API_KEY: "project-key", GEOD_IDENTITY_ORIGIN: identityOrigin, DEEPSEEK_BASE_URL: upstreamOrigin, GEOD_AGENT_DB_PATH: join(folder, "gateway.sqlite"), GEOD_AGENT_TOKEN_LIMIT: "40000" });
+  const config = readConfig({ GEOD_AGENT_GATEWAY_SECRET: SECRET, DEEPSEEK_API_KEY: "project-key", GEOD_IDENTITY_ORIGIN: identityOrigin, DEEPSEEK_BASE_URL: upstreamOrigin, GEOD_AGENT_DB_PATH: join(folder, "gateway.sqlite"), GEOD_AGENT_TOKEN_LIMIT: "40000", GEOD_AGENT_WELCOME_CREDITS: "0" });
   gateway = createGatewayServer(config);
   base = await listen(gateway);
 });
