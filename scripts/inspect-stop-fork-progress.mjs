@@ -1,0 +1,4 @@
+import {pathToFileURL} from 'node:url';
+const {chromium}=await import(pathToFileURL(process.argv[2]).href),browser=await chromium.connectOverCDP('http://127.0.0.1:9233');
+const page=browser.contexts().flatMap(context=>context.pages()).find(page=>page.url().includes(':1420'));
+console.log(JSON.stringify(await page.evaluate(()=>({runs:window.__stopFork?.runs.map(run=>({conversation:run.conversationId,status:run.result?.status,error:run.error,finishedAt:run.finishedAt,stage:run.events.filter(event=>event.type!=='heartbeat').slice(-12).map(event=>({type:event.type,method:event.method,item:event.params?.item?.type,message:event.message,status:event.params?.item?.status,request:event.type==='request'?event.params:undefined}))})),forks:window.__stopFork?.forks,requests:[...document.querySelectorAll('.codex-request-card')].map(element=>element.textContent),alerts:[...document.querySelectorAll('[role=alert]')].map(element=>element.textContent)}))));await browser.close();

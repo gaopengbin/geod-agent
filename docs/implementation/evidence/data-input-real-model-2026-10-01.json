@@ -1,0 +1,427 @@
+{
+  "model": "deepseek-flash",
+  "codexVersion": "0.159.2",
+  "scenarios": [
+    {
+      "scenario": "sources",
+      "conversationId": "cost-test-sources-ad886360-0725-4873-aaba-0b81103fabeb",
+      "durationMs": 10374,
+      "pass": true,
+      "status": "completed",
+      "answer": "当前已注册图源共 2 个：\n\n- `Esri World Imagery` — XYZ 瓦片，256 px，缩放 0–22\n- `USGS NAIP Plus · 美国本土` — XYZ 瓦片，256 px，缩放 10–18\n\n仅查询，未做任何修改。",
+      "calls": [
+        {
+          "tool": "sources_list",
+          "args": {},
+          "result": {
+            "sources": [
+              {
+                "schemaVersion": "0.1",
+                "id": "esri-world-imagery",
+                "displayName": "Esri World Imagery",
+                "attribution": "Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community",
+                "license": "",
+                "bulkDownloadAllowed": true,
+                "scheme": "XYZ",
+                "tileSize": 256,
+                "minZoom": 0,
+                "maxZoom": 22,
+                "configRevision": "b5d9ccab40f83a688f0580499f5a037c0f76b1adbebb70abb6c02eb50ccef2d1",
+                "credentialRefVersion": null
+              },
+              {
+                "schemaVersion": "0.1",
+                "id": "usgs-naip-plus-conus",
+                "displayName": "USGS NAIP Plus · 美国本土",
+                "attribution": "USGS, USDA, The National Map: Orthoimagery",
+                "license": "USGS The National Map 公共领域影像；仅用于美国本土已确认覆盖范围",
+                "bulkDownloadAllowed": true,
+                "scheme": "XYZ",
+                "tileSize": 256,
+                "minZoom": 10,
+                "maxZoom": 18,
+                "configRevision": "4f3d31417c9374032d2fb96a4bf84f7fdc5131476bd7ed35ccd6eaf35983d489",
+                "credentialRefVersion": null
+              }
+            ]
+          }
+        }
+      ],
+      "plans": []
+    },
+    {
+      "scenario": "gpkg",
+      "conversationId": "cost-test-gpkg-6e9b77db-7257-486b-8e4e-5303a600ae1f",
+      "durationMs": 14162,
+      "pass": true,
+      "status": "completed",
+      "answer": "**计划已生成，未开始下载**\n\n- `planId`: `tool-ef15c75fda1e471f630dcd5e64494b45092da9371f368ef10cdbd7609a94ace4`\n- 图源：`esri-world-imagery`（XYZ，256px）\n- 裁剪范围：GeoPackage `polygons` 图层，1 个多边形，EPSG:4326，bounds `116.1, 39.6, 116.3, 39.8`\n- 输出：GeoTIFF，仅 Z12，共 16 个瓦片，预计占用约 32.5 MB\n\n计划仅完成计算，未创建任何作业。需要下载时告诉我，我再提交本地下载任务（当前为 Confirm Each 模式，需你在确认卡片上批准）。",
+      "calls": [
+        {
+          "tool": "data_input_read",
+          "args": {
+            "handle": "75757139-29a4-425a-abfb-1315abf31104",
+            "layer": "polygons"
+          },
+          "result": {
+            "boundary": {
+              "name": "polygons.geojson",
+              "bounds": [
+                116.1,
+                39.6,
+                116.3,
+                39.8
+              ],
+              "polygonCount": 1,
+              "attachedToDesktopPlan": true
+            },
+            "handle": "75757139-29a4-425a-abfb-1315abf31104",
+            "layers": [
+              {
+                "crs": "EPSG:4326",
+                "featureCount": 1,
+                "geometryType": "Polygon",
+                "name": "polygons"
+              },
+              {
+                "crs": "EPSG:4326",
+                "featureCount": 1,
+                "geometryType": "Point",
+                "name": "points"
+              }
+            ],
+            "selectedLayer": "polygons",
+            "sourceCrs": "EPSG:4326"
+          }
+        },
+        {
+          "tool": "sources_list",
+          "args": {},
+          "result": {
+            "sources": [
+              {
+                "schemaVersion": "0.1",
+                "id": "esri-world-imagery",
+                "displayName": "Esri World Imagery",
+                "attribution": "Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community",
+                "license": "",
+                "bulkDownloadAllowed": true,
+                "scheme": "XYZ",
+                "tileSize": 256,
+                "minZoom": 0,
+                "maxZoom": 22,
+                "configRevision": "b5d9ccab40f83a688f0580499f5a037c0f76b1adbebb70abb6c02eb50ccef2d1",
+                "credentialRefVersion": null
+              },
+              {
+                "schemaVersion": "0.1",
+                "id": "usgs-naip-plus-conus",
+                "displayName": "USGS NAIP Plus · 美国本土",
+                "attribution": "USGS, USDA, The National Map: Orthoimagery",
+                "license": "USGS The National Map 公共领域影像；仅用于美国本土已确认覆盖范围",
+                "bulkDownloadAllowed": true,
+                "scheme": "XYZ",
+                "tileSize": 256,
+                "minZoom": 10,
+                "maxZoom": 18,
+                "configRevision": "4f3d31417c9374032d2fb96a4bf84f7fdc5131476bd7ed35ccd6eaf35983d489",
+                "credentialRefVersion": null
+              }
+            ]
+          }
+        },
+        {
+          "tool": "plan_imagery",
+          "args": {
+            "outputFormats": [
+              "geotiff"
+            ],
+            "sourceId": "esri-world-imagery",
+            "zoom": 12
+          },
+          "result": {
+            "planId": "tool-ef15c75fda1e471f630dcd5e64494b45092da9371f368ef10cdbd7609a94ace4",
+            "source": "Esri World Imagery",
+            "bounds": [
+              116.1,
+              39.6,
+              116.3,
+              39.8
+            ],
+            "polygonCount": 1,
+            "totalTiles": 16,
+            "requiredFreeDiskBytes": 34078720,
+            "zoomLevels": [
+              12
+            ],
+            "outputFormats": [
+              "geotiff"
+            ],
+            "requiresPlanConfirmation": true
+          }
+        }
+      ],
+      "plans": [
+        "tool-ef15c75fda1e471f630dcd5e64494b45092da9371f368ef10cdbd7609a94ace4"
+      ]
+    },
+    {
+      "scenario": "online",
+      "conversationId": "cost-test-online-de4a6cbd-cbb4-47c9-84eb-10d6b8fa552a",
+      "durationMs": 12884,
+      "pass": true,
+      "status": "completed",
+      "answer": "计划已生成，未启动下载。\n\n**计划详情**\n- 边界：`boundary.geojson`（1 个多边形，EPSG:4326），范围 116.1–116.3E, 39.6–39.8N\n- 图源：Esri World Imagery（XYZ，256px）\n- 层级：Z12；瓦片数：16\n- 输出格式：GeoTIFF\n- 预估磁盘占用：约 32.5 MiB\n- `planId`：`tool-2be3573d2e8101ba711d5107fe36852f1881ddac1baa878b32b84ade4dd7a953`\n\n该计划仍需确认才能执行。需要我下载或调整层级/范围时告诉我即可。",
+      "calls": [
+        {
+          "tool": "data_input_read",
+          "args": {
+            "url": "http://127.0.0.1:15439/boundary.geojson"
+          },
+          "result": {
+            "boundary": {
+              "name": "boundary.geojson",
+              "bounds": [
+                116.1,
+                39.6,
+                116.3,
+                39.8
+              ],
+              "polygonCount": 1,
+              "attachedToDesktopPlan": true
+            },
+            "handle": "f6c530cc-f733-4a1c-bde0-11665b9b8520",
+            "layers": [
+              {
+                "crs": "EPSG:4326",
+                "featureCount": 1,
+                "geometryType": "Polygon",
+                "name": "boundary"
+              }
+            ],
+            "selectedLayer": "boundary",
+            "sourceCrs": "EPSG:4326"
+          }
+        },
+        {
+          "tool": "sources_list",
+          "args": {},
+          "result": {
+            "sources": [
+              {
+                "schemaVersion": "0.1",
+                "id": "esri-world-imagery",
+                "displayName": "Esri World Imagery",
+                "attribution": "Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community",
+                "license": "",
+                "bulkDownloadAllowed": true,
+                "scheme": "XYZ",
+                "tileSize": 256,
+                "minZoom": 0,
+                "maxZoom": 22,
+                "configRevision": "b5d9ccab40f83a688f0580499f5a037c0f76b1adbebb70abb6c02eb50ccef2d1",
+                "credentialRefVersion": null
+              },
+              {
+                "schemaVersion": "0.1",
+                "id": "usgs-naip-plus-conus",
+                "displayName": "USGS NAIP Plus · 美国本土",
+                "attribution": "USGS, USDA, The National Map: Orthoimagery",
+                "license": "USGS The National Map 公共领域影像；仅用于美国本土已确认覆盖范围",
+                "bulkDownloadAllowed": true,
+                "scheme": "XYZ",
+                "tileSize": 256,
+                "minZoom": 10,
+                "maxZoom": 18,
+                "configRevision": "4f3d31417c9374032d2fb96a4bf84f7fdc5131476bd7ed35ccd6eaf35983d489",
+                "credentialRefVersion": null
+              }
+            ]
+          }
+        },
+        {
+          "tool": "plan_imagery",
+          "args": {
+            "outputFormats": [
+              "geotiff"
+            ],
+            "sourceId": "esri-world-imagery",
+            "zoom": 12
+          },
+          "result": {
+            "planId": "tool-2be3573d2e8101ba711d5107fe36852f1881ddac1baa878b32b84ade4dd7a953",
+            "source": "Esri World Imagery",
+            "bounds": [
+              116.1,
+              39.6,
+              116.3,
+              39.8
+            ],
+            "polygonCount": 1,
+            "totalTiles": 16,
+            "requiredFreeDiskBytes": 34078720,
+            "zoomLevels": [
+              12
+            ],
+            "outputFormats": [
+              "geotiff"
+            ],
+            "requiresPlanConfirmation": true
+          }
+        }
+      ],
+      "plans": [
+        "tool-2be3573d2e8101ba711d5107fe36852f1881ddac1baa878b32b84ade4dd7a953"
+      ]
+    },
+    {
+      "scenario": "postgis",
+      "conversationId": "cost-test-postgis-173b6c53-3a58-45da-abfe-85a515fc13d6",
+      "durationMs": 18236,
+      "pass": true,
+      "status": "completed",
+      "answer": "**计划已生成（未下载）**\n- 范围：来自 PostGIS `50616192-c7da-469f-a076-6f7f06712696` 的 `public.input_polygons.geom`（EPSG:3857），1 个多边形，外包框 `116.1, 39.6, 116.3, 39.8`\n- 图源：Esri World Imagery（XYZ，256px）\n- 层级：Z12，共 16 个瓦片\n- 输出：GeoTIFF，预计需磁盘约 34 MB\n- `planId`：`tool-b09df1f716e6ded12318ba655d72bd02c05444a1acc0e5fbff214a11f38b0749`\n\n当前为 Confirm Each 模式，计划尚未执行。需要我发起下载时告诉我即可。",
+      "calls": [
+        {
+          "tool": "data_connections_list",
+          "args": {},
+          "result": {
+            "connections": [
+              {
+                "id": "50616192-c7da-469f-a076-6f7f06712696",
+                "name": "PostGIS real model test",
+                "readOnly": true
+              }
+            ]
+          }
+        },
+        {
+          "tool": "sources_list",
+          "args": {},
+          "result": {
+            "sources": [
+              {
+                "schemaVersion": "0.1",
+                "id": "esri-world-imagery",
+                "displayName": "Esri World Imagery",
+                "attribution": "Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community",
+                "license": "",
+                "bulkDownloadAllowed": true,
+                "scheme": "XYZ",
+                "tileSize": 256,
+                "minZoom": 0,
+                "maxZoom": 22,
+                "configRevision": "b5d9ccab40f83a688f0580499f5a037c0f76b1adbebb70abb6c02eb50ccef2d1",
+                "credentialRefVersion": null
+              },
+              {
+                "schemaVersion": "0.1",
+                "id": "usgs-naip-plus-conus",
+                "displayName": "USGS NAIP Plus · 美国本土",
+                "attribution": "USGS, USDA, The National Map: Orthoimagery",
+                "license": "USGS The National Map 公共领域影像；仅用于美国本土已确认覆盖范围",
+                "bulkDownloadAllowed": true,
+                "scheme": "XYZ",
+                "tileSize": 256,
+                "minZoom": 10,
+                "maxZoom": 18,
+                "configRevision": "4f3d31417c9374032d2fb96a4bf84f7fdc5131476bd7ed35ccd6eaf35983d489",
+                "credentialRefVersion": null
+              }
+            ]
+          }
+        },
+        {
+          "tool": "data_input_read",
+          "args": {
+            "connectionId": "50616192-c7da-469f-a076-6f7f06712696",
+            "url": "public.input_polygons"
+          },
+          "result": {
+            "error": "Error: {\"code\":\"INPUT_INVALID\",\"message\":\"每次请选择一个文件组、网址或数据库来源\"}"
+          }
+        },
+        {
+          "tool": "data_input_read",
+          "args": {
+            "connectionId": "50616192-c7da-469f-a076-6f7f06712696"
+          },
+          "result": {
+            "layers": [
+              {
+                "crs": "EPSG:3857",
+                "featureCount": null,
+                "geometryType": "POLYGON",
+                "name": "public.input_polygons.geom"
+              }
+            ],
+            "selectionRequired": true
+          }
+        },
+        {
+          "tool": "data_input_read",
+          "args": {
+            "connectionId": "50616192-c7da-469f-a076-6f7f06712696",
+            "layer": "public.input_polygons.geom"
+          },
+          "result": {
+            "boundary": {
+              "name": "public.input_polygons.geom.geojson",
+              "bounds": [
+                116.1,
+                39.6,
+                116.3,
+                39.8
+              ],
+              "polygonCount": 1,
+              "attachedToDesktopPlan": true
+            },
+            "layers": [
+              {
+                "crs": "EPSG:3857",
+                "featureCount": null,
+                "geometryType": "POLYGON",
+                "name": "public.input_polygons.geom"
+              }
+            ],
+            "selectedLayer": "public.input_polygons.geom",
+            "sourceCrs": "EPSG:3857"
+          }
+        },
+        {
+          "tool": "plan_imagery",
+          "args": {
+            "outputFormats": [
+              "geotiff"
+            ],
+            "sourceId": "esri-world-imagery",
+            "zoom": 12
+          },
+          "result": {
+            "planId": "tool-b09df1f716e6ded12318ba655d72bd02c05444a1acc0e5fbff214a11f38b0749",
+            "source": "Esri World Imagery",
+            "bounds": [
+              116.1,
+              39.6,
+              116.3,
+              39.8
+            ],
+            "polygonCount": 1,
+            "totalTiles": 16,
+            "requiredFreeDiskBytes": 34078720,
+            "zoomLevels": [
+              12
+            ],
+            "outputFormats": [
+              "geotiff"
+            ],
+            "requiresPlanConfirmation": true
+          }
+        }
+      ],
+      "plans": [
+        "tool-b09df1f716e6ded12318ba655d72bd02c05444a1acc0e5fbff214a11f38b0749"
+      ]
+    }
+  ]
+}

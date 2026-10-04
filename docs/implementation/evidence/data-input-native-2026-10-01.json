@@ -1,0 +1,228 @@
+{
+  "conversationId": "data-input-native-5ed4d374-3942-4ec9-b9d4-66826594c5cc",
+  "cases": [
+    {
+      "case": "native geojson",
+      "pass": true,
+      "bounds": [
+        116.1,
+        39.6,
+        116.3,
+        39.8
+      ],
+      "code": null
+    },
+    {
+      "case": "native gpkg",
+      "pass": true,
+      "bounds": [
+        116.1,
+        39.6,
+        116.3,
+        39.8
+      ],
+      "code": null
+    },
+    {
+      "case": "native sqlite",
+      "pass": true,
+      "bounds": [
+        116.1,
+        39.6,
+        116.3,
+        39.8
+      ],
+      "code": null
+    },
+    {
+      "case": "native kml",
+      "pass": true,
+      "bounds": [
+        116.1,
+        39.6,
+        116.3,
+        39.8
+      ],
+      "code": null
+    },
+    {
+      "case": "native gml",
+      "pass": true,
+      "bounds": [
+        116.1,
+        39.6,
+        116.3,
+        39.8
+      ],
+      "code": null
+    },
+    {
+      "case": "native fgb",
+      "pass": true,
+      "bounds": [
+        116.1,
+        39.6,
+        116.3,
+        39.8
+      ],
+      "code": null
+    },
+    {
+      "case": "native kmz",
+      "pass": true,
+      "bounds": [
+        116.1,
+        39.6,
+        116.3,
+        39.8
+      ],
+      "code": null
+    },
+    {
+      "case": "native wkt",
+      "pass": true,
+      "bounds": [
+        116.1,
+        39.6,
+        116.3,
+        39.8
+      ],
+      "code": null
+    },
+    {
+      "case": "native SHP group",
+      "pass": true,
+      "bounds": [
+        116.1,
+        39.6,
+        116.3,
+        39.8
+      ],
+      "recheck": "Adapter was restarted during first request; isolated retry passed"
+    },
+    {
+      "case": "native ZIP",
+      "pass": true,
+      "bounds": [
+        116.1,
+        39.6,
+        116.3,
+        39.8
+      ],
+      "code": null
+    },
+    {
+      "case": "native CSV WKT",
+      "pass": true,
+      "bounds": [
+        116.1,
+        39.6,
+        116.3,
+        39.8
+      ],
+      "code": null
+    },
+    {
+      "case": "native multi layer list",
+      "pass": true
+    },
+    {
+      "case": "native layer selected",
+      "pass": true,
+      "bounds": [
+        116.1,
+        39.6,
+        116.3,
+        39.8
+      ],
+      "code": null
+    },
+    {
+      "case": "native point rejected",
+      "pass": true,
+      "bounds": null,
+      "code": "INPUT_NOT_POLYGON"
+    },
+    {
+      "case": "native CRS required",
+      "pass": true,
+      "bounds": null,
+      "code": "INPUT_CRS_REQUIRED"
+    },
+    {
+      "case": "native CRS supplied",
+      "pass": true,
+      "bounds": [
+        116.1,
+        39.6,
+        116.3,
+        39.8
+      ],
+      "code": null
+    },
+    {
+      "case": "native ZIP traversal rejected",
+      "pass": true,
+      "bounds": null,
+      "code": "INPUT_ARCHIVE_INVALID"
+    },
+    {
+      "case": "native online GeoJSON",
+      "pass": true,
+      "bounds": [
+        116.1,
+        39.6,
+        116.3,
+        39.8
+      ],
+      "code": null
+    },
+    {
+      "case": "native pagination paged",
+      "pass": true
+    },
+    {
+      "case": "native pagination ogc-next",
+      "pass": true
+    },
+    {
+      "case": "real ArcGIS Virginia query",
+      "pass": true,
+      "url": "https://sampleserver6.arcgisonline.com/arcgis/rest/services/Census/MapServer/3/query?where=STATE_NAME%3D%27Virginia%27&outFields=STATE_NAME&returnGeometry=true&outSR=4326&f=geojson",
+      "bounds": [
+        -83.67518093,
+        36.54163075,
+        -75.24222096,
+        39.45700603
+      ],
+      "polygonCount": 3
+    },
+    {
+      "case": "native PostGIS layer discovery",
+      "pass": true,
+      "layers": [
+        {
+          "crs": "EPSG:3857",
+          "featureCount": null,
+          "geometryType": "POLYGON",
+          "name": "public.input_polygons.geom"
+        }
+      ]
+    },
+    {
+      "case": "native PostGIS projected polygon",
+      "pass": true,
+      "bounds": [
+        116.1,
+        39.6,
+        116.3,
+        39.8
+      ],
+      "code": null
+    },
+    {
+      "case": "native database credential privacy",
+      "pass": true
+    }
+  ]
+}

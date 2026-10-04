@@ -10,8 +10,7 @@ fn now() -> chrono::DateTime<Utc> {
 }
 
 fn source() -> SourceDescriptor {
-    SourceDescriptor {
-        schema_version: SchemaVersion::V0_1,
+    SourceDescriptor { elevation_encoding: None, schema_version: SchemaVersion::V0_1,
         id: "synthetic".into(),
         display_name: "Synthetic fixture".into(),
         attribution: "Generated test pixels".into(),
@@ -26,6 +25,54 @@ fn source() -> SourceDescriptor {
     }
 }
 
+#[test]
+fn expired_pending_plan_is_revalidated_in_place_before_approval() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("revalidate.sqlite");
+    let mut store = TaskStore::open(&path).unwrap();
+    let original = store.create_plan(spec(), &source(), now()).unwrap();
+    let later = now() + chrono::Duration::hours(12);
+    assert_eq!(store.grant_approval(&original.plan_id, &original.plan.plan_hash,
+        "local-user", "test-ui", later).unwrap_err().code, "PLAN_STALE");
+    let refreshed = store.revalidate_plan(&original.plan_id, &original.plan.plan_hash, &source(), later).unwrap();
+    let mut expected = original.clone();
+    expected.plan.expires_at = later + chrono::Duration::minutes(30);
+    assert_eq!(refreshed, expected);
+    assert_eq!(store.revalidate_plan(&original.plan_id, &original.plan.plan_hash, &source(), later).unwrap(), refreshed);
+    drop(store);
+    let mut store = TaskStore::open(&path).unwrap();
+    assert_eq!(store.get_plan(&original.plan_id).unwrap(), Some(refreshed));
+    let approval = store.grant_approval(&original.plan_id, &original.plan.plan_hash,
+        "local-user", "test-ui", later).unwrap();
+    let job = store.start_job(&original.plan_id, &original.plan.plan_hash, &approval.approval_id,
+        "renewed-start", &source(), later).unwrap();
+    assert_eq!(job.plan_id, original.plan_id);
+    assert_eq!(job.plan_hash, original.plan.plan_hash);
+    assert_eq!(job.state, JobState::Queued);
+    assert_eq!(store.list_jobs(10).unwrap().len(), 1);
+}
+
+#[test]
+fn revalidation_rejects_changed_inputs_and_never_changes_an_existing_job_plan() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = TaskStore::open(&dir.path().join("revalidate.sqlite")).unwrap();
+    let original = store.create_plan(spec(), &source(), now()).unwrap();
+    let later = now() + chrono::Duration::hours(12);
+    let mut changed_source = source();
+    changed_source.config_revision = "v2".into();
+    assert_eq!(store.revalidate_plan(&original.plan_id, &original.plan.plan_hash, &changed_source, later).unwrap_err().code, "PLAN_STALE");
+    assert_eq!(store.revalidate_plan(&original.plan_id, "wrong-hash", &source(), later).unwrap_err().code, "PLAN_STALE");
+    assert_eq!(store.get_plan(&original.plan_id).unwrap(), Some(original.clone()));
+    assert!(store.job_for_plan(&original.plan_id).unwrap().is_none());
+    let approval = store.grant_approval(&original.plan_id, &original.plan.plan_hash,
+        "local-user", "test-ui", now()).unwrap();
+    let job = store.start_job(&original.plan_id, &original.plan.plan_hash, &approval.approval_id,
+        "existing-job", &source(), now()).unwrap();
+    assert_eq!(store.revalidate_plan(&original.plan_id, &original.plan.plan_hash, &source(), later).unwrap_err().code, "JOB_STATE_CONFLICT");
+    assert_eq!(store.get_plan(&original.plan_id).unwrap(), Some(original));
+    assert_eq!(store.get_job(&job.job_id).unwrap(), Some(job));
+}
+
 fn spec() -> TaskSpec {
     TaskSpec {
         schema_version: SchemaVersion::V0_1,
@@ -35,6 +82,7 @@ fn spec() -> TaskSpec {
         boundary: None,
         zoom_levels: vec![1],
         output_formats: vec![OutputFormat::GeoTiff],
+        export_options: None,
         output_directory: std::env::temp_dir()
             .join("geod-ledger-test")
             .to_string_lossy()
@@ -460,8 +508,7 @@ fn newer_database_is_not_written() {
 }
 
 fn endpoint() -> HttpSource {
-    HttpSource {
-        id: "authorized-example".into(),
+    HttpSource { subdomains: Vec::new(), coordinate_system: None, elevation_encoding: None, id: "authorized-example".into(),
         name: "Authorized example".into(),
         attribution: "Example owner".into(),
         license: "Owner permits bulk use".into(),
@@ -469,23 +516,17 @@ fn endpoint() -> HttpSource {
         scheme: HttpTileScheme::XYZ,
         tile_size: 256,
         network_policy: NetworkPolicy::PublicHttps,
-        min_interval_ms: 200,
+        min_interval_ms: 200, authentication: None, runtime_token: None,
     }
 }
 
 #[test]
-fn source_registration_requires_acknowledgement_and_persists_revision() {
+fn source_configuration_persists_without_permission_gate_and_protects_existing_ids() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("jobs.sqlite");
     let mut store = TaskStore::open(&path).unwrap();
-    assert_eq!(
-        store
-            .save_source(endpoint(), 0, 18, false, now())
-            .unwrap_err()
-            .code,
-        "SOURCE_UNAUTHORIZED"
-    );
-    let descriptor = store.save_source(endpoint(), 0, 18, true, now()).unwrap();
+    let descriptor = store.save_source(endpoint(), 0, 18, false, now()).unwrap();
+    assert_eq!(store.save_source(endpoint(), 0, 18, false, now()).unwrap().config_revision, descriptor.config_revision);
     assert_eq!(
         descriptor.config_revision,
         endpoint().configuration_revision()
@@ -502,9 +543,26 @@ fn source_registration_requires_acknowledgement_and_persists_revision() {
     assert_eq!(saved.descriptor.config_revision, descriptor.config_revision);
     let mut edited = endpoint();
     edited.url_template = "https://example.org/new/{z}/{x}/{y}.png".into();
+    assert_eq!(reopened.save_source(edited.clone(), 0, 18, false, now()).unwrap_err().code, "SOURCE_EXISTS");
+    assert_eq!(reopened.get_registered_source("authorized-example").unwrap().unwrap().endpoint.url_template, endpoint().url_template);
     let revised = reopened.save_source(edited, 0, 18, true, now()).unwrap();
     assert_ne!(revised.config_revision, descriptor.config_revision);
     assert_eq!(reopened.list_sources().unwrap().len(), 1);
+}
+
+#[test]
+fn optional_source_metadata_does_not_block_configuration_or_planning() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = TaskStore::open(&dir.path().join("jobs.sqlite")).unwrap();
+    let mut source = endpoint();
+    source.attribution.clear(); source.license.clear();
+    let saved = store.save_source(source, 0, 18, false, now()).unwrap();
+    assert!(saved.attribution.is_empty() && saved.license.is_empty());
+    let mut task = spec(); task.source_id = saved.id.clone();
+    assert!(store.create_plan_for_tool_execution("optional-meta:plan", task, &saved, now()).is_ok());
+    let old = serde_json::json!({"descriptor":saved,"endpoint":endpoint(),"permissionConfirmedAt":now()});
+    let parsed: geod_task_engine::ledger::RegisteredSource = serde_json::from_value(old).unwrap();
+    assert_eq!(parsed.configured_at, now());
 }
 
 #[test]
@@ -518,7 +576,7 @@ fn source_registration_rejects_inline_query_credentials() {
             .save_source(source, 0, 18, true, now())
             .unwrap_err()
             .code,
-        "INVALID_SOURCE"
+        "SOURCE_TOKEN_IN_URL"
     );
 }
 

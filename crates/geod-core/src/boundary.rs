@@ -6,10 +6,14 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-const MAX_GEOJSON_BYTES: usize = 1024 * 1024;
-const MAX_POLYGONS: usize = 32;
+// A valid 65,536-vertex boundary can exceed 1 MiB when exported as pretty JSON.
+// Keep the geometry limits below, with enough room to read our own artifacts.
+pub const MAX_GEOJSON_BYTES: usize = 8 * 1024 * 1024;
+const MAX_POLYGONS: usize = 1024;
 const MAX_RINGS: usize = 64;
-const MAX_VERTICES: usize = 4096;
+// Detailed administrative boundaries (AreaCity Beijing has 15,481 vertices).
+// Keep a finite budget while preserving the original rings and islands.
+const MAX_VERTICES: usize = 65_536;
 const MAX_LATITUDE: f64 = 85.051_128_78;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]

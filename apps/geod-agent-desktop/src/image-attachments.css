@@ -1,0 +1,8 @@
+.chat-image-attachments{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0;max-width:100%;}
+.chat-image-thumbnail{position:relative;display:grid;grid-template-rows:78px 20px;width:102px;min-width:0;margin:0;border:1px solid var(--app-border);border-radius:12px;overflow:hidden;background:var(--app-surface);}
+.chat-image-thumbnail img{width:100%;height:78px;object-fit:contain;display:block;}
+.chat-image-thumbnail>span{padding:12px;font-size:11px;color:var(--app-soft-text);}
+.chat-image-thumbnail figcaption{font-size:10px;line-height:20px;padding:0 7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--app-soft-text);}
+.chat-image-thumbnail [data-slot=button]{position:absolute;right:4px;top:4px;width:22px;height:22px;border-radius:50%;}
+.geod-message-user .chat-image-attachments{justify-content:flex-end;}
+.composer-images{padding:0 10px;}

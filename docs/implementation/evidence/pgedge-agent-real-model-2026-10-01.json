@@ -1,0 +1,415 @@
+{
+  "model": "deepseek-flash",
+  "codexVersion": "0.159.2",
+  "databaseLayer": "demo.boundaries_3857.geom",
+  "scenarios": [
+    {
+      "scenario": "postgis-connect",
+      "conversationId": "cost-test-postgis-connect-6f6c2128-de1e-4474-9828-cda1e9308f29",
+      "durationMs": 20972,
+      "pass": true,
+      "status": "completed",
+      "answer": "已完成，连接 `Agent 对话实测` 已保存（只读）。\n\n**实际字段**（`demo.boundaries_3857.geom`，EPSG:3857 面图层）\n- `id`：integer\n- `name`：text\n- `geom`：geometry(Polygon,3857)\n\n**属性样例**\n- 该图层实际只有 1 条要素，因此只能取到 1 条样例（无法凑满两条）：`id=1`，`name=北京测试范围`。\n\n**范围与计划**\n- 范围：1 个多边形，边界框 `116.1, 39.6, 116.3, 39.8`（北京一带）。\n- 图源 Esri World Imagery，Z12、GeoTIFF，共 16 瓦片，预计占用约 34.1 MB（`requiredFreeDiskBytes` 34078720）。\n- 计划已生成、未下载：`planId=tool-95165f51deff9bb6be39d48b8e0f271b5f0ff756951db29471e256b6cef4de5a`。\n\n如需我把某个图层或这条要素载入当前地图查看，或改用其他缩放级别重算计划，告诉我即可。",
+      "calls": [
+        {
+          "tool": "data_connection_connect",
+          "args": {
+            "credentialFile": "infra/postgis-test/.secrets/reader-connection.json",
+            "name": "Agent 对话实测"
+          },
+          "result": {
+            "connection": {
+              "id": "6df9b0a7-4a82-49f7-a457-dddd63e232a0",
+              "name": "Agent 对话实测",
+              "readOnly": true,
+              "type": "PostGIS"
+            },
+            "error": null,
+            "layers": [
+              {
+                "crs": "EPSG:4326",
+                "featureCount": null,
+                "geometryType": "POLYGON",
+                "name": "demo.big_area.geom"
+              },
+              {
+                "crs": "EPSG:3857",
+                "featureCount": null,
+                "geometryType": "POLYGON",
+                "name": "demo.boundaries_3857.geom"
+              },
+              {
+                "crs": "EPSG:4326",
+                "featureCount": null,
+                "geometryType": "POLYGON",
+                "name": "demo.boundaries_4326.geom"
+              },
+              {
+                "crs": "EPSG:4326",
+                "featureCount": null,
+                "geometryType": "POLYGON",
+                "name": "demo.empty_area.geom"
+              },
+              {
+                "crs": "EPSG:4326",
+                "featureCount": null,
+                "geometryType": "POLYGON",
+                "name": "demo.invalid_area.geom"
+              },
+              {
+                "crs": "EPSG:4326",
+                "featureCount": null,
+                "geometryType": "MULTIPOLYGON",
+                "name": "demo.multiple_regions.geom"
+              },
+              {
+                "crs": "EPSG:3857",
+                "featureCount": null,
+                "geometryType": "POLYGON",
+                "name": "demo.nullable_area.backup_geom"
+              },
+              {
+                "crs": "EPSG:4326",
+                "featureCount": null,
+                "geometryType": "POLYGON",
+                "name": "demo.nullable_area.geom"
+              },
+              {
+                "crs": "EPSG:4326",
+                "featureCount": null,
+                "geometryType": "POINT",
+                "name": "demo.points.geom"
+              },
+              {
+                "crs": "EPSG:4326",
+                "featureCount": null,
+                "geometryType": "POLYGON",
+                "name": "demo.projected_view.geom"
+              },
+              {
+                "crs": "EPSG:4326",
+                "featureCount": null,
+                "geometryType": "POLYGON",
+                "name": "demo.scoped_regions.geom"
+              },
+              {
+                "crs": null,
+                "featureCount": null,
+                "geometryType": "POLYGON",
+                "name": "demo.unknown_crs.geom"
+              },
+              {
+                "crs": "EPSG:4326",
+                "featureCount": null,
+                "geometryType": "POLYGON",
+                "name": "demo.区划 odd\" table.边界 odd"
+              }
+            ],
+            "mcp": {
+              "protocolVersion": "2025-11-25",
+              "server": "pgedge-postgres-mcp",
+              "toolCalls": 2,
+              "tools": [
+                "count_rows",
+                "get_schema_info",
+                "query_database",
+                "read_resource"
+              ],
+              "transport": "stdio",
+              "version": "1.1.0"
+            },
+            "readOnly": true,
+            "tables": [
+              {
+                "name": "demo.big_area",
+                "type": "TABLE"
+              },
+              {
+                "name": "demo.boundaries_3857",
+                "type": "TABLE"
+              },
+              {
+                "name": "demo.boundaries_4326",
+                "type": "TABLE"
+              },
+              {
+                "name": "demo.empty_area",
+                "type": "TABLE"
+              },
+              {
+                "name": "demo.invalid_area",
+                "type": "TABLE"
+              },
+              {
+                "name": "demo.multiple_regions",
+                "type": "TABLE"
+              },
+              {
+                "name": "demo.nullable_area",
+                "type": "TABLE"
+              },
+              {
+                "name": "demo.points",
+                "type": "TABLE"
+              },
+              {
+                "name": "demo.projected_view",
+                "type": "VIEW"
+              },
+              {
+                "name": "demo.scoped_regions",
+                "type": "TABLE"
+              },
+              {
+                "name": "demo.unknown_crs",
+                "type": "TABLE"
+              },
+              {
+                "name": "demo.区划 odd\" table",
+                "type": "TABLE"
+              }
+            ]
+          }
+        },
+        {
+          "tool": "data_layer_inspect",
+          "args": {
+            "connectionId": "6df9b0a7-4a82-49f7-a457-dddd63e232a0",
+            "layer": "demo.boundaries_3857.geom",
+            "limit": 2
+          },
+          "result": {
+            "columns": [
+              {
+                "name": "id",
+                "spatial": false,
+                "type": "integer"
+              },
+              {
+                "name": "name",
+                "spatial": false,
+                "type": "text"
+              },
+              {
+                "name": "geom",
+                "spatial": true,
+                "type": "geometry(Polygon,3857)"
+              }
+            ],
+            "featureCount": 1,
+            "featureCountLowerBound": null,
+            "geometryType": "POLYGON",
+            "mcp": {
+              "protocolVersion": "2025-11-25",
+              "server": "pgedge-postgres-mcp",
+              "toolCalls": 5,
+              "tools": [
+                "count_rows",
+                "get_schema_info",
+                "query_database",
+                "read_resource"
+              ],
+              "transport": "stdio",
+              "version": "1.1.0"
+            },
+            "readOnly": true,
+            "sampleLimit": 2,
+            "sampleRecords": [
+              {
+                "id": 1,
+                "name": "北京测试范围"
+              }
+            ],
+            "selectedLayer": "demo.boundaries_3857.geom",
+            "sourceCrs": "EPSG:3857"
+          }
+        },
+        {
+          "tool": "data_input_read",
+          "args": {
+            "connectionId": "6df9b0a7-4a82-49f7-a457-dddd63e232a0",
+            "layer": "demo.boundaries_3857.geom"
+          },
+          "result": {
+            "boundary": {
+              "name": "demo.boundaries_3857.geom.geojson",
+              "bounds": [
+                116.1,
+                39.6,
+                116.3,
+                39.8
+              ],
+              "polygonCount": 1,
+              "attachedToDesktopPlan": true
+            },
+            "layers": [
+              {
+                "crs": "EPSG:4326",
+                "featureCount": null,
+                "geometryType": "POLYGON",
+                "name": "demo.big_area.geom"
+              },
+              {
+                "crs": "EPSG:3857",
+                "featureCount": null,
+                "geometryType": "POLYGON",
+                "name": "demo.boundaries_3857.geom"
+              },
+              {
+                "crs": "EPSG:4326",
+                "featureCount": null,
+                "geometryType": "POLYGON",
+                "name": "demo.boundaries_4326.geom"
+              },
+              {
+                "crs": "EPSG:4326",
+                "featureCount": null,
+                "geometryType": "POLYGON",
+                "name": "demo.empty_area.geom"
+              },
+              {
+                "crs": "EPSG:4326",
+                "featureCount": null,
+                "geometryType": "POLYGON",
+                "name": "demo.invalid_area.geom"
+              },
+              {
+                "crs": "EPSG:4326",
+                "featureCount": null,
+                "geometryType": "MULTIPOLYGON",
+                "name": "demo.multiple_regions.geom"
+              },
+              {
+                "crs": "EPSG:3857",
+                "featureCount": null,
+                "geometryType": "POLYGON",
+                "name": "demo.nullable_area.backup_geom"
+              },
+              {
+                "crs": "EPSG:4326",
+                "featureCount": null,
+                "geometryType": "POLYGON",
+                "name": "demo.nullable_area.geom"
+              },
+              {
+                "crs": "EPSG:4326",
+                "featureCount": null,
+                "geometryType": "POINT",
+                "name": "demo.points.geom"
+              },
+              {
+                "crs": "EPSG:4326",
+                "featureCount": null,
+                "geometryType": "POLYGON",
+                "name": "demo.projected_view.geom"
+              },
+              {
+                "crs": "EPSG:4326",
+                "featureCount": null,
+                "geometryType": "POLYGON",
+                "name": "demo.scoped_regions.geom"
+              },
+              {
+                "crs": null,
+                "featureCount": null,
+                "geometryType": "POLYGON",
+                "name": "demo.unknown_crs.geom"
+              },
+              {
+                "crs": "EPSG:4326",
+                "featureCount": null,
+                "geometryType": "POLYGON",
+                "name": "demo.区划 odd\" table.边界 odd"
+              }
+            ],
+            "mcp": {
+              "protocolVersion": "2025-11-25",
+              "server": "pgedge-postgres-mcp",
+              "toolCalls": 4,
+              "tools": [
+                "count_rows",
+                "get_schema_info",
+                "query_database",
+                "read_resource"
+              ],
+              "transport": "stdio",
+              "version": "1.1.0"
+            },
+            "readOnly": true,
+            "selectedLayer": "demo.boundaries_3857.geom",
+            "sourceCrs": "EPSG:3857"
+          }
+        },
+        {
+          "tool": "sources_list",
+          "args": {},
+          "result": {
+            "sources": [
+              {
+                "schemaVersion": "0.1",
+                "id": "esri-world-imagery",
+                "displayName": "Esri World Imagery",
+                "attribution": "Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community",
+                "license": "",
+                "bulkDownloadAllowed": true,
+                "scheme": "XYZ",
+                "tileSize": 256,
+                "minZoom": 0,
+                "maxZoom": 22,
+                "configRevision": "b5d9ccab40f83a688f0580499f5a037c0f76b1adbebb70abb6c02eb50ccef2d1",
+                "credentialRefVersion": null
+              },
+              {
+                "schemaVersion": "0.1",
+                "id": "usgs-naip-plus-conus",
+                "displayName": "USGS NAIP Plus · 美国本土",
+                "attribution": "USGS, USDA, The National Map: Orthoimagery",
+                "license": "USGS The National Map 公共领域影像；仅用于美国本土已确认覆盖范围",
+                "bulkDownloadAllowed": true,
+                "scheme": "XYZ",
+                "tileSize": 256,
+                "minZoom": 10,
+                "maxZoom": 18,
+                "configRevision": "4f3d31417c9374032d2fb96a4bf84f7fdc5131476bd7ed35ccd6eaf35983d489",
+                "credentialRefVersion": null
+              }
+            ]
+          }
+        },
+        {
+          "tool": "plan_imagery",
+          "args": {
+            "outputFormats": [
+              "geotiff"
+            ],
+            "sourceId": "esri-world-imagery",
+            "zoom": 12
+          },
+          "result": {
+            "planId": "tool-95165f51deff9bb6be39d48b8e0f271b5f0ff756951db29471e256b6cef4de5a",
+            "source": "Esri World Imagery",
+            "bounds": [
+              116.1,
+              39.6,
+              116.3,
+              39.8
+            ],
+            "polygonCount": 1,
+            "totalTiles": 16,
+            "requiredFreeDiskBytes": 34078720,
+            "zoomLevels": [
+              12
+            ],
+            "outputFormats": [
+              "geotiff"
+            ],
+            "requiresPlanConfirmation": true
+          }
+        }
+      ],
+      "plans": [
+        "tool-95165f51deff9bb6be39d48b8e0f271b5f0ff756951db29471e256b6cef4de5a"
+      ]
+    }
+  ]
+}

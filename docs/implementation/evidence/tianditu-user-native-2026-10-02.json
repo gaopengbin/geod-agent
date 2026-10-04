@@ -1,0 +1,250 @@
+{
+  "conversationId": "tianditu-user-f59fd874-575b-426e-8a15-9e0246a17401",
+  "workspace": "G:\\code\\geod-agent\\artifacts\\desktop-parity\\tianditu-user-f59fd874-575b-426e-8a15-9e0246a17401",
+  "checkedAt": "2026-10-02T15:20:33.123Z",
+  "previews": [
+    {
+      "sourceId": "tianditu-img-w",
+      "path": "G:\\code\\geod-agent\\artifacts\\desktop-parity\\tianditu-user-f59fd874-575b-426e-8a15-9e0246a17401\\tianditu-img-w.png",
+      "bytes": 29762
+    },
+    {
+      "sourceId": "tianditu-cia-w",
+      "path": "G:\\code\\geod-agent\\artifacts\\desktop-parity\\tianditu-user-f59fd874-575b-426e-8a15-9e0246a17401\\tianditu-cia-w.png",
+      "bytes": 8976
+    }
+  ],
+  "plan": {
+    "planId": "tool-4035df6d74632f5afe9bd69c3ef563ba2114faaace298e536ae05c583d7f53e9",
+    "plan": {
+      "schemaVersion": "0.1",
+      "spec": {
+        "schemaVersion": "0.1",
+        "kind": "imagery",
+        "sourceId": "tianditu-img-w",
+        "bounds": [
+          116.39,
+          39.9,
+          116.4,
+          39.91
+        ],
+        "zoomLevels": [
+          15
+        ],
+        "outputFormats": [
+          "geotiff"
+        ],
+        "exportOptions": {
+          "compression": "lzw",
+          "buildPyramid": false,
+          "generateSidecars": false,
+          "jpegQuality": 90,
+          "overlaySources": [
+            {
+              "sourceId": "tianditu-cia-w",
+              "configRevision": "da7d3434b7a7ab9ad480f25ddfa843d4be36fcee004202b5ed3ea3d5db63d6a0"
+            }
+          ]
+        },
+        "outputDirectory": "\\\\?\\G:\\code\\geod-agent\\artifacts\\desktop-parity\\tianditu-user-f59fd874-575b-426e-8a15-9e0246a17401\\imagery-20261002-152033-0921d547",
+        "limits": {
+          "maxTiles": 1000000,
+          "maxDecodedRgbaBytes": 1099511627776
+        }
+      },
+      "sourceName": "天地图 · 影像",
+      "attribution": "天地图",
+      "license": "",
+      "sourceFingerprint": "815796c26b743b9d585c73ce30882139de5556a68eac658b9e80d38d9a66cfef",
+      "policyVersion": "imagery-plan-0.1",
+      "tileGrids": [
+        {
+          "zoom": 15,
+          "xMin": 26978,
+          "yMin": 12415,
+          "xMax": 26978,
+          "yMax": 12417,
+          "columns": 1,
+          "rows": 3,
+          "tileCount": 3,
+          "pixelWidth": 256,
+          "pixelHeight": 768,
+          "actualBounds": [
+            116.38916015625,
+            39.89287990029479,
+            116.400146484375,
+            39.91816284660945
+          ]
+        }
+      ],
+      "totalTiles": 3,
+      "decodedRgbaBytes": 786432,
+      "requiredFreeDiskBytes": 20021248,
+      "createdAt": "2026-10-02T15:20:33.403237800Z",
+      "expiresAt": "2026-10-02T15:50:33.403237800Z",
+      "planHash": "824c31fea51bcb9e73a2e574cba96d76ec97a6fb5fc045a5c0d14fd42dccbfee"
+    }
+  },
+  "jobId": "73ec758b-ccc5-4213-aabd-dadb04bf7c52",
+  "job": {
+    "jobId": "73ec758b-ccc5-4213-aabd-dadb04bf7c52",
+    "planId": "tool-4035df6d74632f5afe9bd69c3ef563ba2114faaace298e536ae05c583d7f53e9",
+    "approvalId": "ebd66de2-5b9f-4be8-9fa2-9a6fdb4a9cd7",
+    "planHash": "824c31fea51bcb9e73a2e574cba96d76ec97a6fb5fc045a5c0d14fd42dccbfee",
+    "idempotencyKey": "d0b335d4-a25f-44de-9bc6-72cd30eeeb90",
+    "state": "completed",
+    "version": 7,
+    "createdAt": "2026-10-02T15:20:33.430884400Z"
+  },
+  "manifest": {
+    "schemaVersion": "1.0",
+    "kind": "geod-bundle",
+    "id": "geod-agent-job-73ec758b-ccc5-4213-aabd-dadb04bf7c52",
+    "name": "天地图 · 影像",
+    "createdAt": "2026-10-02T15:20:33.456428400+00:00",
+    "bounds": [
+      116.39,
+      39.9,
+      116.4,
+      39.91
+    ],
+    "assets": [
+      {
+        "id": "imagery-z15",
+        "kind": "raster",
+        "role": "analysis",
+        "path": "imagery-z15.tif",
+        "mimeType": "image/tiff",
+        "bytes": 272588,
+        "sha256": "8dae551147f95eff0e55efa5674cc1efe5fc2dd1343728fdd10be943790c2f80",
+        "crs": "EPSG:3857",
+        "bounds": [
+          116.38997554779051,
+          39.899991671978704,
+          116.40001773834229,
+          39.910032500201055
+        ],
+        "width": 234,
+        "height": 305
+      },
+      {
+        "id": "imagery-preview",
+        "kind": "raster",
+        "role": "preview",
+        "path": "preview.png",
+        "mimeType": "image/png",
+        "bytes": 213267,
+        "sha256": "038d13b33bf93821dbeb57227a735f116e8e246274dbdbf734c8133088ff210d",
+        "crs": "EPSG:3857",
+        "bounds": [
+          116.38997554779051,
+          39.899991671978704,
+          116.40001773834229,
+          39.910032500201055
+        ],
+        "width": 234,
+        "height": 305
+      }
+    ],
+    "layers": [],
+    "quality": {
+      "status": "complete",
+      "missingTiles": 0,
+      "warnings": []
+    },
+    "provenance": [
+      {
+        "source": "天地图 · 影像",
+        "attribution": "天地图",
+        "retrievedAt": "2026-10-02T15:20:33.456436500+00:00"
+      },
+      {
+        "source": "天地图 · 影像注记",
+        "attribution": "天地图",
+        "retrievedAt": "2026-10-02T15:20:33.456441600+00:00"
+      }
+    ]
+  },
+  "raster": {
+    "jobId": "73ec758b-ccc5-4213-aabd-dadb04bf7c52",
+    "assetId": "imagery-z15",
+    "sha256": "8dae551147f95eff0e55efa5674cc1efe5fc2dd1343728fdd10be943790c2f80",
+    "width": 234,
+    "height": 305,
+    "maxStripBytes": 227123,
+    "samples": [
+      202,
+      207,
+      175,
+      255,
+      199,
+      204,
+      172,
+      255,
+      198,
+      203,
+      171,
+      255,
+      208,
+      213,
+      181,
+      255,
+      197,
+      195,
+      157,
+      255,
+      206,
+      208,
+      171,
+      255,
+      206,
+      212,
+      176,
+      255,
+      195,
+      205,
+      170,
+      255,
+      196,
+      205,
+      174,
+      255,
+      185,
+      198,
+      168,
+      255,
+      182,
+      197,
+      166,
+      255,
+      190,
+      207,
+      175,
+      255,
+      118,
+      143,
+      121,
+      255,
+      103,
+      128,
+      106,
+      255,
+      98,
+      126,
+      103,
+      255,
+      100,
+      128,
+      103,
+      255
+    ],
+    "protocol": "http",
+    "dataTile": {
+      "type": "Uint8Array",
+      "bandCount": 5,
+      "length": 299520,
+      "nonzeroValues": 299494
+    }
+  },
+  "pass": true
+}

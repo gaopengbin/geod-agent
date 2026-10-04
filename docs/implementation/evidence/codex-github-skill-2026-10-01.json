@@ -1,0 +1,17 @@
+{
+  "id": "1bcdb2fd-7352-4242-a3bb-675d51139c84",
+  "name": "skill-creator",
+  "description": "Guide for creating effective skills. This skill should be used when users want to create a new skill (or update an existing skill) that extends Codex's capabilities with specialized knowledge, workflows, or tool integrations.",
+  "sourceUrl": "https://raw.githubusercontent.com/openai/skills/49f948faa9258a0c61caceaf225e179651397431/skills/.system/skill-creator/SKILL.md",
+  "contentSha256": "d4a141d0d6662b79ecc4a846d777618a89f0fdf1447c6b24b6f9544248014b47",
+  "enabled": false,
+  "files": [
+    "LICENSE.txt",
+    "agents/openai.yaml",
+    "references/openai_yaml.md",
+    "scripts/generate_openai_yaml.py",
+    "scripts/init_skill.py",
+    "scripts/quick_validate.py"
+  ],
+  "totalResourceBytes": 38070
+}

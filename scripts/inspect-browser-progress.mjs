@@ -1,0 +1,6 @@
+import{pathToFileURL}from'node:url';
+const{chromium}=await import(pathToFileURL(process.argv[2]).href),browser=await chromium.connectOverCDP('http://127.0.0.1:9233');
+try{const page=browser.contexts().flatMap(context=>context.pages()).find(page=>page.url().includes(':1420'));console.log(JSON.stringify(await page.evaluate(async()=>{
+  const{api}=await import('/src/api.ts'),{localStateStore}=await import('/src/local-state.ts'),{accountChatStore,CHAT_LIST_KEY,DELETED_CHAT_KEY}=await import('/src/pending-generations.ts');const auth=await api.authStatus(),store=accountChatStore(localStateStore,auth.userId),chats=JSON.parse(store.getItem(CHAT_LIST_KEY)??'[]'),active=store.getItem('geod-agent-active-conversation-0.1');
+  return{chatCount:chats.length,activeTitle:chats.find(chat=>chat.conversationId===active)?.title,card:document.querySelector('.codex-request-card')?.textContent,pending:await api.mcpPendingRequests(active),mcpAudit:window.__mcpAudit,model:window.__browserModelAudit?{finished:window.__browserModelAudit.finished,result:window.__browserModelAudit.result,error:window.__browserModelAudit.error,events:window.__browserModelAudit.events.slice(-4)}:null};
+})));}finally{await browser.close();}

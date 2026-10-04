@@ -1,0 +1,186 @@
+{
+  "fixtureDirectory": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\geod-data-input-fixtures",
+  "gdalVersion": "3.12.4",
+  "cases": [
+    {
+      "case": "geojson",
+      "pass": true,
+      "bounds": [
+        116.1,
+        39.6,
+        116.3,
+        39.8
+      ],
+      "holeCount": 1,
+      "sourceCrs": "EPSG:4326"
+    },
+    {
+      "case": "shp",
+      "pass": true,
+      "bounds": [
+        116.10000000000001,
+        39.6,
+        116.3,
+        39.800000000000004
+      ],
+      "holeCount": 1,
+      "sourceCrs": "EPSG:3857"
+    },
+    {
+      "case": "gpkg",
+      "pass": true,
+      "bounds": [
+        116.10000000000001,
+        39.6,
+        116.3,
+        39.800000000000004
+      ],
+      "holeCount": 1,
+      "sourceCrs": "EPSG:3857"
+    },
+    {
+      "case": "sqlite",
+      "pass": true,
+      "bounds": [
+        116.10000000000001,
+        39.6,
+        116.3,
+        39.800000000000004
+      ],
+      "holeCount": 1,
+      "sourceCrs": "EPSG:3857"
+    },
+    {
+      "case": "kml",
+      "pass": true,
+      "bounds": [
+        116.1,
+        39.6,
+        116.3,
+        39.8
+      ],
+      "holeCount": 1,
+      "sourceCrs": "EPSG:4326"
+    },
+    {
+      "case": "gml",
+      "pass": true,
+      "bounds": [
+        116.1,
+        39.6,
+        116.3,
+        39.8
+      ],
+      "holeCount": 1,
+      "sourceCrs": "EPSG:4326"
+    },
+    {
+      "case": "fgb",
+      "pass": true,
+      "bounds": [
+        116.10000000000001,
+        39.6,
+        116.3,
+        39.800000000000004
+      ],
+      "holeCount": 1,
+      "sourceCrs": "EPSG:3857"
+    },
+    {
+      "case": "shapefile ZIP",
+      "pass": true,
+      "bounds": [
+        116.10000000000001,
+        39.6,
+        116.3,
+        39.800000000000004
+      ],
+      "holeCount": 1,
+      "sourceCrs": "EPSG:3857"
+    },
+    {
+      "case": "KMZ",
+      "pass": true,
+      "bounds": [
+        116.1,
+        39.6,
+        116.3,
+        39.8
+      ],
+      "holeCount": 1,
+      "sourceCrs": "EPSG:4326"
+    },
+    {
+      "case": "EWKT",
+      "pass": true,
+      "bounds": [
+        116.1,
+        39.6,
+        116.3,
+        39.8
+      ],
+      "holeCount": 1,
+      "sourceCrs": "EPSG:4326"
+    },
+    {
+      "case": "CSV WKT",
+      "pass": true,
+      "bounds": [
+        116.1,
+        39.6,
+        116.3,
+        39.8
+      ],
+      "holeCount": 1,
+      "sourceCrs": "EPSG:4326"
+    },
+    {
+      "case": "multi layer selection",
+      "pass": true,
+      "layers": [
+        {
+          "name": "polygons",
+          "geometryType": "Polygon",
+          "crs": "EPSG:4326",
+          "featureCount": 1
+        },
+        {
+          "name": "points",
+          "geometryType": "Point",
+          "crs": "EPSG:4326",
+          "featureCount": 1
+        }
+      ]
+    },
+    {
+      "case": "multi polygon selected",
+      "pass": true,
+      "bounds": [
+        116.1,
+        39.6,
+        116.3,
+        39.8
+      ],
+      "holeCount": 1,
+      "sourceCrs": "EPSG:4326"
+    },
+    {
+      "case": "point rejection",
+      "pass": true,
+      "code": "INPUT_NOT_POLYGON",
+      "message": "裁剪范围需要 Polygon / MultiPolygon；点和线不能直接作为裁剪边界。"
+    },
+    {
+      "case": "missing CRS",
+      "pass": true,
+      "code": "INPUT_CRS_REQUIRED",
+      "message": "数据未声明坐标系，请填写源 EPSG 编号后读取。"
+    },
+    {
+      "case": "ZIP traversal rejection",
+      "pass": true,
+      "code": "INPUT_ARCHIVE_INVALID",
+      "message": "压缩包包含不安全的路径。"
+    }
+  ]
+}

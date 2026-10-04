@@ -8,7 +8,9 @@ description = "Pure geographic calculations for GeoD Agent"
 [dependencies]
 chrono = { version = "0.4", features = ["serde"] }
 fs4 = { version = "1.1", features = ["sync"] }
+futures-util = "0.3"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+png = "0.18"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
 schemars = "1"

@@ -1,0 +1,72 @@
+{
+  "bounds": [
+    116.19141625,
+    39.77477948529546,
+    116.89452125,
+    40.04442758460856
+  ],
+  "perLaneIntervalMs": 500,
+  "results": [
+    {
+      "bundleMs": 24483,
+      "coldLocalCache": true,
+      "concurrency": 1,
+      "output": "G:\\code\\geod-agent\\docs\\implementation\\evidence\\download-throughput-2026-10-01\\cold-1",
+      "quality": "complete",
+      "raster": {
+        "bounds": [
+          116.19140625,
+          39.77476948529546,
+          116.89453125,
+          40.044437584608566
+        ],
+        "bytes": 8389034,
+        "crs": "EPSG:3857",
+        "height": 1024,
+        "id": "imagery-z12",
+        "kind": "raster",
+        "mimeType": "image/tiff",
+        "path": "imagery-z12.tif",
+        "role": "analysis",
+        "sha256": "1ac7cca1ff99e7892a545d52ad1570a5a6d7fd3b1bf3d3ce5dae0b8c1758dd5f",
+        "width": 2048
+      },
+      "sourceBytes": 650861,
+      "tilePhaseMs": 23910,
+      "tiles": 32,
+      "tilesPerSecond": 1.3383521539104977
+    },
+    {
+      "bundleMs": 2233,
+      "coldLocalCache": true,
+      "concurrency": 30,
+      "output": "G:\\code\\geod-agent\\docs\\implementation\\evidence\\download-throughput-2026-10-01\\cold-30",
+      "quality": "complete",
+      "raster": {
+        "bounds": [
+          116.19140625,
+          39.77476948529546,
+          116.89453125,
+          40.044437584608566
+        ],
+        "bytes": 8389034,
+        "crs": "EPSG:3857",
+        "height": 1024,
+        "id": "imagery-z12",
+        "kind": "raster",
+        "mimeType": "image/tiff",
+        "path": "imagery-z12.tif",
+        "role": "analysis",
+        "sha256": "1ac7cca1ff99e7892a545d52ad1570a5a6d7fd3b1bf3d3ce5dae0b8c1758dd5f",
+        "width": 2048
+      },
+      "sourceBytes": 650861,
+      "tilePhaseMs": 1642,
+      "tiles": 32,
+      "tilesPerSecond": 19.4884287454324
+    }
+  ],
+  "sameRasterBytes": true,
+  "source": "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+  "zoom": 12
+}

@@ -1,0 +1,487 @@
+{
+  "pass": true,
+  "checkedAt": "2026-10-02T14:27:55.484Z",
+  "conversationId": "wayback-f99b9a8a-3395-4cbf-873f-649fabc8ce46",
+  "workspace": "G:\\code\\geod-agent\\artifacts\\desktop-parity\\wayback-f99b9a8a-3395-4cbf-873f-649fabc8ce46",
+  "versions": {
+    "catalogUrl": "https://s3-us-west-2.amazonaws.com/config.maptiles.arcgis.com/waybackconfig.json",
+    "dateMeaning": "releaseDate 是版本发布日期；实际拍摄时间由区域元数据提供",
+    "fetchedAt": "2026-10-02T13:36:05.661324Z",
+    "nextOffset": 1,
+    "offset": 0,
+    "staleCache": false,
+    "total": 196,
+    "versions": [
+      {
+        "catalogTileUrl": "https://wayback.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/WMTS/1.0.0/default028mm/MapServer/tile/26334/{z}/{y}/{x}",
+        "metadataUrl": "https://metadata.maptiles.arcgis.com/arcgis/rest/services/World_Imagery_Metadata_2026_r07/MapServer",
+        "releaseDate": "2026-08-05",
+        "releaseId": "26334",
+        "source": {
+          "attribution": "Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+          "id": "wayback-26334",
+          "license": "",
+          "maxZoom": 22,
+          "minIntervalMs": 0,
+          "minZoom": 0,
+          "name": "Esri 历史影像 2026-08-05",
+          "scheme": "XYZ",
+          "tileSize": 256,
+          "urlTemplate": "https://wayback-a.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/WMTS/1.0.0/default028mm/MapServer/tile/26334/{z}/{y}/{x}"
+        }
+      }
+    ]
+  },
+  "oldest": {
+    "catalogTileUrl": "https://wayback.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/WMTS/1.0.0/default028mm/MapServer/tile/10/{z}/{y}/{x}",
+    "metadataUrl": "https://metadata.maptiles.arcgis.com/arcgis/rest/services/World_Imagery_Metadata_2014_r01/MapServer",
+    "releaseDate": "2014-02-20",
+    "releaseId": "10",
+    "source": {
+      "attribution": "Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+      "id": "wayback-10",
+      "license": "",
+      "maxZoom": 22,
+      "minIntervalMs": 0,
+      "minZoom": 0,
+      "name": "Esri 历史影像 2014-02-20",
+      "scheme": "XYZ",
+      "tileSize": 256,
+      "urlTemplate": "https://wayback-a.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/WMTS/1.0.0/default028mm/MapServer/tile/10/{z}/{y}/{x}"
+    }
+  },
+  "metadata": {
+    "bounds": [
+      116.395,
+      39.895,
+      116.405,
+      39.905
+    ],
+    "catalogFetchedAt": "2026-10-02T13:36:05.661324Z",
+    "dateMeaning": "captureDate 是该覆盖面的拍摄日期；缺失值表示服务没有提供。releaseDate 是版本发布日期。",
+    "footprints": [
+      {
+        "bounds": [
+          116.39499999986936,
+          39.89499999980198,
+          116.4050000001115,
+          39.905000000044126
+        ],
+        "captureDate": "2026-01-26",
+        "polygonCount": 1,
+        "provider": "Vivid Advanced",
+        "resolutionMeters": 0.34
+      }
+    ],
+    "metadataCoverageFraction": 1,
+    "metadataLayer": 5,
+    "release": {
+      "catalogTileUrl": "https://wayback.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/WMTS/1.0.0/default028mm/MapServer/tile/26334/{z}/{y}/{x}",
+      "metadataUrl": "https://metadata.maptiles.arcgis.com/arcgis/rest/services/World_Imagery_Metadata_2026_r07/MapServer",
+      "releaseDate": "2026-08-05",
+      "releaseId": "26334",
+      "source": {
+        "attribution": "Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+        "id": "wayback-26334",
+        "license": "",
+        "maxZoom": 22,
+        "minIntervalMs": 0,
+        "minZoom": 0,
+        "name": "Esri 历史影像 2026-08-05",
+        "scheme": "XYZ",
+        "tileSize": 256,
+        "urlTemplate": "https://wayback-a.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/WMTS/1.0.0/default028mm/MapServer/tile/26334/{z}/{y}/{x}"
+      }
+    },
+    "staleCatalog": false,
+    "zoom": 16
+  },
+  "changes": {
+    "after": [
+      {
+        "bounds": [
+          116.39499999986936,
+          39.89499999980198,
+          116.4050000001115,
+          39.905000000044126
+        ],
+        "captureDate": "2026-01-26",
+        "polygonCount": 1,
+        "provider": "Vivid Advanced",
+        "resolutionMeters": 0.34
+      }
+    ],
+    "before": [],
+    "bounds": [
+      116.395,
+      39.895,
+      116.405,
+      39.905
+    ],
+    "catalogFetchedAt": "2026-10-02T13:36:05.661324Z",
+    "changedFraction": 0.9999999989519495,
+    "comparison": "capture metadata footprint difference",
+    "dateMeaning": "比较拍摄日期、提供方、分辨率与覆盖几何；未知元数据范围保留在增量范围中",
+    "found": true,
+    "fromRelease": {
+      "catalogTileUrl": "https://wayback.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/WMTS/1.0.0/default028mm/MapServer/tile/10/{z}/{y}/{x}",
+      "metadataUrl": "https://metadata.maptiles.arcgis.com/arcgis/rest/services/World_Imagery_Metadata_2014_r01/MapServer",
+      "releaseDate": "2014-02-20",
+      "releaseId": "10",
+      "source": {
+        "attribution": "Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+        "id": "wayback-10",
+        "license": "",
+        "maxZoom": 22,
+        "minIntervalMs": 0,
+        "minZoom": 0,
+        "name": "Esri 历史影像 2014-02-20",
+        "scheme": "XYZ",
+        "tileSize": 256,
+        "urlTemplate": "https://wayback-a.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/WMTS/1.0.0/default028mm/MapServer/tile/10/{z}/{y}/{x}"
+      }
+    },
+    "source": {
+      "attribution": "Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+      "id": "wayback-26334",
+      "license": "",
+      "maxZoom": 22,
+      "minIntervalMs": 0,
+      "minZoom": 0,
+      "name": "Esri 历史影像 2026-08-05",
+      "scheme": "XYZ",
+      "tileSize": 256,
+      "urlTemplate": "https://wayback-a.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/WMTS/1.0.0/default028mm/MapServer/tile/26334/{z}/{y}/{x}"
+    },
+    "staleCatalog": false,
+    "toRelease": {
+      "catalogTileUrl": "https://wayback.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/WMTS/1.0.0/default028mm/MapServer/tile/26334/{z}/{y}/{x}",
+      "metadataUrl": "https://metadata.maptiles.arcgis.com/arcgis/rest/services/World_Imagery_Metadata_2026_r07/MapServer",
+      "releaseDate": "2026-08-05",
+      "releaseId": "26334",
+      "source": {
+        "attribution": "Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+        "id": "wayback-26334",
+        "license": "",
+        "maxZoom": 22,
+        "minIntervalMs": 0,
+        "minZoom": 0,
+        "name": "Esri 历史影像 2026-08-05",
+        "scheme": "XYZ",
+        "tileSize": 256,
+        "urlTemplate": "https://wayback-a.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/WMTS/1.0.0/default028mm/MapServer/tile/26334/{z}/{y}/{x}"
+      }
+    },
+    "unknownMetadataFraction": 0.9999999989519495,
+    "zoom": 16,
+    "attachedToDesktopPlan": true,
+    "boundaryId": "range-0d67d3c5504e6a1da498a887a99a0161105e9be3f58a85be74b097c3c1ce64b9",
+    "name": "Wayback-2014-02-20-至-2026-08-05-更新范围.geojson",
+    "polygonCount": 1
+  },
+  "boundary": {
+    "boundaryId": "range-0d67d3c5504e6a1da498a887a99a0161105e9be3f58a85be74b097c3c1ce64b9",
+    "name": "Wayback-2014-02-20-至-2026-08-05-更新范围.geojson",
+    "bounds": [
+      116.395,
+      39.895,
+      116.405,
+      39.905
+    ],
+    "polygonCount": 1,
+    "inputIds": [],
+    "createdAt": "2026-10-02T14:27:52.922226100Z",
+    "geometry": {
+      "polygons": [
+        [
+          [
+            [
+              116.395,
+              39.905
+            ],
+            [
+              116.395,
+              39.895
+            ],
+            [
+              116.405,
+              39.895
+            ],
+            [
+              116.405,
+              39.905
+            ],
+            [
+              116.395,
+              39.905
+            ]
+          ]
+        ]
+      ]
+    }
+  },
+  "stored": {
+    "planId": "tool-bee9cc5b05615e10b98be93c5859ee94736ad0c7ce4f3656322b7616573bdcd3",
+    "plan": {
+      "schemaVersion": "0.1",
+      "spec": {
+        "schemaVersion": "0.1",
+        "kind": "imagery",
+        "sourceId": "wayback-native-26334-f0d5ab93",
+        "bounds": [
+          116.395,
+          39.895,
+          116.405,
+          39.905
+        ],
+        "boundary": {
+          "polygons": [
+            [
+              [
+                [
+                  116.395,
+                  39.905
+                ],
+                [
+                  116.395,
+                  39.895
+                ],
+                [
+                  116.405,
+                  39.895
+                ],
+                [
+                  116.405,
+                  39.905
+                ],
+                [
+                  116.395,
+                  39.905
+                ]
+              ]
+            ]
+          ]
+        },
+        "zoomLevels": [
+          15
+        ],
+        "outputFormats": [
+          "geotiff"
+        ],
+        "exportOptions": {
+          "compression": "deflate",
+          "buildPyramid": false,
+          "generateSidecars": false,
+          "jpegQuality": 90
+        },
+        "outputDirectory": "\\\\?\\G:\\code\\geod-agent\\artifacts\\desktop-parity\\wayback-f99b9a8a-3395-4cbf-873f-649fabc8ce46\\imagery-20261002-142752-eec3c559-Wayback-2014-02-20-至-2026-08-05-更新范围",
+        "limits": {
+          "maxTiles": 1000000,
+          "maxDecodedRgbaBytes": 1099511627776
+        }
+      },
+      "sourceName": "Esri 历史影像 2026-08-05",
+      "attribution": "Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+      "license": "",
+      "sourceFingerprint": "33e4ec1529c36cae79ab9b7dbb1fbc62ffd9391be4e154f6f65d6d451f77d946",
+      "policyVersion": "imagery-plan-0.1",
+      "tileGrids": [
+        {
+          "zoom": 15,
+          "xMin": 26978,
+          "yMin": 12416,
+          "xMax": 26979,
+          "yMax": 12417,
+          "columns": 2,
+          "rows": 2,
+          "tileCount": 4,
+          "pixelWidth": 512,
+          "pixelHeight": 512,
+          "actualBounds": [
+            116.38916015625,
+            39.89287990029479,
+            116.4111328125,
+            39.909736234537185
+          ]
+        }
+      ],
+      "totalTiles": 4,
+      "decodedRgbaBytes": 1048576,
+      "requiredFreeDiskBytes": 21102592,
+      "createdAt": "2026-10-02T14:27:52.969292900Z",
+      "expiresAt": "2026-10-02T14:57:52.969292900Z",
+      "planHash": "4b00bb49b94d48cc79a8e48cb457c923a9571a0f7175f29284028b39f4dd7975"
+    }
+  },
+  "job": {
+    "jobId": "ae4e5e4c-498e-4db6-bed9-f016bef97755",
+    "planId": "tool-bee9cc5b05615e10b98be93c5859ee94736ad0c7ce4f3656322b7616573bdcd3",
+    "approvalId": "a25e4aab-57f4-4669-99c7-0986bbbab953",
+    "planHash": "4b00bb49b94d48cc79a8e48cb457c923a9571a0f7175f29284028b39f4dd7975",
+    "idempotencyKey": "wayback-native:3f3c716d-6960-4da1-8855-4f4128dde855",
+    "state": "queued",
+    "version": 1,
+    "createdAt": "2026-10-02T14:27:52.989746800Z"
+  },
+  "manifest": {
+    "schemaVersion": "1.0",
+    "kind": "geod-bundle",
+    "id": "geod-agent-job-ae4e5e4c-498e-4db6-bed9-f016bef97755",
+    "name": "Esri 历史影像 2026-08-05",
+    "createdAt": "2026-10-02T14:27:53.013074+00:00",
+    "bounds": [
+      116.395,
+      39.895,
+      116.405,
+      39.905
+    ],
+    "assets": [
+      {
+        "id": "boundary",
+        "kind": "vector",
+        "role": "input",
+        "path": "boundary.geojson",
+        "mimeType": "application/geo+json",
+        "bytes": 364,
+        "sha256": "0226e7d1db5df03832976627dca9157ced57bbcdf49c81b7cd48dc804caab56c",
+        "crs": "EPSG:4326",
+        "bounds": [
+          116.395,
+          39.895,
+          116.405,
+          39.905
+        ]
+      },
+      {
+        "id": "imagery-z15",
+        "kind": "raster",
+        "role": "analysis",
+        "path": "imagery-z15.tif",
+        "mimeType": "image/tiff",
+        "bytes": 202345,
+        "sha256": "f9ecf87407f179476444e129013a703a9332bab3666ed390ee4e434a61a305a9",
+        "crs": "EPSG:3857",
+        "bounds": [
+          116.3949966430664,
+          39.894987168842064,
+          116.40503883361816,
+          39.90502873040254
+        ],
+        "width": 234,
+        "height": 305
+      },
+      {
+        "id": "imagery-preview",
+        "kind": "raster",
+        "role": "preview",
+        "path": "preview.png",
+        "mimeType": "image/png",
+        "bytes": 211798,
+        "sha256": "332ec9ecdd0f0bf9897289163e01997c7f1da424b6468eea33c3278bf819ccb6",
+        "crs": "EPSG:3857",
+        "bounds": [
+          116.3949966430664,
+          39.894987168842064,
+          116.40503883361816,
+          39.90502873040254
+        ],
+        "width": 234,
+        "height": 305
+      }
+    ],
+    "layers": [],
+    "quality": {
+      "status": "complete",
+      "missingTiles": 0,
+      "warnings": []
+    },
+    "provenance": [
+      {
+        "source": "Esri 历史影像 2026-08-05",
+        "attribution": "Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+        "retrievedAt": "2026-10-02T14:27:53.013081+00:00"
+      }
+    ]
+  },
+  "raster": {
+    "jobId": "ae4e5e4c-498e-4db6-bed9-f016bef97755",
+    "assetId": "imagery-z15",
+    "sha256": "f9ecf87407f179476444e129013a703a9332bab3666ed390ee4e434a61a305a9",
+    "width": 234,
+    "height": 305,
+    "maxStripBytes": 170196,
+    "samples": [
+      127,
+      130,
+      119,
+      255,
+      109,
+      112,
+      101,
+      255,
+      45,
+      48,
+      37,
+      255,
+      36,
+      36,
+      28,
+      255,
+      105,
+      109,
+      95,
+      255,
+      131,
+      135,
+      121,
+      255,
+      86,
+      90,
+      76,
+      255,
+      90,
+      87,
+      78,
+      255,
+      135,
+      139,
+      125,
+      255,
+      154,
+      158,
+      144,
+      255,
+      119,
+      123,
+      109,
+      255,
+      105,
+      103,
+      91,
+      255,
+      114,
+      116,
+      102,
+      255,
+      130,
+      132,
+      118,
+      255,
+      113,
+      115,
+      101,
+      255,
+      138,
+      134,
+      122,
+      255
+    ],
+    "protocol": "http",
+    "dataTile": {
+      "type": "Uint8Array",
+      "bandCount": 5,
+      "length": 299520,
+      "nonzeroValues": 299008
+    }
+  }
+}

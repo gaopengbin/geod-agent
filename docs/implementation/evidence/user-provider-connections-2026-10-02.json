@@ -1,0 +1,45 @@
+{
+  "savedSources": [
+    "tianditu-img-w",
+    "tianditu-cia-w"
+  ],
+  "ion": {
+    "assetListStatus": 404,
+    "availableAssets": [],
+    "endpointStatus": 200,
+    "type": "3DTILES",
+    "connectionId": "65aad306-8dcc-453f-a01b-123efc55a64d",
+    "assetId": 96188,
+    "credentialReady": true,
+    "test": {
+      "value": {
+        "connected": true,
+        "version": "1.0"
+      }
+    },
+    "nativeDownload": {
+      "pass": true,
+      "taskId": "560bcca1-fe3e-416c-9341-38d9a4a6b792",
+      "resources": 18,
+      "bytes": 9343290,
+      "evidence": "tiles3d-ion-native-2026-10-02.json"
+    },
+    "visualPreview": {
+      "pass": true,
+      "evidence": "tiles3d-ion-preview/acceptance.json",
+      "screenshot": "tiles3d-ion-preview/beijing-cbd.png",
+      "resetCamera": true
+    }
+  },
+  "tianditu": {
+    "credentialStored": true,
+    "sources": [
+      "tianditu-img-w",
+      "tianditu-cia-w"
+    ],
+    "preview": true,
+    "download": true,
+    "jobId": "73ec758b-ccc5-4213-aabd-dadb04bf7c52",
+    "evidence": "tianditu-user-native-2026-10-02.json"
+  }
+}

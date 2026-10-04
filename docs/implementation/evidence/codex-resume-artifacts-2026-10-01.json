@@ -1,0 +1,24 @@
+{
+  "quality": {
+    "status": "complete",
+    "missingTiles": 0,
+    "warnings": []
+  },
+  "assets": [
+    {
+      "name": "boundary.geojson",
+      "bytes": 1033940,
+      "sha256Matches": true
+    },
+    {
+      "name": "imagery-z12.tif",
+      "bytes": 150523010,
+      "sha256Matches": true
+    },
+    {
+      "name": "preview.png",
+      "bytes": 2885573,
+      "sha256Matches": true
+    }
+  ]
+}

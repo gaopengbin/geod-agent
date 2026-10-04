@@ -1,0 +1,45 @@
+{
+  "codexVersion": "0.159.2",
+  "codexRelease": "https://github.com/openai/codex/releases/tag/rust-v0.159.2",
+  "nodeVersion": "v24.21.0",
+  "nodeArchive": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-win-x64.zip",
+  "nodeArchiveSha256": "158f7685b44de51f6c0df1d153526cbcd3e1bc739a8dfc607721cef75de9e541",
+  "npmVersion": "11.19.0",
+  "npmArchivePrefix": "node-v24.21.0-win-x64/node_modules/npm/",
+  "files": {
+    "codex.exe": {
+      "sha256": "52f75c649bebb8001102a1dd129c1ea6d02b0940321e6d7e82ee0526753bd58a",
+      "source": "https://github.com/openai/codex/releases/download/rust-v0.159.2/codex-x86_64-pc-windows-msvc.exe"
+    },
+    "codex-code-mode-host.exe": {
+      "sha256": "88c55dcd4f4a0b8767991bceb5bdb8d05f72c53643714694925f33a11ced646f",
+      "source": "https://github.com/openai/codex/releases/download/rust-v0.159.2/codex-code-mode-host-x86_64-pc-windows-msvc.exe"
+    },
+    "codex-command-runner.exe": {
+      "sha256": "f9cdc39dc02c2208ecb65a7a4849b26ac1c368c35741eb015e448d0bfcd77159",
+      "source": "https://github.com/openai/codex/releases/download/rust-v0.159.2/codex-command-runner-x86_64-pc-windows-msvc.exe"
+    },
+    "codex-windows-sandbox-setup.exe": {
+      "sha256": "7efc654885230814c9499cf6b95f0c1aabae5c6f344ac70e2f57437c512f42b7",
+      "source": "https://github.com/openai/codex/releases/download/rust-v0.159.2/codex-windows-sandbox-setup-x86_64-pc-windows-msvc.exe"
+    },
+    "node.exe": {
+      "sha256": "ba4e6d110e8c1592a1ecd390f6b05f3da124b13871a5be62b341a07a853c6c32",
+      "source": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-win-x64.zip",
+      "archiveMember": "node-v24.21.0-win-x64/node.exe"
+    },
+    "NODE-LICENSE.txt": {
+      "sha256": "ed34dd8e3f0a78dbaf00d0444ce8e285b015b765379c2e17880455f70370f8e9",
+      "source": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-win-x64.zip",
+      "archiveMember": "node-v24.21.0-win-x64/LICENSE"
+    },
+    "CODEX-LICENSE.txt": {
+      "sha256": "d17f227e4df5da1600391338865ce0f3055211760a36688f816941d58232d8dc",
+      "source": "https://raw.githubusercontent.com/openai/codex/rust-v0.159.2/LICENSE"
+    },
+    "CODEX-NOTICE.txt": {
+      "sha256": "9d71575ecfd9a843fc1677b0efb08053c6ba9fd686a0de1a6f5382fd3c220915",
+      "source": "https://raw.githubusercontent.com/openai/codex/rust-v0.159.2/NOTICE"
+    }
+  }
+}

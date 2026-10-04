@@ -1,0 +1,33 @@
+.manual-boundary-toolbar { position:absolute; top:12px; left:12px; z-index:3; display:flex; align-items:center; gap:2px; padding:4px; border:1px solid var(--border); border-radius:10px; background:var(--background); box-shadow:0 2px 10px #00000012; color:var(--foreground); }
+.manual-boundary-toolbar button[aria-pressed=true] { color:var(--primary); background:var(--muted); }
+.manual-boundary-divider { height:18px; width:1px; background:var(--border); margin-inline:3px; }
+.manual-boundary-hint, .manual-boundary-message { position:absolute; z-index:4; left:12px; right:12px; width:fit-content; max-width:calc(100% - 24px); display:flex; align-items:center; gap:8px; padding:6px 8px 6px 12px; border:1px solid var(--border); border-radius:10px; background:var(--background); color:var(--foreground); font-size:12px; line-height:1.5; box-shadow:0 2px 12px #00000012; }
+.manual-boundary-hint { top:60px; }
+.manual-boundary-message { top:60px; }
+.manual-boundary-message.is-error { color:var(--app-warning-text,#b45309); }
+.manual-boundary-message span, .manual-boundary-hint span { min-width:0; overflow-wrap:anywhere; }
+.manual-boundary-editor { position:absolute; z-index:3; left:12px; right:12px; bottom:16px; padding:12px; border:1px solid var(--border); border-radius:12px; background:var(--background); color:var(--foreground); box-shadow:0 4px 18px #0000001a; }
+.manual-boundary-editor .field { margin:0 0 8px; gap:5px; }
+.manual-boundary-editor .field-label { font-size:12px; font-weight:500; }
+.manual-boundary-editor input { height:34px; min-height:34px!important; font-size:13px!important; }
+.manual-boundary-editor-actions { display:flex; align-items:center; flex-wrap:wrap; justify-content:flex-end; gap:6px; }
+.manual-boundary-editor-actions > span { color:var(--muted-foreground); font-size:12px; margin-right:auto; }
+.manual-boundary-editor-actions button { font-size:12px; padding-inline:9px; }
+.manual-bookmark-popover { width:min(330px,calc(100vw - 24px)); background:var(--background); border:1px solid var(--border); color:var(--foreground); padding:6px; box-shadow:0 5px 24px #00000024; }
+.manual-bookmark-heading { display:flex; align-items:center; justify-content:space-between; padding:8px 8px 10px; font-size:13px; }
+.manual-bookmark-heading strong { font-weight:600; }
+.manual-bookmark-heading > span, .manual-bookmark-empty { color:var(--muted-foreground); font-size:12px; }
+.manual-bookmark-empty { padding:4px 8px 12px; margin:0; line-height:1.7; }
+.manual-bookmark-item { padding:4px; border-radius:8px; }
+.manual-bookmark-item + .manual-bookmark-item { border-top:1px solid var(--border); }
+.manual-bookmark-title { display:flex; align-items:center; gap:4px; min-width:0; }
+.manual-bookmark-title > button { justify-content:flex-start; flex:1; min-width:0; padding:4px; height:auto; font-size:13px; color:var(--foreground); }
+.manual-bookmark-title > button span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.manual-bookmark-title > span { font-size:11px; color:var(--muted-foreground); padding-right:4px; white-space:nowrap; }
+.manual-bookmark-actions { display:flex; align-items:center; gap:2px; }
+.manual-bookmark-actions > button { font-size:11px; padding-inline:6px; height:28px; }
+.manual-bookmark-actions > .manual-bookmark-remove { margin-left:auto; width:28px; padding:0; }
+.manual-bookmark-rename.field { display:flex; flex-direction:row; align-items:center; gap:2px; margin:0; }
+.manual-bookmark-rename input { min-width:0; min-height:30px!important; height:30px; font-size:13px!important; padding-inline:7px!important; }
+.manual-bookmark-rename button { flex:none; }
+@media (max-width:700px) { .manual-boundary-editor-actions > span { width:100%; } }

@@ -23,6 +23,19 @@ apps/geod-agent-desktop/src-tauri/icons/StoreLogo.png
 .env
 .env.*
 !.env.example
+infra/postgis-test/.secrets/
+apps/geod-agent-desktop/src-tauri/resources/codex/
+apps/geod-agent-desktop/src-tauri/resources/pgedge/
+apps/geod-agent-desktop/src-tauri/resources/gdal/
+apps/geod-agent-desktop/src-tauri/resources/documents/
+apps/geod-agent-desktop/src-tauri/resources/dbhub/
+apps/geod-agent-desktop/src-tauri/resources/audio/
+apps/geod-agent-desktop/src-tauri/resources/ocr/
+apps/geod-agent-desktop/src-tauri/resources/legacy-office/
+# Large generated download samples; keep the small reports and UI evidence.
+docs/implementation/evidence/download-throughput-2026-10-01/**/*.tif
+docs/implementation/evidence/download-throughput-2026-10-01/**/cache-*/
+__pycache__/
 
 # Editor and OS
 .idea/

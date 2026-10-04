@@ -1,0 +1,114 @@
+[
+  {
+    "background": "rgb(255, 255, 255)",
+    "color": "rgb(33, 33, 33)",
+    "font": "16px",
+    "selector": ".agent-work-content",
+    "theme": "light",
+    "ratio": 16.1
+  },
+  {
+    "background": "rgb(255, 255, 255)",
+    "color": "rgb(33, 33, 33)",
+    "font": "13px",
+    "selector": ".agent-work-label",
+    "theme": "light",
+    "ratio": 16.1
+  },
+  {
+    "background": "rgb(236, 236, 236)",
+    "color": "rgb(33, 33, 33)",
+    "font": "14px",
+    "selector": ".conversation-item.active",
+    "theme": "light",
+    "ratio": 13.63
+  },
+  {
+    "background": "rgb(236, 236, 236)",
+    "color": "rgb(89, 89, 89)",
+    "font": "12px",
+    "selector": ".task-queue-state",
+    "theme": "light",
+    "ratio": 5.93
+  },
+  {
+    "background": "rgb(255, 255, 255)",
+    "color": "rgb(89, 89, 89)",
+    "font": "12px",
+    "selector": ".task-subtitle",
+    "theme": "light",
+    "ratio": 7
+  },
+  {
+    "background": "rgb(23, 105, 232)",
+    "color": "rgb(255, 255, 255)",
+    "font": "12px",
+    "selector": ".plan-review-actions > button:first-child",
+    "theme": "light",
+    "ratio": 4.97
+  },
+  {
+    "background": "rgb(247, 247, 248)",
+    "color": "rgb(33, 33, 33)",
+    "font": "15px",
+    "selector": ".geod-prompt-input textarea",
+    "theme": "light",
+    "ratio": 15.04
+  },
+  {
+    "background": "rgb(33, 33, 33)",
+    "color": "rgb(236, 236, 236)",
+    "font": "16px",
+    "selector": ".agent-work-content",
+    "theme": "dark",
+    "ratio": 13.63
+  },
+  {
+    "background": "rgb(33, 33, 33)",
+    "color": "rgb(236, 236, 236)",
+    "font": "13px",
+    "selector": ".agent-work-label",
+    "theme": "dark",
+    "ratio": 13.63
+  },
+  {
+    "background": "rgb(47, 47, 47)",
+    "color": "rgb(236, 236, 236)",
+    "font": "14px",
+    "selector": ".conversation-item.active",
+    "theme": "dark",
+    "ratio": 11.33
+  },
+  {
+    "background": "rgb(47, 47, 47)",
+    "color": "rgb(180, 180, 180)",
+    "font": "12px",
+    "selector": ".task-queue-state",
+    "theme": "dark",
+    "ratio": 6.46
+  },
+  {
+    "background": "rgb(33, 33, 33)",
+    "color": "rgb(180, 180, 180)",
+    "font": "12px",
+    "selector": ".task-subtitle",
+    "theme": "dark",
+    "ratio": 7.77
+  },
+  {
+    "background": "rgb(37, 99, 235)",
+    "color": "rgb(255, 255, 255)",
+    "font": "12px",
+    "selector": ".plan-review-actions > button:first-child",
+    "theme": "dark",
+    "ratio": 5.17
+  },
+  {
+    "background": "rgb(47, 47, 47)",
+    "color": "rgb(236, 236, 236)",
+    "font": "15px",
+    "selector": ".geod-prompt-input textarea",
+    "theme": "dark",
+    "ratio": 11.33
+  }
+]

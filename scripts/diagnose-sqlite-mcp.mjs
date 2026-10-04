@@ -1,0 +1,10 @@
+import {spawn} from 'node:child_process';
+import path from 'node:path';
+const root=path.resolve('apps/geod-agent-desktop/src-tauri/resources/dbhub'),file=path.resolve('artifacts/product-gaps-20261004/sql-inputs/workspace/普通属性.sqlite');
+const dsn=new URL('sqlite:///');dsn.pathname=file.replaceAll('\\','/');
+const child=spawn(path.resolve('apps/geod-agent-desktop/src-tauri/resources/codex/node.exe'),[path.join(root,'node_modules/@bytebase/dbhub/dist/index.js'),'--transport=stdio','--config='+path.join(root,'dbhub.toml')],{cwd:root,env:{SYSTEMROOT:process.env.SYSTEMROOT,PATH:process.env.SYSTEMROOT+'/System32',GEOD_DBHUB_DSN:String(dsn)},windowsHide:true});
+let errors='';child.stderr.on('data',bytes=>{errors+=bytes.toString();});child.stdout.on('data',bytes=>process.stdout.write(bytes));
+child.stdin.write(JSON.stringify({jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2025-11-25',capabilities:{},clientInfo:{name:'geod-fixture',version:'1'}}})+'\n');
+setTimeout(()=>{child.stdin.write(JSON.stringify({jsonrpc:'2.0',method:'notifications/initialized'})+'\n');child.stdin.write(JSON.stringify({jsonrpc:'2.0',id:2,method:'tools/call',params:{name:'search_objects',arguments:{object_type:'table',detail_level:'names',limit:100}}})+'\n');},1500);
+await new Promise(resolve=>{child.once('exit',resolve);setTimeout(()=>{child.kill();resolve();},4000);});
+console.log(errors.slice(-6000));

@@ -1,0 +1,12 @@
+import path from 'node:path';
+const {chromium}=await import(process.argv[2]);
+const browser=await chromium.connectOverCDP('http://127.0.0.1:9233');
+const page=browser.contexts().flatMap(c=>c.pages()).find(p=>p.url().includes(':1420'));
+await page.getByRole('button',{name:'技能与连接器',exact:true}).click();
+await page.getByRole('button',{name:/^连接器 \d+/}).click();
+await page.getByRole('button',{name:'自定义连接器',exact:true}).click();
+await page.getByRole('button',{name:'本机命令 · stdio',exact:true}).click();
+await page.evaluate(()=>document.fonts.ready);
+await page.screenshot({path:path.resolve(process.argv[3])});
+console.log(await page.locator('.extension-runtime-form').boundingBox());
+await browser.close();

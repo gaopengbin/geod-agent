@@ -1,0 +1,946 @@
+{
+  "pass": true,
+  "conversationId": "parity-86719fe9-cfe6-4c16-825c-84488e4af6ec",
+  "workspace": "G:\\code\\geod-agent\\artifacts\\desktop-parity\\parity-86719fe9-cfe6-4c16-825c-84488e4af6ec",
+  "records": [
+    {
+      "name": "six-formats",
+      "job": {
+        "jobId": "d216c2f2-5e1f-49ee-9be4-1f7c53079885",
+        "planId": "tool-bd84de56e9465a791638179d20f7cead6030404dbb1cc7afd41bd34535ffbf97",
+        "approvalId": "ace2e2d2-fbc7-42d2-a89f-a8182a112806",
+        "planHash": "585a85e64244c4e5dce8fa7e0ea8b4570a193b2b09cd91f4cedb7b4441824cce",
+        "idempotencyKey": "parity:ecd33f93-f052-40e3-94fb-aaaa2c3001d4",
+        "state": "queued",
+        "version": 1,
+        "createdAt": "2026-10-02T12:41:22.482391200Z"
+      },
+      "plan": {
+        "planId": "tool-bd84de56e9465a791638179d20f7cead6030404dbb1cc7afd41bd34535ffbf97",
+        "plan": {
+          "schemaVersion": "0.1",
+          "spec": {
+            "schemaVersion": "0.1",
+            "kind": "imagery",
+            "sourceId": "esri-world-imagery",
+            "bounds": [
+              116.38,
+              39.89,
+              116.48,
+              39.98
+            ],
+            "zoomLevels": [
+              11,
+              12
+            ],
+            "outputFormats": [
+              "geotiff",
+              "mbtiles",
+              "png",
+              "jpeg",
+              "gpkg",
+              "tiles"
+            ],
+            "exportOptions": {
+              "compression": "deflate",
+              "buildPyramid": true,
+              "generateSidecars": true,
+              "jpegQuality": 90
+            },
+            "outputDirectory": "\\\\?\\G:\\code\\geod-agent\\artifacts\\desktop-parity\\parity-86719fe9-cfe6-4c16-825c-84488e4af6ec\\imagery-20261002-124122-f986b00f",
+            "limits": {
+              "maxTiles": 1000000,
+              "maxDecodedRgbaBytes": 1099511627776
+            }
+          },
+          "sourceName": "Esri World Imagery",
+          "attribution": "Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community",
+          "license": "",
+          "sourceFingerprint": "b178c5c3a9c4e490cccff6195663c645cae1f8288249414c1fa7756ef039e2cb",
+          "policyVersion": "imagery-plan-0.1",
+          "tileGrids": [
+            {
+              "zoom": 11,
+              "xMin": 1686,
+              "yMin": 775,
+              "xMax": 1686,
+              "yMax": 776,
+              "columns": 1,
+              "rows": 2,
+              "tileCount": 2,
+              "pixelWidth": 256,
+              "pixelHeight": 512,
+              "actualBounds": [
+                116.3671875,
+                39.77476948529546,
+                116.54296875,
+                40.044437584608566
+              ]
+            },
+            {
+              "zoom": 12,
+              "xMin": 3372,
+              "yMin": 1550,
+              "xMax": 3373,
+              "yMax": 1552,
+              "columns": 2,
+              "rows": 3,
+              "tileCount": 6,
+              "pixelWidth": 512,
+              "pixelHeight": 768,
+              "actualBounds": [
+                116.3671875,
+                39.842286020743394,
+                116.54296875,
+                40.044437584608566
+              ]
+            }
+          ],
+          "totalTiles": 8,
+          "decodedRgbaBytes": 2097152,
+          "requiredFreeDiskBytes": 25427968,
+          "createdAt": "2026-10-02T12:41:22.466330Z",
+          "expiresAt": "2026-10-02T13:11:22.466330Z",
+          "planHash": "585a85e64244c4e5dce8fa7e0ea8b4570a193b2b09cd91f4cedb7b4441824cce"
+        }
+      },
+      "manifest": {
+        "schemaVersion": "1.0",
+        "kind": "geod-bundle",
+        "id": "geod-agent-job-d216c2f2-5e1f-49ee-9be4-1f7c53079885",
+        "name": "Esri World Imagery",
+        "createdAt": "2026-10-02T12:41:22.501878700+00:00",
+        "bounds": [
+          116.38,
+          39.89,
+          116.48,
+          39.98
+        ],
+        "assets": [
+          {
+            "id": "imagery-z11",
+            "kind": "raster",
+            "role": "analysis",
+            "path": "imagery-z11.tif",
+            "mimeType": "image/tiff",
+            "bytes": 67071,
+            "sha256": "4ff2c4ecc1597c5e941b52e4ae0eb951eb4edc636eb09b2f42e0f71a2fc4d728",
+            "crs": "EPSG:3857",
+            "bounds": [
+              116.37954711914062,
+              39.88971887599667,
+              116.48048400878906,
+              39.98027708862264
+            ],
+            "width": 147,
+            "height": 172
+          },
+          {
+            "id": "sidecar-imagery-z11.tfw",
+            "kind": "raster",
+            "role": "metadata",
+            "path": "imagery-z11.tfw",
+            "mimeType": "text/plain",
+            "bytes": 92,
+            "sha256": "ed65d545188e1c6c470e56356c55a90511c0f0414c1cf6d65d6388fa8143305a",
+            "crs": "EPSG:3857",
+            "bounds": [
+              116.37954711914062,
+              39.88971887599667,
+              116.48048400878906,
+              39.98027708862264
+            ]
+          },
+          {
+            "id": "sidecar-imagery-z11.prj",
+            "kind": "raster",
+            "role": "metadata",
+            "path": "imagery-z11.prj",
+            "mimeType": "text/plain",
+            "bytes": 353,
+            "sha256": "ddd5843d1bdea54a71a6d0c5ba86f47f3b5d568dec24f6e4990514c98042f058",
+            "crs": "EPSG:3857",
+            "bounds": [
+              116.37954711914062,
+              39.88971887599667,
+              116.48048400878906,
+              39.98027708862264
+            ]
+          },
+          {
+            "id": "imagery-preview",
+            "kind": "raster",
+            "role": "preview",
+            "path": "preview.png",
+            "mimeType": "image/png",
+            "bytes": 81686,
+            "sha256": "0ec3e5f45431ebccb5c3c1508314ca0a39c8517d0c9aeb73d89402d3b6e3b7ea",
+            "crs": "EPSG:3857",
+            "bounds": [
+              116.37954711914062,
+              39.88971887599667,
+              116.48048400878906,
+              39.98027708862264
+            ],
+            "width": 147,
+            "height": 172
+          },
+          {
+            "id": "imagery-z11-png",
+            "kind": "raster",
+            "role": "analysis",
+            "path": "imagery-z11.png",
+            "mimeType": "image/png",
+            "bytes": 63941,
+            "sha256": "7f19677e6fd431d798fc6c0152308a69ce7b11a45bc698130e42502d77fa95b3",
+            "crs": "EPSG:3857",
+            "bounds": [
+              116.37954711914062,
+              39.88971887599667,
+              116.48048400878906,
+              39.98027708862264
+            ],
+            "width": 147,
+            "height": 172
+          },
+          {
+            "id": "sidecar-imagery-z11.pgw",
+            "kind": "raster",
+            "role": "metadata",
+            "path": "imagery-z11.pgw",
+            "mimeType": "text/plain",
+            "bytes": 92,
+            "sha256": "ed65d545188e1c6c470e56356c55a90511c0f0414c1cf6d65d6388fa8143305a",
+            "crs": "EPSG:3857",
+            "bounds": [
+              116.37954711914062,
+              39.88971887599667,
+              116.48048400878906,
+              39.98027708862264
+            ]
+          },
+          {
+            "id": "imagery-z11-jpg",
+            "kind": "raster",
+            "role": "analysis",
+            "path": "imagery-z11.jpg",
+            "mimeType": "image/jpeg",
+            "bytes": 16356,
+            "sha256": "e3b4f01c5fd699a30c20307cbf5d9c37b863c73c9c58a6cc20247541bb3e83dd",
+            "crs": "EPSG:3857",
+            "bounds": [
+              116.37954711914062,
+              39.88971887599667,
+              116.48048400878906,
+              39.98027708862264
+            ],
+            "width": 147,
+            "height": 172
+          },
+          {
+            "id": "sidecar-imagery-z11.jgw",
+            "kind": "raster",
+            "role": "metadata",
+            "path": "imagery-z11.jgw",
+            "mimeType": "text/plain",
+            "bytes": 92,
+            "sha256": "ed65d545188e1c6c470e56356c55a90511c0f0414c1cf6d65d6388fa8143305a",
+            "crs": "EPSG:3857",
+            "bounds": [
+              116.37954711914062,
+              39.88971887599667,
+              116.48048400878906,
+              39.98027708862264
+            ]
+          },
+          {
+            "id": "imagery-z12",
+            "kind": "raster",
+            "role": "analysis",
+            "path": "imagery-z12.tif",
+            "mimeType": "image/tiff",
+            "bytes": 303993,
+            "sha256": "dc22275106d374a35aa99dd1a167124e5b07e27f756874f6f5858d1ca78d5b17",
+            "crs": "EPSG:3857",
+            "bounds": [
+              116.37989044189452,
+              39.88998230025583,
+              116.48014068603516,
+              39.9800140116781
+            ],
+            "width": 292,
+            "height": 342
+          },
+          {
+            "id": "sidecar-imagery-z12.tfw",
+            "kind": "raster",
+            "role": "metadata",
+            "path": "imagery-z12.tfw",
+            "mimeType": "text/plain",
+            "bytes": 92,
+            "sha256": "e4a7d2e1cc8ed362c8f4eeb19d0aca56127e12f30d28fadae9467a46730b9717",
+            "crs": "EPSG:3857",
+            "bounds": [
+              116.37989044189452,
+              39.88998230025583,
+              116.48014068603516,
+              39.9800140116781
+            ]
+          },
+          {
+            "id": "sidecar-imagery-z12.prj",
+            "kind": "raster",
+            "role": "metadata",
+            "path": "imagery-z12.prj",
+            "mimeType": "text/plain",
+            "bytes": 353,
+            "sha256": "ddd5843d1bdea54a71a6d0c5ba86f47f3b5d568dec24f6e4990514c98042f058",
+            "crs": "EPSG:3857",
+            "bounds": [
+              116.37989044189452,
+              39.88998230025583,
+              116.48014068603516,
+              39.9800140116781
+            ]
+          },
+          {
+            "id": "imagery-z12-png",
+            "kind": "raster",
+            "role": "analysis",
+            "path": "imagery-z12.png",
+            "mimeType": "image/png",
+            "bytes": 210623,
+            "sha256": "356c21d9208187b3a3dbb7018517aea9a35aa83f23829cb804615e8b8c789e71",
+            "crs": "EPSG:3857",
+            "bounds": [
+              116.37989044189452,
+              39.88998230025583,
+              116.48014068603516,
+              39.9800140116781
+            ],
+            "width": 292,
+            "height": 342
+          },
+          {
+            "id": "sidecar-imagery-z12.pgw",
+            "kind": "raster",
+            "role": "metadata",
+            "path": "imagery-z12.pgw",
+            "mimeType": "text/plain",
+            "bytes": 92,
+            "sha256": "e4a7d2e1cc8ed362c8f4eeb19d0aca56127e12f30d28fadae9467a46730b9717",
+            "crs": "EPSG:3857",
+            "bounds": [
+              116.37989044189452,
+              39.88998230025583,
+              116.48014068603516,
+              39.9800140116781
+            ]
+          },
+          {
+            "id": "imagery-z12-jpg",
+            "kind": "raster",
+            "role": "analysis",
+            "path": "imagery-z12.jpg",
+            "mimeType": "image/jpeg",
+            "bytes": 58244,
+            "sha256": "06b723283d50bc0fdf845742d749e8e830c24d020888a581e1447377988b7d0c",
+            "crs": "EPSG:3857",
+            "bounds": [
+              116.37989044189452,
+              39.88998230025583,
+              116.48014068603516,
+              39.9800140116781
+            ],
+            "width": 292,
+            "height": 342
+          },
+          {
+            "id": "sidecar-imagery-z12.jgw",
+            "kind": "raster",
+            "role": "metadata",
+            "path": "imagery-z12.jgw",
+            "mimeType": "text/plain",
+            "bytes": 92,
+            "sha256": "e4a7d2e1cc8ed362c8f4eeb19d0aca56127e12f30d28fadae9467a46730b9717",
+            "crs": "EPSG:3857",
+            "bounds": [
+              116.37989044189452,
+              39.88998230025583,
+              116.48014068603516,
+              39.9800140116781
+            ]
+          },
+          {
+            "id": "imagery-mbtiles",
+            "kind": "raster",
+            "role": "offline",
+            "path": "imagery.mbtiles",
+            "mimeType": "application/vnd.mbtiles",
+            "bytes": 1798144,
+            "sha256": "74fdf35692e033d69856d8619afd5d84368672ec6dda0ef8fe7ec3c53eb44cda",
+            "crs": "EPSG:4326",
+            "bounds": [
+              116.38,
+              39.89,
+              116.48,
+              39.98
+            ]
+          },
+          {
+            "id": "imagery-gpkg",
+            "kind": "raster",
+            "role": "offline",
+            "path": "imagery.gpkg",
+            "mimeType": "application/geopackage+sqlite3",
+            "bytes": 233472,
+            "sha256": "8f26dc61f0a6a8698696afdff1e5f1f8171a9694561703eef13182880c7c01d8",
+            "crs": "EPSG:3857",
+            "bounds": [
+              116.38,
+              39.89,
+              116.48,
+              39.98
+            ]
+          },
+          {
+            "id": "raw-tiles-index",
+            "kind": "raster",
+            "role": "offline",
+            "path": "tiles-index.sqlite",
+            "mimeType": "application/vnd.geod.tiles-index+sqlite3",
+            "bytes": 12288,
+            "sha256": "b6888183df8c422581201a77d8390f089eded56264fc0e202ce75b02785f4bf6",
+            "crs": "EPSG:4326",
+            "bounds": [
+              116.38,
+              39.89,
+              116.48,
+              39.98
+            ]
+          }
+        ],
+        "layers": [],
+        "quality": {
+          "status": "complete",
+          "missingTiles": 0,
+          "warnings": []
+        },
+        "provenance": [
+          {
+            "source": "Esri World Imagery",
+            "attribution": "Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community",
+            "retrievedAt": "2026-10-02T12:41:22.501889800+00:00"
+          }
+        ]
+      },
+      "raster": {
+        "jobId": "d216c2f2-5e1f-49ee-9be4-1f7c53079885",
+        "assetId": "imagery-z11",
+        "sha256": "4ff2c4ecc1597c5e941b52e4ae0eb951eb4edc636eb09b2f42e0f71a2fc4d728",
+        "width": 147,
+        "height": 172,
+        "maxStripBytes": 66655,
+        "samples": [
+          116,
+          98,
+          76,
+          255,
+          86,
+          68,
+          46,
+          255,
+          117,
+          105,
+          81,
+          255,
+          128,
+          124,
+          97,
+          255,
+          181,
+          165,
+          142,
+          255,
+          111,
+          95,
+          72,
+          255,
+          83,
+          73,
+          48,
+          255,
+          117,
+          113,
+          86,
+          255,
+          111,
+          96,
+          75,
+          255,
+          108,
+          93,
+          72,
+          255,
+          67,
+          56,
+          34,
+          255,
+          71,
+          67,
+          42,
+          255,
+          128,
+          116,
+          94,
+          255,
+          85,
+          73,
+          51,
+          255,
+          88,
+          77,
+          55,
+          255,
+          86,
+          80,
+          56,
+          255
+        ],
+        "protocol": "http",
+        "dataTile": {
+          "type": "Uint8Array",
+          "bandCount": 5,
+          "length": 327680,
+          "nonzeroValues": 166638
+        }
+      }
+    },
+    {
+      "name": "annotation",
+      "job": {
+        "jobId": "42770aa7-c1cb-446b-a567-06f78b1a777a",
+        "planId": "tool-a9d2565ff2e4bda6cc42185c970f9baf6c5ba001b007b7320eadcf1edd0b6c92",
+        "approvalId": "20c39ea2-dc1a-40a4-850c-babe2885786f",
+        "planHash": "7bb22a159de30962eb91e3d4c0f1da672ef5b50739138f3effdb547a953ec168",
+        "idempotencyKey": "parity:e01db2da-a383-4daa-930d-76839684999b",
+        "state": "queued",
+        "version": 1,
+        "createdAt": "2026-10-02T12:41:27.165659500Z"
+      },
+      "plan": {
+        "planId": "tool-a9d2565ff2e4bda6cc42185c970f9baf6c5ba001b007b7320eadcf1edd0b6c92",
+        "plan": {
+          "schemaVersion": "0.1",
+          "spec": {
+            "schemaVersion": "0.1",
+            "kind": "imagery",
+            "sourceId": "esri-world-imagery",
+            "bounds": [
+              116.38,
+              39.89,
+              116.48,
+              39.98
+            ],
+            "zoomLevels": [
+              12
+            ],
+            "outputFormats": [
+              "geotiff"
+            ],
+            "exportOptions": {
+              "compression": "lzw",
+              "buildPyramid": false,
+              "generateSidecars": false,
+              "jpegQuality": 90,
+              "overlaySources": [
+                {
+                  "sourceId": "esri-reference-labels",
+                  "configRevision": "a52cc44584a7f34ea571b06039fe311baea40e3749577af740c7cf8f7e96e389"
+                }
+              ]
+            },
+            "outputDirectory": "\\\\?\\G:\\code\\geod-agent\\artifacts\\desktop-parity\\parity-86719fe9-cfe6-4c16-825c-84488e4af6ec\\imagery-20261002-124127-525c7f4d",
+            "limits": {
+              "maxTiles": 1000000,
+              "maxDecodedRgbaBytes": 1099511627776
+            }
+          },
+          "sourceName": "Esri World Imagery",
+          "attribution": "Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community",
+          "license": "",
+          "sourceFingerprint": "b178c5c3a9c4e490cccff6195663c645cae1f8288249414c1fa7756ef039e2cb",
+          "policyVersion": "imagery-plan-0.1",
+          "tileGrids": [
+            {
+              "zoom": 12,
+              "xMin": 3372,
+              "yMin": 1550,
+              "xMax": 3373,
+              "yMax": 1552,
+              "columns": 2,
+              "rows": 3,
+              "tileCount": 6,
+              "pixelWidth": 512,
+              "pixelHeight": 768,
+              "actualBounds": [
+                116.3671875,
+                39.842286020743394,
+                116.54296875,
+                40.044437584608566
+              ]
+            }
+          ],
+          "totalTiles": 6,
+          "decodedRgbaBytes": 1572864,
+          "requiredFreeDiskBytes": 23265280,
+          "createdAt": "2026-10-02T12:41:27.149528200Z",
+          "expiresAt": "2026-10-02T13:11:27.149528200Z",
+          "planHash": "7bb22a159de30962eb91e3d4c0f1da672ef5b50739138f3effdb547a953ec168"
+        }
+      },
+      "manifest": {
+        "schemaVersion": "1.0",
+        "kind": "geod-bundle",
+        "id": "geod-agent-job-42770aa7-c1cb-446b-a567-06f78b1a777a",
+        "name": "Esri World Imagery",
+        "createdAt": "2026-10-02T12:41:27.184935200+00:00",
+        "bounds": [
+          116.38,
+          39.89,
+          116.48,
+          39.98
+        ],
+        "assets": [
+          {
+            "id": "imagery-z12",
+            "kind": "raster",
+            "role": "analysis",
+            "path": "imagery-z12.tif",
+            "mimeType": "image/tiff",
+            "bytes": 342807,
+            "sha256": "5e0c619c6aa2dd3509850ab45b97ee7705388ae536a4b4e0d8b61c0af19101e4",
+            "crs": "EPSG:3857",
+            "bounds": [
+              116.37989044189452,
+              39.88998230025583,
+              116.48014068603516,
+              39.9800140116781
+            ],
+            "width": 292,
+            "height": 342
+          },
+          {
+            "id": "imagery-preview",
+            "kind": "raster",
+            "role": "preview",
+            "path": "preview.png",
+            "mimeType": "image/png",
+            "bytes": 324841,
+            "sha256": "18fc93d45b0716ddc511040befaad5f91ebc5ba4e42a175bf700ce2156a39c14",
+            "crs": "EPSG:3857",
+            "bounds": [
+              116.37989044189452,
+              39.88998230025583,
+              116.48014068603516,
+              39.9800140116781
+            ],
+            "width": 292,
+            "height": 342
+          }
+        ],
+        "layers": [],
+        "quality": {
+          "status": "complete",
+          "missingTiles": 0,
+          "warnings": []
+        },
+        "provenance": [
+          {
+            "source": "Esri World Imagery",
+            "attribution": "Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community",
+            "retrievedAt": "2026-10-02T12:41:27.184943800+00:00"
+          },
+          {
+            "source": "Esri 影像注记",
+            "attribution": "Esri and contributors",
+            "retrievedAt": "2026-10-02T12:41:27.184946+00:00"
+          }
+        ]
+      },
+      "raster": {
+        "jobId": "42770aa7-c1cb-446b-a567-06f78b1a777a",
+        "assetId": "imagery-z12",
+        "sha256": "5e0c619c6aa2dd3509850ab45b97ee7705388ae536a4b4e0d8b61c0af19101e4",
+        "width": 292,
+        "height": 342,
+        "maxStripBytes": 254476,
+        "samples": [
+          70,
+          67,
+          52,
+          255,
+          77,
+          75,
+          60,
+          255,
+          126,
+          124,
+          109,
+          255,
+          147,
+          148,
+          134,
+          255,
+          133,
+          130,
+          115,
+          255,
+          106,
+          104,
+          89,
+          255,
+          87,
+          85,
+          70,
+          255,
+          81,
+          82,
+          68,
+          255,
+          148,
+          145,
+          130,
+          255,
+          76,
+          74,
+          59,
+          255,
+          71,
+          69,
+          54,
+          255,
+          63,
+          64,
+          50,
+          255,
+          95,
+          92,
+          77,
+          255,
+          99,
+          97,
+          82,
+          255,
+          115,
+          113,
+          98,
+          255,
+          111,
+          112,
+          98,
+          255
+        ],
+        "protocol": "http",
+        "dataTile": {
+          "type": "Uint8Array",
+          "bandCount": 5,
+          "length": 373760,
+          "nonzeroValues": 373646
+        }
+      }
+    },
+    {
+      "name": "dem",
+      "job": {
+        "jobId": "e676b09e-5eb4-4717-b3b5-2e5e6ad07fc7",
+        "planId": "tool-f28d52d7541c42aeb05f5e1f461f1a41c38472699aec979d7226dc1d0e1a9dc8",
+        "approvalId": "31857e0f-1043-47e0-b89a-3f46f28122ff",
+        "planHash": "d12b269f55275bed5b5a7fe71c71e9ed899e0ac36c645bf25ec65394c8889d5a",
+        "idempotencyKey": "parity:aa5fb6ce-3f1d-4985-8c9b-d16e8b10c2b0",
+        "state": "queued",
+        "version": 1,
+        "createdAt": "2026-10-02T12:41:27.562101Z"
+      },
+      "plan": {
+        "planId": "tool-f28d52d7541c42aeb05f5e1f461f1a41c38472699aec979d7226dc1d0e1a9dc8",
+        "plan": {
+          "schemaVersion": "0.1",
+          "spec": {
+            "schemaVersion": "0.1",
+            "kind": "imagery",
+            "sourceId": "terrarium-dem",
+            "bounds": [
+              116.2,
+              39.8,
+              116.6,
+              40.1
+            ],
+            "zoomLevels": [
+              10
+            ],
+            "outputFormats": [
+              "geotiff"
+            ],
+            "exportOptions": {
+              "compression": "lzw",
+              "buildPyramid": true,
+              "generateSidecars": false,
+              "jpegQuality": 90,
+              "elevationEncoding": "terrarium"
+            },
+            "outputDirectory": "\\\\?\\G:\\code\\geod-agent\\artifacts\\desktop-parity\\parity-86719fe9-cfe6-4c16-825c-84488e4af6ec\\imagery-20261002-124127-716da1d4",
+            "limits": {
+              "maxTiles": 1000000,
+              "maxDecodedRgbaBytes": 1099511627776
+            }
+          },
+          "sourceName": "Terrarium 高程",
+          "attribution": "Mapzen / AWS Terrain Tiles",
+          "license": "",
+          "sourceFingerprint": "145a7a2a94bf56e7b16d8e072eed004a03e02db5cbaa6039e9b994dc613891f1",
+          "policyVersion": "imagery-plan-0.1",
+          "tileGrids": [
+            {
+              "zoom": 10,
+              "xMin": 842,
+              "yMin": 387,
+              "xMax": 843,
+              "yMax": 388,
+              "columns": 2,
+              "rows": 2,
+              "tileCount": 4,
+              "pixelWidth": 512,
+              "pixelHeight": 512,
+              "actualBounds": [
+                116.015625,
+                39.6395375643667,
+                116.71875,
+                40.17887331434696
+              ]
+            }
+          ],
+          "totalTiles": 4,
+          "decodedRgbaBytes": 1048576,
+          "requiredFreeDiskBytes": 21102592,
+          "createdAt": "2026-10-02T12:41:27.546526300Z",
+          "expiresAt": "2026-10-02T13:11:27.546526300Z",
+          "planHash": "d12b269f55275bed5b5a7fe71c71e9ed899e0ac36c645bf25ec65394c8889d5a"
+        }
+      },
+      "manifest": {
+        "schemaVersion": "1.0",
+        "kind": "geod-bundle",
+        "id": "geod-agent-job-e676b09e-5eb4-4717-b3b5-2e5e6ad07fc7",
+        "name": "Terrarium 高程",
+        "createdAt": "2026-10-02T12:41:27.580496300+00:00",
+        "bounds": [
+          116.2,
+          39.8,
+          116.6,
+          40.1
+        ],
+        "assets": [
+          {
+            "id": "elevation-info",
+            "kind": "raster",
+            "role": "metadata",
+            "path": "elevation-info.json",
+            "mimeType": "application/json",
+            "bytes": 164,
+            "sha256": "c7834d7390433ff1cd9c4ac4d6704a111fae2663e30b0902eb38f3012d7ff185",
+            "crs": "EPSG:4326",
+            "bounds": [
+              116.2,
+              39.8,
+              116.6,
+              40.1
+            ]
+          },
+          {
+            "id": "imagery-z10",
+            "kind": "raster",
+            "role": "analysis",
+            "path": "imagery-z10.tif",
+            "mimeType": "image/tiff",
+            "bytes": 90948,
+            "sha256": "6f1c18d9b8a7801f99e8a9cebe2b49fe2361cc75632bd6369e7bdf6b22721467",
+            "crs": "EPSG:3857",
+            "bounds": [
+              116.19964599609376,
+              39.79904087286648,
+              116.60064697265624,
+              40.100134613086574
+            ],
+            "width": 292,
+            "height": 286
+          },
+          {
+            "id": "imagery-preview",
+            "kind": "raster",
+            "role": "preview",
+            "path": "preview.png",
+            "mimeType": "image/png",
+            "bytes": 11398,
+            "sha256": "c2aa93026da94587fa22beded0027857d73ded481e27a32f1d74d94e806f1d34",
+            "crs": "EPSG:3857",
+            "bounds": [
+              116.19964599609376,
+              39.79904087286648,
+              116.60064697265624,
+              40.100134613086574
+            ],
+            "width": 292,
+            "height": 286
+          }
+        ],
+        "layers": [],
+        "quality": {
+          "status": "complete",
+          "missingTiles": 0,
+          "warnings": []
+        },
+        "provenance": [
+          {
+            "source": "Terrarium 高程",
+            "attribution": "Mapzen / AWS Terrain Tiles",
+            "retrievedAt": "2026-10-02T12:41:27.580506200+00:00"
+          }
+        ]
+      },
+      "raster": {
+        "jobId": "e676b09e-5eb4-4717-b3b5-2e5e6ad07fc7",
+        "assetId": "imagery-z10",
+        "sha256": "6f1c18d9b8a7801f99e8a9cebe2b49fe2361cc75632bd6369e7bdf6b22721467",
+        "width": 292,
+        "height": 286,
+        "maxStripBytes": 62907,
+        "samples": [
+          52,
+          52,
+          51,
+          49,
+          49,
+          49,
+          49,
+          49,
+          48,
+          49,
+          49,
+          50,
+          51,
+          50,
+          51,
+          51
+        ],
+        "protocol": "http",
+        "dataTile": {
+          "type": "Uint8Array",
+          "bandCount": 2,
+          "length": 149504,
+          "nonzeroValues": 149504
+        }
+      }
+    }
+  ]
+}

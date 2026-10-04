@@ -1,0 +1,15 @@
+from pathlib import Path
+p = Path('crates/geod-core/src/imagery.rs')
+s = p.read_text(encoding='utf-8')
+s = s.replace('DynamicImage, ImageEncoder', 'ImageEncoder').replace('encoder::{colortype::RGBA8, TiffEncoder}', 'encoder::TiffEncoder')
+start = s.index('fn write_tiff(')
+end = s.index('fn sha256_file(', start)
+s = s[:start] + s[end:]
+s = s.replace('|| request.deadline.is_zero()', '|| request.deadline.is_zero()\n        || !(1..=100).contains(&request.export_options.jpeg_quality)')
+s = s.replace('and include GeoTIFF output', 'and include GeoTIFF, PNG or JPEG output')
+s = s.replace('request.output_geotiff || !request.extra_outputs.is_empty()', 'request.output_geotiff || request.extra_outputs.iter().any(|f| matches!(f, ExtraOutput::Png | ExtraOutput::Jpeg))')
+s = s.replace('if request.output_mbtiles {\n            manifest.quality.warnings.push', 'if request.output_mbtiles || request.extra_outputs.iter().any(|f| matches!(f, ExtraOutput::GeoPackage | ExtraOutput::Tiles)) {\n            manifest.quality.warnings.push')
+s = s.replace('MBTiles preserves complete source tiles; the boundary alpha mask applies to GeoTIFF and preview only', 'Tile containers preserve complete source tiles; the boundary mask applies to GeoTIFF, PNG, JPEG and preview')
+s = s.replace('for (id, filename, mime) in extra_tiles.finish()? {\n        manifest.assets.push(asset(', 'for (id, filename, mime) in extra_tiles.finish()? {\n        let mut tile_asset = asset(')
+s = s.replace('AssetFootprint { bounds: request.bounds, dimensions: None })?);\n    }\n    if started.elapsed()', 'AssetFootprint { bounds: request.bounds, dimensions: None })?;\n        if mime == "application/geopackage+sqlite3" { tile_asset.crs = "EPSG:3857".into(); }\n        manifest.assets.push(tile_asset);\n    }\n    if started.elapsed()')
+p.write_text(s, encoding='utf-8', newline='\n')

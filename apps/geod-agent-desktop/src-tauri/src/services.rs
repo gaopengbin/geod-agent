@@ -6,22 +6,22 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::{
     fs,
-    io::{Read, Write},
+    io::{BufRead, BufReader, Read, Write},
     net::TcpListener,
     path::PathBuf,
     sync::{Arc, Mutex},
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
-use tauri::{AppHandle, State};
+use tauri::{ipc::Channel, AppHandle, State};
 use tauri_plugin_opener::OpenerExt;
 use uuid::Uuid;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ServiceError {
-    code: &'static str,
-    message: String,
+    pub(crate) code: &'static str,
+    pub(crate) message: String,
 }
 fn error(code: &'static str, message: &str) -> ServiceError {
     ServiceError {
@@ -78,6 +78,7 @@ impl Drop for FlowReservation {
         }
     }
 }
+#[derive(Clone)]
 pub struct ServiceState {
     config_path: PathBuf,
     flow: Arc<Mutex<Flow>>,
@@ -91,6 +92,14 @@ impl ServiceState {
             credential_lock: Arc::new(Mutex::new(())),
         }
     }
+}
+
+pub fn current_user_id(state: &ServiceState) -> Result<String, ServiceError> {
+    let config = load_config(&state.config_path)?;
+    let _ = get_access_token(state, &config)?;
+    let tokens = read_tokens(&config.identity_origin)?
+        .ok_or_else(|| error("AUTH_REQUIRED", "请先登录 GeoD"))?;
+    Ok(tokens.user_id)
 }
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -185,7 +194,7 @@ fn validate_config(config: ServiceConfig) -> Result<ServiceConfig, ServiceError>
     })
 }
 fn load_config(path: &PathBuf) -> Result<ServiceConfig, ServiceError> {
-    let config: ServiceConfig = match fs::read_to_string(path) {
+    let mut config: ServiceConfig = match fs::read_to_string(path) {
         Ok(value) => serde_json::from_str(&value)
             .map_err(|_| error("SERVICE_NOT_CONFIGURED", "服务配置损坏"))?,
         Err(io_error) if io_error.kind() == std::io::ErrorKind::NotFound => {
@@ -204,23 +213,23 @@ fn load_config(path: &PathBuf) -> Result<ServiceConfig, ServiceError> {
         }
         Err(_) => return Err(error("SERVICE_NOT_CONFIGURED", "读取服务配置失败")),
     };
+    // A development preview can use a local gateway while keeping the real login.
+    #[cfg(debug_assertions)]
+    if let Ok(origin) = std::env::var("GEOD_AGENT_DEV_GATEWAY_ORIGIN") {
+        let url = reqwest::Url::parse(&origin).map_err(|_| error("SERVICE_NOT_CONFIGURED", "本地网关地址无效"))?;
+        if url.scheme() != "http" || url.host_str() != Some("127.0.0.1") { return Err(error("SERVICE_NOT_CONFIGURED", "开发网关必须运行在本机")); }
+        config.gateway_origin = origin;
+    }
     validate_config(config)
 }
 fn client(origin: &str) -> Result<Client, ServiceError> {
-    let mut builder = Client::builder()
+    let proxy = crate::network::proxy_for(origin)
+        .map_err(|_| error("NETWORK_SETTINGS_ERROR", "网络代理设置无效，请在设置中检查"))?;
+    let builder = Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .timeout(Duration::from_secs(55));
-    #[cfg(windows)]
-    if Url::parse(origin)
-        .ok()
-        .and_then(|url| url.host_str().map(str::to_string))
-        .is_some_and(|host| !matches!(host.as_str(), "127.0.0.1" | "localhost" | "[::1]" | "::1"))
-    {
-        if let Some(proxy) = crate::windows_user_proxy() {
-            builder = builder.proxy(proxy);
-        }
-    }
-    builder
+    crate::network::apply_blocking(builder, proxy.as_deref())
+        .map_err(|_| error("NETWORK_SETTINGS_ERROR", "网络代理设置无效，请在设置中检查"))?
         .build()
         .map_err(|_| error("NETWORK_ERROR", "网络客户端初始化失败"))
 }
@@ -265,6 +274,13 @@ fn get_access_token(state: &ServiceState, config: &ServiceConfig) -> Result<Stri
         .credential_lock
         .lock()
         .expect("credential mutex poisoned");
+    // The desktop and its detached background share the same rotating token.
+    // Serialize refresh across processes, then reread the current vault value.
+    let refresh_lock = fs::OpenOptions::new().create(true).read(true).write(true)
+        .open(state.config_path.with_extension("credentials.lock"))
+        .map_err(|_| error("CREDENTIAL_STORE", "无法取得本机授权锁"))?;
+    fs2::FileExt::lock_exclusive(&refresh_lock)
+        .map_err(|_| error("CREDENTIAL_STORE", "无法取得本机授权锁"))?;
     let mut tokens = read_tokens(&config.identity_origin)?
         .ok_or_else(|| error("AUTH_REQUIRED", "请先登录 GeoD"))?;
     if tokens.identity_origin != config.identity_origin {
@@ -579,7 +595,9 @@ pub fn auth_begin(
     })
 }
 #[tauri::command]
-pub fn auth_logout(state: State<'_, ServiceState>) -> Result<AuthStatus, ServiceError> {
+pub fn auth_logout(app: AppHandle, state: State<'_, ServiceState>) -> Result<AuthStatus, ServiceError> {
+    use tauri::Manager;
+    app.state::<crate::codex_runtime::CodexState>().shutdown();
     if state.flow.lock().expect("flow mutex poisoned").pending {
         return Err(error("AUTH_IN_PROGRESS", "请先完成当前登录流程"));
     }
@@ -614,6 +632,47 @@ pub fn auth_logout(state: State<'_, ServiceState>) -> Result<AuthStatus, Service
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn payment_checkout_stays_on_the_declared_provider_and_fixture_boundary(){
+        let checkout=|url:&str,environment:&str,fixture:bool|json!({"checkoutUrl":url,"order":{"environment":environment},"fixture":fixture});
+        assert!(payment_checkout_url(&checkout("https://openapi.alipay.com/gateway.do?sign=signed","production",false),"https://geod.laogao.xyz").is_ok());
+        assert!(payment_checkout_url(&checkout("https://openapi-sandbox.dl.alipaydev.com/gateway.do","sandbox",false),"https://geod.laogao.xyz").is_ok());
+        for url in ["https://openapi.alipay.com.evil.example/gateway.do","https://u:p@openapi.alipay.com/gateway.do","https://openapi.alipay.com/gateway.do#part","http://openapi.alipay.com/gateway.do","https://openapi.alipay.com:8443/gateway.do"]{
+            assert!(payment_checkout_url(&checkout(url,"production",false),"https://geod.laogao.xyz").is_err());
+        }
+        assert!(payment_checkout_url(&checkout("http://127.0.0.1:43210/gateway.do","fixture",true),"https://geod.laogao.xyz").is_err());
+        assert!(payment_checkout_url(&checkout("http://127.0.0.1:43210/gateway.do","fixture",true),"http://127.0.0.1:43124").is_ok());
+        assert!(payment_checkout_url(&checkout("http://example.com/gateway.do","fixture",true),"http://127.0.0.1:43124").is_err());
+        assert!(payment_checkout_url(&checkout("https://openapi.alipay.com/gateway.do","unknown",false),"https://geod.laogao.xyz").is_err());
+    }
+    #[test]
+    fn payment_errors_preserve_uncertainty_and_do_not_render_an_object(){
+        let cause=gateway_response_error(reqwest::StatusCode::BAD_GATEWAY,"/v1/payments/orders/GDA000/refund",&json!({"error":{"code":"PAYMENT_PROVIDER_UNCERTAIN","message":"private provider diagnostics"}}));
+        assert_eq!(cause.code,"PAYMENT_PROVIDER_UNCERTAIN");assert!(!cause.message.contains("private"));
+        assert_eq!(gateway_response_error(reqwest::StatusCode::NOT_FOUND,"/v1/payments/status",&json!({"error":"NOT_FOUND"})).code,"PAYMENT_UNAVAILABLE");
+        assert!(payment_order_id("GDA0123456789abcdef0123456789abcdef"));assert!(!payment_order_id("GDA../orders"));assert!(!payment_order_id("GDA0123456789ABCDEF0123456789abcdef"));
+    }
+
+    #[test]
+    fn optional_payment_status_handles_a_real_proxy_html_404_without_hiding_other_errors(){
+        for (path,status,body,expected) in [
+            ("/v1/payments/status","404 Not Found","<html>Not found</html>","PAYMENT_UNAVAILABLE"),
+            ("/v1/payments/status","200 OK","<html>Not JSON</html>","GATEWAY_RESPONSE"),
+            ("/v1/payments/orders/GDA000","404 Not Found","<html>Not found</html>","GATEWAY_RESPONSE"),
+            ("/v1/payments/status","401 Unauthorized",r#"{"error":"UNAUTHORIZED"}"#,"AUTH_REQUIRED"),
+        ] {
+            let listener=TcpListener::bind("127.0.0.1:0").unwrap();
+            let origin=format!("http://{}",listener.local_addr().unwrap());
+            let server=thread::spawn(move||{
+                let (mut stream,_)=listener.accept().unwrap();let mut request=[0_u8;2048];stream.read(&mut request).unwrap();
+                write!(stream,"HTTP/1.1 {status}\r\nContent-Type: text/html\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).unwrap();
+            });
+            let response=reqwest::blocking::Client::builder().no_proxy().timeout(std::time::Duration::from_secs(5)).build().unwrap().get(format!("{origin}{path}")).send().unwrap();
+            assert_eq!(gateway_json_response(response,path).unwrap_err().code,expected);
+            server.join().unwrap();
+        }
+    }
 
     #[test]
     fn authorization_reservation_rejects_parallel_starts_and_releases_failed_preflight() {
@@ -661,16 +720,18 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn expired_local_login_refreshes_silently_and_survives_state_recreation() {
-        struct CredentialCleanup(String);
+        struct CredentialCleanup(String,PathBuf);
         impl Drop for CredentialCleanup {
             fn drop(&mut self) {
                 let _ = delete_tokens(&self.0);
+                let _ = fs::remove_file(self.1.with_extension("credentials.lock"));
             }
         }
 
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let origin = format!("http://{}", listener.local_addr().unwrap());
-        let cleanup = CredentialCleanup(origin.clone());
+        let config_path=std::env::temp_dir().join(format!("geod-credential-refresh-{}.json",Uuid::new_v4()));
+        let cleanup = CredentialCleanup(origin.clone(),config_path.clone());
         let old_refresh = "r".repeat(43);
         write_tokens(&Tokens {
             identity_origin: origin.clone(),
@@ -701,12 +762,12 @@ mod tests {
             identity_origin: origin.clone(),
             gateway_origin: origin.clone(),
         };
-        let first_state = ServiceState::new(PathBuf::new());
+        let first_state = ServiceState::new(config_path.clone());
         assert_eq!(get_access_token(&first_state, &config).unwrap(), new_access);
         server.join().unwrap();
         let persisted = read_tokens(&origin).unwrap().unwrap();
         assert_eq!(persisted.refresh_token, "s".repeat(43));
-        let restarted_state = ServiceState::new(PathBuf::new());
+        let restarted_state = ServiceState::new(config_path);
         assert_eq!(
             get_access_token(&restarted_state, &config).unwrap(),
             new_access
@@ -809,9 +870,70 @@ mod tests {
             "GATEWAY_ERROR"
         );
     }
+
+    #[test]
+    fn sponsored_optional_endpoint_distinguishes_legacy_from_authentication_and_network_failures() {
+        let missing=gateway_status_error(reqwest::StatusCode::NOT_FOUND,"/api/agent/sponsors","NOT_FOUND");
+        assert_eq!(sponsor_catalogue_result(Err(missing)).unwrap(),json!({"sponsors":[]}));
+        for (status,code) in [(reqwest::StatusCode::UNAUTHORIZED,"UNAUTHORIZED"),(reqwest::StatusCode::BAD_GATEWAY,"UPSTREAM_UNAVAILABLE")] {
+            let original=gateway_status_error(status,"/api/agent/sponsors",code);
+            let expected=original.code;
+            assert_eq!(sponsor_catalogue_result(Err(original)).unwrap_err().code,expected);
+        }
+        let public=json!({"sponsors":[{"id":"current"}]});
+        assert_eq!(sponsor_catalogue_result(Ok(public.clone())).unwrap(),public);
+    }
+
+    #[test]
+    fn quota_rejection_is_distinct_from_an_unknown_request() {
+        for path in ["/api/agent/generations", "/api/agent/generations/stream"] {
+            let rejected = gateway_response_error(
+                reqwest::StatusCode::TOO_MANY_REQUESTS,
+                path,
+                &json!({"error":"QUOTA_EXCEEDED","remainingTokens":12951}),
+            );
+            assert_eq!(rejected.code, "QUOTA_EXCEEDED");
+            assert!(rejected.message.contains("12.95K"));
+            assert!(rejected.message.contains("请求未提交"));
+        }
+        // Unknown upstream outcomes must retain their recovery record.
+        assert_eq!(gateway_response_error(
+            reqwest::StatusCode::BAD_GATEWAY,
+            "/api/agent/generations/stream",
+            &json!({"error":"UPSTREAM_UNKNOWN"}),
+        ).code, "GATEWAY_ERROR");
+        assert_eq!(gateway_response_error(
+            reqwest::StatusCode::BAD_GATEWAY,
+            "/api/agent/generations/stream",
+            &json!({"error":"QUOTA_EXCEEDED"}),
+        ).code, "GATEWAY_ERROR");
+    }
 }
 
 fn gateway_status_error(status: reqwest::StatusCode, path: &str, code: &str) -> ServiceError {
+    if path.starts_with("/v1/payments") {
+        if status==reqwest::StatusCode::NOT_FOUND&&code=="NOT_FOUND" {return error("PAYMENT_UNAVAILABLE","当前服务尚未开放支付，现有测试模式不受影响");}
+        return match code {
+            "UNAUTHORIZED"|"AUTH_REQUIRED"=>error("AUTH_REQUIRED","GeoD 登录已失效，请重新登录"),
+            "PAYMENT_DISABLED"=>error("PAYMENT_DISABLED","支付尚未开放，当前无需充值"),
+            "PAYMENT_PROVIDER_UNCERTAIN"=>error("PAYMENT_PROVIDER_UNCERTAIN","付款或退款结果尚未确认，请查询原订单，不要重复下单"),
+            "PAYMENT_ORDER_NOT_PAYABLE"=>error("PAYMENT_ORDER_NOT_PAYABLE","此订单暂不可继续支付，请查询原订单状态"),
+            "PAYMENT_ORDER_NOT_FOUND"=>error("PAYMENT_ORDER_NOT_FOUND","未找到当前账号的订单"),
+            "PAYMENT_REFUND_REVIEW_REQUIRED"=>error("PAYMENT_REFUND_REVIEW_REQUIRED","此订单的退款需要人工复核"),
+            "PAYMENT_REFUND_USED"=>error("PAYMENT_REFUND_USED","此笔余额已使用，退款需要人工复核"),
+            "PAYMENT_REFUND_BUSY"=>error("PAYMENT_REFUND_BUSY","有模型请求正在使用此笔余额，请等待请求结束后重试"),
+            "PAYMENT_DAILY_LIMIT"=>error("PAYMENT_DAILY_LIMIT","当前支付服务暂不能创建新订单，请稍后再试"),
+            "PAYMENT_IDEMPOTENCY_CONFLICT"=>error("PAYMENT_IDEMPOTENCY_CONFLICT","该下单请求已用于其他商品，请刷新订单列表"),
+            _=>error("PAYMENT_ERROR","支付操作未完成，请刷新原订单核对状态"),
+        };
+    }
+    if code=="BILLING_INSUFFICIENT_CREDIT" {return error("BILLING_INSUFFICIENT_CREDIT","可用 AI 余额不足以预留本次模型请求，请查看余额与订阅；本次未提交给模型");}
+    let sponsored=match code {"SPONSOR_QUOTA_EXCEEDED"=>Some("此赞助渠道的可用额度不足，请选择其他渠道"),"SPONSOR_CHANGED"=>Some("赞助渠道配置已更新，请刷新列表并重新选择模型"),"SPONSOR_DISABLED"=>Some("赞助渠道已停用，请选择其他模型"),"SPONSOR_NOT_STARTED"=>Some("赞助活动尚未开始，请稍后使用或选择其他模型"),"SPONSOR_ENDED"=>Some("赞助活动已结束，请选择其他模型"),"SPONSOR_UNAVAILABLE"=>Some("赞助渠道不可用，请刷新列表或选择其他模型"),"SPONSOR_MODEL_MISSING"=>Some("赞助模型已移除，请选择其他模型"),"SPONSOR_IMAGE_UNSUPPORTED"=>Some("此赞助渠道暂不支持图片，请选择支持图片的模型"),_=>None};
+    if let Some(message)=sponsored{return error(match code{"SPONSOR_QUOTA_EXCEEDED"=>"SPONSOR_QUOTA_EXCEEDED","SPONSOR_CHANGED"=>"SPONSOR_CHANGED","SPONSOR_DISABLED"=>"SPONSOR_DISABLED","SPONSOR_NOT_STARTED"=>"SPONSOR_NOT_STARTED","SPONSOR_ENDED"=>"SPONSOR_ENDED","SPONSOR_MODEL_MISSING"=>"SPONSOR_MODEL_MISSING","SPONSOR_IMAGE_UNSUPPORTED"=>"SPONSOR_IMAGE_UNSUPPORTED",_=>"SPONSOR_UNAVAILABLE"},message);}
+    if path=="/api/agent/sponsors"&&status==reqwest::StatusCode::NOT_FOUND{return error("SPONSOR_CATALOG_UNAVAILABLE","赞助渠道暂未开放");}
+    if status == reqwest::StatusCode::TOO_MANY_REQUESTS && code == "QUOTA_EXCEEDED" {
+        return error("QUOTA_EXCEEDED", "当前模型额度不足以覆盖单次请求的预留额度；本次请求未提交给模型。");
+    }
     if status == reqwest::StatusCode::NOT_FOUND
         && path.starts_with("/api/agent/generations/")
         && code == "NOT_FOUND"
@@ -833,6 +955,17 @@ fn gateway_status_error(status: reqwest::StatusCode, path: &str, code: &str) -> 
     )
 }
 
+fn gateway_response_error(status: reqwest::StatusCode, path: &str, value: &Value) -> ServiceError {
+    let code = value.get("error").and_then(|value|value.as_str().or_else(||value.get("code").and_then(Value::as_str))).unwrap_or("GATEWAY_ERROR");
+    let mut cause = gateway_status_error(status, path, code);
+    if cause.code == "QUOTA_EXCEEDED" {
+        if let Some(remaining) = value.get("remainingTokens").and_then(Value::as_u64) {
+            cause.message = format!("请求未提交：当前可用模型额度 {:.2}K，未达到单次请求的预留要求。此前的工具结果已保留。", remaining as f64 / 1000.0);
+        }
+    }
+    cause
+}
+
 fn gateway_call(
     state: &ServiceState,
     path: &str,
@@ -852,18 +985,106 @@ fn gateway_call(
         .bearer_auth(token)
         .send()
         .map_err(|_| error("GATEWAY_UNAVAILABLE", "GeoD Agent 模型服务暂时不可达"))?;
-    let status = response.status();
-    let value: Value = response
-        .json()
-        .map_err(|_| error("GATEWAY_RESPONSE", "模型服务响应无效"))?;
-    if !status.is_success() {
-        let code = value
-            .get("error")
-            .and_then(Value::as_str)
-            .unwrap_or("GATEWAY_ERROR");
-        return Err(gateway_status_error(status, path, code));
+    gateway_json_response(response,path)
+}
+fn gateway_json_response(response:reqwest::blocking::Response,path:&str)->Result<Value,ServiceError>{
+    let status=response.status();
+    // Optional status routes may be absent at the reverse proxy itself, which
+    // returns HTML rather than the gateway's JSON. Other responses stay strict.
+    if status==reqwest::StatusCode::NOT_FOUND&&path=="/v1/payments/status"{
+        return Err(gateway_status_error(status,path,"NOT_FOUND"));
     }
+    let value:Value=response.json().map_err(|_|error("GATEWAY_RESPONSE","模型服务响应无效"))?;
+    if !status.is_success(){return Err(gateway_response_error(status,path,&value));}
     Ok(value)
+}
+fn gateway_stream_call(
+    state: &ServiceState,
+    generation_id: String,
+    conversation_id: String,
+    messages: Value,
+    events: Channel<Value>,
+) -> Result<Value, ServiceError> {
+    let body = json!({ "generationId": generation_id, "conversationId": conversation_id, "messages": messages });
+    gateway_stream_body(state, "/api/agent/generations/stream", body, |event, value| {
+        let _ = events.send(json!({ "type": event, "data": value }));
+    })
+}
+
+pub(crate) fn codex_capabilities(state: &ServiceState) -> Result<Value, ServiceError> {
+    gateway_call(state, "/api/agent/capabilities", None)
+}
+fn sponsor_catalogue_result(result:Result<Value,ServiceError>)->Result<Value,ServiceError>{
+    match result {
+        // An authenticated legacy gateway without this optional endpoint has no sponsors.
+        Err(error) if error.code=="SPONSOR_CATALOG_UNAVAILABLE"=>Ok(json!({"sponsors":[]})),
+        other=>other,
+    }
+}
+pub(crate) fn sponsor_catalogue(state:&ServiceState)->Result<Value,ServiceError>{sponsor_catalogue_result(gateway_call(state,"/api/agent/sponsors",None))}
+
+pub(crate) fn codex_generate(state: &ServiceState, generation_id: &str, conversation_id: &str, request: Value, on_event: impl FnMut(&str, &Value)) -> Result<Value, ServiceError> {
+    codex_generate_sponsored(state,generation_id,conversation_id,request,None,on_event)
+}
+pub(crate) fn codex_generate_sponsored(state:&ServiceState,generation_id:&str,conversation_id:&str,request:Value,sponsor:Option<Value>,on_event:impl FnMut(&str,&Value))->Result<Value,ServiceError>{let mut body=json!({"generationId":generation_id,"conversationId":conversation_id,"request":request});if let Some(sponsor)=sponsor{body["sponsor"]=sponsor;}gateway_stream_body(state,"/api/agent/codex/generations/stream",body,on_event)}
+
+fn gateway_stream_body(state: &ServiceState, path: &str, body: Value, mut on_event: impl FnMut(&str, &Value)) -> Result<Value, ServiceError> {
+    let config = load_config(&state.config_path)?;
+    let token = get_access_token(state, &config)?;
+    let response = client(&config.gateway_origin)?
+        .post(format!("{}{path}", config.gateway_origin))
+        .timeout(Duration::from_secs(180))
+        .bearer_auth(token)
+        .json(&body)
+        .send()
+        .map_err(|_| error("GATEWAY_UNAVAILABLE", "GeoD Agent 模型服务暂时不可达"))?;
+    let status = response.status();
+    let streaming = response.headers().get(reqwest::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value.starts_with("text/event-stream"));
+    if !streaming {
+        if status == reqwest::StatusCode::NOT_FOUND && path == "/api/agent/generations/stream" {
+            return gateway_call(state, "/api/agent/generations", Some(body));
+        }
+        let value: Value = response.json().map_err(|_| error("GATEWAY_RESPONSE", "模型服务响应无效"))?;
+        if !status.is_success() {
+            return Err(gateway_response_error(status, path, &value));
+        }
+        return Ok(value);
+    }
+    if !status.is_success() { return Err(error("GATEWAY_ERROR", "模型流式请求失败")); }
+    let mut reader = BufReader::new(response);
+    let mut line = String::new();
+    let mut event = String::new();
+    let mut data = String::new();
+    let mut result = None;
+    loop {
+        line.clear();
+        let count = reader.read_line(&mut line).map_err(|_| error("GATEWAY_RESPONSE", "模型流式响应中断，可检查请求状态"))?;
+        if count == 0 { break; }
+        if line == "\n" || line == "\r\n" {
+            if !event.is_empty() && !data.is_empty() {
+                let value: Value = serde_json::from_str(data.trim_end()).map_err(|_| error("GATEWAY_RESPONSE", "模型流式事件无效"))?;
+                if event == "generation" { result = Some(value.clone()); }
+                if event == "error" { return Err(error("GATEWAY_ERROR", value["error"].as_str().unwrap_or("模型流式请求失败，可检查请求状态"))); }
+                on_event(&event, &value);
+            }
+            event.clear(); data.clear();
+        } else if let Some(value) = line.strip_prefix("event: ") {
+            event = value.trim().to_string();
+        } else if let Some(value) = line.strip_prefix("data: ") {
+            if data.len() + value.len() > 4_000_000 { return Err(error("GATEWAY_RESPONSE", "模型流式事件过大")); }
+            data.push_str(value);
+        }
+    }
+    result.ok_or_else(|| error("GATEWAY_RESPONSE", "模型流式响应未完成，可检查请求状态"))
+}
+
+#[cfg(test)]
+pub(crate) fn creator_test_generation(state: &ServiceState, conversation_id: &str, messages: Value) -> Result<Value, ServiceError> {
+    gateway_call(state, "/api/agent/generations", Some(json!({
+        "generationId": Uuid::new_v4().to_string(), "conversationId": conversation_id, "messages": messages
+    })))
 }
 #[tauri::command]
 pub async fn agent_generate(
@@ -881,6 +1102,22 @@ pub async fn agent_generate(
         .map_err(|_| error("GATEWAY_ERROR", "模型请求线程中断"))?
 }
 #[tauri::command]
+pub async fn agent_generate_stream(
+    state: State<'_, ServiceState>,
+    generation_id: String,
+    conversation_id: String,
+    messages: Value,
+    events: Channel<Value>,
+) -> Result<Value, ServiceError> {
+    let state = Arc::new(ServiceState {
+        config_path: state.config_path.clone(),
+        flow: Arc::clone(&state.flow),
+        credential_lock: Arc::clone(&state.credential_lock),
+    });
+    tauri::async_runtime::spawn_blocking(move || gateway_stream_call(&state, generation_id, conversation_id, messages, events))
+        .await.map_err(|_| error("GATEWAY_ERROR", "模型流式请求线程中断"))?
+}
+#[tauri::command]
 pub async fn agent_usage(state: State<'_, ServiceState>) -> Result<Value, ServiceError> {
     let state = Arc::new(ServiceState {
         config_path: state.config_path.clone(),
@@ -891,8 +1128,77 @@ pub async fn agent_usage(state: State<'_, ServiceState>) -> Result<Value, Servic
         .await
         .map_err(|_| error("GATEWAY_ERROR", "用量查询线程中断"))?
 }
+
+#[tauri::command]
+pub async fn agent_payment_snapshot(state: State<'_, ServiceState>) -> Result<Value, ServiceError> {
+    let state=state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move||{
+        let status=match gateway_call(&state,"/v1/payments/status",None){
+            Ok(value)=>value,
+            Err(cause) if cause.code=="PAYMENT_UNAVAILABLE"=>{
+                let usage=gateway_call(&state,"/api/agent/usage",None)?;
+                return Ok(json!({"status":{"candidate":true,"available":false,"checkoutEnabled":false,"environment":"disabled","fixture":false,
+                    "billingMode":if usage.get("quotaEnforced")==Some(&Value::Bool(false)){"unlimited-test"}else{"token-quota"},"products":[]},"wallet":null}));
+            },
+            Err(cause)=>return Err(cause),
+        };
+        let wallet=gateway_call(&state,"/v1/payments/wallet",None)?;
+        Ok(json!({"status":status,"wallet":wallet}))
+    }).await.map_err(|_|error("PAYMENT_ERROR","支付查询线程中断"))?
+}
+fn payment_order_id(value:&str)->bool{value.len()==35&&value.starts_with("GDA")&&value[3..].bytes().all(|c|c.is_ascii_digit()||(b'a'..=b'f').contains(&c))}
+fn payment_checkout_url(value:&Value,gateway_origin:&str)->Result<Url,ServiceError>{
+    let url=Url::parse(value.get("checkoutUrl").and_then(Value::as_str).unwrap_or(""))
+        .map_err(|_|error("PAYMENT_CHECKOUT_INVALID","收银台地址无效"))?;
+    let environment=value.get("order").and_then(|order|order.get("environment")).and_then(Value::as_str);
+    let valid=url.username().is_empty()&&url.password().is_none()&&url.fragment().is_none()&&url.path()=="/gateway.do"&&
+        match environment{
+            Some("production")=>url.scheme()=="https"&&url.host_str()==Some("openapi.alipay.com")&&url.port_or_known_default()==Some(443),
+            Some("sandbox")=>url.scheme()=="https"&&url.host_str()==Some("openapi-sandbox.dl.alipaydev.com")&&url.port_or_known_default()==Some(443),
+            Some("fixture")=>cfg!(debug_assertions)&&value.get("fixture")==Some(&Value::Bool(true))&&
+                Url::parse(gateway_origin).is_ok_and(|origin|origin.scheme()=="http"&&origin.host_str()==Some("127.0.0.1"))&&
+                url.scheme()=="http"&&url.host_str()==Some("127.0.0.1"),
+            _=>false,
+        };
+    if valid{Ok(url)}else{Err(error("PAYMENT_CHECKOUT_INVALID","收银台地址与支付环境不匹配"))}
+}
+#[tauri::command]
+pub async fn agent_payment_action(app:AppHandle,state:State<'_,ServiceState>,action:String,order_id:Option<String>,product_id:Option<String>,request_key:Option<String>)->Result<Value,ServiceError>{
+    let state=state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move||{
+        let (path,body)=if action=="create"{
+            let product=product_id.filter(|value|!value.is_empty()&&value.len()<=160).ok_or_else(||error("PAYMENT_INPUT_INVALID","请选择支付方案"))?;
+            let request=request_key.filter(|value|!value.is_empty()&&value.len()<=160).ok_or_else(||error("PAYMENT_INPUT_INVALID","缺少下单请求编号"))?;
+            ("/v1/payments/orders".to_owned(),json!({"productId":product,"requestKey":request}))
+        }else{
+            if !["checkout","refresh","cancel","refund"].contains(&action.as_str()){return Err(error("PAYMENT_INPUT_INVALID","支付操作无效"));}
+            let id=order_id.filter(|value|payment_order_id(value)).ok_or_else(||error("PAYMENT_INPUT_INVALID","订单编号无效"))?;
+            (format!("/v1/payments/orders/{id}/{action}"),json!({}))
+        };
+        let result=gateway_call(&state,&path,Some(body))?;
+        if action=="checkout"{
+            let config=load_config(&state.config_path)?;
+            let url=payment_checkout_url(&result,&config.gateway_origin)?;
+            app.opener().open_url(url.as_str(),None::<&str>).map_err(|_|error("PAYMENT_BROWSER_FAILED","无法打开收银台，可从原订单继续支付"))?;
+            return Ok(json!({"opened":true,"order":result.get("order"),"fixture":result.get("fixture")}));
+        }
+        Ok(result)
+    }).await.map_err(|_|error("PAYMENT_ERROR","支付操作线程中断"))?
+}
+#[tauri::command]
+pub async fn agent_events(state: State<'_, ServiceState>, account_id: String, events: Value) -> Result<Value, ServiceError> {
+    let state = Arc::new(ServiceState {
+        config_path: state.config_path.clone(),
+        flow: Arc::clone(&state.flow),
+        credential_lock: Arc::clone(&state.credential_lock),
+    });
+    tauri::async_runtime::spawn_blocking(move || gateway_call(&state, "/api/agent/events", Some(json!({
+        "schema_version": 1, "accountId": account_id, "events": events
+    })))).await.map_err(|_| error("GATEWAY_ERROR", "Telemetry transport interrupted"))?
+}
 #[tauri::command]
 pub async fn agent_generation_get(
+    app: tauri::AppHandle,
     state: State<'_, ServiceState>,
     generation_id: String,
 ) -> Result<Value, ServiceError> {
@@ -904,6 +1210,8 @@ pub async fn agent_generation_get(
     {
         return Err(error("INVALID_GENERATION", "模型请求编号无效"));
     }
+    let owner=current_user_id(&state)?;
+    if let Some(value)=crate::ai_channels::generation_get(&app,&owner,&generation_id)?{return Ok(value);}
     let state = Arc::new(ServiceState {
         config_path: state.config_path.clone(),
         flow: Arc::clone(&state.flow),

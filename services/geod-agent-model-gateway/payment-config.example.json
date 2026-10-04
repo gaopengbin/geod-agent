@@ -1,0 +1,20 @@
+{
+  "billingMode": "observe",
+  "dbPath": "./data/geod-payments-candidate.sqlite",
+  "catalogueApproved": false,
+  "approvedPricingVersion": "",
+  "approvedCatalogueSha256": "",
+  "maxDailyFen": 0,
+  "gateway": {
+    "environment": "sandbox",
+    "externalRequestsAuthorized": false,
+    "appId": "REPLACE_WITH_SANDBOX_APP_ID",
+    "sellerId": "REPLACE_WITH_SANDBOX_SELLER_ID",
+    "maxSingleFen": 0,
+    "privateKeyPath": "REPLACE_WITH_SERVER_PRIVATE_KEY_PATH",
+    "alipayPublicKeyPath": "REPLACE_WITH_PROVIDER_PUBLIC_KEY_PATH",
+    "notifyUrl": "https://YOUR_GEOD_GATEWAY/v1/payments/alipay/notify",
+    "returnUrl": "https://YOUR_GEOD_SITE/payment-result",
+    "timeoutMs": 10000
+  }
+}

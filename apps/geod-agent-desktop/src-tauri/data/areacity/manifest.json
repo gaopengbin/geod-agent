@@ -1,0 +1,22 @@
+{
+  "source": "https://github.com/xiangyuecn/AreaCity-JsSpider-StatsGov",
+  "version": "2025.251231.260403",
+  "collectedAt": "2026-04-03",
+  "nameSourceVersions": {
+    "nationalPlaceNames": "2025-12-31",
+    "tencent": "2025-11-19"
+  },
+  "sourceCrs": "GCJ-02",
+  "archiveSha256": "675c3e9b8dec6444994d3ef53259a145304f6a957db8a5e601e55c0b9e61e21a",
+  "csvSha256": "ac2641b1cb137d099779f49b21b965919591af9d82a29a911f6270530fef8ed7",
+  "geometrySha256": "75f816ac3e2e8df622914b2fb019f2b1637660fc52b14888bfc572de03049559",
+  "regionCount": 3635,
+  "emptyGeometryCount": 378,
+  "maximumVertices": 51321,
+  "maximumParts": 563,
+  "knownMissing": [
+    "和康县",
+    "和安县"
+  ],
+  "geometryEncoding": "per-region gzip: LE u32 polygons/rings/points then zigzag LEB128 coordinate deltas at 1e8 precision; no simplification"
+}

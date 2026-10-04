@@ -1,0 +1,22 @@
+# Application-owned stdio runtime. Connection secrets are child environment only.
+databases:
+  - name: default
+    allow_writes: false
+    allow_llm_switching: false
+    connect_timeout: 10s
+    pool_max_conns: 1
+    pool_min_conns: 0
+llm:
+  enabled: false
+knowledgebase:
+  enabled: false
+builtins:
+  tools:
+    query_database: true
+    get_schema_info: true
+    count_rows: true
+    execute_explain: false
+    generate_embedding: false
+    similarity_search: false
+    search_knowledgebase: false
+    llm_connection_selection: false

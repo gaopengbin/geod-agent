@@ -1,0 +1,28 @@
+{
+  "conversationId": "data-services-test-d6fb2d2d-266f-4cf2-bd08-9eb43194c8d9",
+  "cases": [
+    {
+      "case": "real WFS GetFeature Virginia",
+      "pass": false,
+      "error": "{'code': 'INPUT_NETWORK_FAILED', 'message': '在线数据返回 HTTP 403'}"
+    },
+    {
+      "case": "real OGC API Features lake",
+      "pass": true,
+      "discoveredFrom": "https://demo.pygeoapi.io/master/collections/lakes/items?f=json&limit=1",
+      "url": "https://demo.pygeoapi.io/master/collections/lakes/items/0?f=json",
+      "bounds": [
+        103.62001143,
+        51.46001171,
+        109.92980716,
+        55.7309138
+      ],
+      "polygonCount": 1
+    },
+    {
+      "case": "PostGIS same connection options reject INSERT",
+      "pass": true,
+      "sqlState": "25006"
+    }
+  ]
+}

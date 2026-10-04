@@ -1,0 +1,14 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+import {pathToFileURL} from 'node:url';
+const root='artifacts/product-gaps-20261004/legacy-office';
+const saved=JSON.parse(fs.readFileSync(root+'/qa-state.json','utf8'));
+assert(!saved.baselineChatIds.includes(saved.conversationId));
+const {chromium}=await import(pathToFileURL('C:/Users/Administrator/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs').href);
+const browser=await chromium.connectOverCDP('http://127.0.0.1:9233');
+let page;for(let attempt=0;attempt<100&&!page;attempt++){page=browser.contexts().flatMap(context=>context.pages()).find(page=>page.url().includes(':1420'));if(!page)await new Promise(resolve=>setTimeout(resolve,300));}assert(page);
+await page.locator('.conversation-account-trigger').waitFor();
+const value=await page.evaluate(async args=>{try{return {ok:true,value:await window.__TAURI_INTERNALS__.invoke('document_attachment_add',args)};}catch(error){return {ok:false,error};}},{conversationId:saved.conversationId,name:'owned-native-diagnostic.doc',base64:fs.readFileSync(root+'/beijing-brief.doc').toString('base64')});
+fs.writeFileSync(root+'/actual-native-diagnostic.json',JSON.stringify(value,null,2));console.log(JSON.stringify(value));
+if(value.ok)await page.evaluate(async args=>window.__TAURI_INTERNALS__.invoke('document_attachment_discard',args),{conversationId:saved.conversationId,id:value.value.id});
+await browser.close();

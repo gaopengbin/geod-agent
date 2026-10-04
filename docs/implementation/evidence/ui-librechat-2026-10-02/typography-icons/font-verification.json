@@ -1,0 +1,72 @@
+{
+  "desktop": {
+    "bodySize": "16px",
+    "fontFamily": "Inter, \"GeoD Noto Sans SC\", \"Segoe UI Variable\", \"Segoe UI\", \"Microsoft YaHei UI\", sans-serif",
+    "fontsLoaded": "loaded",
+    "horizontalOverflow": false,
+    "navIconSize": "18px",
+    "navIconStroke": "2",
+    "navSize": "14px",
+    "singleTaskEntryHeight": 58
+  },
+  "renderedFonts": {
+    "fonts": [
+      {
+        "familyName": "Noto Sans SC",
+        "glyphCount": 6,
+        "isCustomFont": true,
+        "postScriptName": "Noto-Sans-SC-Medium"
+      },
+      {
+        "familyName": "Noto Sans SC",
+        "glyphCount": 5,
+        "isCustomFont": true,
+        "postScriptName": "Noto-Sans-SC"
+      },
+      {
+        "familyName": "Inter",
+        "glyphCount": 20,
+        "isCustomFont": true,
+        "postScriptName": "Inter-Regular"
+      }
+    ]
+  },
+  "narrow": {
+    "bodySize": "15px",
+    "composer": [
+      {
+        "label": "添加数据范围（演示）",
+        "left": 91,
+        "right": 119
+      },
+      {
+        "label": "每次确认",
+        "left": 122,
+        "right": 150
+      },
+      {
+        "label": "查看上下文用量，当前 <0.1K / 42K 字符，0.0%",
+        "left": 225.875,
+        "right": 257.875
+      },
+      {
+        "label": "Codex / DeepSeek Flash",
+        "left": 260.875,
+        "right": 332
+      },
+      {
+        "label": "Codex / DeepSeek Flash",
+        "left": 129,
+        "right": 327
+      },
+      {
+        "label": "发送消息",
+        "left": 335,
+        "right": 363
+      }
+    ],
+    "horizontalOverflow": false,
+    "navIcon": "lucide lucide-panel-left-open",
+    "width": 390
+  }
+}

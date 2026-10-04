@@ -1,0 +1,27 @@
+{
+  "admin": {
+    "readOnly": "on",
+    "role": "geod_admin",
+    "visibleRows": 2
+  },
+  "mcp": {
+    "protocolVersion": "2025-11-25",
+    "server": "pgedge-postgres-mcp",
+    "toolCalls": 1,
+    "tools": [
+      "count_rows",
+      "get_schema_info",
+      "query_database",
+      "read_resource"
+    ],
+    "transport": "stdio",
+    "version": "1.1.0"
+  },
+  "reader": {
+    "readOnly": "on",
+    "role": "geod_reader",
+    "visibleRows": 1
+  },
+  "separateConcurrentContexts": true,
+  "writeRejectedByMcp": true
+}

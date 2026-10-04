@@ -1,0 +1,36 @@
+// Exercise the production native recovery commands with a real public source.
+import assert from 'node:assert/strict';
+import {randomUUID,createHash} from 'node:crypto';
+import {mkdirSync,readFileSync,writeFileSync} from 'node:fs';
+import {resolve,join} from 'node:path';
+const rpc=async(command,args={})=>{const r=await(await fetch('http://127.0.0.1:1421/rpc',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({command,args})})).json();if(r.error)throw {command,...r.error};return r.value;};
+async function done(jobId){const deadline=Date.now()+120000;while(Date.now()<deadline){const job=await rpc('jobs_get',{jobId});if(['completed','partial','failed','cancelled'].includes(job.state)){if(job.state!=='completed')throw Error(JSON.stringify(await rpc('jobs_events',{jobId,afterSeq:0})));return job;}await new Promise(r=>setTimeout(r,300));}throw Error('Native job deadline exceeded');}
+const conversationId=`recovery-${randomUUID()}`,workspace=resolve('../../artifacts/desktop-parity',conversationId);mkdirSync(workspace,{recursive:true});
+await rpc('workspace_set',{conversationId,directory:workspace,permission:'fullAccess'});
+const sourceId=`recovery-esri-${randomUUID().slice(0,8)}`;
+const endpoint={id:sourceId,name:'Esri recovery acceptance',urlTemplate:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',attribution:'Esri',license:'',scheme:'XYZ',tileSize:256,networkPolicy:'PublicHttps',minIntervalMs:0};
+await rpc('sources_save',{endpoint,minZoom:0,maxZoom:22,replaceExisting:false});
+const planned=await rpc('test_imagery_plan',{conversationId,executionId:randomUUID(),arguments:{sourceId,bounds:[116.402,39.914,116.406,39.917],zoom:16,outputFormats:['geotiff','mbtiles']}});
+assert.deepEqual(planned.errors,[]);const original=planned.plans[0].stored;
+const originalJob=await rpc('jobs_start_auto',{conversationId,planId:original.planId,idempotencyKey:randomUUID()});await done(originalJob.jobId);
+const originalManifest=await rpc('artifacts_inspect',{jobId:originalJob.jobId});
+const fingerprint=()=>Object.fromEntries(originalManifest.assets.map(a=>[a.path,createHash('sha256').update(readFileSync(join(original.plan.spec.outputDirectory,a.path))).digest('hex')]));
+const oldHashes=fingerprint();
+const input={conversationId,jobId:originalJob.jobId,mode:'exportAvailable',executionId:randomUUID()};
+const [cached,replay]=await Promise.all([rpc('imagery_recovery_plan',input),rpc('imagery_recovery_plan',input)]);
+assert.equal(cached.stored.planId,replay.stored.planId);assert.equal(cached.stored.plan.spec.exportOptions.cacheOnly,true);assert.notEqual(cached.stored.plan.spec.outputDirectory,original.plan.spec.outputDirectory);
+const cachedJob=await rpc('jobs_start_auto',{conversationId,planId:cached.stored.planId,idempotencyKey:randomUUID()});await done(cachedJob.jobId);
+const cachedManifest=await rpc('artifacts_inspect',{jobId:cachedJob.jobId});assert.equal(cachedManifest.quality.missingTiles,0);
+assert.deepEqual(fingerprint(),oldHashes);
+await rpc('workspace_set',{conversationId,directory:workspace,permission:'confirmEach'});
+const retry=await rpc('imagery_recovery_plan',{conversationId,jobId:originalJob.jobId,mode:'retryMissing',executionId:randomUUID()});assert(retry.requiresPlanConfirmation);assert.equal(retry.stored.plan.spec.exportOptions.reuseVerifiedCache,true);assert(!retry.stored.plan.spec.exportOptions.cacheOnly);
+await assert.rejects(()=>rpc('jobs_start_auto',{conversationId,planId:retry.stored.planId,idempotencyKey:randomUUID()}),e=>e.code==='APPROVAL_REQUIRED');
+const approval=await rpc('approvals_grant',{planId:retry.stored.planId,planHash:retry.stored.plan.planHash});
+const retryJob=await rpc('jobs_start',{planId:retry.stored.planId,planHash:retry.stored.plan.planHash,approvalId:approval.approvalId,idempotencyKey:randomUUID()});await done(retryJob.jobId);
+const foreign=`recovery-other-${randomUUID()}`;await rpc('workspace_set',{conversationId:foreign,directory:workspace,permission:'fullAccess'});
+await assert.rejects(()=>rpc('imagery_recovery_plan',{conversationId:foreign,jobId:originalJob.jobId,mode:'retryMissing',executionId:randomUUID()}),e=>e.code==='PLAN_NOT_OWNED');
+await rpc('sources_save',{endpoint:{...endpoint,minIntervalMs:1},minZoom:0,maxZoom:22,replaceExisting:true});
+await assert.rejects(()=>rpc('imagery_recovery_plan',{conversationId,jobId:originalJob.jobId,mode:'retryMissing',executionId:randomUUID()}),e=>e.code==='PLAN_STALE');
+const report={pass:true,checkedAt:new Date().toISOString(),conversationId,workspace,original,originalJob,originalManifest,cached,cachedJob,cachedManifest,retry,retryJob,originalArtifactsUnchanged:true,concurrentRequestIdempotent:true,confirmEachEnforced:true,crossConversationDenied:true,sourceRevisionChangeDenied:true};
+writeFileSync(resolve('../../docs/implementation/evidence/imagery-recovery-native-2026-10-02.json'),JSON.stringify(report,null,2));
+console.log(JSON.stringify({pass:true,originalJob:originalJob.jobId,cachedJob:cachedJob.jobId,retryJob:retryJob.jobId}));

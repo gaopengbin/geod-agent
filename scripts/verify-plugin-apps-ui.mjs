@@ -1,0 +1,23 @@
+/** Inspect settled production theme colors and App declaration details in the real WebView. */
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import {pathToFileURL} from 'node:url';
+const root=path.resolve('artifacts/product-gaps-20261004/plugin-apps'),saved=JSON.parse(fs.readFileSync(path.join(root,'restart-state.json'),'utf8'));
+const {chromium}=await import(pathToFileURL('C:/Users/Administrator/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs').href);
+const browser=await chromium.connectOverCDP('http://127.0.0.1:9233'),page=browser.contexts().flatMap(c=>c.pages()).find(p=>p.url().includes(':1420'));assert(page);
+const routePattern='**/@tauri-apps_plugin-dialog.js*',report={passed:false,cases:[]};
+try{
+ await page.route(routePattern,async route=>{const response=await route.fetch(),body=await response.text(),signature='async function open(options = {}) {';assert(body.includes(signature));await route.fulfill({response,body:body.replace(signature,signature+'\n if(options.directory && options.multiple === false) return '+JSON.stringify(saved.fixture)+';')});});
+ await page.reload();await page.locator('.conversation-account-trigger').waitFor();await page.evaluate(async()=>{const {setLanguagePreferences}=await import('/src/i18n.ts');setLanguagePreferences({language:'zh-CN'});document.documentElement.dataset.theme='dark';document.documentElement.style.colorScheme='dark'});await page.setViewportSize({width:1000,height:720});
+ await page.getByRole('button',{name:'技能与连接器',exact:true}).click();await page.getByRole('button',{name:'插件',exact:true}).click();await page.getByRole('button',{name:'导入插件',exact:true}).click();const dialog=page.getByRole('dialog');await dialog.waitFor();
+ for(const [theme,language]of [['dark','zh-CN'],['light','en']]){
+  await page.evaluate(async({theme,language})=>{const {setLanguagePreferences}=await import('/src/i18n.ts');setLanguagePreferences({language});document.documentElement.dataset.theme=theme;document.documentElement.style.colorScheme=theme},{theme,language});
+  await page.waitForFunction(()=>{const outline=document.querySelector('.plugin-preview-dialog .dialog-actions button[data-variant="outline"]');const foreground=getComputedStyle(document.documentElement).getPropertyValue('--foreground').trim();const probe=document.createElement('span');probe.style.color=foreground;document.body.appendChild(probe);const expected=getComputedStyle(probe).color;probe.remove();return outline&&getComputedStyle(outline).color===expected;});
+  const actual=await dialog.evaluate(el=>{const luminance=color=>{const values=color.match(/[\d.]+/g).slice(0,3).map(Number).map(v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4});return .2126*values[0]+.7152*values[1]+.0722*values[2]};const background=getComputedStyle(el).backgroundColor;return [...el.querySelectorAll('.dialog-actions button:not(:disabled)')].map(button=>{const css=getComputedStyle(button),bg=css.backgroundColor==='rgba(0, 0, 0, 0)'?background:css.backgroundColor;const l1=luminance(css.color),l2=luminance(bg);return{text:button.textContent.trim(),foreground:css.color,background:bg,contrast:(Math.max(l1,l2)+.05)/(Math.min(l1,l2)+.05)}})});
+  assert(actual.every(value=>value.contrast>=4.5),JSON.stringify(actual));await dialog.locator('.plugin-registered-app summary').first().focus();assert(await dialog.locator('.plugin-registered-app summary').first().evaluate(el=>el===document.activeElement));
+  await page.screenshot({path:path.join(root,'actual-app-preview-settled-'+theme+'-'+language+'-1000.png')});report.cases.push({name:'Actual settled '+theme+' '+language+' preview action contrast and keyboard focus',passed:true,actions:actual});
+ }
+ await dialog.getByRole('button',{name:'Cancel',exact:true}).click();report.passed=true;fs.writeFileSync(path.join(root,'ui-result.json'),JSON.stringify(report,null,2));console.log(JSON.stringify({passed:true,cases:report.cases.length}));
+}catch(error){report.error=error.message;fs.writeFileSync(path.join(root,'ui-result.json'),JSON.stringify(report,null,2));throw error;}
+finally{await page.unroute(routePattern).catch(()=>{});await page.evaluate(async saved=>{const {setLanguagePreferences}=await import('/src/i18n.ts');if(saved.settings.language)setLanguagePreferences(JSON.parse(saved.settings.language));document.documentElement.dataset.theme=saved.settings.theme;document.documentElement.style.colorScheme=saved.settings.theme},saved).catch(()=>{});await page.setViewportSize({width:saved.settings.width,height:saved.settings.height}).catch(()=>{});await page.reload().catch(()=>{});await browser.close();}

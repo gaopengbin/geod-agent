@@ -1,0 +1,16 @@
+.chat-document-attachments{display:flex;flex-wrap:wrap;gap:8px;min-width:0;margin:4px 0 8px}
+.chat-document-chip{display:flex;align-items:center;gap:10px;min-width:0;max-width:min(100%,320px);padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:var(--muted);color:var(--foreground)}
+.chat-document-chip>svg{flex:none;color:var(--muted-foreground)}
+.chat-document-name{min-width:0;display:flex;flex-direction:column;gap:3px}
+.chat-document-name strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:500}
+.chat-document-name small{font-size:11px;color:var(--muted-foreground);white-space:nowrap}
+.chat-document-chip>button{flex:none;width:24px;height:24px;border-radius:6px}
+.chat-document-chip.has-warning small{color:var(--agent-warning,#a66314)}
+.composer-documents .chat-document-attachments{max-height:144px;overflow-y:auto;scrollbar-width:none}
+.composer-documents .chat-document-attachments::-webkit-scrollbar{display:none}
+.dialog.document-password-dialog{width:min(440px,calc(100vw - 32px))}
+.document-password-dialog .dialog-body{display:flex;flex-direction:column;gap:18px}
+.document-password-file{display:flex;align-items:center;gap:10px;min-width:0;color:var(--muted-foreground)}
+.document-password-file svg{flex:none}
+.document-password-file span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
+.document-password-help{margin:0;font-size:12px;line-height:1.65;color:var(--muted-foreground)}

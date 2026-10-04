@@ -1,0 +1,18 @@
+{
+  "tika": {
+    "version": "3.3.2",
+    "filename": "tika-app-3.3.2.jar",
+    "url": "https://downloads.apache.org/tika/3.3.2/tika-app-3.3.2.jar",
+    "sha512": "88c2032cba0d45feea361e6eebd2918bd04707614cdda5d89a1b167da5503c98e7b4cd368336f0402d559abcaf5006fcc7c825c32c749ae0417ea2f3b8423aba",
+    "checksumSource": "https://downloads.apache.org/tika/3.3.2/tika-app-3.3.2.jar.sha512",
+    "license": "Apache-2.0"
+  },
+  "java": {
+    "version": "21.0.12.1+1",
+    "filename": "OpenJDK21U-jre_x64_windows_hotspot_21.0.12.1_1.zip",
+    "url": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_x64_windows_hotspot_21.0.12.1_1.zip",
+    "sha256": "d35f31e712f0fcf6ac5a093edc90204fbff22f720ba3950bd09d331d5e621636",
+    "checksumSource": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_x64_windows_hotspot_21.0.12.1_1.zip.sha256.txt",
+    "license": "GPL-2.0-with-classpath-exception"
+  }
+}

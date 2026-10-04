@@ -6,8 +6,7 @@ use geod_task_engine::{
 };
 
 fn source() -> SourceDescriptor {
-    SourceDescriptor {
-        schema_version: SchemaVersion::V0_1,
+    SourceDescriptor { elevation_encoding: None, schema_version: SchemaVersion::V0_1,
         id: "synthetic-xyz".into(),
         display_name: "Synthetic XYZ fixture".into(),
         attribution: "Generated pixels for tests".into(),
@@ -31,6 +30,7 @@ fn spec() -> TaskSpec {
         boundary: None,
         zoom_levels: vec![1],
         output_formats: vec![OutputFormat::GeoTiff],
+        export_options: None,
         output_directory: std::env::temp_dir()
             .join("geod-agent-fixture")
             .to_string_lossy()

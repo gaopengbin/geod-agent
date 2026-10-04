@@ -11,7 +11,7 @@ test("artifact facts sent to the model omit local file names and private warning
     provenance: [{ source: "USGS NAIP", attribution: "USGS", retrievedAt: "2026-09-28T00:00:00Z" }],
   };
   const result = artifactResultForModel("job-1", manifest);
-  assert.deepEqual(result.assets[0], { kind: "raster", role: "analysis", bytes: 4914, sha256: "abc123", bounds: manifest.bounds, width: 30, height: 38 });
+  assert.deepEqual(result.assets[0], { id:"raster", kind: "raster", role: "analysis", bytes: 4914, sha256: "abc123", bounds: manifest.bounds, width: 30, height: 38 });
   assert.equal(result.quality.warnings[0], "See the desktop results for a local verification warning");
   assert.doesNotMatch(JSON.stringify(result), /Alice|Private|imagery\.tif/);
 });

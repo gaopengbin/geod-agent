@@ -1,0 +1,24 @@
+[
+  {
+    "format": "boundary.geojson",
+    "pass": true,
+    "bounds": [
+      116.1,
+      39.6,
+      116.3,
+      39.8
+    ],
+    "holesPreserved": true
+  },
+  {
+    "format": "boundary.gpkg",
+    "pass": true,
+    "bounds": [
+      116.1,
+      39.6,
+      116.3,
+      39.8
+    ],
+    "holesPreserved": true
+  }
+]

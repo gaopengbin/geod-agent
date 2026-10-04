@@ -24,6 +24,16 @@
     "displayName": {
       "type": "string"
     },
+    "elevationEncoding": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ElevationEncoding"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "id": {
       "type": "string"
     },
@@ -70,6 +80,12 @@
     "configRevision"
   ],
   "$defs": {
+    "ElevationEncoding": {
+      "type": "string",
+      "enum": [
+        "terrarium"
+      ]
+    },
     "SchemaVersion": {
       "type": "string",
       "enum": [

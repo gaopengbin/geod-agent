@@ -1,0 +1,19 @@
+.audio-setup-dialog,.audio-transcript-dialog{width:min(520px,calc(100vw - 40px));max-height:calc(100vh - 64px);display:flex;flex-direction:column}
+.audio-setup-dialog .dialog-body,.audio-transcript-dialog .dialog-body{overflow:auto;min-height:0;scrollbar-width:none}
+.audio-setup-dialog .dialog-body::-webkit-scrollbar,.audio-transcript-dialog .dialog-body::-webkit-scrollbar{display:none}
+.audio-setup-dialog .dialog-body{display:grid;gap:16px}
+.audio-model-description,.audio-transcript-notice{margin:0;color:var(--muted-foreground);font-size:13px;line-height:1.6}
+.audio-model-description{margin-top:-8px}
+.audio-model-state{display:flex;gap:12px;align-items:flex-start;padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--muted)}
+.audio-model-state>svg{flex:none;color:var(--muted-foreground);margin-top:2px}
+.audio-model-state>div{display:grid;gap:7px;flex:1;min-width:0}
+.audio-model-state strong{font-size:14px;font-weight:500}
+.audio-model-state small{font-size:12px;line-height:1.6;color:var(--muted-foreground)}
+.audio-model-state .desktop-update-progress{height:4px}
+.audio-transcript-dialog textarea{width:100%;min-height:220px;max-height:45vh;resize:vertical;padding:12px;margin-top:14px;border:1px solid var(--border);border-radius:10px;background:var(--background);color:var(--foreground);font:inherit;font-size:14px;line-height:1.75;scrollbar-width:none}
+.audio-transcript-dialog textarea:focus-visible{outline:2px solid var(--ring);outline-offset:2px}
+.chat-document-name.audio-review{appearance:none;border:0;background:none;color:inherit;text-align:left;padding:0;border-radius:4px;cursor:pointer}
+.chat-document-name.audio-review:hover strong{text-decoration:underline;text-underline-offset:3px}
+.chat-document-name.audio-review:focus-visible{outline:2px solid var(--ring);outline-offset:4px}
+.chat-document-chip>.chat-document-name.audio-review{width:auto;height:auto;flex:1;align-items:flex-start;gap:3px;font-weight:400}
+.composer-audio-status{display:flex;align-items:center;gap:8px;color:var(--muted-foreground);font-size:12px;min-height:30px}

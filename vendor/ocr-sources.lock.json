@@ -1,0 +1,24 @@
+{
+  "licenses": [
+    {
+      "filename": "LICENSE-RapidOCR.txt",
+      "url": "https://raw.githubusercontent.com/RapidAI/RapidOCR/v3.9.2/LICENSE",
+      "sha256": "3e0af25fdd06aa9586ae97adb00ea927ebe5a3805ac77d2d3a81ce5f55693333"
+    },
+    {
+      "filename": "LICENSE-antlr4-runtime.txt",
+      "url": "https://raw.githubusercontent.com/antlr/antlr4/4.9.3/LICENSE.txt",
+      "sha256": "b1b379fcaf3219593a4c433feb1b35c780bed23fafaae440b1ae2771a9521e3a"
+    },
+    {
+      "filename": "LICENSE-flatbuffers.txt",
+      "url": "https://raw.githubusercontent.com/google/flatbuffers/v25.12.19/LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "filename": "LICENSE-tqdm.txt",
+      "url": "https://raw.githubusercontent.com/tqdm/tqdm/v4.70.1/LICENCE",
+      "sha256": "fcff87c3a47ce8028a8512aa182d4fcf0ad1c90544ee75cf9b343684cac194de"
+    }
+  ]
+}

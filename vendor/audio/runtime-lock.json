@@ -1,0 +1,16 @@
+{
+  "engine": "whisper.cpp",
+  "version": "1.9.4",
+  "binaryTag": "b5130",
+  "repository": "https://github.com/ggml-org/whisper.cpp",
+  "archive": {
+    "url": "https://github.com/ggml-org/whisper.cpp/releases/download/b5130/whisper-bin-x64.zip",
+    "bytes": 8573270,
+    "sha256": "f9ec6c52a2e949b62ab51fa21d0d497958f9e41c3010c157c4e42932d5316f3c"
+  },
+  "modelRevision": "5359861c739e955e79d9a303bcbc70fb988958b1",
+  "models": [
+    {"id": "base", "filename": "ggml-base.bin", "bytes": 147951465, "sha256": "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe"},
+    {"id": "tiny", "filename": "ggml-tiny.bin", "bytes": 77691713, "sha256": "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21"}
+  ]
+}

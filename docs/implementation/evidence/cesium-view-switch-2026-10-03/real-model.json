@@ -1,0 +1,408 @@
+{
+  "pass": true,
+  "native": {
+    "before": {
+      "opened": true,
+      "scene": "Cesium",
+      "taskId": "30d9fb3c-00fe-43dd-a106-a21ff60dd204",
+      "title": "名古屋市中心 · Cesium OSM Buildings 三维瓦片",
+      "bounds": [
+        136.89151961,
+        35.17784976,
+        136.91355591,
+        35.19650728
+      ],
+      "camera": {
+        "longitude": 136.90253767643517,
+        "latitude": 35.16640047257926,
+        "height": 3995.5580647936094,
+        "heading": 5.088887490341627e-14,
+        "pitch": -60.02066426364367,
+        "roll": 359.99999999999994
+      },
+      "globe": true,
+      "rendering": true,
+      "layers": [
+        {
+          "id": "imagery-320e6aa1-21f8-45b1-99bc-32bb90a49914",
+          "name": "OpenStreetMap",
+          "type": "imagery",
+          "visible": true,
+          "color": "#3B82F6"
+        },
+        {
+          "id": "download-30d9fb3c-00fe-43dd-a106-a21ff60dd204",
+          "name": "名古屋市中心 · Cesium OSM Buildings 三维瓦片",
+          "type": "3D Tiles",
+          "visible": true,
+          "color": "#8B5CF6"
+        }
+      ],
+      "imagery": [
+        {
+          "id": "imagery-320e6aa1-21f8-45b1-99bc-32bb90a49914",
+          "sourceId": null,
+          "visible": true,
+          "opacity": 1,
+          "loaded": 34,
+          "failed": 0,
+          "pending": 8,
+          "lastError": null,
+          "state": "ready"
+        }
+      ],
+      "viewMode": "3d",
+      "visible": true
+    },
+    "hidden": {
+      "opened": true,
+      "scene": "Cesium",
+      "taskId": "30d9fb3c-00fe-43dd-a106-a21ff60dd204",
+      "title": "名古屋市中心 · Cesium OSM Buildings 三维瓦片",
+      "bounds": [
+        136.89151961,
+        35.17784976,
+        136.91355591,
+        35.19650728
+      ],
+      "camera": {
+        "longitude": 136.90253767643517,
+        "latitude": 35.16640047257926,
+        "height": 3995.5580647936094,
+        "heading": 5.088887490341627e-14,
+        "pitch": -60.02066426364367,
+        "roll": 359.99999999999994
+      },
+      "globe": true,
+      "rendering": false,
+      "layers": [
+        {
+          "id": "imagery-320e6aa1-21f8-45b1-99bc-32bb90a49914",
+          "name": "OpenStreetMap",
+          "type": "imagery",
+          "visible": true,
+          "color": "#3B82F6"
+        },
+        {
+          "id": "download-30d9fb3c-00fe-43dd-a106-a21ff60dd204",
+          "name": "名古屋市中心 · Cesium OSM Buildings 三维瓦片",
+          "type": "3D Tiles",
+          "visible": true,
+          "color": "#8B5CF6"
+        }
+      ],
+      "imagery": [
+        {
+          "id": "imagery-320e6aa1-21f8-45b1-99bc-32bb90a49914",
+          "sourceId": null,
+          "visible": true,
+          "opacity": 1,
+          "loaded": 56,
+          "failed": 0,
+          "pending": 0,
+          "lastError": null,
+          "state": "ready"
+        }
+      ],
+      "viewMode": "2d",
+      "visible": false
+    },
+    "initial": {
+      "success": true,
+      "data": {
+        "mode": "2d",
+        "has3DScene": false,
+        "ready": false,
+        "taskId": null,
+        "title": null
+      }
+    },
+    "rapid": [
+      {
+        "success": false,
+        "error": "VIEW_CHANGE_SUPERSEDED"
+      },
+      {
+        "success": true,
+        "data": {
+          "mode": "3d",
+          "has3DScene": true,
+          "ready": true,
+          "taskId": "30d9fb3c-00fe-43dd-a106-a21ff60dd204",
+          "title": "名古屋市中心 · Cesium OSM Buildings 三维瓦片"
+        }
+      }
+    ],
+    "taskId": "30d9fb3c-00fe-43dd-a106-a21ff60dd204",
+    "errors": []
+  },
+  "turns": [
+    {
+      "input": "切换到二维",
+      "mode": "2d",
+      "results": [
+        {
+          "completedAt": 1791005448,
+          "durationMs": 31086,
+          "error": null,
+          "id": "01a1003d-e0d4-77b2-9d1a-6bcb62cb67b2",
+          "items": [
+            {
+              "delivery": null,
+              "id": "msg_geod_996f603b-a149-4a05-93fc-5d7571ae093b",
+              "memoryCitation": null,
+              "phase": "final_answer",
+              "questions": null,
+              "text": "已切换到二维，实测回读确认。\n\n**当前状态**\n- 工作区视图：`mode: 2d`（OpenLayers 二维界面）\n- 三维场景：`opened: true`、`visible: false` —— 场景保留但不再显示，相机、图层（OSM 底图 + 名古屋 Cesium OSM Buildings 三维瓦片）和几何都未丢失，任务 `30d9fb3c-…` 保持 `ready`。\n- 未做任何下载或删除，也没有改动二维地图图层。\n\n需要时随时说一句，我用 `setViewMode(mode:3d)` 恢复原来的三维视角（南侧斜看、俯角约 45° 的那一帧仍在）。",
+              "type": "agentMessage"
+            }
+          ],
+          "itemsView": "summary",
+          "startedAt": 1791005417,
+          "status": "completed",
+          "text": "已切换到二维，实测回读确认。\n\n**当前状态**\n- 工作区视图：`mode: 2d`（OpenLayers 二维界面）\n- 三维场景：`opened: true`、`visible: false` —— 场景保留但不再显示，相机、图层（OSM 底图 + 名古屋 Cesium OSM Buildings 三维瓦片）和几何都未丢失，任务 `30d9fb3c-…` 保持 `ready`。\n- 未做任何下载或删除，也没有改动二维地图图层。\n\n需要时随时说一句，我用 `setViewMode(mode:3d)` 恢复原来的三维视角（南侧斜看、俯角约 45° 的那一帧仍在）。",
+          "threadId": "01a0fffe-64a8-7e13-aa68-3c163aa0f09a"
+        }
+      ],
+      "calls": [
+        {
+          "connectorId": "builtin-cesium-mcp",
+          "name": "getViewMode",
+          "args": {},
+          "result": {
+            "success": true,
+            "data": {
+              "mode": "3d",
+              "has3DScene": true,
+              "ready": true,
+              "taskId": "30d9fb3c-00fe-43dd-a106-a21ff60dd204",
+              "title": "名古屋市中心 · Cesium OSM Buildings 三维瓦片"
+            }
+          }
+        },
+        {
+          "connectorId": "builtin-cesium-mcp",
+          "name": "setViewMode",
+          "args": {
+            "mode": "2d"
+          },
+          "result": {
+            "success": true,
+            "data": {
+              "mode": "2d",
+              "has3DScene": true,
+              "ready": true,
+              "taskId": "30d9fb3c-00fe-43dd-a106-a21ff60dd204",
+              "title": "名古屋市中心 · Cesium OSM Buildings 三维瓦片"
+            }
+          }
+        },
+        {
+          "connectorId": "builtin-cesium-mcp",
+          "name": "getViewMode",
+          "args": {},
+          "result": {
+            "success": true,
+            "data": {
+              "mode": "2d",
+              "has3DScene": true,
+              "ready": true,
+              "taskId": "30d9fb3c-00fe-43dd-a106-a21ff60dd204",
+              "title": "名古屋市中心 · Cesium OSM Buildings 三维瓦片"
+            }
+          }
+        },
+        {
+          "connectorId": "builtin-cesium-mcp",
+          "name": "getSceneState",
+          "args": {},
+          "result": {
+            "success": true,
+            "data": {
+              "opened": true,
+              "scene": "Cesium",
+              "taskId": "30d9fb3c-00fe-43dd-a106-a21ff60dd204",
+              "title": "名古屋市中心 · Cesium OSM Buildings 三维瓦片",
+              "bounds": [
+                136.89151961,
+                35.17784976,
+                136.91355591,
+                35.19650728
+              ],
+              "camera": {
+                "longitude": 136.90253767643517,
+                "latitude": 35.16640047257926,
+                "height": 3995.5580647936094,
+                "heading": 5.088887490341627e-14,
+                "pitch": -60.02066426364367,
+                "roll": 359.99999999999994
+              },
+              "globe": true,
+              "rendering": false,
+              "layers": [
+                {
+                  "id": "imagery-f163bad4-1041-436d-a4de-f7a1cbd545e2",
+                  "name": "OpenStreetMap",
+                  "type": "imagery",
+                  "visible": true,
+                  "color": "#3B82F6"
+                },
+                {
+                  "id": "download-30d9fb3c-00fe-43dd-a106-a21ff60dd204",
+                  "name": "名古屋市中心 · Cesium OSM Buildings 三维瓦片",
+                  "type": "3D Tiles",
+                  "visible": true,
+                  "color": "#8B5CF6"
+                }
+              ],
+              "imagery": [
+                {
+                  "id": "imagery-f163bad4-1041-436d-a4de-f7a1cbd545e2",
+                  "sourceId": null,
+                  "visible": true,
+                  "opacity": 1,
+                  "loaded": 64,
+                  "failed": 0,
+                  "pending": 0,
+                  "lastError": null,
+                  "state": "ready"
+                }
+              ],
+              "viewMode": "2d",
+              "visible": false
+            }
+          }
+        }
+      ],
+      "actualMode": {
+        "success": true,
+        "data": {
+          "mode": "2d",
+          "has3DScene": true,
+          "ready": true,
+          "taskId": "30d9fb3c-00fe-43dd-a106-a21ff60dd204",
+          "title": "名古屋市中心 · Cesium OSM Buildings 三维瓦片"
+        }
+      }
+    },
+    {
+      "input": "切回三维",
+      "mode": "3d",
+      "results": [
+        {
+          "completedAt": 1791005461,
+          "durationMs": 3582,
+          "error": null,
+          "id": "01a1003e-7f6e-7a41-8e72-ebc8b9821597",
+          "items": [
+            {
+              "delivery": null,
+              "id": "msg_geod_7f69f168-5aef-45cd-960f-faa330fd39dd",
+              "memoryCitation": null,
+              "phase": "final_answer",
+              "questions": null,
+              "text": "已切回三维，实测回读确认。\n\n**当前状态**\n- 工作区视图：`viewMode: 3d`、`visible: true`、`rendering: true`（Cesium 场景正在渲染）\n- 场景：`opened: true`，任务 `30d9fb3c-…`（名古屋市中心 · Cesium OSM Buildings 三维瓦片）保持 `ready`\n- 图层：OSM 底图（已加载 64 块瓦片、`failed: 0`）+ 三维建筑瓦片，均可见\n- 相机：纬度 35.1664、经度 136.9025、高度约 3996 m、heading ≈ 0°（正北朝南看）、pitch ≈ -60°\n\n保留了切换前的同一场景，未重新下载。若要把俯角调回约 45° 的南侧斜看角度，说一声我立即调整。",
+              "type": "agentMessage"
+            }
+          ],
+          "itemsView": "summary",
+          "startedAt": 1791005458,
+          "status": "completed",
+          "text": "已切回三维，实测回读确认。\n\n**当前状态**\n- 工作区视图：`viewMode: 3d`、`visible: true`、`rendering: true`（Cesium 场景正在渲染）\n- 场景：`opened: true`，任务 `30d9fb3c-…`（名古屋市中心 · Cesium OSM Buildings 三维瓦片）保持 `ready`\n- 图层：OSM 底图（已加载 64 块瓦片、`failed: 0`）+ 三维建筑瓦片，均可见\n- 相机：纬度 35.1664、经度 136.9025、高度约 3996 m、heading ≈ 0°（正北朝南看）、pitch ≈ -60°\n\n保留了切换前的同一场景，未重新下载。若要把俯角调回约 45° 的南侧斜看角度，说一声我立即调整。",
+          "threadId": "01a0fffe-64a8-7e13-aa68-3c163aa0f09a"
+        }
+      ],
+      "calls": [
+        {
+          "connectorId": "builtin-cesium-mcp",
+          "name": "setViewMode",
+          "args": {
+            "mode": "3d"
+          },
+          "result": {
+            "success": true,
+            "data": {
+              "mode": "3d",
+              "has3DScene": true,
+              "ready": true,
+              "taskId": "30d9fb3c-00fe-43dd-a106-a21ff60dd204",
+              "title": "名古屋市中心 · Cesium OSM Buildings 三维瓦片"
+            }
+          }
+        },
+        {
+          "connectorId": "builtin-cesium-mcp",
+          "name": "getSceneState",
+          "args": {},
+          "result": {
+            "success": true,
+            "data": {
+              "opened": true,
+              "scene": "Cesium",
+              "taskId": "30d9fb3c-00fe-43dd-a106-a21ff60dd204",
+              "title": "名古屋市中心 · Cesium OSM Buildings 三维瓦片",
+              "bounds": [
+                136.89151961,
+                35.17784976,
+                136.91355591,
+                35.19650728
+              ],
+              "camera": {
+                "longitude": 136.90253767643517,
+                "latitude": 35.16640047257926,
+                "height": 3995.5580647936094,
+                "heading": 5.088887490341627e-14,
+                "pitch": -60.02066426364367,
+                "roll": 359.99999999999994
+              },
+              "globe": true,
+              "rendering": true,
+              "layers": [
+                {
+                  "id": "imagery-f163bad4-1041-436d-a4de-f7a1cbd545e2",
+                  "name": "OpenStreetMap",
+                  "type": "imagery",
+                  "visible": true,
+                  "color": "#3B82F6"
+                },
+                {
+                  "id": "download-30d9fb3c-00fe-43dd-a106-a21ff60dd204",
+                  "name": "名古屋市中心 · Cesium OSM Buildings 三维瓦片",
+                  "type": "3D Tiles",
+                  "visible": true,
+                  "color": "#8B5CF6"
+                }
+              ],
+              "imagery": [
+                {
+                  "id": "imagery-f163bad4-1041-436d-a4de-f7a1cbd545e2",
+                  "sourceId": null,
+                  "visible": true,
+                  "opacity": 1,
+                  "loaded": 64,
+                  "failed": 0,
+                  "pending": 0,
+                  "lastError": null,
+                  "state": "ready"
+                }
+              ],
+              "viewMode": "3d",
+              "visible": true
+            }
+          }
+        }
+      ],
+      "actualMode": {
+        "success": true,
+        "data": {
+          "mode": "3d",
+          "has3DScene": true,
+          "ready": true,
+          "taskId": "30d9fb3c-00fe-43dd-a106-a21ff60dd204",
+          "title": "名古屋市中心 · Cesium OSM Buildings 三维瓦片"
+        }
+      }
+    }
+  ],
+  "checkedAt": "2026-10-03T05:31:03.348Z"
+}

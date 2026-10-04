@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import {verifySignedFile,updateManifest} from './update-candidate.mjs';
+const [fixturePath,output]=process.argv.slice(2),state=JSON.parse(fs.readFileSync(fixturePath,'utf8')),cases=[];
+const add=name=>cases.push({name,passed:true});
+const verified=await verifySignedFile(state.payload,state.public,state.signature,'0.2.1');assert(verified.bytes>65536);add('Genuine official Tauri CLI signature verifies offline');
+const original=fs.readFileSync(state.payload);try{fs.writeFileSync(state.payload,Buffer.concat([original,Buffer.from('tampered')]));await assert.rejects(()=>verifySignedFile(state.payload,state.public,state.signature,'0.2.1'),/does not verify/);}finally{fs.writeFileSync(state.payload,original);}add('Altered update bytes are rejected');
+await assert.rejects(()=>verifySignedFile(state.payload,state.otherPublic,state.signature,'0.2.1'),/key does not match/);add('Wrong update public key is rejected');
+await assert.rejects(()=>verifySignedFile(state.payload,state.public,state.signature,'0.2.2'),/Signed version/);add('Manifest and signed version mismatch is rejected');
+const modified=Buffer.from(Buffer.from(state.signature,'base64').toString('utf8').replace('version:0.2.1','version:0.2.2'),'utf8').toString('base64');await assert.rejects(()=>verifySignedFile(state.payload,state.public,modified,'0.2.2'),/does not verify/);add('Altered trusted version comment is rejected');
+const manifest=updateManifest('0.2.1',state.signature,'https://updates.example.test/0.2.1','GeoD Agent_0.2.1_x64-setup.exe');assert(manifest.platforms['windows-x86_64'].url.includes('GeoD%20Agent'));assert.equal(manifest.platforms['windows-x86_64'].signature,state.signature);assert.throws(()=>updateManifest('0.2.1',state.signature,'https://secret:password@updates.example.test','file'),/without credentials/);add('Static updater manifest retains actual signature content and encodes the asset URL');
+fs.mkdirSync(output,{recursive:true});fs.writeFileSync(path.join(output,'signature-result.json'),JSON.stringify({passed:true,cases,verified,containsInstaller:false},null,2));console.log(JSON.stringify({passed:true,cases:cases.length}));

@@ -1,0 +1,19 @@
+{
+  "pass": true,
+  "sourceSha256": "df63b69bf8ad501d39b505ccb9a4d838d92cad2b84e271c9f7907cca3f12851f",
+  "sourceBytes": 97682,
+  "sourceGlbOffset": 10988,
+  "sourceBinBytes": 85034,
+  "outputBytes": 97688,
+  "outputGlbOffset": 10992,
+  "outputBinBytes": 85036,
+  "sourceGeometrySha256": "1f1356e1e10a724df56a390dea2674e560d1f2e9cd758b9587bb1a18a43b7d39",
+  "outputGeometrySha256": "1f1356e1e10a724df56a390dea2674e560d1f2e9cd758b9587bb1a18a43b7d39",
+  "checks": [
+    "offline download and inspect passed",
+    "feature, batch and glTF JSON values unchanged",
+    "all original binary geometry bytes unchanged",
+    "BIN padded by exactly two zero bytes",
+    "container and chunk lengths aligned"
+  ]
+}

@@ -1,0 +1,282 @@
+{
+  "model": "deepseek-flash",
+  "codexVersion": "0.159.2",
+  "databaseLayer": "demo.boundaries_3857.geom",
+  "scenarios": [
+    {
+      "scenario": "postgis",
+      "conversationId": "cost-test-postgis-5a4c5867-0d91-4b43-88d9-979aa957deb6",
+      "durationMs": 15642,
+      "pass": true,
+      "status": "completed",
+      "answer": "**计划已生成（未下载）**\n- 范围：PostGIS 连接 `PostGIS real model test` 的 `demo.boundaries_3857.geom`（EPSG:3857，1 个多边形），边界 `116.1, 39.6, 116.3, 39.8`\n- 图源：`Esri World Imagery`（XYZ，256px）\n- 级别：Z12，共 `16` 个瓦片\n- 输出：`GeoTIFF`，预计占用约 `32.5 MiB`（34,078,720 字节），需保留确认\n- 计划 ID：`tool-87f897cd9e1b24fc7950d6132fa129d8325ec90a9bae9a772fe0fc3c2274fa12`\n\n仅生成了计划，未启动任何下载。需要下载或改用其他级别/格式时告诉我即可。",
+      "calls": [
+        {
+          "tool": "data_connections_list",
+          "args": {},
+          "result": {
+            "connections": [
+              {
+                "id": "5e81c065-f690-42b3-89c2-826c532648a3",
+                "name": "PostGIS real model test",
+                "readOnly": true
+              }
+            ]
+          }
+        },
+        {
+          "tool": "sources_list",
+          "args": {},
+          "result": {
+            "sources": [
+              {
+                "schemaVersion": "0.1",
+                "id": "esri-world-imagery",
+                "displayName": "Esri World Imagery",
+                "attribution": "Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community",
+                "license": "",
+                "bulkDownloadAllowed": true,
+                "scheme": "XYZ",
+                "tileSize": 256,
+                "minZoom": 0,
+                "maxZoom": 22,
+                "configRevision": "b5d9ccab40f83a688f0580499f5a037c0f76b1adbebb70abb6c02eb50ccef2d1",
+                "credentialRefVersion": null
+              },
+              {
+                "schemaVersion": "0.1",
+                "id": "usgs-naip-plus-conus",
+                "displayName": "USGS NAIP Plus · 美国本土",
+                "attribution": "USGS, USDA, The National Map: Orthoimagery",
+                "license": "USGS The National Map 公共领域影像；仅用于美国本土已确认覆盖范围",
+                "bulkDownloadAllowed": true,
+                "scheme": "XYZ",
+                "tileSize": 256,
+                "minZoom": 10,
+                "maxZoom": 18,
+                "configRevision": "4f3d31417c9374032d2fb96a4bf84f7fdc5131476bd7ed35ccd6eaf35983d489",
+                "credentialRefVersion": null
+              }
+            ]
+          }
+        },
+        {
+          "tool": "extensions_list",
+          "args": {
+            "query": "data input postgis vector boundary"
+          },
+          "result": {
+            "skills": [
+              {
+                "id": "builtin-source-creator",
+                "name": "geod-source-creator",
+                "description": "配置网络影像图源；查询中国行政区边界并生成下载裁剪计划。用于添加图源、按地区下载影像和行政区裁剪。",
+                "enabled": true,
+                "sourceUrl": null,
+                "contentSha256": "858b79bd31f7e8bdd902ccb6b99d6cf6435c8b04174960d9975af57849c7e173"
+              }
+            ],
+            "connectors": [
+              {
+                "id": "f87ad1ba-a7ac-4195-9f76-c39615bcafbb",
+                "name": "humaps",
+                "url": "https://api.humaps.org/mcp",
+                "enabled": true,
+                "transport": "http"
+              },
+              {
+                "id": "0ec1d367-963a-47d0-a9e0-0e68518bc72b",
+                "name": "GDAL 格式转换",
+                "url": "",
+                "enabled": true,
+                "transport": "gdalStdio"
+              }
+            ],
+            "mcp": [
+              {
+                "connectorId": "builtin-data-input",
+                "name": "数据范围 · 文件 / 在线 / PostGIS",
+                "enabled": true,
+                "kind": "builtin",
+                "tools": [
+                  {
+                    "name": "data_input_read",
+                    "description": "Read and attach a polygon boundary from one source: a user supplied HTTP(S) vector file / WFS GetFeature / ArcGIS query / OGC API Features items URL, a relative workspace vector filename, saved PostGIS connectionId, or a handle returned by this tool. Supports GeoJSON, Shapefile with sidecars or ZIP, GPKG/SQLite, KML/KMZ, GML, FGB, WKT and CSV WKT. Returns layer choices for multi-layer inputs; repeat with layer and the returned handle/connectionId. Supply sourceCrs only when known or explicitly provided; never guess a missing CRS. Points/lines cannot be clipping boundaries. Whole geometry remains on desktop. On success the boundary is attached to plan_imagery. Do not ask for manual GeoJSON conversion.",
+                    "inputSchema": {
+                      "type": "object",
+                      "properties": {
+                        "url": {
+                          "type": "string"
+                        },
+                        "relativePath": {
+                          "type": "string"
+                        },
+                        "connectionId": {
+                          "type": "string"
+                        },
+                        "handle": {
+                          "type": "string"
+                        },
+                        "layer": {
+                          "type": "string"
+                        },
+                        "sourceCrs": {
+                          "type": "string"
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  {
+                    "name": "data_connections_list",
+                    "description": "List saved PostGIS connections by id and display name. Read only, no credentials or host details. Database setup is available in the composer's Add data range button.",
+                    "inputSchema": {
+                      "type": "object",
+                      "properties": {},
+                      "additionalProperties": false
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "tool": "data_input_read",
+          "args": {
+            "connectionId": "5e81c065-f690-42b3-89c2-826c532648a3",
+            "layer": "demo.boundaries_3857.geom"
+          },
+          "result": {
+            "boundary": {
+              "name": "demo.boundaries_3857.geom.geojson",
+              "bounds": [
+                116.1,
+                39.6,
+                116.3,
+                39.8
+              ],
+              "polygonCount": 1,
+              "attachedToDesktopPlan": true
+            },
+            "layers": [
+              {
+                "crs": "EPSG:4326",
+                "featureCount": null,
+                "geometryType": "POLYGON",
+                "name": "demo.big_area.geom"
+              },
+              {
+                "crs": "EPSG:3857",
+                "featureCount": null,
+                "geometryType": "POLYGON",
+                "name": "demo.boundaries_3857.geom"
+              },
+              {
+                "crs": "EPSG:4326",
+                "featureCount": null,
+                "geometryType": "POLYGON",
+                "name": "demo.boundaries_4326.geom"
+              },
+              {
+                "crs": "EPSG:4326",
+                "featureCount": null,
+                "geometryType": "POLYGON",
+                "name": "demo.empty_area.geom"
+              },
+              {
+                "crs": "EPSG:4326",
+                "featureCount": null,
+                "geometryType": "POLYGON",
+                "name": "demo.invalid_area.geom"
+              },
+              {
+                "crs": "EPSG:4326",
+                "featureCount": null,
+                "geometryType": "MULTIPOLYGON",
+                "name": "demo.multiple_regions.geom"
+              },
+              {
+                "crs": "EPSG:3857",
+                "featureCount": null,
+                "geometryType": "POLYGON",
+                "name": "demo.nullable_area.backup_geom"
+              },
+              {
+                "crs": "EPSG:4326",
+                "featureCount": null,
+                "geometryType": "POLYGON",
+                "name": "demo.nullable_area.geom"
+              },
+              {
+                "crs": "EPSG:4326",
+                "featureCount": null,
+                "geometryType": "POINT",
+                "name": "demo.points.geom"
+              },
+              {
+                "crs": "EPSG:4326",
+                "featureCount": null,
+                "geometryType": "POLYGON",
+                "name": "demo.projected_view.geom"
+              },
+              {
+                "crs": "EPSG:4326",
+                "featureCount": null,
+                "geometryType": "POLYGON",
+                "name": "demo.scoped_regions.geom"
+              },
+              {
+                "crs": null,
+                "featureCount": null,
+                "geometryType": "POLYGON",
+                "name": "demo.unknown_crs.geom"
+              },
+              {
+                "crs": "EPSG:4326",
+                "featureCount": null,
+                "geometryType": "POLYGON",
+                "name": "demo.区划 odd\" table.边界 odd"
+              }
+            ],
+            "selectedLayer": "demo.boundaries_3857.geom",
+            "sourceCrs": "EPSG:3857"
+          }
+        },
+        {
+          "tool": "plan_imagery",
+          "args": {
+            "outputFormats": [
+              "geotiff"
+            ],
+            "sourceId": "esri-world-imagery",
+            "zoom": 12
+          },
+          "result": {
+            "planId": "tool-87f897cd9e1b24fc7950d6132fa129d8325ec90a9bae9a772fe0fc3c2274fa12",
+            "source": "Esri World Imagery",
+            "bounds": [
+              116.1,
+              39.6,
+              116.3,
+              39.8
+            ],
+            "polygonCount": 1,
+            "totalTiles": 16,
+            "requiredFreeDiskBytes": 34078720,
+            "zoomLevels": [
+              12
+            ],
+            "outputFormats": [
+              "geotiff"
+            ],
+            "requiresPlanConfirmation": true
+          }
+        }
+      ],
+      "plans": [
+        "tool-87f897cd9e1b24fc7950d6132fa129d8325ec90a9bae9a772fe0fc3c2274fa12"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,78 @@
+{
+  "createdAt": "2026-10-02T10:28:15.624Z",
+  "tests": [
+    {
+      "mode": "queryToken",
+      "preview": true,
+      "wrongTokenRejected": true,
+      "download": true,
+      "resumed": true,
+      "jobId": "60063ddc-43e3-4016-90af-7bf69523fe12",
+      "tiles": 4,
+      "quality": {
+        "status": "complete",
+        "missingTiles": 0,
+        "warnings": []
+      }
+    },
+    {
+      "rotationInvalidatesOldPlan": true,
+      "staleCode": "PLAN_STALE"
+    },
+    {
+      "mode": "bearerToken",
+      "preview": true,
+      "wrongTokenRejected": true,
+      "download": true,
+      "resumed": false,
+      "jobId": "62c12db8-c753-41b5-a775-5c39e957a1ba",
+      "tiles": 4,
+      "quality": {
+        "status": "complete",
+        "missingTiles": 0,
+        "warnings": []
+      }
+    },
+    {
+      "mode": "headerToken",
+      "preview": true,
+      "wrongTokenRejected": true,
+      "download": true,
+      "resumed": false,
+      "jobId": "c6f7a150-bdf7-4928-814a-9927fe0c0013",
+      "tiles": 4,
+      "quality": {
+        "status": "complete",
+        "missingTiles": 0,
+        "warnings": []
+      }
+    },
+    {
+      "originBinding": true
+    },
+    {
+      "pendingConnection": true,
+      "missingTokenRejectedBeforeStart": true
+    },
+    {
+      "authenticatedSchedule": true,
+      "jobId": "e2f2bc37-cf57-4edc-becf-f08ba44ad96d"
+    }
+  ],
+  "sources": [
+    "auth-fixture-query-d364cbbc-ed73-4d33-8620-1f11de600271",
+    "auth-fixture-bearer-d364cbbc-ed73-4d33-8620-1f11de600271",
+    "auth-fixture-header-d364cbbc-ed73-4d33-8620-1f11de600271",
+    "auth-fixture-pending-d364cbbc-ed73-4d33-8620-1f11de600271"
+  ],
+  "counts": {
+    "query": 6,
+    "bearer": 5,
+    "header": 9,
+    "rejected": 4,
+    "redirects": 0
+  },
+  "pass": true,
+  "credentialsSurviveDesktopRestart": true,
+  "tiandituPendingConnectionSurvivesRestart": true
+}

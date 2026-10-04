@@ -1,0 +1,16 @@
+{
+  "fonts": [
+    {
+      "familyName": "Noto Sans SC",
+      "glyphCount": 60,
+      "isCustomFont": true,
+      "postScriptName": "Noto-Sans-SC"
+    },
+    {
+      "familyName": "Roboto Mono",
+      "glyphCount": 1459,
+      "isCustomFont": true,
+      "postScriptName": "RobotoMono-Regular"
+    }
+  ]
+}

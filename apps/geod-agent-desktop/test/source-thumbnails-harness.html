@@ -1,0 +1,8 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>GeoD 图源缩略图 · 本机只读验收</title></head><body><div id="root"></div>
+<script>
+// Actual source APIs through the read-only adapter; saving is never forwarded.
+window.isTauri=true;window.__TAURI__={};window.__TAURI_INTERNALS__={invoke:async(command,args)=>{
+ const response=await fetch('http://127.0.0.1:1422/rpc',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({command,args})});
+ const result=await response.json();if(result.error)throw result.error;return result.value;
+}};
+</script><script type="module" src="/test/source-thumbnails-harness.tsx"></script></body></html>

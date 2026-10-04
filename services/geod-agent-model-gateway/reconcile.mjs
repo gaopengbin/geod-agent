@@ -5,7 +5,7 @@ import { openLedger } from "./ledger.mjs";
 const dbPath = resolve(process.env.GEOD_AGENT_DB_PATH || "./data/agent-model.sqlite");
 const secret = process.env.GEOD_AGENT_GATEWAY_SECRET;
 const tokenLimit = Number(process.env.GEOD_AGENT_TOKEN_LIMIT || 100_000);
-const ledger = openLedger(dbPath, tokenLimit, secret);
+const ledger = openLedger(dbPath, tokenLimit, secret, process.env.GEOD_AGENT_QUOTA_MODE !== "unlimited");
 try {
   if (process.argv[2] === "--list") {
     process.stdout.write(`${JSON.stringify(ledger.pendingList(), null, 2)}\n`);

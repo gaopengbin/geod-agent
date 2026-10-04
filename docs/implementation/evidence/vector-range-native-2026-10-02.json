@@ -1,0 +1,169 @@
+{
+  "pass": true,
+  "conversationId": "data-range-d79b52df-df31-4fc8-ad34-b0162f7fb7cf",
+  "task": {
+    "id": "cfec5688-5516-42ad-9e9b-f2351e1445e6",
+    "conversationId": "data-range-d79b52df-df31-4fc8-ad34-b0162f7fb7cf",
+    "kind": "vector",
+    "title": "柏林范围内相交国家边界",
+    "status": "completed",
+    "planHash": "241f8b1f56f46eec61477ee17c6943261a9446647032a4dfe166b399492c4a90",
+    "request": {
+      "kind": "vector",
+      "spec": {
+        "source": {
+          "type": "mvt",
+          "id": "maplibre-countries",
+          "name": "MapLibre 国家边界",
+          "urlTemplate": "https://demotiles.maplibre.org/tiles/{z}/{x}/{y}.pbf",
+          "scheme": "xyz",
+          "layers": [
+            "countries"
+          ],
+          "attribution": "MapLibre demo"
+        },
+        "bounds": [
+          13.404,
+          52.52,
+          13.406,
+          52.522
+        ],
+        "boundary": {
+          "polygons": [
+            [
+              [
+                [
+                  13.404,
+                  52.52
+                ],
+                [
+                  13.406,
+                  52.52
+                ],
+                [
+                  13.405,
+                  52.522
+                ],
+                [
+                  13.404,
+                  52.52
+                ]
+              ]
+            ]
+          ]
+        },
+        "zoomLevels": [
+          2
+        ],
+        "outputs": [
+          "pbf",
+          "mbtiles",
+          "geojson",
+          "gpkg"
+        ],
+        "allowPartial": false
+      }
+    },
+    "outputDir": "\\\\?\\G:\\code\\geod-agent\\artifacts\\desktop-parity\\data-range-d79b52df-df31-4fc8-ad34-b0162f7fb7cf\\vector-20261002-142805-cfec5688",
+    "progress": {
+      "phase": "completed",
+      "completed": 1,
+      "total": 1,
+      "bytes": 69624,
+      "cacheHits": 0,
+      "failures": 0
+    },
+    "manifest": {
+      "assets": [
+        {
+          "kind": "mbtiles",
+          "path": "vectors.mbtiles",
+          "sha256": "556b5da360a60ed376570a8b786b9f26b1f222db345b04809746550dac1243c4",
+          "size": 57344
+        },
+        {
+          "kind": "pbf-index",
+          "path": "tiles-index.sqlite",
+          "sha256": "8ea390de96a11f883b29723a08fbf0e5fcfe0b2310ce0c1c6d387187297e4ec0",
+          "size": 16384
+        },
+        {
+          "kind": "tilejson",
+          "path": "tilejson.json",
+          "sha256": "bb963d995f6042a962a97cf7612e9f46b23fb5092c8d5fc2379f07cc0b330350",
+          "size": 707
+        },
+        {
+          "kind": "geojson",
+          "path": "features.geojson",
+          "sha256": "4c6e4a1bbf1944733494fac7a4a8863a9ac89be610dcfe4d4636e733b72fbd68",
+          "size": 16006
+        },
+        {
+          "kind": "gpkg",
+          "path": "features.gpkg",
+          "sha256": "72483b38da9631c345bde1436d7a4d4802856c6d9d37e235bb1f7c866b174177",
+          "size": 53248
+        },
+        {
+          "kind": "preview",
+          "path": "preview.geojson",
+          "sha256": "f2ce43be0c220d2f459d6f43391bf3228af6c9f8a850da190b403b2011c83375",
+          "size": 16006
+        }
+      ],
+      "bounds": [
+        13.404,
+        52.52,
+        13.406,
+        52.522
+      ],
+      "createdAt": "2026-10-02T14:28:05.555076600+00:00",
+      "dataTimestamp": null,
+      "failures": [],
+      "featureCount": 1,
+      "planHash": "a5fa92794517f2b832c03fc69526c0c8833af7fc79d31a8ef4ed82919bdaccae",
+      "previewFeatureCount": 1,
+      "previewTruncated": false,
+      "schemaVersion": 1,
+      "sourceName": "MapLibre 国家边界",
+      "tileCount": 1,
+      "warnings": [
+        "GeoJSON and GeoPackage retain complete features intersecting the requested area, excluding holes and outside features; geometry is not cut at the boundary. PBF and MBTiles retain complete selected tiles.",
+        "Vector tile exports preserve tile boundaries and buffered features; features split across tiles or zoom levels are not merged."
+      ]
+    },
+    "error": null,
+    "createdAt": "2026-10-02T14:28:05.412565500+00:00",
+    "updatedAt": "2026-10-02T14:28:06.765762700+00:00"
+  },
+  "featureProperties": {
+    "ABBREV": "Ger.",
+    "ADM0_A3": "DEU",
+    "CONTINENT": "Europe",
+    "NAME": "Germany",
+    "_sourceId": "50",
+    "_sourceLayer": "countries",
+    "_tile": "2/2/1",
+    "fid": 51
+  },
+  "preview": {
+    "kind": "vector",
+    "resourcePath": "a71ccea7-271b-435c-a42a-928c3871ab92/preview.geojson",
+    "token": "[REDACTED FOR RELEASE]",
+    "bounds": [
+      13.404,
+      52.52,
+      13.406,
+      52.522
+    ],
+    "featureCount": 1,
+    "truncated": false
+  },
+  "checks": [
+    "native persists exact polygon geometry",
+    "public MVT download and four formats",
+    "bbox/polygon exports exclude other countries in the tile",
+    "verified GeoJSON and preview contain only Germany country geometry"
+  ]
+}

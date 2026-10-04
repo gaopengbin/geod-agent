@@ -1,0 +1,29 @@
+{
+  "pass": true,
+  "conversationId": "ion-buildings-4d47a261-2cd6-41e1-ae3d-473831f572bd",
+  "taskId": "560bcca1-fe3e-416c-9341-38d9a4a6b792",
+  "loaded": {
+    "loaded": true,
+    "radius": 11022782.565540954,
+    "taskId": "560bcca1-fe3e-416c-9341-38d9a4a6b792",
+    "kind": "tiles3d",
+    "title": "北京 CBD · Cesium OSM Buildings 实测"
+  },
+  "bounds": [
+    116.456,
+    39.91,
+    116.461,
+    39.915
+  ],
+  "resources": 18,
+  "bytes": 9343290,
+  "screenshot": "G:\\code\\geod-agent\\docs\\implementation\\evidence\\tiles3d-ion-preview\\beijing-cbd.png",
+  "checks": [
+    "production DataPreviewHost and native geod-data assets",
+    "Cesium initialTilesLoaded resolves actual load",
+    "download bounds supplied despite global asset root",
+    "camera wheel interaction changes rendered view",
+    "recenter restores view from displaced camera"
+  ],
+  "checkedAt": "2026-10-02T15:34:40.926Z"
+}

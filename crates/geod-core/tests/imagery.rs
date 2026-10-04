@@ -1,9 +1,10 @@
 use geod_core::{
     boundary::BoundaryGeometry,
     imagery::{
-        fetch_bundle, fetch_bundle_with_cache, fetch_bundle_with_cache_control,
-        fetch_bundle_with_cancel, inspect_bundle, HttpSource, ImageryRequest, NetworkPolicy,
-        TileCacheConfig, TileScheme,
+        fetch_bundle, fetch_bundle_with_cache_control_proxy,
+        fetch_bundle_with_cache_control_proxy_options, fetch_bundle_with_cancel, inspect_bundle,
+        DownloadOptions, HttpSource, ImageryRequest, NetworkPolicy, ProxyRoute, TileCacheConfig,
+        TileScheme,
     },
     tile,
 };
@@ -79,6 +80,7 @@ impl Fixture {
         let times_worker = request_times.clone();
         let left = png([40, 90, 130, 255], tile_size);
         let right = png([150, 60, 20, 255], tile_size);
+        let annotation = png([255,0,0,128], tile_size);
         let source_y = if tms { 1 } else { 0 };
         let left_path = format!("/1/0/{source_y}.png");
         let right_path = format!("/1/1/{source_y}.png");
@@ -92,6 +94,7 @@ impl Fixture {
                     }
                     Err(error) => panic!("fixture accept failed: {error}"),
                 };
+                stream.set_nonblocking(false).unwrap();
                 stream
                     .set_read_timeout(Some(Duration::from_millis(500)))
                     .unwrap();
@@ -113,8 +116,11 @@ impl Fixture {
                     ("429 Too Many Requests", b"")
                 } else {
                     match path {
-                        Some(value) if value == left_path => ("200 OK", &left),
-                        Some(value) if value == right_path && !missing_right => ("200 OK", &right),
+                        Some(value) if value.starts_with("/annotation/") => ("200 OK", &annotation),
+                        Some(value) if value.ends_with(&left_path) || value.ends_with("/2/1/1.png") => ("200 OK", &left),
+                        Some(value) if (value.ends_with(&right_path) || value.ends_with("/2/2/1.png")) && !missing_right => {
+                            ("200 OK", &right)
+                        }
                         _ => ("404 Not Found", b""),
                     }
                 };
@@ -142,8 +148,7 @@ impl Fixture {
     }
 
     fn source(&self) -> HttpSource {
-        HttpSource {
-            id: "synthetic-xyz".into(),
+        HttpSource { subdomains: Vec::new(), coordinate_system: None, elevation_encoding: None, id: "synthetic-xyz".into(),
             name: "Synthetic XYZ fixture".into(),
             attribution: "Generated test pixels".into(),
             license: "Synthetic test data".into(),
@@ -155,7 +160,7 @@ impl Fixture {
             },
             tile_size: self.tile_size,
             network_policy: NetworkPolicy::UserTrustedHttp,
-            min_interval_ms: 0,
+            min_interval_ms: 0, authentication: None, runtime_token: None,
         }
     }
 }
@@ -187,11 +192,38 @@ fn request(destination: std::path::PathBuf, tile_size: u16) -> ImageryRequest {
         grids: vec![tile::grid([-1.0, 1.0, 1.0, 2.0], 1, tile_size).unwrap()],
         output_geotiff: true,
         output_mbtiles: true,
+        extra_outputs: Vec::new(),
+        export_options: geod_core::imagery::ExportOptions::default(), overlays: Vec::new(),
         max_tiles: 2,
         max_decoded_rgba_bytes: 2 * u64::from(tile_size).pow(2) * 4,
         destination,
         deadline: Duration::from_secs(10),
     }
+}
+
+// These retry tests intentionally use one lane so request ordering and counts
+// describe retries rather than requests already in flight when control changes.
+async fn fetch_serial_bundle(
+    request: &ImageryRequest,
+    source: &HttpSource,
+) -> Result<geod_core::imagery::Manifest, geod_core::imagery::CoreError> {
+    let directory = tempfile::tempdir().unwrap();
+    let cache = TileCacheConfig {
+        root: directory.path().join("cache"),
+        plan_hash: "c".repeat(64),
+        job_id: uuid::Uuid::new_v4().to_string(),
+    };
+    fetch_bundle_with_cache_control_proxy_options(
+        request,
+        source,
+        &AtomicBool::new(false),
+        &AtomicBool::new(false),
+        &cache,
+        ProxyRoute::Direct,
+        DownloadOptions { concurrency: 1 },
+        |_, _| Ok(()),
+    )
+    .await
 }
 
 #[tokio::test]
@@ -331,11 +363,14 @@ async fn resumes_from_verified_tile_checkpoint_without_repeating_http() {
         job_id: "a7dafeb5-eef5-47be-b1f3-9ed1bd2279f2".into(),
     };
     let cancelled = AtomicBool::new(false);
-    let error = fetch_bundle_with_cache(
+    let error = fetch_bundle_with_cache_control_proxy_options(
         &request(output.clone(), 256),
         &fixture.source(),
         &cancelled,
+        &AtomicBool::new(false),
         &cache,
+        ProxyRoute::Direct,
+        DownloadOptions { concurrency: 1 },
         |completed, _| {
             if completed == 1 {
                 cancelled.store(true, Ordering::Relaxed);
@@ -349,11 +384,14 @@ async fn resumes_from_verified_tile_checkpoint_without_repeating_http() {
     assert!(!output.exists());
     assert_eq!(fixture.requests.load(Ordering::Relaxed), 1);
     cancelled.store(false, Ordering::Relaxed);
-    let manifest = fetch_bundle_with_cache(
+    let manifest = fetch_bundle_with_cache_control_proxy_options(
         &request(output.clone(), 256),
         &fixture.source(),
         &cancelled,
+        &AtomicBool::new(false),
         &cache,
+        ProxyRoute::Direct,
+        DownloadOptions { concurrency: 1 },
         |_, _| Ok(()),
     )
     .await
@@ -369,7 +407,7 @@ async fn retries_one_rate_limited_tile_and_publishes_complete_bundle() {
     let fixture = Fixture::start_mode(false, 256, false, true);
     let directory = tempfile::tempdir().unwrap();
     let output = directory.path().join("retry-complete");
-    fetch_bundle(&request(output.clone(), 256), &fixture.source())
+    fetch_serial_bundle(&request(output.clone(), 256), &fixture.source())
         .await
         .unwrap();
     assert_eq!(fixture.requests.load(Ordering::Relaxed), 3);
@@ -383,7 +421,9 @@ async fn recovers_after_four_temporary_service_errors() {
     let output = directory.path().join("temporary-service-recovery");
     let mut planned = request(output.clone(), 256);
     planned.deadline = Duration::from_secs(30);
-    fetch_bundle(&planned, &fixture.source()).await.unwrap();
+    fetch_serial_bundle(&planned, &fixture.source())
+        .await
+        .unwrap();
     assert_eq!(fixture.requests.load(Ordering::Relaxed), 6);
     assert_eq!(inspect_bundle(&output).unwrap().quality.status, "complete");
 }
@@ -393,7 +433,7 @@ async fn respects_retry_after_before_requesting_the_rate_limited_tile_again() {
     let fixture = Fixture::start_mode_with_retry_after(false, 256, false, true, Some(2));
     let directory = tempfile::tempdir().unwrap();
     let output = directory.path().join("retry-after-complete");
-    fetch_bundle(&request(output.clone(), 256), &fixture.source())
+    fetch_serial_bundle(&request(output.clone(), 256), &fixture.source())
         .await
         .unwrap();
     let times = fixture.request_times.lock().unwrap();
@@ -407,12 +447,11 @@ async fn retry_after_beyond_job_deadline_does_not_retry_early() {
     let fixture = Fixture::start_mode_with_retry_after(false, 256, false, true, Some(30));
     let directory = tempfile::tempdir().unwrap();
     let output = directory.path().join("rate-limit-beyond-deadline");
-    let started = Instant::now();
-    let error = fetch_bundle(&request(output.clone(), 256), &fixture.source())
+    let error = fetch_serial_bundle(&request(output.clone(), 256), &fixture.source())
         .await
         .unwrap_err();
     assert_eq!(error.code, "SOURCE_RATE_LIMITED");
-    assert!(started.elapsed() < Duration::from_secs(3));
+    assert!(fixture.request_times.lock().unwrap()[0].elapsed() < Duration::from_secs(3));
     assert_eq!(fixture.requests.load(Ordering::Relaxed), 1);
     assert!(!output.exists());
 }
@@ -426,7 +465,7 @@ async fn cancel_interrupts_retry_after_without_another_tile_request() {
     let watcher_cancelled = cancelled.clone();
     let requests = fixture.requests.clone();
     let watcher = thread::spawn(move || {
-        let deadline = Instant::now() + Duration::from_secs(3);
+        let deadline = Instant::now() + Duration::from_secs(30);
         while requests.load(Ordering::Relaxed) == 0 {
             if Instant::now() >= deadline {
                 return false;
@@ -439,15 +478,57 @@ async fn cancel_interrupts_retry_after_without_another_tile_request() {
     });
     let mut job = request(output.clone(), 256);
     job.deadline = Duration::from_secs(60);
-    let started = Instant::now();
-    let error = fetch_bundle_with_cancel(&job, &fixture.source(), &cancelled)
-        .await
-        .unwrap_err();
+    let cache = TileCacheConfig {
+        root: directory.path().join("checkpoints"),
+        plan_hash: "a".repeat(64),
+        job_id: uuid::Uuid::new_v4().to_string(),
+    };
+    let error = fetch_bundle_with_cache_control_proxy_options(
+        &job,
+        &fixture.source(),
+        &cancelled,
+        &AtomicBool::new(false),
+        &cache,
+        ProxyRoute::Direct,
+        DownloadOptions { concurrency: 1 },
+        |_, _| Ok(()),
+    )
+    .await
+    .unwrap_err();
     assert!(watcher.join().unwrap());
     assert_eq!(error.code, "CANCELLED");
-    assert!(started.elapsed() < Duration::from_secs(3));
+    assert!(fixture.request_times.lock().unwrap()[0].elapsed() < Duration::from_secs(3));
     assert_eq!(fixture.requests.load(Ordering::Relaxed), 1);
     assert!(!output.exists());
+}
+
+#[tokio::test]
+async fn explicit_proxy_routes_imagery_tiles_through_selected_server() {
+    let fixture = Fixture::start(false);
+    let mut source = fixture.source();
+    source.url_template = "http://imagery.invalid/{z}/{x}/{y}.png".into();
+    let directory = tempfile::tempdir().unwrap();
+    let output = directory.path().join("proxied");
+    let cache = TileCacheConfig {
+        root: directory.path().join("checkpoints"),
+        plan_hash: "b".repeat(64),
+        job_id: "b76cfda5-2879-4293-9c0b-ec60d595210f".into(),
+    };
+    let proxy = format!("http://{}", fixture.address);
+    let manifest = fetch_bundle_with_cache_control_proxy(
+        &request(output.clone(), 256),
+        &source,
+        &AtomicBool::new(false),
+        &AtomicBool::new(false),
+        &cache,
+        ProxyRoute::Http(&proxy),
+        |_, _| Ok(()),
+    )
+    .await
+    .unwrap();
+    assert_eq!(manifest.quality.missing_tiles, 0);
+    assert_eq!(fixture.requests.load(Ordering::Relaxed), 2);
+    assert!(output.join("imagery.mbtiles").exists());
 }
 
 #[tokio::test]
@@ -460,7 +541,7 @@ async fn pause_interrupts_retry_after_and_keeps_the_job_unpublished() {
     let watcher_paused = paused.clone();
     let requests = fixture.requests.clone();
     let watcher = thread::spawn(move || {
-        let deadline = Instant::now() + Duration::from_secs(3);
+        let deadline = Instant::now() + Duration::from_secs(30);
         while requests.load(Ordering::Relaxed) == 0 {
             if Instant::now() >= deadline {
                 return false;
@@ -478,20 +559,21 @@ async fn pause_interrupts_retry_after_and_keeps_the_job_unpublished() {
     };
     let mut job = request(output.clone(), 256);
     job.deadline = Duration::from_secs(60);
-    let started = Instant::now();
-    let error = fetch_bundle_with_cache_control(
+    let error = fetch_bundle_with_cache_control_proxy_options(
         &job,
         &fixture.source(),
         &cancelled,
         &paused,
         &cache,
+        ProxyRoute::Direct,
+        DownloadOptions { concurrency: 1 },
         |_, _| Ok(()),
     )
     .await
     .unwrap_err();
     assert!(watcher.join().unwrap());
     assert_eq!(error.code, "PAUSED");
-    assert!(started.elapsed() < Duration::from_secs(3));
+    assert!(fixture.request_times.lock().unwrap()[0].elapsed() < Duration::from_secs(3));
     assert_eq!(fixture.requests.load(Ordering::Relaxed), 1);
     assert!(!output.exists());
 }
@@ -571,7 +653,7 @@ async fn geojson_boundary_masks_geotiff_and_preview_but_preserves_mbtiles() {
         .quality
         .warnings
         .iter()
-        .any(|warning| warning.contains("MBTiles preserves complete source tiles")));
+        .any(|warning| warning.contains("Tile containers preserve complete source tiles")));
     assert_eq!(inspect_bundle(&output).unwrap().assets.len(), 4);
 
     let mut tiff =
@@ -615,4 +697,122 @@ fn geojson_boundary_rejects_non_polygon_and_ambiguous_coordinates() {
         br#"{"type":"Polygon","coordinates":[[[179,0],[-179,0],[179,1],[179,0]]]}"#
     )
     .is_err());
+}
+
+#[tokio::test]
+async fn six_formats_two_zooms_preserve_pixels_matrices_and_raw_bytes() {
+    use geod_core::imagery::ExtraOutput;
+    let fixture = Fixture::start(false);
+    let dir = tempfile::tempdir().unwrap();
+    let output = dir.path().join("six-formats");
+    let mut job = request(output.clone(), 256);
+    job.grids.push(tile::grid(job.bounds, 2, 256).unwrap());
+    job.max_tiles = 4;
+    job.max_decoded_rgba_bytes *= 2;
+    job.extra_outputs = vec![ExtraOutput::Png, ExtraOutput::Jpeg, ExtraOutput::GeoPackage, ExtraOutput::Tiles];
+    job.export_options.generate_sidecars = true;
+    let manifest = fetch_bundle(&job, &fixture.source()).await.unwrap();
+    assert_eq!(fixture.requests.load(Ordering::Relaxed), 4);
+    assert_eq!(inspect_bundle(&output).unwrap().quality.status, "complete");
+    for z in [1,2] {
+        let png = image::open(output.join(format!("imagery-z{z}.png"))).unwrap().to_rgba8();
+        let mut tif = Decoder::new(std::fs::File::open(output.join(format!("imagery-z{z}.tif"))).unwrap()).unwrap();
+        let DecodingResult::U8(bytes) = tif.read_image().unwrap() else { panic!("RGBA expected"); };
+        assert_eq!(png.as_raw(), &bytes);
+        let jpeg = image::open(output.join(format!("imagery-z{z}.jpg"))).unwrap();
+        assert_eq!((jpeg.width(), jpeg.height()), png.dimensions());
+        let world: Vec<f64> = std::fs::read_to_string(output.join(format!("imagery-z{z}.pgw"))).unwrap().lines().map(|v| v.parse().unwrap()).collect();
+        let scale = tif.get_tag_f64_vec(Tag::ModelPixelScaleTag).unwrap();
+        let tie = tif.get_tag_f64_vec(Tag::ModelTiepointTag).unwrap();
+        assert_eq!(world[0], scale[0]); assert_eq!(world[3], -scale[1]);
+        assert!((world[4] - tie[3] - scale[0]/2.0).abs() < 1e-8);
+        assert!((world[5] - tie[4] + scale[1]/2.0).abs() < 1e-8);
+    }
+    let gpkg = Connection::open(output.join("imagery.gpkg")).unwrap();
+    let count: u64 = gpkg.query_row("SELECT count(*) FROM tiles", [], |r| r.get(0)).unwrap();
+    assert_eq!(count, 4);
+    for z in [1,2] {
+        let matrix: u64 = gpkg.query_row("SELECT matrix_width FROM gpkg_tile_matrix WHERE zoom_level=?1", [z], |r| r.get(0)).unwrap();
+        assert_eq!(matrix, 1 << z);
+    }
+    let raw = std::fs::read(output.join("tiles/1/0/0.png")).unwrap();
+    assert_eq!(raw, png([40,90,130,255], 256));
+    let blob: Vec<u8> = gpkg.query_row("SELECT tile_data FROM tiles WHERE zoom_level=1 AND tile_column=0 AND tile_row=0", [], |r| r.get(0)).unwrap();
+    assert_eq!(blob, raw);
+    assert!(manifest.assets.iter().any(|a| a.path == "imagery.gpkg" && a.crs == "EPSG:3857"));
+    std::fs::write(output.join("tiles/1/0/0.png"), b"tampered").unwrap();
+    assert_eq!(inspect_bundle(&output).unwrap_err().code, "ARTIFACT_INCOMPLETE");
+}
+
+#[tokio::test]
+async fn compression_and_internal_overviews_decode_correctly() {
+    use geod_core::imagery::TiffCompression;
+    let fixture = Fixture::start(false);
+    let dir = tempfile::tempdir().unwrap();
+    for (i,compression) in [TiffCompression::None, TiffCompression::Lzw, TiffCompression::Deflate].into_iter().enumerate() {
+        let output = dir.path().join(format!("compression-{i}"));
+        let mut job = request(output.clone(),256);
+        job.bounds = [-170.0,1.0,170.0,80.0];
+        job.grids = vec![tile::grid(job.bounds,1,256).unwrap()];
+        job.export_options.compression = compression;
+        job.export_options.build_pyramid = true;
+        fetch_bundle(&job, &fixture.source()).await.unwrap();
+        let mut tif = Decoder::new(std::fs::File::open(output.join("imagery-z1.tif")).unwrap()).unwrap();
+        let (w,h) = tif.dimensions().unwrap();
+        let DecodingResult::U8(pixels) = tif.read_image().unwrap() else { panic!("RGBA expected"); };
+        assert_eq!(&pixels[..4], &[40,90,130,255]);
+        tif.next_image().unwrap();
+        assert_eq!(tif.get_tag_u32(Tag::NewSubfileType).unwrap(), 1);
+        assert_eq!(tif.dimensions().unwrap(), (w.div_ceil(2),h.div_ceil(2)));
+        let DecodingResult::U8(overview) = tif.read_image().unwrap() else { panic!("RGBA expected"); };
+        assert_eq!(&overview[..4], &[40,90,130,255]);
+        inspect_bundle(&output).unwrap();
+    }
+}
+
+#[tokio::test]
+async fn annotation_is_composited_and_dem_is_float32_metres_with_nodata() {
+    use geod_core::imagery::{OverlaySourceRef, ElevationEncoding};
+    let fixture=Fixture::start(false);
+    let dir=tempfile::tempdir().unwrap();
+    let mut job=request(dir.path().join("annotation"),256);
+    let mut overlay=fixture.source();overlay.id="annotation".into();overlay.name="半透明注记".into();
+    overlay.url_template=overlay.url_template.replace(&fixture.address.to_string(), &format!("{}/annotation",fixture.address));
+    job.export_options.overlay_sources=vec![OverlaySourceRef {source_id:overlay.id.clone(),config_revision:overlay.configuration_revision()}];
+    job.overlays=vec![overlay];
+    let manifest=fetch_bundle(&job,&fixture.source()).await.unwrap();
+    assert_eq!(manifest.provenance.len(),2);
+    let pixels=image::open(job.destination.join("preview.png")).unwrap().to_rgba8();
+    let p=pixels.get_pixel(0,0).0;
+    assert!((146..=149).contains(&p[0]) && (43..=46).contains(&p[1]) && p[3]==255, "composite pixel={p:?}");
+    assert_eq!(fixture.requests.load(Ordering::Relaxed),4);
+    let mut dem=request(dir.path().join("elevation"),256);
+    dem.output_mbtiles=false;
+    dem.export_options.elevation_encoding=Some(ElevationEncoding::Terrarium);
+    dem.boundary=Some(BoundaryGeometry::from_geojson(br#"{"type":"Polygon","coordinates":[[[-1,1],[1,1],[-1,2],[-1,1]]]}"#).unwrap());
+    fetch_bundle(&dem,&fixture.source()).await.unwrap();
+    inspect_bundle(&dem.destination).unwrap();
+    let mut tif=Decoder::new(std::fs::File::open(dem.destination.join("imagery-z1.tif")).unwrap()).unwrap();
+    let DecodingResult::F32(values)=tif.read_image().unwrap() else {panic!("Height must be Float32, not RGB");};
+    assert!(values.contains(&-9999.0));
+    assert!(values.contains(&(40.0*256.0+90.0+130.0/256.0-32768.0)));
+}
+
+#[tokio::test]
+async fn different_plans_reuse_shared_tiles_and_source_revisions_are_isolated() {
+    let fixture=Fixture::start(false);let dir=tempfile::tempdir().unwrap();
+    for i in 0..2 {
+        let cache=TileCacheConfig {root:dir.path().join(format!("job-{i}")),plan_hash:format!("{i:064x}"),job_id:uuid::Uuid::new_v4().to_string()};
+        let mut request=request(dir.path().join(format!("output-{i}")),256);
+        if i==1 {request.output_mbtiles=false;request.extra_outputs=vec![geod_core::imagery::ExtraOutput::Png];}
+        fetch_bundle_with_cache_control_proxy(&request,&fixture.source(),&AtomicBool::new(false),&AtomicBool::new(false),&cache,ProxyRoute::Direct,|_,_|Ok(())).await.unwrap();
+    }
+    assert_eq!(fixture.requests.load(Ordering::Relaxed),2,"second plan must reuse the original validated bytes");
+    let mut changed=fixture.source();changed.url_template.push_str("?version=2");
+    let cache=TileCacheConfig {root:dir.path().join("changed"),plan_hash:"c".repeat(64),job_id:uuid::Uuid::new_v4().to_string()};
+    // The fixture returns 404 for the changed request. A stale shared tile must
+    // never turn that into success.
+    let result=fetch_bundle_with_cache_control_proxy(&request(dir.path().join("changed-out"),256),&changed,&AtomicBool::new(false),&AtomicBool::new(false),&cache,ProxyRoute::Direct,|_,_|Ok(())).await;
+    assert_eq!(result.unwrap_err().code,"SOURCE_UNAVAILABLE");
+    assert_eq!(fixture.requests.load(Ordering::Relaxed),4);
 }

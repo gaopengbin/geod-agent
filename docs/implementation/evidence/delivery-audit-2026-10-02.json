@@ -1,0 +1,115 @@
+{
+  "verifiedAt": "2026-10-02T07:19:11.576Z",
+  "jobs": [
+    {
+      "jobId": "30900b5c-21fb-44ef-9bfa-2badedba22d1",
+      "state": "completed"
+    },
+    {
+      "jobId": "832d2a38-1a56-4748-b0a0-599b1bf0f95d",
+      "state": "completed"
+    },
+    {
+      "jobId": "5c5ffcbf-7988-42bc-b702-970eb7f7e27a",
+      "state": "completed"
+    },
+    {
+      "jobId": "ae493ce6-e865-42d5-837d-51e4e5ee7732",
+      "state": "completed"
+    },
+    {
+      "jobId": "3d6758b6-af4b-405d-a47c-ebc0080a0aac",
+      "state": "completed"
+    },
+    {
+      "jobId": "c014f437-fae1-42bc-9334-24a1b6a81340",
+      "state": "completed"
+    },
+    {
+      "jobId": "57e290f3-6a47-4cba-bd6f-81ebb7f2b042",
+      "state": "completed"
+    },
+    {
+      "jobId": "0f374a82-42bc-4421-8d26-90c2846b8fe2",
+      "state": "completed"
+    },
+    {
+      "jobId": "9363e4e8-6120-42e3-aec5-dc4f58a1c299",
+      "state": "completed"
+    },
+    {
+      "jobId": "6761dbcf-76e9-45cf-8610-af84a4b79b4d",
+      "state": "completed"
+    },
+    {
+      "jobId": "a2e5ea13-c444-4657-b535-fc7aa9a71d11",
+      "state": "completed"
+    },
+    {
+      "jobId": "7fe3dbfd-4240-444f-b224-e963b770af53",
+      "state": "completed"
+    }
+  ],
+  "formatsPassed": 13,
+  "lifecyclePass": true,
+  "schedulerPass": true,
+  "compatibilityPass": true,
+  "scheduleStates": [
+    {
+      "conversationId": "f2dedf82-a383-42ea-b6dd-3e753cf441bb",
+      "schedules": [
+        {
+          "scheduleId": "schedule-c6e8c171a9d54a601358ad78910673fe194e681823198e084aa5b1f4baed8ade",
+          "enabled": false
+        },
+        {
+          "scheduleId": "schedule-fe1d997c7c744a6a2305f800e510982f47015bae47a9ed0c45d605c48b5fcf21",
+          "enabled": false
+        },
+        {
+          "scheduleId": "schedule-744022cb9a6414261f092d135bd0d4a1e677673e70a3284e92e080969ead63f7",
+          "enabled": false
+        }
+      ]
+    },
+    {
+      "conversationId": "57bd4008-80e4-4630-8896-df90a2c9ed09",
+      "schedules": [
+        {
+          "scheduleId": "schedule-7dfde235f599a24775ad7bd1d1e4f18df45851753c8564046f4222278f3c83f2",
+          "enabled": false
+        }
+      ]
+    },
+    {
+      "conversationId": "1641149e-3b34-47f2-877b-93aed5896f70",
+      "schedules": [
+        {
+          "scheduleId": "schedule-1c267f71f9665d50a68328f18e4e2b61246f177bffc6a8e50e4af75ca32b6fc2",
+          "enabled": false
+        }
+      ]
+    },
+    {
+      "conversationId": "a679f3a4-0d3d-488d-8e03-85a22954ed7c",
+      "schedules": [
+        {
+          "scheduleId": "schedule-1acbec86db5dc414286ed426fa4c24cc02e7c957550d974b960eb82741f26cf3",
+          "enabled": false
+        },
+        {
+          "scheduleId": "schedule-a45c346a0d9667435e035e26648b1adf042e0406cf9d6ba8c8f5fea2103c0983",
+          "enabled": false
+        }
+      ]
+    }
+  ],
+  "failedTaskVerified": {
+    "jobId": "0fd59065-7927-47c7-9607-a205c1666820",
+    "state": "failed",
+    "refundedCny": 0.06395104
+  },
+  "pricingActive": false,
+  "activeJobs": [],
+  "pass": true
+}

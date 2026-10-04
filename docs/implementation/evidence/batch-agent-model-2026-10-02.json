@@ -1,0 +1,3047 @@
+{
+  "conversation": "ea7dbca6-962c-4516-bb0a-133530334776",
+  "engine": "bundled Codex app-server",
+  "events": [
+    {
+      "capabilities": {
+        "contextWindow": 128000,
+        "contextWindowSource": "gatewayConfigured",
+        "engine": "Codex",
+        "inputModalities": [
+          "text"
+        ],
+        "maxOutputTokens": 8192,
+        "model": "deepseek-flash",
+        "protocol": "geod-codex-v1",
+        "provider": "DeepSeek",
+        "reasoning": true,
+        "requestMaxBytes": 4000000,
+        "version": "0.159.2"
+      },
+      "runId": "a420cb48-5310-4dae-873c-15649905d202",
+      "type": "capabilities"
+    }
+  ],
+  "generations": [
+    {
+      "conversationId": "ea7dbca6-962c-4516-bb0a-133530334776",
+      "createdAt": "2026-10-02T05:43:54.461Z",
+      "errorCode": null,
+      "generationId": "5b2a1f00-5e08-4da5-a24a-c51847042198",
+      "inputTokens": 15454,
+      "model": "deepseek-flash",
+      "outputTokens": 147,
+      "reservedTokens": 20000,
+      "result": {
+        "content": "我先读取相关技能说明并发现可用的边界查询与地图工具。",
+        "phase": "commentary",
+        "phaseSource": "compatibility",
+        "reasoning": "The user wants to download imagery for Zhumadian City and its actual neighboring cities. Let me start by discovering the tools.\n\nFirst, let me check the geod-source-creator skill for China administrative boundaries. Also need to discover builtin-data-input and OpenLayers MCP.\n\nLet me start.",
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "function": {
+              "arguments": "{\"name\": \"geod-source-creator\"}",
+              "name": "skill_read"
+            },
+            "id": "call_00_kaFxvueAyDeDvPlNTGsD6425",
+            "type": "function"
+          },
+          {
+            "function": {
+              "arguments": "{\"query\": \"boundary\"}",
+              "name": "extensions_list"
+            },
+            "id": "call_01_jU82FjIwBFoP57hY2OkU6916",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "cachedInputTokens": 8832,
+          "reasoningTokens": 61
+        }
+      },
+      "state": "settled",
+      "updatedAt": "2026-10-02T05:43:56.469Z",
+      "upstreamRequestId": "122a3a55-e4c9-4dcc-ae59-c08061b195b2"
+    },
+    {
+      "conversationId": "ea7dbca6-962c-4516-bb0a-133530334776",
+      "createdAt": "2026-10-02T05:44:08.015Z",
+      "errorCode": null,
+      "generationId": "cbd8d7f8-4f83-4fa1-8a1f-f0fdb84e0991",
+      "inputTokens": 18336,
+      "model": "deepseek-flash",
+      "outputTokens": 146,
+      "reservedTokens": 20000,
+      "result": {
+        "content": "继续发现相邻城市查询工具和地图工具。",
+        "phase": "commentary",
+        "phaseSource": "compatibility",
+        "reasoning": "I need lookup_neighbors which is a source creator tool. The extensions_list for \"boundary\" only returned 2 tools for builtin-source-creator (lookup_boundary, lookup_boundaries) but toolCount is 5. Let me query extensions_list for \"neighbors\".\n\nAlso discover OpenLayers map tool.",
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "function": {
+              "arguments": "{\"query\": \"neighbors\"}",
+              "name": "extensions_list"
+            },
+            "id": "call_00_Dz2tI4MiMHxYZtTA9ZLP6260",
+            "type": "function"
+          },
+          {
+            "function": {
+              "arguments": "{\"query\": \"OpenLayers\"}",
+              "name": "extensions_list"
+            },
+            "id": "call_01_wP775hb1cv2WKnZiIUtg4103",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "cachedInputTokens": 15488,
+          "reasoningTokens": 66
+        }
+      },
+      "state": "settled",
+      "updatedAt": "2026-10-02T05:44:08.924Z",
+      "upstreamRequestId": "9427a32c-2896-4038-acad-73b6c7d08b42"
+    },
+    {
+      "conversationId": "ea7dbca6-962c-4516-bb0a-133530334776",
+      "createdAt": "2026-10-02T05:44:15.415Z",
+      "errorCode": null,
+      "generationId": "f484c46b-ab62-4c35-a7d3-4f4b44fa18b2",
+      "inputTokens": 21906,
+      "model": "deepseek-flash",
+      "outputTokens": 135,
+      "reservedTokens": 20000,
+      "result": {
+        "content": "查询驻马店市真实相邻城市，同时读取已注册图源。",
+        "phase": "commentary",
+        "phaseSource": "compatibility",
+        "reasoning": "Now let's look up actual neighbors of 驻马店市. Also list sources.",
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "function": {
+              "arguments": "{\"connectorId\": \"builtin-source-creator\", \"toolName\": \"lookup_neighbors\", \"arguments\": {\"query\": \"驻马店市\"}}",
+              "name": "mcp_call"
+            },
+            "id": "call_00_EtdQoMJgqvaA6Ig7tnk88176",
+            "type": "function"
+          },
+          {
+            "function": {
+              "arguments": "{}",
+              "name": "sources_list"
+            },
+            "id": "call_01_CggURE0nt4Bll2YDVXe87547",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "cachedInputTokens": 16512,
+          "reasoningTokens": 18
+        }
+      },
+      "state": "settled",
+      "updatedAt": "2026-10-02T05:44:16.700Z",
+      "upstreamRequestId": "1fc0211a-a8c7-4515-a2f2-c5108ef28b74"
+    },
+    {
+      "conversationId": "ea7dbca6-962c-4516-bb0a-133530334776",
+      "createdAt": "2026-10-02T05:44:18.296Z",
+      "errorCode": null,
+      "generationId": "7880d250-f089-454d-9f9a-473d54883ff2",
+      "inputTokens": 22644,
+      "model": "deepseek-flash",
+      "outputTokens": 266,
+      "reservedTokens": 20000,
+      "result": {
+        "content": "驻马店市实际相邻 6 市已确认，现按区划编码一次性查询全部边界。",
+        "phase": "commentary",
+        "phaseSource": "compatibility",
+        "reasoning": "Neighbors of 驻马店市: 阜阳市(341200, 安徽), 平顶山市(410400), 漯河市(411100), 南阳市(411300), 信阳市(411500), 周口市(411600). Six neighbors.\n\nNow query boundaries for target + neighbors. Use lookup_boundaries with queries array of 7 names. But 阜阳市 is in 安徽 - name is unique enough? Let me use adcodes to be exact: 411700, 341200, 410400, 411100, 411300, 411500, 411600.",
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "function": {
+              "arguments": "{\"arguments\": {\"queries\": [\"411700\", \"341200\", \"410400\", \"411100\", \"411300\", \"411500\", \"411600\"]}, \"connectorId\": \"builtin-source-creator\", \"toolName\": \"lookup_boundaries\"}",
+              "name": "mcp_call"
+            },
+            "id": "call_00_DMjAN0cbiApx0pZI0U9N1831",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "cachedInputTokens": 18432,
+          "reasoningTokens": 132
+        }
+      },
+      "state": "settled",
+      "updatedAt": "2026-10-02T05:44:19.941Z",
+      "upstreamRequestId": "a2743690-632e-4092-a067-7daadd700e05"
+    },
+    {
+      "conversationId": "ea7dbca6-962c-4516-bb0a-133530334776",
+      "createdAt": "2026-10-02T05:44:20.986Z",
+      "errorCode": null,
+      "generationId": "04a25da0-35ba-4304-9a88-30ca708556bd",
+      "inputTokens": 24692,
+      "model": "deepseek-flash",
+      "outputTokens": 599,
+      "reservedTokens": 20000,
+      "result": {
+        "content": "7 个范围全部查询成功，现合并规划 Z8 / GeoTIFF。",
+        "phase": "commentary",
+        "phaseSource": "compatibility",
+        "reasoning": "All 7 boundaries found. Now plan with merge mode, Z8, GeoTIFF. The user said \"小规模实测\" - Z8 is already small. Use plan_imagery_batch with merge mode.\n\nNote: the union extent is large (110.97-116.63 lon, 31.38-34.35 lat). At Z8 with GeoTIFF clipped... let's see. Z8 tiles: 256 tiles globally per zoom. The bounding box spans about 5.66 degrees lon = 5.66/360*256 ≈ 4 tiles wide; lat 2.97 deg → at z8, y range: roughly ~4 tiles tall. So ~16 tiles. Very small. Good.\n\nLet me plan.",
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "function": {
+              "arguments": "{\"sourceId\": \"esri-world-imagery\", \"boundaryIds\": [\"range-d79efcd705501d442136b4315d3d2350728d4a013d122add75595fc19ee940e3\", \"range-e7e39fcbfa3fc6ed006f68ae164078ce5474389466b4efe8dd3d7daeca8916f3\", \"range-ccbec10e156f14bd50f1440ac649a721e507a9a5260755dd87c2335b72c89f64\", \"range-129b1ff5440747e04c6eafdbb4340f6e99ab3e8f20bd6fa33a28d69159f36999\", \"range-09f49cb8f6a849734de088d38f497414b3670eb6c1144739cdaf8c9f26a635bf\", \"range-f08974606ecea39a2ecb4097d0dbc9b0e9830c1b3dcbc405ab7cccd948c378ea\", \"range-0c3cb6e86aab12c25005c0e2fbd2cf41f45122a9b52e85cda7c141ede967ea7a\"], \"mode\": \"merge\", \"name\": \"驻马店及周边六市\", \"zoom\": 8, \"outputFormats\": [\"geotiff\"]}",
+              "name": "plan_imagery_batch"
+            },
+            "id": "call_00_KlsrNJ5xLMKR3oLcXuXs5198",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "cachedInputTokens": 22016,
+          "reasoningTokens": 158
+        }
+      },
+      "state": "settled",
+      "updatedAt": "2026-10-02T05:44:23.968Z",
+      "upstreamRequestId": "d645c85f-21b6-47ec-9776-28932af256e8"
+    },
+    {
+      "conversationId": "ea7dbca6-962c-4516-bb0a-133530334776",
+      "createdAt": "2026-10-02T05:44:24.809Z",
+      "errorCode": null,
+      "generationId": "17e69c65-b700-4c77-b3ae-5a07008ad676",
+      "inputTokens": 25622,
+      "model": "deepseek-flash",
+      "outputTokens": 114,
+      "reservedTokens": 20000,
+      "result": {
+        "content": "计划已生成（20 瓦片，约 38 MB），现启动下载。",
+        "phase": "commentary",
+        "phaseSource": "compatibility",
+        "reasoning": "20 tiles, 38MB. Good, small. Full access, user asked to download. Start job.",
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "function": {
+              "arguments": "{\"planId\": \"tool-15a9dd174960ce26cf1148560c4bddc46a71306881c9f778c76f4d616ebb283e\"}",
+              "name": "jobs_start"
+            },
+            "id": "call_00_SGyTIYMAPIZm0rO9tm188845",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "cachedInputTokens": 25216,
+          "reasoningTokens": 22
+        }
+      },
+      "state": "settled",
+      "updatedAt": "2026-10-02T05:44:26.007Z",
+      "upstreamRequestId": "84011307-4ede-4209-a872-88ef4d487f62"
+    },
+    {
+      "conversationId": "ea7dbca6-962c-4516-bb0a-133530334776",
+      "createdAt": "2026-10-02T05:44:26.441Z",
+      "errorCode": null,
+      "generationId": "66b7c4bc-c9f6-4c35-9d7b-410fd7925503",
+      "inputTokens": 25921,
+      "model": "deepseek-flash",
+      "outputTokens": 174,
+      "reservedTokens": 20000,
+      "result": {
+        "content": "下载任务已启动（20 瓦片），查看一次进度。",
+        "phase": "commentary",
+        "phaseSource": "compatibility",
+        "reasoning": "Job started with background monitoring. Now check status once after a short while, and then load into map. Let me wait briefly and check job status.\n\nPer instructions \"Hand downloads off to native background monitoring; do not repeatedly poll.\" So check once, then load into map when complete. But we need to load the artifact. If not complete, we can't load it. Let me check once.\n\nActually let me just wait a bit and check. Total 20 tiles should be fast.",
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "function": {
+              "arguments": "{\"jobId\": \"9363e4e8-6120-42e3-aec5-dc4f58a1c299\"}",
+              "name": "jobs_get"
+            },
+            "id": "call_00_aVHbZGIK8ydqQaXmyI4B1956",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "cachedInputTokens": 25728,
+          "reasoningTokens": 98
+        }
+      },
+      "state": "settled",
+      "updatedAt": "2026-10-02T05:44:27.849Z",
+      "upstreamRequestId": "657df290-80e3-4ba3-a3fe-e2a89cc4ef9c"
+    },
+    {
+      "conversationId": "ea7dbca6-962c-4516-bb0a-133530334776",
+      "createdAt": "2026-10-02T05:44:28.089Z",
+      "errorCode": null,
+      "generationId": "6cfa1d36-8146-4d3b-a175-e62d542ef942",
+      "inputTokens": 26281,
+      "model": "deepseek-flash",
+      "outputTokens": 84,
+      "reservedTokens": 20000,
+      "result": {
+        "content": "瓦片已全部下载，等待裁剪产物完成后核对。",
+        "phase": "commentary",
+        "phaseSource": "compatibility",
+        "reasoning": "100% tiles downloaded, still in \"downloading\" ledger state (probably post-processing/clipping). Let me wait a moment and check artifacts.",
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "function": {
+              "arguments": "{\"cmd\": \"Start-Sleep -Seconds 12\"}",
+              "name": "exec_command"
+            },
+            "id": "call_00_pnmDwT51gWwNJk3xfSWJ8890",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "cachedInputTokens": 25984,
+          "reasoningTokens": 29
+        }
+      },
+      "state": "settled",
+      "updatedAt": "2026-10-02T05:44:28.944Z",
+      "upstreamRequestId": "96137495-ea0b-4fea-9207-c05d71a79fb1"
+    },
+    {
+      "conversationId": "ea7dbca6-962c-4516-bb0a-133530334776",
+      "createdAt": "2026-10-02T05:44:39.309Z",
+      "errorCode": null,
+      "generationId": "f295c033-d47a-4608-bedd-2a75e29e3040",
+      "inputTokens": 26416,
+      "model": "deepseek-flash",
+      "outputTokens": 66,
+      "reservedTokens": 20000,
+      "result": {
+        "content": null,
+        "phase": "commentary",
+        "phaseSource": "compatibility",
+        "reasoning": null,
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "function": {
+              "arguments": "{\"jobId\": \"9363e4e8-6120-42e3-aec5-dc4f58a1c299\"}",
+              "name": "artifacts_inspect"
+            },
+            "id": "call_00_ET_2Yl8v8Cbgmdo8l4aEXjY9384",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "cachedInputTokens": 26240,
+          "reasoningTokens": 0
+        }
+      },
+      "state": "settled",
+      "updatedAt": "2026-10-02T05:44:40.352Z",
+      "upstreamRequestId": "71345cf7-ca8b-4ec2-a051-eda8f6582515"
+    },
+    {
+      "conversationId": "ea7dbca6-962c-4516-bb0a-133530334776",
+      "createdAt": "2026-10-02T05:44:40.666Z",
+      "errorCode": null,
+      "generationId": "8f6ff154-f4f2-4f95-93bf-17129b584319",
+      "inputTokens": 26898,
+      "model": "deepseek-flash",
+      "outputTokens": 221,
+      "reservedTokens": 20000,
+      "result": {
+        "content": "产物完整（无缺失瓦片），现加载到当前地图并核对图层。",
+        "phase": "commentary",
+        "phaseSource": "compatibility",
+        "reasoning": "Artifact complete: imagery-z8 raster 1030x643, missingTiles 0. Now load into map via loadArtifact with jobId.\n\nThen verify layer list.\n\nAlso maybe add the boundary vector layers? The user said \"下载后将成果加载到当前地图并核对图层\" - load results and verify layers. Let's load artifact, then listLayers.\n\nAlso I could load the source for reference. Let's do loadArtifact.",
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "function": {
+              "arguments": "{\"connectorId\": \"builtin-openlayers-mcp\", \"toolName\": \"loadArtifact\", \"arguments\": {\"jobId\": \"9363e4e8-6120-42e3-aec5-dc4f58a1c299\"}}",
+              "name": "mcp_call"
+            },
+            "id": "call_00_rU8OkOb6DS9WqLKMD3vh1411",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "cachedInputTokens": 26368,
+          "reasoningTokens": 93
+        }
+      },
+      "state": "settled",
+      "updatedAt": "2026-10-02T05:44:42.110Z",
+      "upstreamRequestId": "05e1db34-a415-4730-92a2-ee361e2b5fc4"
+    },
+    {
+      "conversationId": "ea7dbca6-962c-4516-bb0a-133530334776",
+      "createdAt": "2026-10-02T05:44:42.589Z",
+      "errorCode": null,
+      "generationId": "c08508b1-1371-48a5-911e-2b7935d8d8b1",
+      "inputTokens": 27300,
+      "model": "deepseek-flash",
+      "outputTokens": 224,
+      "reservedTokens": 20000,
+      "result": {
+        "content": null,
+        "phase": "commentary",
+        "phaseSource": "compatibility",
+        "reasoning": "Loaded. Now verify layers list and maybe fit to extent.",
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "function": {
+              "arguments": "{\"arguments\": {}, \"connectorId\": \"builtin-openlayers-mcp\", \"toolName\": \"listLayers\"}",
+              "name": "mcp_call"
+            },
+            "id": "call_00_rq5QmDimihCgBHzA7zJq6088",
+            "type": "function"
+          },
+          {
+            "function": {
+              "arguments": "{\"arguments\": {\"duration\": 800, \"east\": 116.630859375, \"maxZoom\": 12, \"north\": 34.34797149124496, \"south\": 31.38177878211098, \"west\": 110.972900390625}, \"connectorId\": \"builtin-openlayers-mcp\", \"toolName\": \"fitExtent\"}",
+              "name": "mcp_call"
+            },
+            "id": "call_01_YM6s5Reksc7WRexeVjid6951",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "cachedInputTokens": 27008,
+          "reasoningTokens": 12
+        }
+      },
+      "state": "settled",
+      "updatedAt": "2026-10-02T05:44:43.940Z",
+      "upstreamRequestId": "750f8c1d-8120-4b7d-b2b6-cbc14f157818"
+    },
+    {
+      "conversationId": "ea7dbca6-962c-4516-bb0a-133530334776",
+      "createdAt": "2026-10-02T05:44:44.937Z",
+      "errorCode": null,
+      "generationId": "3b34db6f-b9f0-4fbf-9f01-b5d3b2fe992b",
+      "inputTokens": 27868,
+      "model": "deepseek-flash",
+      "outputTokens": 235,
+      "reservedTokens": 20000,
+      "result": {
+        "content": "已完成。\n\n- 按真实共享边界查出驻马店市相邻 6 市：阜阳、平顶山、漯河、南阳、信阳、周口（非记忆推测）。\n- 7 个行政区合并为一个裁剪范围（13 个面），用已注册 Esri World Imagery、Z8、GeoTIFF 下载，20 瓦片全部成功、无缺失。\n- 成果已加载到当前地图，图层 `artifact-9363e4e8-...-imagery-z8` 状态 ready、可见，覆盖 110.97–116.63°E / 31.38–34.35°N，底图 OSM 保持在下层。",
+        "phase": "final_answer",
+        "phaseSource": "compatibility",
+        "reasoning": "Everything loaded. Let me take a screenshot to visually verify? That's optional but good for \"核对图层\". Screenshot may fail due to CORS on osm tiles. Let me skip; listLayers already confirms the raster layer is ready and visible. Actually verification via screenshot is a nice touch but CORS-tainted tiles cause explicit error. I'll skip.\n\nReport concisely in Chinese.",
+        "role": "assistant",
+        "toolCalls": [],
+        "usage": {
+          "cachedInputTokens": 27520,
+          "reasoningTokens": 82
+        }
+      },
+      "state": "settled",
+      "updatedAt": "2026-10-02T05:44:46.480Z",
+      "upstreamRequestId": "8b4618c6-a518-4bdb-8700-2fc917b403c6"
+    }
+  ],
+  "result": {
+    "completedAt": 1790919886,
+    "durationMs": 52364,
+    "error": null,
+    "id": "01a0fb23-f9ef-7023-b57f-4ffd7fc58554",
+    "items": [
+      {
+        "delivery": null,
+        "id": "msg_geod_9f098c8d-59a7-45a6-9575-1b86eff579ec",
+        "memoryCitation": null,
+        "phase": "final_answer",
+        "questions": null,
+        "text": "已完成。\n\n- 按真实共享边界查出驻马店市相邻 6 市：阜阳、平顶山、漯河、南阳、信阳、周口（非记忆推测）。\n- 7 个行政区合并为一个裁剪范围（13 个面），用已注册 Esri World Imagery、Z8、GeoTIFF 下载，20 瓦片全部成功、无缺失。\n- 成果已加载到当前地图，图层 `artifact-9363e4e8-...-imagery-z8` 状态 ready、可见，覆盖 110.97–116.63°E / 31.38–34.35°N，底图 OSM 保持在下层。",
+        "type": "agentMessage"
+      }
+    ],
+    "itemsView": "summary",
+    "startedAt": 1790919834,
+    "status": "completed",
+    "text": "已完成。\n\n- 按真实共享边界查出驻马店市相邻 6 市：阜阳、平顶山、漯河、南阳、信阳、周口（非记忆推测）。\n- 7 个行政区合并为一个裁剪范围（13 个面），用已注册 Esri World Imagery、Z8、GeoTIFF 下载，20 瓦片全部成功、无缺失。\n- 成果已加载到当前地图，图层 `artifact-9363e4e8-...-imagery-z8` 状态 ready、可见，覆盖 110.97–116.63°E / 31.38–34.35°N，底图 OSM 保持在下层。",
+    "threadId": "01a0fb23-d963-7ad3-84c1-1e939421d471"
+  },
+  "trace": [
+    {
+      "name": "skill_read",
+      "args": {
+        "name": "geod-source-creator"
+      },
+      "output": {
+        "name": "geod-source-creator",
+        "content": "---\r\nname: geod-source-creator\r\ndescription: 配置网络影像图源；查询中国行政区边界并生成下载裁剪计划。用于添加图源、按地区下载影像和行政区裁剪。\n---\r\n\r\n# 图源 Creator\r\n\r\n完成用户请求的图源配置：检查服务接口，填写参数，调用 `source_configure` 保存，再读取 `sources_list` 验证。配置结果以本机实际保存的记录为准。\r\n\r\n通过 `extensions_list` 发现 `builtin-source-creator`，用 `mcp_call` 调用其 `search_sources` 和 `inspect_source`。用户给链接时直接检查；没给链接时从网络获取候选并继续检查，不要求用户先准备好图源。\r\n\r\n用户泛指 ArcGIS 全球影像时，可先检查 Esri World Imagery：`https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer`。指定地区、时相或提供方时按需求搜索。\r\n\r\n## 服务参数\r\n\r\n- XYZ/TMS：保留实际模板、行方向、瓦片大小和缩放范围。样本坐标应在覆盖内；一张瓦片缺失不表示整个图源不可用。\r\n- ArcGIS 缓存 MapServer：`inspect_source` 检查 `tileInfo`、Web Mercator 网格、LODs，兼容时返回 `/tile/{z}/{y}/{x}` 模板及缩放范围。不要将所有 MapServer 判成不支持。\r\n- ArcGIS ImageServer：支持 Image 能力的服务使用 `/ImageServer/exportImage`，XYZ、256 px；未指定缩放范围时可先配置 Z0–18。未指定请求间隔时用 0 ms；下载器默认 30 路并发，`minIntervalMs` 表示每路连续请求之间的等待，服务端限流由下载器共享退避处理。\n- 其他服务按检查结果处理；需要凭证或当前没有适配器时，只说明实际技术缺口，不虚构成功或绕过认证。\r\n\r\n署名和备注是选填的服务元数据，可以复制检查结果；没有就留空。配置流程不查授权协议，不索要许可证明，不因这些信息缺失拒绝配置，也不对使用权作判断。\r\n\r\n用户要求添加、接入或配置时直接调用 `source_configure`，不额外转为审核草稿或要求手动填写。仅当用户明确要预览配置时用 `source_registration_prepare`。先检查已有图源；相同配置复用，已有 ID 的不同配置不能自动覆盖，使用新的 ID。\r\n\r\n完成后简短告知已保存的图源名称、接口类型和缩放范围。不把配置请求扩展成下载任务。\n\n## 按中国行政区下载和裁剪\n\n用户明确要求下载、裁剪某地区影像时，检查已配置图源，通过 `mcp_call` 调用 `builtin-source-creator` 的 `lookup_boundary`，参数例如 `{\"query\":\"北京\"}` 或 `{\"query\":\"海淀区\",\"parent\":\"北京市\"}`。此工具使用随应用提供的 AreaCity 本地边界库，不依赖工作区中已有文件或网络；美国县级查询的限制不适用于此工具。\n\n查询成功后，桌面端将 WGS84 几何独立保存到当前对话，返回 `boundaryId`、`attachedToDesktopPlan: true` 和范围、数据版本。使用 `plan_imagery` 并明确传入对应 `boundaryId` 继续规划，不要求用户再上传同一地区 GeoJSON。几何保留在本机，不向模型复制详细坐标。新地区请求需要查询新边界，不能复用上一个地区；用户明确提供自定义边界时优先使用自定义边界。`boundaries_list` 可找回此会话已保存的范围，查询下一地区不会移除之前的范围。\n\n## 多地区与周边区域\n\n多个行政区用 `lookup_boundaries` 一次查询，传入实际名称或区划编码数组 `queries`。每个成功范围返回独立 `boundaryId`；检查缺失和同名候选，不能把部分成功说成全部成功。\n\n“某市及周边市”先用 `lookup_neighbors` 查询。它依据此版本实际共享边界线段列出同层级相邻地区，点接触不算相邻；不凭记忆猜名单。随后把目标和返回的相邻区划编码交给 `lookup_boundaries`。\n\n用 `plan_imagery_batch` 的 `boundaryIds` 指定本轮范围：\n\n- `mode: \"merge\"`：一个任务按所有范围的并集裁剪，保留各面的孔洞和岛屿。用户要求一个整体或同一裁剪成果时使用；默认名称用区域名称，例如“驻马店及周边六市”。\n- `mode: \"split\"`：每个区域独立任务和成果目录。用户要求各市分别输出或批量下载时使用。\n\n未指定拆分方式时可默认合并，简短说明；无需为一个可调整的规划选择反复询问。检查返回的 `plans` 与 `errors`，完全访问且用户要求执行时为成功计划调用 `jobs_start`，逐次确认时由任务列表批量确认。单个范围也可以 `boundaries_combine` 保存为合并范围再规划。合并范围超出容量时降低缩放或改为分区；不要悄悄漏掉地区或把行政区变成矩形。\n\n同名区县返回候选时，只询问必要的所属省市；版本缺少该区域几何时如实说明，不能伪造矩形充当行政边界。该库采集于 2026-04-03，不能声称实时最新。\n\n只缺少缩放或格式时，先以 Z12、GeoTIFF 生成计划，简短说明默认参数；超出计划容量则降低缩放并说明。\n\n执行方式以本轮本机权限状态及工具返回的 permission 为准，不能沿用旧对话里的权限描述：\n\n- Full Access（完全访问）：用户要求下载、裁剪或执行时，生成或核对计划后继续调用 `jobs_start`，并核对返回的作业状态。不停在计划卡片，不再要求用户确认。调用失败则说明实际错误。\n- Confirm Each（逐次确认）：生成计划后在右侧任务面板确认；聊天里的紧凑任务入口可打开对应任务，不反复让用户填写参数。\n- 用户明确只要规划、预览或估算时，无论权限模式都不启动任务。\n\n用户用中文提问时，所有用户可见的过程说明和最终回复均用中文。先执行必要查询和规划，完成后简短报告实际结果与下一步，不以长篇能力说明代替操作。\n\n最终回复用一两句话报告真实结果。完全访问且 `jobs_start` 成功时，例如“已启动北京市 Z12 / GeoTIFF 下载，共 600 张瓦片，按行政边界裁剪。进度在任务面板查看。”只有逐次确认时才说明“计划已生成，请在任务面板确认后开始下载”。只要求规划时说明计划已生成。不要重复枚举工具、坐标、adcode、计划 ID 或所有元数据；边界采集日期已在查询记录中显示。\n"
+      }
+    },
+    {
+      "name": "extensions_list",
+      "args": {
+        "query": "boundary"
+      },
+      "output": {
+        "skills": [],
+        "connectors": [
+          {
+            "connectorId": "builtin-data-input",
+            "name": "数据范围 · 文件 / 在线 / PostGIS",
+            "toolCount": 4,
+            "matchedToolCount": 2,
+            "availableTools": [
+              "data_layer_inspect",
+              "data_input_read"
+            ],
+            "tools": [
+              {
+                "name": "data_layer_inspect",
+                "description": "Read a PostgreSQL table or PostGIS layer's actual field names/types, feature count and sample attribute records. Use a returned table ID (schema.table) or spatial layer ID (schema.table.geometry_column). Works for points, lines and polygons; does not attach a clipping boundary. Geometry remains native. Count over 10,000 is explicitly a lower bound; sample records are not the full dataset. Use data_input_read to attach a polygon layer as the planning range.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "connectionId": {
+                      "type": "string"
+                    },
+                    "layer": {
+                      "type": "string"
+                    },
+                    "limit": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 10
+                    }
+                  },
+                  "required": [
+                    "connectionId",
+                    "layer"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              {
+                "name": "data_input_read",
+                "description": "Read and attach polygon boundaries from one source: supplied HTTP(S) vector data / WFS GetFeature / ArcGIS query / OGC API items URL, a workspace relative vector file, saved PostGIS connectionId, or returned handle. Supports GeoJSON, Shapefile / ZIP, GPKG/SQLite, KML/KMZ, GML, FGB, WKT, CSV WKT. Returns layers to choose with layer + handle/connectionId. Missing CRS needs known sourceCrs, never guess. Geometry stays on desktop. Success attaches boundary to plan_imagery.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "url": {
+                      "type": "string"
+                    },
+                    "relativePath": {
+                      "type": "string"
+                    },
+                    "connectionId": {
+                      "type": "string"
+                    },
+                    "handle": {
+                      "type": "string"
+                    },
+                    "layer": {
+                      "type": "string"
+                    },
+                    "sourceCrs": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            ]
+          },
+          {
+            "connectorId": "builtin-source-creator",
+            "name": "图源接入工具",
+            "toolCount": 5,
+            "matchedToolCount": 2,
+            "availableTools": [
+              "lookup_boundary",
+              "lookup_boundaries"
+            ],
+            "tools": [
+              {
+                "description": "查询中国省、市、区县行政边界，例如北京、天津、海淀区，可按六位区划代码查询，同名区域用 parent 指定所属省市。使用本机随应用提供的 AreaCity 2026-04-03 边界库，无需网络；将 GCJ-02 转为 WGS84，自动附到当前对话影像计划用于裁剪。返回数据版本，不能称为实时最新；不要求用户提供工作区 GeoJSON。",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "parent": {
+                      "description": "同名区域的所属省市，例如北京市",
+                      "type": "string"
+                    },
+                    "query": {
+                      "description": "行政区名称或六位区划代码，例如北京市或110000",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "query"
+                  ],
+                  "type": "object"
+                },
+                "name": "lookup_boundary"
+              },
+              {
+                "description": "一次查询多个中国行政区名称或编码。每个成功范围独立保存并返回 boundaryId，不覆盖之前的范围。用 plan_imagery_batch 按区下载或合并裁剪；同名区县可用 parent。返回实际缺失或歧义，不猜测。",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "parent": {
+                      "type": "string"
+                    },
+                    "queries": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "maxItems": 32,
+                      "minItems": 1,
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "queries"
+                  ],
+                  "type": "object"
+                },
+                "name": "lookup_boundaries"
+              }
+            ]
+          },
+          {
+            "connectorId": "0ec1d367-963a-47d0-a9e0-0e68518bc72b",
+            "name": "GDAL 格式转换",
+            "toolCount": 10,
+            "matchedToolCount": 1,
+            "availableTools": [
+              "vector_clip"
+            ],
+            "tools": [
+              {
+                "description": "Clip vector dataset by bounding box or mask geometry for spatial subsetting. USE WHEN: Need to extract features within specific area, subset large datasets, or prepare data for localized analysis. Common scenarios: Clip to study area extent, extract features within city boundary, subset regional data to project area. REQUIRES: uri (source vector path), output (destination file path). ONE OF: bounds=[minx, miny, maxx, maxy] (bounding box) OR mask=<path> (clip geometry). OUTPUT: VectorClipResult with ResourceRef (output file URI/path/size/metadata), feature_count (features in output), geometry_type, bounds, clip_method used. SIDE EFFECTS: Creates new file at output path. SUPPORTS: Shapefile, GeoPackage, GeoJSON and other OGR formats. NOTE: Features intersecting clip boundary are split. Empty geometries removed. Uses pyogrio and shapely for performance. No reflection required - spatial operations are straightforward with user-defined extents.",
+                "inputSchema": {
+                  "properties": {
+                    "bounds": {
+                      "anyOf": [
+                        {
+                          "items": {
+                            "type": "number"
+                          },
+                          "type": "array"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "mask": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "output": {
+                      "type": "string"
+                    },
+                    "uri": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "uri",
+                    "output"
+                  ],
+                  "type": "object"
+                },
+                "name": "vector_clip"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "extensions_list",
+      "args": {
+        "query": "neighbors"
+      },
+      "output": {
+        "skills": [],
+        "connectors": [
+          {
+            "connectorId": "builtin-source-creator",
+            "name": "图源接入工具",
+            "toolCount": 5,
+            "matchedToolCount": 1,
+            "availableTools": [
+              "lookup_neighbors"
+            ],
+            "tools": [
+              {
+                "description": "依据 AreaCity 2026-04-03 实际边界查询同层级相邻行政区。只有共享边界线段才算相邻，点接触或包围盒相交不算。返回名称、编码和来源，不附加几何。随后用 lookup_boundaries 查询目标及相邻区域编码，再规划。",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "parent": {
+                      "type": "string"
+                    },
+                    "query": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "query"
+                  ],
+                  "type": "object"
+                },
+                "name": "lookup_neighbors"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "extensions_list",
+      "args": {
+        "query": "OpenLayers"
+      },
+      "output": {
+        "skills": [],
+        "connectors": [
+          {
+            "connectorId": "builtin-openlayers-mcp",
+            "name": "OpenLayers MCP",
+            "toolCount": 40,
+            "matchedToolCount": 40,
+            "availableTools": [
+              "getCapabilities",
+              "flyTo",
+              "setView",
+              "getView",
+              "fitExtent",
+              "zoomIn",
+              "zoomOut",
+              "addTileLayer",
+              "addVectorLayer",
+              "addVectorTileLayer",
+              "getLayer",
+              "fitLayer",
+              "removeLayer",
+              "listLayers",
+              "setLayerVisibility",
+              "setLayerOpacity",
+              "setLayerZIndex",
+              "addGeoTIFFLayer",
+              "addImageLayer",
+              "addFeature",
+              "addGeoJSON",
+              "removeFeature",
+              "updateFeature",
+              "listFeatures",
+              "exportFeatures",
+              "clearFeatures",
+              "getFeaturesInExtent",
+              "screenshot",
+              "getFeatureAtPixel",
+              "addOverlay",
+              "removeOverlay",
+              "updateOverlay",
+              "listOverlays",
+              "setFeatureStyle",
+              "setLayerStyle",
+              "enableDraw",
+              "disableDraw",
+              "getDrawnFeatures",
+              "loadSource",
+              "loadArtifact"
+            ],
+            "tools": [
+              {
+                "name": "getCapabilities",
+                "description": "Get the connected map projection, actual commands, source formats and loading constraints.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {},
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "flyTo",
+                "description": "Animate to WGS84 longitude/latitude; returns the view after animation finishes.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "longitude": {
+                      "type": "number",
+                      "minimum": -180,
+                      "maximum": 180
+                    },
+                    "latitude": {
+                      "type": "number",
+                      "minimum": -90,
+                      "maximum": 90
+                    },
+                    "zoom": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 30
+                    },
+                    "duration": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 20000
+                    },
+                    "rotation": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "longitude",
+                    "latitude"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "setView",
+                "description": "Set view instantly using WGS84 longitude/latitude.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "longitude": {
+                      "type": "number",
+                      "minimum": -180,
+                      "maximum": 180
+                    },
+                    "latitude": {
+                      "type": "number",
+                      "minimum": -90,
+                      "maximum": 90
+                    },
+                    "zoom": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 30
+                    },
+                    "rotation": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "longitude",
+                    "latitude"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "getView",
+                "description": "Get the actual view in WGS84 and its projection.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {},
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "fitExtent",
+                "description": "Fit a WGS84 bounding box; west must be below east and south below north.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "west": {
+                      "type": "number",
+                      "minimum": -180,
+                      "maximum": 180
+                    },
+                    "south": {
+                      "type": "number",
+                      "minimum": -90,
+                      "maximum": 90
+                    },
+                    "east": {
+                      "$ref": "#/properties/west"
+                    },
+                    "north": {
+                      "$ref": "#/properties/south"
+                    },
+                    "duration": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 20000
+                    },
+                    "maxZoom": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 30
+                    },
+                    "padding": {
+                      "type": "array",
+                      "minItems": 4,
+                      "maxItems": 4,
+                      "items": [
+                        {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "number",
+                          "minimum": 0
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "west",
+                    "south",
+                    "east",
+                    "north"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "zoomIn",
+                "description": "Animate one zoom level in and return the resulting view.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {},
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "zoomOut",
+                "description": "Animate one zoom level out and return the resulting view.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {},
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "addTileLayer",
+                "description": "Add OSM, XYZ/TMS, WMS, or WMTS. WMTS requires a GetCapabilities URL and a layer name. Invalid sources fail rather than falling back to OSM. 已在 GeoD 配置的图源优先使用 loadSource。",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "opacity": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "visible": {
+                      "type": "boolean"
+                    },
+                    "zIndex": {
+                      "type": "number"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "osm",
+                        "xyz",
+                        "wms",
+                        "wmts"
+                      ]
+                    },
+                    "url": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Browser-readable URL. The host supplies local file URLs; raw filesystem paths are not supported."
+                    },
+                    "layers": {
+                      "type": "string"
+                    },
+                    "matrixSet": {
+                      "type": "string"
+                    },
+                    "projection": {
+                      "type": "string"
+                    },
+                    "tileUrl": {
+                      "$ref": "#/properties/url",
+                      "description": "Optional WMTS REST tile template override, e.g. a working mirror from GetCapabilities."
+                    },
+                    "format": {
+                      "type": "string"
+                    },
+                    "params": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "$ref": "#/properties/zIndex"
+                          },
+                          {
+                            "type": "boolean"
+                          }
+                        ]
+                      }
+                    },
+                    "minZoom": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 30
+                    },
+                    "maxZoom": {
+                      "$ref": "#/properties/minZoom"
+                    },
+                    "tileSize": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0
+                    },
+                    "crossOrigin": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "attribution": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "addVectorLayer",
+                "description": "Read inline data or a URL as GeoJSON, KML, GPX, TopoJSON or WKT. A WFS GetFeature URL with GeoJSON output can be used. Returns actual feature count.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "opacity": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "visible": {
+                      "type": "boolean"
+                    },
+                    "zIndex": {
+                      "type": "number"
+                    },
+                    "data": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": {}
+                        }
+                      ]
+                    },
+                    "url": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Browser-readable URL. The host supplies local file URLs; raw filesystem paths are not supported."
+                    },
+                    "format": {
+                      "type": "string",
+                      "enum": [
+                        "geojson",
+                        "kml",
+                        "gpx",
+                        "topojson",
+                        "wkt"
+                      ]
+                    },
+                    "dataProjection": {
+                      "type": "string"
+                    },
+                    "style": {
+                      "type": "object",
+                      "properties": {
+                        "fillColor": {
+                          "type": "string"
+                        },
+                        "fillOpacity": {
+                          "$ref": "#/properties/opacity"
+                        },
+                        "strokeColor": {
+                          "type": "string"
+                        },
+                        "strokeWidth": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "strokeDash": {
+                          "type": "array",
+                          "items": {
+                            "type": "number",
+                            "minimum": 0
+                          }
+                        },
+                        "pointRadius": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "pointColor": {
+                          "type": "string"
+                        },
+                        "iconUrl": {
+                          "type": "string"
+                        },
+                        "iconScale": {
+                          "type": "number",
+                          "exclusiveMinimum": 0
+                        },
+                        "text": {
+                          "type": "string"
+                        },
+                        "textFont": {
+                          "type": "string"
+                        },
+                        "textFillColor": {
+                          "type": "string"
+                        },
+                        "textStrokeColor": {
+                          "type": "string"
+                        },
+                        "textStrokeWidth": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "textOffsetY": {
+                          "$ref": "#/properties/zIndex"
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "fit": {
+                      "type": "boolean"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "addVectorTileLayer",
+                "description": "Add an MVT vector tile layer from a {z}/{x}/{y} URL template.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "opacity": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "visible": {
+                      "type": "boolean"
+                    },
+                    "zIndex": {
+                      "type": "number"
+                    },
+                    "url": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Browser-readable URL. The host supplies local file URLs; raw filesystem paths are not supported."
+                    },
+                    "minZoom": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 30
+                    },
+                    "maxZoom": {
+                      "$ref": "#/properties/minZoom"
+                    },
+                    "style": {
+                      "type": "object",
+                      "properties": {
+                        "fillColor": {
+                          "type": "string"
+                        },
+                        "fillOpacity": {
+                          "$ref": "#/properties/opacity"
+                        },
+                        "strokeColor": {
+                          "type": "string"
+                        },
+                        "strokeWidth": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "strokeDash": {
+                          "type": "array",
+                          "items": {
+                            "type": "number",
+                            "minimum": 0
+                          }
+                        },
+                        "pointRadius": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "pointColor": {
+                          "type": "string"
+                        },
+                        "iconUrl": {
+                          "type": "string"
+                        },
+                        "iconScale": {
+                          "type": "number",
+                          "exclusiveMinimum": 0
+                        },
+                        "text": {
+                          "type": "string"
+                        },
+                        "textFont": {
+                          "type": "string"
+                        },
+                        "textFillColor": {
+                          "type": "string"
+                        },
+                        "textStrokeColor": {
+                          "type": "string"
+                        },
+                        "textStrokeWidth": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "textOffsetY": {
+                          "$ref": "#/properties/zIndex"
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "url"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "getLayer",
+                "description": "Inspect layer type, source type, state, extent and feature count.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "fitLayer",
+                "description": "Fit the actual vector or raster extent of a layer.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "duration": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 20000
+                    },
+                    "maxZoom": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 30
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "removeLayer",
+                "description": "Remove a layer and dispose resources owned by the bridge.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "listLayers",
+                "description": "List stable layer IDs, source types, loading states and properties.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {},
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "setLayerVisibility",
+                "description": "Show or hide a layer.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "visible": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "visible"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "setLayerOpacity",
+                "description": "Set layer opacity from 0 to 1.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "opacity": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "opacity"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "setLayerZIndex",
+                "description": "Set layer stacking order.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "zIndex": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "zIndex"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "addGeoTIFFLayer",
+                "description": "Load GeoTIFF/COG via a browser-readable URL, using actual raster pixels. Supports selected bands and nodata. Returns metadata readiness separately from rendered tile state. Host must expose local files via an HTTP Range or custom protocol URL.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "opacity": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "visible": {
+                      "type": "boolean"
+                    },
+                    "zIndex": {
+                      "type": "number"
+                    },
+                    "url": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Browser-readable URL. The host supplies local file URLs; raw filesystem paths are not supported."
+                    },
+                    "bands": {
+                      "type": "array",
+                      "items": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0
+                      },
+                      "minItems": 1,
+                      "maxItems": 4
+                    },
+                    "min": {
+                      "$ref": "#/properties/zIndex"
+                    },
+                    "max": {
+                      "$ref": "#/properties/zIndex"
+                    },
+                    "nodata": {
+                      "$ref": "#/properties/zIndex"
+                    },
+                    "normalize": {
+                      "type": "boolean"
+                    },
+                    "interpolate": {
+                      "type": "boolean"
+                    },
+                    "convertToRGB": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "string",
+                          "const": "auto"
+                        }
+                      ]
+                    },
+                    "projection": {
+                      "type": "string"
+                    },
+                    "fit": {
+                      "type": "boolean"
+                    },
+                    "cacheSize": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 8192,
+                      "description": "64KB LRU blocks; default 2048 (~128MB maximum)."
+                    }
+                  },
+                  "required": [
+                    "url"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "addImageLayer",
+                "description": "Add a static georeferenced image, image WMS, or ArcGIS MapServer/ImageServer export image.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "opacity": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "visible": {
+                      "type": "boolean"
+                    },
+                    "zIndex": {
+                      "type": "number"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "static",
+                        "wms",
+                        "arcgis"
+                      ]
+                    },
+                    "url": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Browser-readable URL. The host supplies local file URLs; raw filesystem paths are not supported."
+                    },
+                    "projection": {
+                      "type": "string"
+                    },
+                    "extent": {
+                      "type": "array",
+                      "minItems": 4,
+                      "maxItems": 4,
+                      "items": [
+                        {
+                          "$ref": "#/properties/zIndex"
+                        },
+                        {
+                          "$ref": "#/properties/zIndex"
+                        },
+                        {
+                          "$ref": "#/properties/zIndex"
+                        },
+                        {
+                          "$ref": "#/properties/zIndex"
+                        }
+                      ],
+                      "description": "Static image extent in the specified projection, default EPSG:4326."
+                    },
+                    "layers": {
+                      "type": "string"
+                    },
+                    "params": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "$ref": "#/properties/zIndex"
+                          },
+                          {
+                            "type": "boolean"
+                          }
+                        ]
+                      }
+                    },
+                    "fit": {
+                      "type": "boolean"
+                    },
+                    "crossOrigin": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "url"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "addFeature",
+                "description": "Add geometry in the supplied data projection (default WGS84). Circle radius uses map projection units.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "layerId": {
+                      "$ref": "#/properties/id"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "Point",
+                        "LineString",
+                        "Polygon",
+                        "Circle",
+                        "MultiPoint",
+                        "MultiLineString",
+                        "MultiPolygon"
+                      ]
+                    },
+                    "coordinates": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "minItems": 2,
+                          "maxItems": 2,
+                          "items": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "$ref": "#/properties/coordinates/anyOf/0/items/0"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/properties/coordinates/anyOf/0"
+                          }
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/properties/coordinates/anyOf/0"
+                            }
+                          }
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "array",
+                            "items": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/properties/coordinates/anyOf/0"
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "radius": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    "dataProjection": {
+                      "type": "string"
+                    },
+                    "properties": {
+                      "type": "object",
+                      "additionalProperties": {}
+                    },
+                    "style": {
+                      "type": "object",
+                      "properties": {
+                        "fillColor": {
+                          "type": "string"
+                        },
+                        "fillOpacity": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "strokeColor": {
+                          "type": "string"
+                        },
+                        "strokeWidth": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "strokeDash": {
+                          "type": "array",
+                          "items": {
+                            "type": "number",
+                            "minimum": 0
+                          }
+                        },
+                        "pointRadius": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "pointColor": {
+                          "type": "string"
+                        },
+                        "iconUrl": {
+                          "type": "string"
+                        },
+                        "iconScale": {
+                          "type": "number",
+                          "exclusiveMinimum": 0
+                        },
+                        "text": {
+                          "type": "string"
+                        },
+                        "textFont": {
+                          "type": "string"
+                        },
+                        "textFillColor": {
+                          "type": "string"
+                        },
+                        "textStrokeColor": {
+                          "type": "string"
+                        },
+                        "textStrokeWidth": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "textOffsetY": {
+                          "$ref": "#/properties/coordinates/anyOf/0/items/0"
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "coordinates"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "addGeoJSON",
+                "description": "Add inline or URL GeoJSON to an existing or default vector layer.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "layerId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": {}
+                        }
+                      ]
+                    },
+                    "url": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Browser-readable URL. The host supplies local file URLs; raw filesystem paths are not supported."
+                    },
+                    "dataProjection": {
+                      "type": "string"
+                    },
+                    "style": {
+                      "type": "object",
+                      "properties": {
+                        "fillColor": {
+                          "type": "string"
+                        },
+                        "fillOpacity": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "strokeColor": {
+                          "type": "string"
+                        },
+                        "strokeWidth": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "strokeDash": {
+                          "type": "array",
+                          "items": {
+                            "type": "number",
+                            "minimum": 0
+                          }
+                        },
+                        "pointRadius": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "pointColor": {
+                          "type": "string"
+                        },
+                        "iconUrl": {
+                          "type": "string"
+                        },
+                        "iconScale": {
+                          "type": "number",
+                          "exclusiveMinimum": 0
+                        },
+                        "text": {
+                          "type": "string"
+                        },
+                        "textFont": {
+                          "type": "string"
+                        },
+                        "textFillColor": {
+                          "type": "string"
+                        },
+                        "textStrokeColor": {
+                          "type": "string"
+                        },
+                        "textStrokeWidth": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "textOffsetY": {
+                          "type": "number"
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "fit": {
+                      "type": "boolean"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "removeFeature",
+                "description": "Remove a feature by ID.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "featureId": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        {
+                          "type": "number"
+                        }
+                      ]
+                    },
+                    "layerId": {
+                      "$ref": "#/properties/featureId/anyOf/0"
+                    }
+                  },
+                  "required": [
+                    "featureId"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "updateFeature",
+                "description": "Update feature coordinates, properties or style. Coordinates use dataProjection, default WGS84.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "featureId": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        {
+                          "type": "number"
+                        }
+                      ]
+                    },
+                    "layerId": {
+                      "$ref": "#/properties/featureId/anyOf/0"
+                    },
+                    "coordinates": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "minItems": 2,
+                          "maxItems": 2,
+                          "items": [
+                            {
+                              "$ref": "#/properties/featureId/anyOf/1"
+                            },
+                            {
+                              "$ref": "#/properties/featureId/anyOf/1"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/properties/coordinates/anyOf/0"
+                          }
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/properties/coordinates/anyOf/0"
+                            }
+                          }
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "array",
+                            "items": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/properties/coordinates/anyOf/0"
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "radius": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    "dataProjection": {
+                      "type": "string"
+                    },
+                    "properties": {
+                      "type": "object",
+                      "additionalProperties": {}
+                    },
+                    "style": {
+                      "type": "object",
+                      "properties": {
+                        "fillColor": {
+                          "type": "string"
+                        },
+                        "fillOpacity": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "strokeColor": {
+                          "type": "string"
+                        },
+                        "strokeWidth": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "strokeDash": {
+                          "type": "array",
+                          "items": {
+                            "type": "number",
+                            "minimum": 0
+                          }
+                        },
+                        "pointRadius": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "pointColor": {
+                          "type": "string"
+                        },
+                        "iconUrl": {
+                          "type": "string"
+                        },
+                        "iconScale": {
+                          "type": "number",
+                          "exclusiveMinimum": 0
+                        },
+                        "text": {
+                          "type": "string"
+                        },
+                        "textFont": {
+                          "type": "string"
+                        },
+                        "textFillColor": {
+                          "type": "string"
+                        },
+                        "textStrokeColor": {
+                          "type": "string"
+                        },
+                        "textStrokeWidth": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "textOffsetY": {
+                          "$ref": "#/properties/featureId/anyOf/1"
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "featureId"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "listFeatures",
+                "description": "List JSON-safe feature information with offset/limit pagination, without OpenLayers geometry objects.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "layerId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "offset": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "limit": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 1000
+                    }
+                  },
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "exportFeatures",
+                "description": "Export loaded vector features as GeoJSON in a target projection, default WGS84. Circles are converted to polygons.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "layerId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "dataProjection": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "clearFeatures",
+                "description": "Clear all features from a vector layer.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "layerId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  },
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "getFeaturesInExtent",
+                "description": "Query loaded vector features whose geometries intersect a WGS84 box.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "west": {
+                      "type": "number",
+                      "minimum": -180,
+                      "maximum": 180
+                    },
+                    "south": {
+                      "type": "number",
+                      "minimum": -90,
+                      "maximum": 90
+                    },
+                    "east": {
+                      "$ref": "#/properties/west"
+                    },
+                    "north": {
+                      "$ref": "#/properties/south"
+                    },
+                    "layerId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "limit": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 1000
+                    }
+                  },
+                  "required": [
+                    "west",
+                    "south",
+                    "east",
+                    "north"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "screenshot",
+                "description": "Composite all visible map canvases into a PNG. CORS-tainted tiles cause an explicit error. HTML controls/overlays are not included.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {},
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "getFeatureAtPixel",
+                "description": "Pick a rendered feature at CSS pixel coordinates with optional layer filter.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "y": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "layerId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "addOverlay",
+                "description": "Add a sanitized HTML overlay at WGS84 coordinates.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "longitude": {
+                      "type": "number",
+                      "minimum": -180,
+                      "maximum": 180
+                    },
+                    "latitude": {
+                      "type": "number",
+                      "minimum": -90,
+                      "maximum": 90
+                    },
+                    "html": {
+                      "type": "string"
+                    },
+                    "offset": {
+                      "type": "array",
+                      "minItems": 2,
+                      "maxItems": 2,
+                      "items": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "$ref": "#/properties/offset/items/0"
+                        }
+                      ]
+                    },
+                    "positioning": {
+                      "type": "string",
+                      "enum": [
+                        "bottom-left",
+                        "bottom-center",
+                        "bottom-right",
+                        "center-left",
+                        "center-center",
+                        "center-right",
+                        "top-left",
+                        "top-center",
+                        "top-right"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "longitude",
+                    "latitude",
+                    "html"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "removeOverlay",
+                "description": "Remove an overlay.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "updateOverlay",
+                "description": "Update sanitized overlay content or position.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "longitude": {
+                      "type": "number",
+                      "minimum": -180,
+                      "maximum": 180
+                    },
+                    "latitude": {
+                      "type": "number",
+                      "minimum": -90,
+                      "maximum": 90
+                    },
+                    "html": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              }
+            ],
+            "omittedToolCount": 8,
+            "next": "Use extensions_list with a specific tool name or capability to obtain its complete schema"
+          }
+        ]
+      }
+    },
+    {
+      "name": "mcp_call",
+      "args": {
+        "arguments": {
+          "query": "驻马店市"
+        },
+        "connectorId": "builtin-source-creator",
+        "toolName": "lookup_neighbors"
+      },
+      "output": {
+        "connectorId": "builtin-source-creator",
+        "kind": "builtin",
+        "toolName": "lookup_neighbors",
+        "result": {
+          "adcode": "411700",
+          "collectedAt": "2026-04-03",
+          "found": true,
+          "name": "驻马店市",
+          "neighbors": [
+            {
+              "adcode": "341200",
+              "level": 1,
+              "name": "阜阳市",
+              "path": "安徽省 阜阳市",
+              "sharedSegmentCount": 507
+            },
+            {
+              "adcode": "410400",
+              "level": 1,
+              "name": "平顶山市",
+              "path": "河南省 平顶山市",
+              "sharedSegmentCount": 678
+            },
+            {
+              "adcode": "411100",
+              "level": 1,
+              "name": "漯河市",
+              "path": "河南省 漯河市",
+              "sharedSegmentCount": 712
+            },
+            {
+              "adcode": "411300",
+              "level": 1,
+              "name": "南阳市",
+              "path": "河南省 南阳市",
+              "sharedSegmentCount": 693
+            },
+            {
+              "adcode": "411500",
+              "level": 1,
+              "name": "信阳市",
+              "path": "河南省 信阳市",
+              "sharedSegmentCount": 3108
+            },
+            {
+              "adcode": "411600",
+              "level": 1,
+              "name": "周口市",
+              "path": "河南省 周口市",
+              "sharedSegmentCount": 1366
+            }
+          ],
+          "relationship": "shared-boundary-segment",
+          "source": "AreaCity 本地行政区边界库",
+          "sourceUrl": "https://github.com/xiangyuecn/AreaCity-JsSpider-StatsGov/releases/tag/2025.251231.260403",
+          "version": "2025.251231.260403"
+        }
+      }
+    },
+    {
+      "name": "sources_list",
+      "args": {},
+      "output": {
+        "sources": [
+          {
+            "schemaVersion": "0.1",
+            "id": "esri-world-imagery",
+            "displayName": "Esri World Imagery",
+            "attribution": "Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community",
+            "license": "",
+            "bulkDownloadAllowed": true,
+            "scheme": "XYZ",
+            "tileSize": 256,
+            "minZoom": 0,
+            "maxZoom": 22,
+            "configRevision": "b5d9ccab40f83a688f0580499f5a037c0f76b1adbebb70abb6c02eb50ccef2d1",
+            "credentialRefVersion": null
+          },
+          {
+            "schemaVersion": "0.1",
+            "id": "usgs-naip-plus-conus",
+            "displayName": "USGS NAIP Plus · 美国本土",
+            "attribution": "USGS, USDA, The National Map: Orthoimagery",
+            "license": "USGS The National Map 公共领域影像；仅用于美国本土已确认覆盖范围",
+            "bulkDownloadAllowed": true,
+            "scheme": "XYZ",
+            "tileSize": 256,
+            "minZoom": 10,
+            "maxZoom": 18,
+            "configRevision": "4f3d31417c9374032d2fb96a4bf84f7fdc5131476bd7ed35ccd6eaf35983d489",
+            "credentialRefVersion": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "mcp_call",
+      "args": {
+        "arguments": {
+          "queries": [
+            "411700",
+            "341200",
+            "410400",
+            "411100",
+            "411300",
+            "411500",
+            "411600"
+          ]
+        },
+        "connectorId": "builtin-source-creator",
+        "toolName": "lookup_boundaries"
+      },
+      "output": {
+        "connectorId": "builtin-source-creator",
+        "kind": "builtin",
+        "toolName": "lookup_boundaries",
+        "result": {
+          "foundCount": 7,
+          "items": [
+            {
+              "adcode": "411700",
+              "bounds": [
+                113.09145063,
+                32.27919026,
+                115.2141632,
+                33.53332019
+              ],
+              "collectedAt": "2026-04-03",
+              "coordinateMethod": "GCJ-02 迭代逆变换，公开行政区边界用于任务裁剪；不代表测绘级精度",
+              "crs": "EPSG:4326",
+              "found": true,
+              "knownMissing": [
+                "和康县",
+                "和安县"
+              ],
+              "name": "驻马店市-AreaCity-20260403.geojson",
+              "offline": true,
+              "path": "河南省 驻马店市",
+              "polygonCount": 1,
+              "source": "AreaCity 本地行政区边界库",
+              "sourceCrs": "GCJ-02",
+              "sourceUrl": "https://github.com/xiangyuecn/AreaCity-JsSpider-StatsGov/releases/tag/2025.251231.260403",
+              "version": "2025.251231.260403",
+              "attachedToDesktopPlan": true,
+              "boundaryId": "range-d79efcd705501d442136b4315d3d2350728d4a013d122add75595fc19ee940e3"
+            },
+            {
+              "adcode": "341200",
+              "bounds": [
+                114.87747359,
+                32.40526937,
+                116.63004688,
+                33.58678374
+              ],
+              "collectedAt": "2026-04-03",
+              "coordinateMethod": "GCJ-02 迭代逆变换，公开行政区边界用于任务裁剪；不代表测绘级精度",
+              "crs": "EPSG:4326",
+              "found": true,
+              "knownMissing": [
+                "和康县",
+                "和安县"
+              ],
+              "name": "阜阳市-AreaCity-20260403.geojson",
+              "offline": true,
+              "path": "安徽省 阜阳市",
+              "polygonCount": 1,
+              "source": "AreaCity 本地行政区边界库",
+              "sourceCrs": "GCJ-02",
+              "sourceUrl": "https://github.com/xiangyuecn/AreaCity-JsSpider-StatsGov/releases/tag/2025.251231.260403",
+              "version": "2025.251231.260403",
+              "attachedToDesktopPlan": true,
+              "boundaryId": "range-e7e39fcbfa3fc6ed006f68ae164078ce5474389466b4efe8dd3d7daeca8916f3"
+            },
+            {
+              "adcode": "410400",
+              "bounds": [
+                112.24168125,
+                33.13004205,
+                113.6838907,
+                34.34702243
+              ],
+              "collectedAt": "2026-04-03",
+              "coordinateMethod": "GCJ-02 迭代逆变换，公开行政区边界用于任务裁剪；不代表测绘级精度",
+              "crs": "EPSG:4326",
+              "found": true,
+              "knownMissing": [
+                "和康县",
+                "和安县"
+              ],
+              "name": "平顶山市-AreaCity-20260403.geojson",
+              "offline": true,
+              "path": "河南省 平顶山市",
+              "polygonCount": 1,
+              "source": "AreaCity 本地行政区边界库",
+              "sourceCrs": "GCJ-02",
+              "sourceUrl": "https://github.com/xiangyuecn/AreaCity-JsSpider-StatsGov/releases/tag/2025.251231.260403",
+              "version": "2025.251231.260403",
+              "attachedToDesktopPlan": true,
+              "boundaryId": "range-ccbec10e156f14bd50f1440ac649a721e507a9a5260755dd87c2335b72c89f64"
+            },
+            {
+              "adcode": "411100",
+              "bounds": [
+                113.44928074,
+                33.40300017,
+                114.29024055,
+                33.98607951
+              ],
+              "collectedAt": "2026-04-03",
+              "coordinateMethod": "GCJ-02 迭代逆变换，公开行政区边界用于任务裁剪；不代表测绘级精度",
+              "crs": "EPSG:4326",
+              "found": true,
+              "knownMissing": [
+                "和康县",
+                "和安县"
+              ],
+              "name": "漯河市-AreaCity-20260403.geojson",
+              "offline": true,
+              "path": "河南省 漯河市",
+              "polygonCount": 3,
+              "source": "AreaCity 本地行政区边界库",
+              "sourceCrs": "GCJ-02",
+              "sourceUrl": "https://github.com/xiangyuecn/AreaCity-JsSpider-StatsGov/releases/tag/2025.251231.260403",
+              "version": "2025.251231.260403",
+              "attachedToDesktopPlan": true,
+              "boundaryId": "range-129b1ff5440747e04c6eafdbb4340f6e99ab3e8f20bd6fa33a28d69159f36999"
+            },
+            {
+              "adcode": "411300",
+              "bounds": [
+                110.97736252,
+                32.27117688,
+                113.80859449,
+                33.80317963
+              ],
+              "collectedAt": "2026-04-03",
+              "coordinateMethod": "GCJ-02 迭代逆变换，公开行政区边界用于任务裁剪；不代表测绘级精度",
+              "crs": "EPSG:4326",
+              "found": true,
+              "knownMissing": [
+                "和康县",
+                "和安县"
+              ],
+              "name": "南阳市-AreaCity-20260403.geojson",
+              "offline": true,
+              "path": "河南省 南阳市",
+              "polygonCount": 4,
+              "source": "AreaCity 本地行政区边界库",
+              "sourceCrs": "GCJ-02",
+              "sourceUrl": "https://github.com/xiangyuecn/AreaCity-JsSpider-StatsGov/releases/tag/2025.251231.260403",
+              "version": "2025.251231.260403",
+              "attachedToDesktopPlan": true,
+              "boundaryId": "range-09f49cb8f6a849734de088d38f497414b3670eb6c1144739cdaf8c9f26a635bf"
+            },
+            {
+              "adcode": "411500",
+              "bounds": [
+                113.70431407,
+                31.38437748,
+                115.93826611,
+                32.66377035
+              ],
+              "collectedAt": "2026-04-03",
+              "coordinateMethod": "GCJ-02 迭代逆变换，公开行政区边界用于任务裁剪；不代表测绘级精度",
+              "crs": "EPSG:4326",
+              "found": true,
+              "knownMissing": [
+                "和康县",
+                "和安县"
+              ],
+              "name": "信阳市-AreaCity-20260403.geojson",
+              "offline": true,
+              "path": "河南省 信阳市",
+              "polygonCount": 2,
+              "source": "AreaCity 本地行政区边界库",
+              "sourceCrs": "GCJ-02",
+              "sourceUrl": "https://github.com/xiangyuecn/AreaCity-JsSpider-StatsGov/releases/tag/2025.251231.260403",
+              "version": "2025.251231.260403",
+              "attachedToDesktopPlan": true,
+              "boundaryId": "range-f08974606ecea39a2ecb4097d0dbc9b0e9830c1b3dcbc405ab7cccd948c378ea"
+            },
+            {
+              "adcode": "411600",
+              "bounds": [
+                114.08411002,
+                33.05009968,
+                115.64887196,
+                34.33844993
+              ],
+              "collectedAt": "2026-04-03",
+              "coordinateMethod": "GCJ-02 迭代逆变换，公开行政区边界用于任务裁剪；不代表测绘级精度",
+              "crs": "EPSG:4326",
+              "found": true,
+              "knownMissing": [
+                "和康县",
+                "和安县"
+              ],
+              "name": "周口市-AreaCity-20260403.geojson",
+              "offline": true,
+              "path": "河南省 周口市",
+              "polygonCount": 1,
+              "source": "AreaCity 本地行政区边界库",
+              "sourceCrs": "GCJ-02",
+              "sourceUrl": "https://github.com/xiangyuecn/AreaCity-JsSpider-StatsGov/releases/tag/2025.251231.260403",
+              "version": "2025.251231.260403",
+              "attachedToDesktopPlan": true,
+              "boundaryId": "range-0c3cb6e86aab12c25005c0e2fbd2cf41f45122a9b52e85cda7c141ede967ea7a"
+            }
+          ],
+          "requestedCount": 7
+        }
+      }
+    },
+    {
+      "name": "plan_imagery_batch",
+      "args": {
+        "boundaryIds": [
+          "range-d79efcd705501d442136b4315d3d2350728d4a013d122add75595fc19ee940e3",
+          "range-e7e39fcbfa3fc6ed006f68ae164078ce5474389466b4efe8dd3d7daeca8916f3",
+          "range-ccbec10e156f14bd50f1440ac649a721e507a9a5260755dd87c2335b72c89f64",
+          "range-129b1ff5440747e04c6eafdbb4340f6e99ab3e8f20bd6fa33a28d69159f36999",
+          "range-09f49cb8f6a849734de088d38f497414b3670eb6c1144739cdaf8c9f26a635bf",
+          "range-f08974606ecea39a2ecb4097d0dbc9b0e9830c1b3dcbc405ab7cccd948c378ea",
+          "range-0c3cb6e86aab12c25005c0e2fbd2cf41f45122a9b52e85cda7c141ede967ea7a"
+        ],
+        "mode": "merge",
+        "name": "驻马店及周边六市",
+        "outputFormats": [
+          "geotiff"
+        ],
+        "sourceId": "esri-world-imagery",
+        "zoom": 8
+      },
+      "output": {
+        "mode": "merge",
+        "plans": [
+          {
+            "permission": "fullAccess",
+            "requiresPlanConfirmation": false,
+            "canStartWithoutPlanConfirmation": true,
+            "planId": "tool-15a9dd174960ce26cf1148560c4bddc46a71306881c9f778c76f4d616ebb283e",
+            "planHash": "c10f64f0e207b87e9c3ea66c6b9452c52cf5b778e674c46bb73c09e65c127486",
+            "source": "Esri World Imagery",
+            "bounds": [
+              110.97736252,
+              31.38437748,
+              116.63004688,
+              34.34702243
+            ],
+            "boundary": "13 个面；GeoTIFF 按边界透明裁剪，MBTiles 保留整瓦片",
+            "zoomLevels": [
+              8
+            ],
+            "outputFormats": [
+              "geotiff"
+            ],
+            "outputLocation": "当前本机工作区中的新文件夹，模型不可读取路径",
+            "totalTiles": 20,
+            "decodedRgbaBytes": 5242880,
+            "requiredFreeDiskBytes": 38404096,
+            "license": "",
+            "attribution": "Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community",
+            "expiresAt": "2026-10-02T06:14:24.519722400Z",
+            "execution": "可调用 jobs_start；本机将验证工作区完全访问授权及计划路径",
+            "name": "驻马店及周边六市"
+          }
+        ],
+        "errors": []
+      }
+    },
+    {
+      "name": "jobs_start",
+      "args": {
+        "planId": "tool-15a9dd174960ce26cf1148560c4bddc46a71306881c9f778c76f4d616ebb283e"
+      },
+      "output": {
+        "jobId": "9363e4e8-6120-42e3-aec5-dc4f58a1c299",
+        "planId": "tool-15a9dd174960ce26cf1148560c4bddc46a71306881c9f778c76f4d616ebb283e",
+        "state": "queued",
+        "ledgerState": "queued",
+        "workerActive": true,
+        "version": 1,
+        "completedTiles": null,
+        "totalTiles": 20,
+        "percent": null,
+        "checkingCache": false,
+        "checkedTiles": null,
+        "progressRecordedAt": null,
+        "checkedAt": "2026-10-02T05:44:26.384Z",
+        "latestError": null,
+        "monitoring": "desktop-background",
+        "operation": "started",
+        "reused": false,
+        "resumed": false
+      }
+    },
+    {
+      "name": "jobs_get",
+      "args": {
+        "jobId": "9363e4e8-6120-42e3-aec5-dc4f58a1c299"
+      },
+      "output": {
+        "jobId": "9363e4e8-6120-42e3-aec5-dc4f58a1c299",
+        "planId": "tool-15a9dd174960ce26cf1148560c4bddc46a71306881c9f778c76f4d616ebb283e",
+        "state": "downloading",
+        "ledgerState": "downloading",
+        "workerActive": true,
+        "version": 14,
+        "completedTiles": 20,
+        "totalTiles": 20,
+        "percent": 100,
+        "checkingCache": false,
+        "checkedTiles": null,
+        "progressRecordedAt": "2026-10-02T05:44:27.583503100Z",
+        "checkedAt": "2026-10-02T05:44:28.033Z",
+        "latestError": null,
+        "monitoring": "desktop-background"
+      }
+    },
+    {
+      "name": "artifacts_inspect",
+      "args": {
+        "jobId": "9363e4e8-6120-42e3-aec5-dc4f58a1c299"
+      },
+      "output": {
+        "jobId": "9363e4e8-6120-42e3-aec5-dc4f58a1c299",
+        "quality": {
+          "status": "complete",
+          "missingTiles": 0,
+          "warnings": []
+        },
+        "assets": [
+          {
+            "id": "boundary",
+            "kind": "vector",
+            "role": "input",
+            "bytes": 2347084,
+            "sha256": "bdc4afb9dd201e4a05a196b9c55179a0ca4a045472117952d8f40ce05d367ce2",
+            "bounds": [
+              110.97736252,
+              31.38437748,
+              116.63004688,
+              34.34702243
+            ]
+          },
+          {
+            "id": "imagery-z8",
+            "kind": "raster",
+            "role": "analysis",
+            "bytes": 2649538,
+            "sha256": "915560ce6bc085daf5a0631e9ecd158f7e85805e0074a693f128abd0e53e0bcd",
+            "bounds": [
+              110.972900390625,
+              31.38177878211098,
+              116.630859375,
+              34.34797149124496
+            ],
+            "width": 1030,
+            "height": 643
+          },
+          {
+            "id": "imagery-preview",
+            "kind": "raster",
+            "role": "preview",
+            "bytes": 1533312,
+            "sha256": "c25e328f5d823553a5056c5db40334aa050d04d9ebfa421346f59918a13b8ec6",
+            "bounds": [
+              110.972900390625,
+              31.38177878211098,
+              116.630859375,
+              34.34797149124496
+            ],
+            "width": 1024,
+            "height": 639
+          }
+        ],
+        "provenance": [
+          {
+            "source": "Esri World Imagery",
+            "attribution": "Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community",
+            "retrievedAt": "2026-10-02T05:44:26.333873800+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "name": "mcp_call",
+      "args": {
+        "arguments": {
+          "jobId": "9363e4e8-6120-42e3-aec5-dc4f58a1c299"
+        },
+        "connectorId": "builtin-openlayers-mcp",
+        "toolName": "loadArtifact"
+      },
+      "output": {
+        "connectorId": "builtin-openlayers-mcp",
+        "toolName": "loadArtifact",
+        "result": {
+          "layerId": "artifact-9363e4e8-6120-42e3-aec5-dc4f58a1c299-imagery-z8",
+          "jobId": "9363e4e8-6120-42e3-aec5-dc4f58a1c299",
+          "assetId": "imagery-z8",
+          "name": "Esri World Imagery",
+          "state": "ready",
+          "visible": true,
+          "kind": "downloaded-geotiff",
+          "bounds": [
+            110.972900390625,
+            31.38177878211098,
+            116.630859375,
+            34.34797149124496
+          ],
+          "crs": "EPSG:3857",
+          "width": 1030,
+          "height": 643
+        }
+      }
+    },
+    {
+      "name": "mcp_call",
+      "args": {
+        "arguments": {},
+        "connectorId": "builtin-openlayers-mcp",
+        "toolName": "listLayers"
+      },
+      "output": {
+        "connectorId": "builtin-openlayers-mcp",
+        "toolName": "listLayers",
+        "result": [
+          {
+            "id": "osm",
+            "name": "OpenStreetMap",
+            "type": "tile",
+            "sourceType": "XYZ",
+            "state": "ready",
+            "visible": true,
+            "opacity": 1,
+            "zIndex": 0,
+            "extent": null,
+            "sourceId": null,
+            "jobId": null,
+            "kind": null
+          },
+          {
+            "id": "artifact-9363e4e8-6120-42e3-aec5-dc4f58a1c299-imagery-z8",
+            "name": "Esri World Imagery",
+            "type": "raster",
+            "sourceType": "geotiff",
+            "state": "ready",
+            "visible": true,
+            "opacity": 1,
+            "zIndex": 750,
+            "extent": [
+              110.972900390625,
+              31.38177878211097,
+              116.630859375,
+              34.34797149124496
+            ],
+            "sourceId": null,
+            "jobId": "9363e4e8-6120-42e3-aec5-dc4f58a1c299",
+            "kind": "downloaded-geotiff"
+          }
+        ]
+      }
+    },
+    {
+      "name": "mcp_call",
+      "args": {
+        "arguments": {
+          "duration": 800,
+          "east": 116.630859375,
+          "maxZoom": 12,
+          "north": 34.34797149124496,
+          "south": 31.38177878211098,
+          "west": 110.972900390625
+        },
+        "connectorId": "builtin-openlayers-mcp",
+        "toolName": "fitExtent"
+      },
+      "output": {
+        "connectorId": "builtin-openlayers-mcp",
+        "toolName": "fitExtent",
+        "result": {
+          "center": [
+            113.8018798828125,
+            32.87728052685539
+          ],
+          "zoom": 7.837061428873798,
+          "rotation": 0,
+          "extent": [
+            110.972900390625,
+            30.998595513592775,
+            116.630859375,
+            34.71697863573651
+          ],
+          "projection": "EPSG:3857"
+        }
+      }
+    }
+  ],
+  "layers": [
+    {
+      "id": "osm",
+      "name": "OpenStreetMap",
+      "type": "tile",
+      "sourceType": "XYZ",
+      "state": "ready",
+      "visible": true,
+      "opacity": 1,
+      "zIndex": 0,
+      "extent": null,
+      "sourceId": null,
+      "jobId": null,
+      "kind": null
+    },
+    {
+      "id": "artifact-9363e4e8-6120-42e3-aec5-dc4f58a1c299-imagery-z8",
+      "name": "Esri World Imagery",
+      "type": "raster",
+      "sourceType": "geotiff",
+      "state": "ready",
+      "visible": true,
+      "opacity": 1,
+      "zIndex": 750,
+      "extent": [
+        110.972900390625,
+        31.38177878211097,
+        116.630859375,
+        34.34797149124496
+      ],
+      "sourceId": null,
+      "jobId": "9363e4e8-6120-42e3-aec5-dc4f58a1c299",
+      "kind": "downloaded-geotiff"
+    }
+  ],
+  "jobs": [
+    {
+      "jobId": "9363e4e8-6120-42e3-aec5-dc4f58a1c299",
+      "planId": "tool-15a9dd174960ce26cf1148560c4bddc46a71306881c9f778c76f4d616ebb283e",
+      "approvalId": "324bb248-a410-4d4b-b3d5-297cabe98939",
+      "planHash": "c10f64f0e207b87e9c3ea66c6b9452c52cf5b778e674c46bb73c09e65c127486",
+      "idempotencyKey": "codex:ea7dbca6-962c-4516-bb0a-133530334776:call_00_SGyTIYMAPIZm0rO9tm188845",
+      "state": "completed",
+      "version": 16,
+      "createdAt": "2026-10-02T05:44:26.193562600Z"
+    }
+  ],
+  "pass": true,
+  "verificationCorrection": "GeoTIFF layers report type=raster and sourceType=geotiff"
+}

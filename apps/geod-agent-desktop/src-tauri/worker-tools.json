@@ -1,0 +1,5 @@
+[
+  {"type":"function","function":{"name":"worker_files_list","description":"List actual files in this isolated task workspace, with relative path and byte size. No parent or other-agent files are available.","parameters":{"type":"object","properties":{},"additionalProperties":false}}},
+  {"type":"function","function":{"name":"worker_file_read","description":"Read an actual UTF-8 text file in this isolated workspace. Use the exact relative path from worker_files_list.","parameters":{"type":"object","properties":{"path":{"type":"string"}},"required":["path"],"additionalProperties":false}}},
+  {"type":"function","function":{"name":"worker_file_write","description":"Save a UTF-8 result inside this isolated workspace when writing is enabled. The native executor rejects absolute paths, parent traversal, symlinks and read-only tasks.","parameters":{"type":"object","properties":{"path":{"type":"string"},"text":{"type":"string"}},"required":["path","text"],"additionalProperties":false}}}
+]

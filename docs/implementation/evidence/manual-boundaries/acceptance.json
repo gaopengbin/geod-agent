@@ -1,0 +1,194 @@
+{
+  "pass": true,
+  "conversationId": "manual-boundary-acceptance-8ca914e6-de5d-437c-a931-c05863e3af90",
+  "rectangle": {
+    "boundaryId": "range-e528ef1ede129c49e947380e40e49bb7262094562da9332c2d69be8f919ab760",
+    "name": "北京测试矩形",
+    "bounds": [
+      116.28327026,
+      39.8578454,
+      116.62659302,
+      40.06835916
+    ],
+    "polygonCount": 1,
+    "inputIds": [],
+    "createdAt": "2026-10-02T13:03:42.633689100Z",
+    "geometry": {
+      "polygons": [
+        [
+          [
+            [
+              116.28327026,
+              39.8578454
+            ],
+            [
+              116.62659302,
+              39.8578454
+            ],
+            [
+              116.62659302,
+              40.06835916
+            ],
+            [
+              116.28327026,
+              40.06835916
+            ],
+            [
+              116.28327026,
+              39.8578454
+            ]
+          ]
+        ]
+      ]
+    }
+  },
+  "polygon": {
+    "boundaryId": "range-9368c7cb4e96af972435bb6703844dc61e8c31ba33bd779d59d4646e2fefcf9a",
+    "name": "北京测试多边形",
+    "bounds": [
+      116.24207153,
+      39.80511572,
+      116.5991272,
+      40.08937488
+    ],
+    "polygonCount": 1,
+    "inputIds": [],
+    "createdAt": "2026-10-02T13:03:42.808404700Z",
+    "geometry": {
+      "polygons": [
+        [
+          [
+            [
+              116.24207153,
+              40.08937488
+            ],
+            [
+              116.5991272,
+              40.02630827
+            ],
+            [
+              116.44806519,
+              39.80511572
+            ],
+            [
+              116.24207153,
+              40.08937488
+            ]
+          ]
+        ]
+      ]
+    }
+  },
+  "edited": {
+    "boundaryId": "range-045f45f1cda85601be5733c18771508c5a590b02394caa8c69947dc4792c00be",
+    "name": "北京测试多边形",
+    "bounds": [
+      116.21408749,
+      39.80511572,
+      116.5991272,
+      40.07866957
+    ],
+    "polygonCount": 1,
+    "inputIds": [],
+    "createdAt": "2026-10-02T13:03:44.226094200Z",
+    "geometry": {
+      "polygons": [
+        [
+          [
+            [
+              116.21408749,
+              40.07866957
+            ],
+            [
+              116.5991272,
+              40.02630827
+            ],
+            [
+              116.44806519,
+              39.80511572
+            ],
+            [
+              116.21408749,
+              40.07866957
+            ]
+          ]
+        ]
+      ]
+    }
+  },
+  "attached": {
+    "boundaryId": "range-e85c64362a98329699bdace04b5a05dffab86e798c714d3a778689e703f2974f",
+    "name": "北京调整后范围",
+    "bounds": [
+      116.21408749,
+      39.80511572,
+      116.5991272,
+      40.07866957
+    ],
+    "polygonCount": 1,
+    "inputIds": [],
+    "createdAt": "2026-10-02T13:03:45.152967400Z",
+    "geometry": {
+      "polygons": [
+        [
+          [
+            [
+              116.21408749,
+              40.07866957
+            ],
+            [
+              116.5991272,
+              40.02630827
+            ],
+            [
+              116.44806519,
+              39.80511572
+            ],
+            [
+              116.21408749,
+              40.07866957
+            ]
+          ]
+        ]
+      ]
+    }
+  },
+  "bookmarks": [
+    {
+      "id": "range-9368c7cb4e96af972435bb6703844dc61e8c31ba33bd779d59d4646e2fefcf9a",
+      "boundaryId": "range-e85c64362a98329699bdace04b5a05dffab86e798c714d3a778689e703f2974f",
+      "name": "北京调整后范围",
+      "bounds": [
+        116.21408749,
+        39.80511572,
+        116.5991272,
+        40.07866957
+      ],
+      "polygonCount": 1,
+      "updatedAt": "2026-10-02T13:03:45.159Z"
+    }
+  ],
+  "nativeSavedCount": 4,
+  "checks": [
+    "rectangle pointer drag",
+    "polygon pointer clicks",
+    "vertex pointer editing",
+    "immutable previous boundary",
+    "native persistence",
+    "bookmark rename",
+    "bookmark delete",
+    "zoom to bookmark",
+    "conversation attachment",
+    "reload persistence",
+    "light dark narrow render"
+  ],
+  "layout": {
+    "width": 720,
+    "scroll": 720,
+    "panel": {
+      "left": 378,
+      "right": 708
+    }
+  },
+  "errors": []
+}

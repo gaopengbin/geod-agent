@@ -1,0 +1,14 @@
+[
+  {
+    "id": "osm",
+    "name": "OpenStreetMap",
+    "type": "tile",
+    "visible": true,
+    "opacity": 1,
+    "zIndex": 0,
+    "state": "ready",
+    "sourceId": null,
+    "jobId": null,
+    "kind": null
+  }
+]

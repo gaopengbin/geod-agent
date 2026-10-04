@@ -1,0 +1,58 @@
+name: geod-agent-postgis-test
+services:
+  postgis:
+    # postgis/postgis:18-3.6, pinned to the digest pulled on 2026-10-01.
+    image: postgis/postgis@sha256:60f6ad1d21ea86a67d47780b9a0d1e1d200500f62b19293fa834d0dea80b8677
+    container_name: geod-agent-postgis-test
+    labels:
+      com.geod.purpose: data-input-integration-test
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:55438:5432"
+    environment:
+      POSTGRES_USER: geod_admin
+      POSTGRES_DB: geod_test
+      POSTGRES_PASSWORD_FILE: /run/secrets/admin_password
+    secrets:
+      - admin_password
+    volumes:
+      - data:/var/lib/postgresql
+      - ./20-fixtures.sql:/docker-entrypoint-initdb.d/20-fixtures.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U geod_admin -d geod_test"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+  geoserver:
+    # docker.osgeo.org/geoserver:2.28.2, official GeoServer image.
+    image: docker.osgeo.org/geoserver@sha256:4f25018703dabd617c00c74753ac2aa02829c555578db365e8c338722754cb88
+    container_name: geod-agent-geoserver-test
+    labels:
+      com.geod.purpose: data-input-integration-test
+    profiles: [online]
+    restart: unless-stopped
+    depends_on:
+      postgis:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:18083:8080"
+    environment:
+      SKIP_DEMO_DATA: "true"
+      GEOSERVER_ADMIN_USER: geod_admin
+      GEOSERVER_ADMIN_PASSWORD_FILE: /run/secrets/geoserver_password
+      EXTRA_JAVA_OPTS: "-Xms128m -Xmx512m"
+    secrets:
+      - geoserver_password
+    volumes:
+      - geoserver_data:/opt/geoserver_data
+volumes:
+  data:
+    name: geod-agent-postgis-test-data
+  geoserver_data:
+    name: geod-agent-geoserver-test-data
+secrets:
+  admin_password:
+    file: ./.secrets/admin-password.txt
+  geoserver_password:
+    file: ./.secrets/geoserver-password.txt

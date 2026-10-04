@@ -1,0 +1,56 @@
+name: Windows review candidate
+on:
+  workflow_dispatch:
+    inputs:
+      signed_update:
+        description: Include update signatures and a reviewable update manifest
+        type: boolean
+        required: true
+        default: false
+permissions:
+  contents: read
+jobs:
+  candidate:
+    runs-on: windows-2022
+    timeout-minutes: 90
+    env:
+      GEOD_SIGNED_CANDIDATE: ${{ inputs.signed_update }}
+      GEOD_UPDATE_ENDPOINT: ${{ vars.GEOD_UPDATE_ENDPOINT }}
+      GEOD_UPDATE_PUBLIC_KEY: ${{ vars.GEOD_UPDATE_PUBLIC_KEY }}
+      GEOD_UPDATE_ARTIFACT_BASE: ${{ vars.GEOD_UPDATE_ARTIFACT_BASE }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.21.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: 3.13.11
+      - name: Prepare pinned build tools
+        shell: pwsh
+        run: |
+          rustup toolchain install 1.91.1 --profile minimal
+          rustup default 1.91.1
+          python -m pip install uv==0.9.26
+          npm ci --prefix apps/geod-agent-desktop --ignore-scripts --no-audit --no-fund
+          if ($env:JAVA_HOME_21_X64) { $env:JAVA_HOME = $env:JAVA_HOME_21_X64; $env:PATH = "$env:JAVA_HOME\bin;$env:PATH" }
+          javac --version
+          if ($LASTEXITCODE -ne 0) { throw 'A JDK is required to compile the bundled read-only Office reader' }
+      - name: Build candidate without installing or publishing
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.GEOD_UPDATE_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.GEOD_UPDATE_PRIVATE_KEY_PASSWORD }}
+        run: |
+          $arguments = @('-X', 'utf8', 'scripts/build-release-candidate.py', '--output', "artifacts/release-candidate-$env:GITHUB_RUN_ID")
+          if ($env:GEOD_SIGNED_CANDIDATE -eq 'true') { $arguments += '--signed-update' }
+          python @arguments
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-review-candidate-${{ github.run_id }}
+          path: artifacts/release-candidate-${{ github.run_id }}/*
+          retention-days: 14
+          if-no-files-found: error

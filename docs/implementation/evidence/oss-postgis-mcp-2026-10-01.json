@@ -1,0 +1,1141 @@
+{
+  "checkedAt": "2026-10-01T12:08:33.832851+00:00",
+  "scope": "Standard stdio MCP protocol and real synthetic PostGIS data; not yet GeoD/LLM integration",
+  "candidates": [
+    {
+      "candidate": "pgedge",
+      "version": "1.1.0",
+      "sha256": "6db8f45f8f3d04d3637def1f095bdf70e5999dfb1d1ca61c0f2da2a6564ca885",
+      "passed": true,
+      "server": {
+        "name": "pgedge-postgres-mcp",
+        "title": null,
+        "version": "1.1.0",
+        "websiteUrl": null,
+        "icons": null
+      },
+      "protocolVersion": "2025-11-25",
+      "initializeSeconds": 0.068,
+      "tools": [
+        "count_rows",
+        "execute_explain",
+        "generate_embedding",
+        "get_schema_info",
+        "query_database",
+        "read_resource",
+        "similarity_search"
+      ],
+      "querySchema": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "default": 100,
+            "description": "Maximum number of rows to return (default: 100, max: 1000). Automatically appended to query if not already present. Use higher limits only when necessary to avoid excessive token usage.",
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "description": "Number of rows to skip before returning results (for pagination). Use with limit to page through large result sets. Example: offset=100 with limit=100 returns rows 101-200.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "query": {
+            "description": "SQL query to execute against the database.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      },
+      "calls": [
+        {
+          "name": "discover_spatial_layers",
+          "seconds": 0.01,
+          "isError": false,
+          "value": [
+            {
+              "schema": "demo",
+              "table_name": "big_area",
+              "geometry_column": "geom",
+              "type": "POLYGON",
+              "srid": 4326
+            },
+            {
+              "schema": "demo",
+              "table_name": "boundaries_3857",
+              "geometry_column": "geom",
+              "type": "POLYGON",
+              "srid": 3857
+            },
+            {
+              "schema": "demo",
+              "table_name": "boundaries_4326",
+              "geometry_column": "geom",
+              "type": "POLYGON",
+              "srid": 4326
+            },
+            {
+              "schema": "demo",
+              "table_name": "empty_area",
+              "geometry_column": "geom",
+              "type": "POLYGON",
+              "srid": 4326
+            },
+            {
+              "schema": "demo",
+              "table_name": "invalid_area",
+              "geometry_column": "geom",
+              "type": "POLYGON",
+              "srid": 4326
+            },
+            {
+              "schema": "demo",
+              "table_name": "multiple_regions",
+              "geometry_column": "geom",
+              "type": "MULTIPOLYGON",
+              "srid": 4326
+            },
+            {
+              "schema": "demo",
+              "table_name": "nullable_area",
+              "geometry_column": "backup_geom",
+              "type": "POLYGON",
+              "srid": 3857
+            },
+            {
+              "schema": "demo",
+              "table_name": "nullable_area",
+              "geometry_column": "geom",
+              "type": "POLYGON",
+              "srid": 4326
+            },
+            {
+              "schema": "demo",
+              "table_name": "points",
+              "geometry_column": "geom",
+              "type": "POINT",
+              "srid": 4326
+            },
+            {
+              "schema": "demo",
+              "table_name": "projected_view",
+              "geometry_column": "geom",
+              "type": "POLYGON",
+              "srid": 4326
+            },
+            {
+              "schema": "demo",
+              "table_name": "scoped_regions",
+              "geometry_column": "geom",
+              "type": "POLYGON",
+              "srid": 4326
+            },
+            {
+              "schema": "demo",
+              "table_name": "unknown_crs",
+              "geometry_column": "geom",
+              "type": "POLYGON",
+              "srid": 0
+            },
+            {
+              "schema": "demo",
+              "table_name": "区划 odd\" table",
+              "geometry_column": "边界 odd",
+              "type": "POLYGON",
+              "srid": 4326
+            }
+          ],
+          "text": [
+            "Database: default\n\nSQL Query:\nSELECT * FROM (SELECT g.f_table_schema AS schema, g.f_table_name AS table_name,\n g.f_geometry_column AS geometry_column, g.type, g.srid\n FROM geometry_columns g JOIN pg_namespace n ON n.nspname=g.f_table_schema\n JOIN pg_class c ON c.relnamespace=n.oid AND c.relname=g.f_table_name\n WHERE has_schema_privilege(n.oid,'USAGE') AND has_table_privilege(c.oid,'SELECT')\n ORDER BY 1,2,3 LIMIT 201) AS pgedge_mcp_row_cap LIMIT 1001\n\nResults (13 rows):\nschema\ttable_name\tgeometry_column\ttype\tsrid\ndemo\tbig_area\tgeom\tPOLYGON\t4326\ndemo\tboundaries_3857\tgeom\tPOLYGON\t3857\ndemo\tboundaries_4326\tgeom\tPOLYGON\t4326\ndemo\tempty_area\tgeom\tPOLYGON\t4326\ndemo\tinvalid_area\tgeom\tPOLYGON\t4326\ndemo\tmultiple_regions\tgeom\tMULTIPOLYGON\t4326\ndemo\tnullable_area\tbackup_geom\tPOLYGON\t3857\ndemo\tnullable_area\tgeom\tPOLYGON\t4326\ndemo\tpoints\tgeom\tPOINT\t4326\ndemo\tprojected_view\tgeom\tPOLYGON\t4326\ndemo\tscoped_regions\tgeom\tPOLYGON\t4326\ndemo\tunknown_crs\tgeom\tPOLYGON\t0\ndemo\t区划 odd\" table\t边界 odd\tPOLYGON\t4326"
+          ]
+        },
+        {
+          "name": "read_attributes",
+          "seconds": 0.003,
+          "isError": false,
+          "value": [
+            {
+              "id": 1,
+              "name": "北京测试范围"
+            }
+          ],
+          "text": [
+            "Database: default\n\nSQL Query:\nSELECT * FROM (SELECT id,name FROM demo.boundaries_3857 LIMIT 2) AS pgedge_mcp_row_cap LIMIT 1001\n\nResults (1 rows):\nid\tname\n1\t北京测试范围"
+          ]
+        },
+        {
+          "name": "read_fields",
+          "seconds": 0.003,
+          "isError": false,
+          "value": [
+            {
+              "name": "id",
+              "type": "integer"
+            },
+            {
+              "name": "name",
+              "type": "text"
+            },
+            {
+              "name": "geom",
+              "type": "geometry(Polygon,3857)"
+            }
+          ],
+          "text": [
+            "Database: default\n\nSQL Query:\nSELECT attname AS name,format_type(atttypid,atttypmod) AS type FROM pg_attribute WHERE attrelid='demo.boundaries_3857'::regclass AND attnum>0 AND NOT attisdropped ORDER BY attnum LIMIT 101\n\nResults (3 rows):\nname\ttype\nid\tinteger\nname\ttext\ngeom\tgeometry(Polygon,3857)"
+          ]
+        },
+        {
+          "name": "transform_3857_to_4326_preserve_hole",
+          "seconds": 0.01,
+          "isError": false,
+          "value": [
+            {
+              "geometry": {
+                "coordinates": [
+                  [
+                    [
+                      116.1,
+                      39.6
+                    ],
+                    [
+                      116.3,
+                      39.6
+                    ],
+                    [
+                      116.3,
+                      39.8
+                    ],
+                    [
+                      116.1,
+                      39.8
+                    ],
+                    [
+                      116.1,
+                      39.6
+                    ]
+                  ],
+                  [
+                    [
+                      116.15,
+                      39.65
+                    ],
+                    [
+                      116.2,
+                      39.65
+                    ],
+                    [
+                      116.2,
+                      39.7
+                    ],
+                    [
+                      116.15,
+                      39.7
+                    ],
+                    [
+                      116.15,
+                      39.65
+                    ]
+                  ]
+                ],
+                "type": "Polygon"
+              }
+            }
+          ],
+          "text": [
+            "Database: default\n\nSQL Query:\nSELECT * FROM (SELECT ST_AsGeoJSON(ST_Transform(geom,4326))::json AS geometry FROM demo.boundaries_3857 LIMIT 1) AS pgedge_mcp_row_cap LIMIT 1001\n\nResults (1 rows):\ngeometry\n{\"coordinates\":[[[116.1,39.6],[116.3,39.6],[116.3,39.8],[116.1,39.8],[116.1,39.6]],[[116.15,39.65],[116.2,39.65],[116.2,39.7],[116.15,39.7],[116.15,39.65]]],\"type\":\"Polygon\"}"
+          ]
+        },
+        {
+          "name": "row_level_security",
+          "seconds": 0.003,
+          "isError": false,
+          "value": [
+            {
+              "count": 1
+            }
+          ],
+          "text": [
+            "Database: default\n\nSQL Query:\nSELECT count(*) AS count FROM demo.scoped_regions LIMIT 101\n\nResults (1 rows):\ncount\n1"
+          ]
+        },
+        {
+          "name": "quoted_unicode_identifier",
+          "seconds": 0.003,
+          "isError": false,
+          "value": [
+            {
+              "srid": 4326
+            }
+          ],
+          "text": [
+            "Database: default\n\nSQL Query:\nSELECT * FROM (SELECT ST_SRID(\"边界 odd\") AS srid FROM demo.\"区划 odd\"\" table\" LIMIT 1) AS pgedge_mcp_row_cap LIMIT 1001\n\nResults (1 rows):\nsrid\n4326"
+          ]
+        },
+        {
+          "name": "multiple_geometry_columns_nulls",
+          "seconds": 0.003,
+          "isError": false,
+          "value": [
+            {
+              "count": 2,
+              "geometry_count": 1,
+              "backup_count": 1
+            }
+          ],
+          "text": [
+            "Database: default\n\nSQL Query:\nSELECT count(*) AS count,count(geom) AS geometry_count,count(backup_geom) AS backup_count FROM demo.nullable_area LIMIT 101\n\nResults (1 rows):\ncount\tgeometry_count\tbackup_count\n2\t1\t1"
+          ]
+        },
+        {
+          "name": "view_read",
+          "seconds": 0.004,
+          "isError": false,
+          "value": [
+            {
+              "srid": 4326
+            }
+          ],
+          "text": [
+            "Database: default\n\nSQL Query:\nSELECT * FROM (SELECT ST_SRID(geom) AS srid FROM demo.projected_view LIMIT 1) AS pgedge_mcp_row_cap LIMIT 1001\n\nResults (1 rows):\nsrid\n4326"
+          ]
+        },
+        {
+          "name": "unknown_table_error",
+          "seconds": 0.002,
+          "isError": true,
+          "value": null,
+          "text": [
+            "SQL Query:\nSELECT * FROM (SELECT * FROM demo.table_does_not_exist LIMIT 1) AS pgedge_mcp_row_cap LIMIT 1001\n\nError executing query: ERROR: relation \"demo.table_does_not_exist\" does not exist (SQLSTATE 42P01)"
+          ]
+        }
+      ],
+      "schemaInfo": {
+        "isError": false,
+        "text": [
+          "Database: default\n\nschema\ttable\ttype\ttable_desc\tcolumn\tdata_type\tnullable\tcol_desc\tis_pk\tis_unique\tfk_ref\tis_indexed\tidentity\tdefault\tis_vector\tvector_dims\ndemo\tboundaries_3857\tTABLE\t\tgeom\tgeometry(Polygon,3857)\tYES\t\tfalse\tfalse\t\tfalse\t\t\tfalse\t0\ndemo\tboundaries_3857\tTABLE\t\tid\tinteger\tNO\t\ttrue\tfalse\t\ttrue\t\tnextval('demo.boundaries_3857_id_seq'::regclass)\tfalse\t0\ndemo\tboundaries_3857\tTABLE\t\tname\ttext\tYES\t\tfalse\tfalse\t\tfalse\t\t\tfalse\t0\n"
+        ]
+      }
+    },
+    {
+      "candidate": "crystaldba-restricted",
+      "version": "0.3.0",
+      "sdkPin": "mcp==1.30.0",
+      "accessMode": "restricted",
+      "unmodifiedInstall": "Fails with current MCP 2.x; requires compatible SDK pin",
+      "passed": false,
+      "server": {
+        "name": "postgres-mcp",
+        "title": null,
+        "version": "1.30.0",
+        "websiteUrl": null,
+        "icons": null
+      },
+      "protocolVersion": "2025-11-25",
+      "initializeSeconds": 2.825,
+      "tools": [
+        "list_schemas",
+        "list_objects",
+        "get_object_details",
+        "explain_query",
+        "analyze_workload_indexes",
+        "analyze_query_indexes",
+        "analyze_db_health",
+        "get_top_queries",
+        "execute_sql"
+      ],
+      "querySchema": {
+        "properties": {
+          "sql": {
+            "default": "all",
+            "description": "SQL to run",
+            "title": "Sql",
+            "type": "string"
+          }
+        },
+        "title": "execute_sqlArguments",
+        "type": "object"
+      },
+      "calls": [
+        {
+          "name": "discover_spatial_layers",
+          "seconds": 0.047,
+          "isError": false,
+          "value": [
+            {
+              "schema": "demo",
+              "table_name": "big_area",
+              "geometry_column": "geom",
+              "type": "POLYGON",
+              "srid": 4326
+            },
+            {
+              "schema": "demo",
+              "table_name": "boundaries_3857",
+              "geometry_column": "geom",
+              "type": "POLYGON",
+              "srid": 3857
+            },
+            {
+              "schema": "demo",
+              "table_name": "boundaries_4326",
+              "geometry_column": "geom",
+              "type": "POLYGON",
+              "srid": 4326
+            },
+            {
+              "schema": "demo",
+              "table_name": "empty_area",
+              "geometry_column": "geom",
+              "type": "POLYGON",
+              "srid": 4326
+            },
+            {
+              "schema": "demo",
+              "table_name": "invalid_area",
+              "geometry_column": "geom",
+              "type": "POLYGON",
+              "srid": 4326
+            },
+            {
+              "schema": "demo",
+              "table_name": "multiple_regions",
+              "geometry_column": "geom",
+              "type": "MULTIPOLYGON",
+              "srid": 4326
+            },
+            {
+              "schema": "demo",
+              "table_name": "nullable_area",
+              "geometry_column": "backup_geom",
+              "type": "POLYGON",
+              "srid": 3857
+            },
+            {
+              "schema": "demo",
+              "table_name": "nullable_area",
+              "geometry_column": "geom",
+              "type": "POLYGON",
+              "srid": 4326
+            },
+            {
+              "schema": "demo",
+              "table_name": "points",
+              "geometry_column": "geom",
+              "type": "POINT",
+              "srid": 4326
+            },
+            {
+              "schema": "demo",
+              "table_name": "projected_view",
+              "geometry_column": "geom",
+              "type": "POLYGON",
+              "srid": 4326
+            },
+            {
+              "schema": "demo",
+              "table_name": "scoped_regions",
+              "geometry_column": "geom",
+              "type": "POLYGON",
+              "srid": 4326
+            },
+            {
+              "schema": "demo",
+              "table_name": "unknown_crs",
+              "geometry_column": "geom",
+              "type": "POLYGON",
+              "srid": 0
+            },
+            {
+              "schema": "demo",
+              "table_name": "区划 odd\" table",
+              "geometry_column": "边界 odd",
+              "type": "POLYGON",
+              "srid": 4326
+            }
+          ],
+          "text": [
+            "[{'schema': 'demo', 'table_name': 'big_area', 'geometry_column': 'geom', 'type': 'POLYGON', 'srid': 4326}, {'schema': 'demo', 'table_name': 'boundaries_3857', 'geometry_column': 'geom', 'type': 'POLYGON', 'srid': 3857}, {'schema': 'demo', 'table_name': 'boundaries_4326', 'geometry_column': 'geom', 'type': 'POLYGON', 'srid': 4326}, {'schema': 'demo', 'table_name': 'empty_area', 'geometry_column': 'geom', 'type': 'POLYGON', 'srid': 4326}, {'schema': 'demo', 'table_name': 'invalid_area', 'geometry_column': 'geom', 'type': 'POLYGON', 'srid': 4326}, {'schema': 'demo', 'table_name': 'multiple_regions', 'geometry_column': 'geom', 'type': 'MULTIPOLYGON', 'srid': 4326}, {'schema': 'demo', 'table_name': 'nullable_area', 'geometry_column': 'backup_geom', 'type': 'POLYGON', 'srid': 3857}, {'schema': 'demo', 'table_name': 'nullable_area', 'geometry_column': 'geom', 'type': 'POLYGON', 'srid': 4326}, {'schema': 'demo', 'table_name': 'points', 'geometry_column': 'geom', 'type': 'POINT', 'srid': 4326}, {'schema': 'demo', 'table_name': 'projected_view', 'geometry_column': 'geom', 'type': 'POLYGON', 'srid': 4326}, {'schema': 'demo', 'table_name': 'scoped_regions', 'geometry_column': 'geom', 'type': 'POLYGON', 'srid': 4326}, {'schema': 'demo', 'table_name': 'unknown_crs', 'geometry_column': 'geom', 'type': 'POLYGON', 'srid': 0}, {'schema': 'demo', 'table_name': '区划 odd\" table', 'geometry_column': '边界 odd', 'type': 'POLYGON', 'srid': 4326}]"
+          ]
+        },
+        {
+          "name": "read_attributes",
+          "seconds": 0.035,
+          "isError": false,
+          "value": [
+            {
+              "id": 1,
+              "name": "北京测试范围"
+            }
+          ],
+          "text": [
+            "[{'id': 1, 'name': '北京测试范围'}]"
+          ]
+        },
+        {
+          "name": "read_fields",
+          "seconds": 0.039,
+          "isError": false,
+          "value": [
+            {
+              "name": "id",
+              "type": "integer"
+            },
+            {
+              "name": "name",
+              "type": "text"
+            },
+            {
+              "name": "geom",
+              "type": "geometry(Polygon,3857)"
+            }
+          ],
+          "text": [
+            "[{'name': 'id', 'type': 'integer'}, {'name': 'name', 'type': 'text'}, {'name': 'geom', 'type': 'geometry(Polygon,3857)'}]"
+          ]
+        },
+        {
+          "name": "transform_3857_to_4326_preserve_hole",
+          "seconds": 0.027,
+          "isError": false,
+          "value": {
+            "result": [
+              {
+                "type": "text",
+                "text": "Error: Error validating query: SELECT ST_AsGeoJSON(ST_Transform(geom,4326))::json AS geometry FROM demo.boundaries_3857 LIMIT 1",
+                "annotations": null,
+                "_meta": null
+              }
+            ]
+          },
+          "text": [
+            "Error: Error validating query: SELECT ST_AsGeoJSON(ST_Transform(geom,4326))::json AS geometry FROM demo.boundaries_3857 LIMIT 1"
+          ]
+        }
+      ],
+      "failureType": "ExceptionGroup",
+      "failure": "unhandled errors in a TaskGroup (1 sub-exception)",
+      "failureDetails": [
+        "PostGIS ST_Transform/ST_AsGeoJSON rejected by candidate SQL validator"
+      ]
+    },
+    {
+      "candidate": "crystaldba-unrestricted",
+      "version": "0.3.0",
+      "sdkPin": "mcp==1.30.0",
+      "accessMode": "unrestricted",
+      "databaseRole": "Existing SELECT-only geod_reader; no data modification requested",
+      "passed": true,
+      "server": {
+        "name": "postgres-mcp",
+        "title": null,
+        "version": "1.30.0",
+        "websiteUrl": null,
+        "icons": null
+      },
+      "protocolVersion": "2025-11-25",
+      "initializeSeconds": 2.864,
+      "tools": [
+        "list_schemas",
+        "list_objects",
+        "get_object_details",
+        "explain_query",
+        "analyze_workload_indexes",
+        "analyze_query_indexes",
+        "analyze_db_health",
+        "get_top_queries",
+        "execute_sql"
+      ],
+      "querySchema": {
+        "properties": {
+          "sql": {
+            "default": "all",
+            "description": "SQL to run",
+            "title": "Sql",
+            "type": "string"
+          }
+        },
+        "title": "execute_sqlArguments",
+        "type": "object"
+      },
+      "calls": [
+        {
+          "name": "discover_spatial_layers",
+          "seconds": 0.054,
+          "isError": false,
+          "value": [
+            {
+              "schema": "demo",
+              "table_name": "big_area",
+              "geometry_column": "geom",
+              "type": "POLYGON",
+              "srid": 4326
+            },
+            {
+              "schema": "demo",
+              "table_name": "boundaries_3857",
+              "geometry_column": "geom",
+              "type": "POLYGON",
+              "srid": 3857
+            },
+            {
+              "schema": "demo",
+              "table_name": "boundaries_4326",
+              "geometry_column": "geom",
+              "type": "POLYGON",
+              "srid": 4326
+            },
+            {
+              "schema": "demo",
+              "table_name": "empty_area",
+              "geometry_column": "geom",
+              "type": "POLYGON",
+              "srid": 4326
+            },
+            {
+              "schema": "demo",
+              "table_name": "invalid_area",
+              "geometry_column": "geom",
+              "type": "POLYGON",
+              "srid": 4326
+            },
+            {
+              "schema": "demo",
+              "table_name": "multiple_regions",
+              "geometry_column": "geom",
+              "type": "MULTIPOLYGON",
+              "srid": 4326
+            },
+            {
+              "schema": "demo",
+              "table_name": "nullable_area",
+              "geometry_column": "backup_geom",
+              "type": "POLYGON",
+              "srid": 3857
+            },
+            {
+              "schema": "demo",
+              "table_name": "nullable_area",
+              "geometry_column": "geom",
+              "type": "POLYGON",
+              "srid": 4326
+            },
+            {
+              "schema": "demo",
+              "table_name": "points",
+              "geometry_column": "geom",
+              "type": "POINT",
+              "srid": 4326
+            },
+            {
+              "schema": "demo",
+              "table_name": "projected_view",
+              "geometry_column": "geom",
+              "type": "POLYGON",
+              "srid": 4326
+            },
+            {
+              "schema": "demo",
+              "table_name": "scoped_regions",
+              "geometry_column": "geom",
+              "type": "POLYGON",
+              "srid": 4326
+            },
+            {
+              "schema": "demo",
+              "table_name": "unknown_crs",
+              "geometry_column": "geom",
+              "type": "POLYGON",
+              "srid": 0
+            },
+            {
+              "schema": "demo",
+              "table_name": "区划 odd\" table",
+              "geometry_column": "边界 odd",
+              "type": "POLYGON",
+              "srid": 4326
+            }
+          ],
+          "text": [
+            "[{'schema': 'demo', 'table_name': 'big_area', 'geometry_column': 'geom', 'type': 'POLYGON', 'srid': 4326}, {'schema': 'demo', 'table_name': 'boundaries_3857', 'geometry_column': 'geom', 'type': 'POLYGON', 'srid': 3857}, {'schema': 'demo', 'table_name': 'boundaries_4326', 'geometry_column': 'geom', 'type': 'POLYGON', 'srid': 4326}, {'schema': 'demo', 'table_name': 'empty_area', 'geometry_column': 'geom', 'type': 'POLYGON', 'srid': 4326}, {'schema': 'demo', 'table_name': 'invalid_area', 'geometry_column': 'geom', 'type': 'POLYGON', 'srid': 4326}, {'schema': 'demo', 'table_name': 'multiple_regions', 'geometry_column': 'geom', 'type': 'MULTIPOLYGON', 'srid': 4326}, {'schema': 'demo', 'table_name': 'nullable_area', 'geometry_column': 'backup_geom', 'type': 'POLYGON', 'srid': 3857}, {'schema': 'demo', 'table_name': 'nullable_area', 'geometry_column': 'geom', 'type': 'POLYGON', 'srid': 4326}, {'schema': 'demo', 'table_name': 'points', 'geometry_column': 'geom', 'type': 'POINT', 'srid': 4326}, {'schema': 'demo', 'table_name': 'projected_view', 'geometry_column': 'geom', 'type': 'POLYGON', 'srid': 4326}, {'schema': 'demo', 'table_name': 'scoped_regions', 'geometry_column': 'geom', 'type': 'POLYGON', 'srid': 4326}, {'schema': 'demo', 'table_name': 'unknown_crs', 'geometry_column': 'geom', 'type': 'POLYGON', 'srid': 0}, {'schema': 'demo', 'table_name': '区划 odd\" table', 'geometry_column': '边界 odd', 'type': 'POLYGON', 'srid': 4326}]"
+          ]
+        },
+        {
+          "name": "read_attributes",
+          "seconds": 0.031,
+          "isError": false,
+          "value": [
+            {
+              "id": 1,
+              "name": "北京测试范围"
+            }
+          ],
+          "text": [
+            "[{'id': 1, 'name': '北京测试范围'}]"
+          ]
+        },
+        {
+          "name": "read_fields",
+          "seconds": 0.034,
+          "isError": false,
+          "value": [
+            {
+              "name": "id",
+              "type": "integer"
+            },
+            {
+              "name": "name",
+              "type": "text"
+            },
+            {
+              "name": "geom",
+              "type": "geometry(Polygon,3857)"
+            }
+          ],
+          "text": [
+            "[{'name': 'id', 'type': 'integer'}, {'name': 'name', 'type': 'text'}, {'name': 'geom', 'type': 'geometry(Polygon,3857)'}]"
+          ]
+        },
+        {
+          "name": "transform_3857_to_4326_preserve_hole",
+          "seconds": 0.044,
+          "isError": false,
+          "value": [
+            {
+              "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                  [
+                    [
+                      116.1,
+                      39.6
+                    ],
+                    [
+                      116.3,
+                      39.6
+                    ],
+                    [
+                      116.3,
+                      39.8
+                    ],
+                    [
+                      116.1,
+                      39.8
+                    ],
+                    [
+                      116.1,
+                      39.6
+                    ]
+                  ],
+                  [
+                    [
+                      116.15,
+                      39.65
+                    ],
+                    [
+                      116.2,
+                      39.65
+                    ],
+                    [
+                      116.2,
+                      39.7
+                    ],
+                    [
+                      116.15,
+                      39.7
+                    ],
+                    [
+                      116.15,
+                      39.65
+                    ]
+                  ]
+                ]
+              }
+            }
+          ],
+          "text": [
+            "[{'geometry': {'type': 'Polygon', 'coordinates': [[[116.1, 39.6], [116.3, 39.6], [116.3, 39.8], [116.1, 39.8], [116.1, 39.6]], [[116.15, 39.65], [116.2, 39.65], [116.2, 39.7], [116.15, 39.7], [116.15, 39.65]]]}}]"
+          ]
+        },
+        {
+          "name": "row_level_security",
+          "seconds": 0.037,
+          "isError": false,
+          "value": [
+            {
+              "count": 1
+            }
+          ],
+          "text": [
+            "[{'count': 1}]"
+          ]
+        },
+        {
+          "name": "quoted_unicode_identifier",
+          "seconds": 0.036,
+          "isError": false,
+          "value": [
+            {
+              "srid": 4326
+            }
+          ],
+          "text": [
+            "[{'srid': 4326}]"
+          ]
+        },
+        {
+          "name": "multiple_geometry_columns_nulls",
+          "seconds": 0.029,
+          "isError": false,
+          "value": [
+            {
+              "count": 2,
+              "geometry_count": 1,
+              "backup_count": 1
+            }
+          ],
+          "text": [
+            "[{'count': 2, 'geometry_count': 1, 'backup_count': 1}]"
+          ]
+        },
+        {
+          "name": "view_read",
+          "seconds": 0.033,
+          "isError": false,
+          "value": [
+            {
+              "srid": 4326
+            }
+          ],
+          "text": [
+            "[{'srid': 4326}]"
+          ]
+        },
+        {
+          "name": "unknown_table_error",
+          "seconds": 0.035,
+          "isError": false,
+          "value": {
+            "result": [
+              {
+                "type": "text",
+                "text": "Error: relation \"demo.table_does_not_exist\" does not exist\nLINE 1: SELECT * FROM demo.table_does_not_exist LIMIT 1\n                      ^",
+                "annotations": null,
+                "_meta": null
+              }
+            ]
+          },
+          "text": [
+            "Error: relation \"demo.table_does_not_exist\" does not exist\nLINE 1: SELECT * FROM demo.table_does_not_exist LIMIT 1\n                      ^"
+          ]
+        }
+      ]
+    },
+    {
+      "candidate": "toolbox",
+      "version": "1.13.1",
+      "binaryBytes": 293772440,
+      "sha256": "fbc00ac9d5be48c5c9948189a33db800087f9bd71778ac1c9c401fcb72a59582",
+      "passed": true,
+      "server": {
+        "name": "Toolbox",
+        "title": null,
+        "version": "1.13.1+binary.windows.amd64.e14cda6+prebuilt.postgres.data",
+        "websiteUrl": null,
+        "icons": null
+      },
+      "protocolVersion": "2025-11-25",
+      "initializeSeconds": 0.134,
+      "tools": [
+        "execute_sql",
+        "list_indexes",
+        "list_schemas",
+        "list_sequences",
+        "list_stored_procedure",
+        "list_tables",
+        "list_triggers",
+        "list_views"
+      ],
+      "querySchema": {
+        "type": "object",
+        "properties": {
+          "sql": {
+            "type": "string",
+            "description": "The sql to execute."
+          }
+        },
+        "required": [
+          "sql"
+        ]
+      },
+      "calls": [
+        {
+          "name": "discover_spatial_layers",
+          "seconds": 0.018,
+          "isError": false,
+          "value": [
+            {
+              "schema": "demo",
+              "table_name": "big_area",
+              "geometry_column": "geom",
+              "type": "POLYGON",
+              "srid": 4326
+            },
+            {
+              "schema": "demo",
+              "table_name": "boundaries_3857",
+              "geometry_column": "geom",
+              "type": "POLYGON",
+              "srid": 3857
+            },
+            {
+              "schema": "demo",
+              "table_name": "boundaries_4326",
+              "geometry_column": "geom",
+              "type": "POLYGON",
+              "srid": 4326
+            },
+            {
+              "schema": "demo",
+              "table_name": "empty_area",
+              "geometry_column": "geom",
+              "type": "POLYGON",
+              "srid": 4326
+            },
+            {
+              "schema": "demo",
+              "table_name": "invalid_area",
+              "geometry_column": "geom",
+              "type": "POLYGON",
+              "srid": 4326
+            },
+            {
+              "schema": "demo",
+              "table_name": "multiple_regions",
+              "geometry_column": "geom",
+              "type": "MULTIPOLYGON",
+              "srid": 4326
+            },
+            {
+              "schema": "demo",
+              "table_name": "nullable_area",
+              "geometry_column": "backup_geom",
+              "type": "POLYGON",
+              "srid": 3857
+            },
+            {
+              "schema": "demo",
+              "table_name": "nullable_area",
+              "geometry_column": "geom",
+              "type": "POLYGON",
+              "srid": 4326
+            },
+            {
+              "schema": "demo",
+              "table_name": "points",
+              "geometry_column": "geom",
+              "type": "POINT",
+              "srid": 4326
+            },
+            {
+              "schema": "demo",
+              "table_name": "projected_view",
+              "geometry_column": "geom",
+              "type": "POLYGON",
+              "srid": 4326
+            },
+            {
+              "schema": "demo",
+              "table_name": "scoped_regions",
+              "geometry_column": "geom",
+              "type": "POLYGON",
+              "srid": 4326
+            },
+            {
+              "schema": "demo",
+              "table_name": "unknown_crs",
+              "geometry_column": "geom",
+              "type": "POLYGON",
+              "srid": 0
+            },
+            {
+              "schema": "demo",
+              "table_name": "区划 odd\" table",
+              "geometry_column": "边界 odd",
+              "type": "POLYGON",
+              "srid": 4326
+            }
+          ],
+          "text": [
+            "{\"schema\":\"demo\",\"table_name\":\"big_area\",\"geometry_column\":\"geom\",\"type\":\"POLYGON\",\"srid\":4326}",
+            "{\"schema\":\"demo\",\"table_name\":\"boundaries_3857\",\"geometry_column\":\"geom\",\"type\":\"POLYGON\",\"srid\":3857}",
+            "{\"schema\":\"demo\",\"table_name\":\"boundaries_4326\",\"geometry_column\":\"geom\",\"type\":\"POLYGON\",\"srid\":4326}",
+            "{\"schema\":\"demo\",\"table_name\":\"empty_area\",\"geometry_column\":\"geom\",\"type\":\"POLYGON\",\"srid\":4326}",
+            "{\"schema\":\"demo\",\"table_name\":\"invalid_area\",\"geometry_column\":\"geom\",\"type\":\"POLYGON\",\"srid\":4326}",
+            "{\"schema\":\"demo\",\"table_name\":\"multiple_regions\",\"geometry_column\":\"geom\",\"type\":\"MULTIPOLYGON\",\"srid\":4326}",
+            "{\"schema\":\"demo\",\"table_name\":\"nullable_area\",\"geometry_column\":\"backup_geom\",\"type\":\"POLYGON\",\"srid\":3857}",
+            "{\"schema\":\"demo\",\"table_name\":\"nullable_area\",\"geometry_column\":\"geom\",\"type\":\"POLYGON\",\"srid\":4326}",
+            "{\"schema\":\"demo\",\"table_name\":\"points\",\"geometry_column\":\"geom\",\"type\":\"POINT\",\"srid\":4326}",
+            "{\"schema\":\"demo\",\"table_name\":\"projected_view\",\"geometry_column\":\"geom\",\"type\":\"POLYGON\",\"srid\":4326}",
+            "{\"schema\":\"demo\",\"table_name\":\"scoped_regions\",\"geometry_column\":\"geom\",\"type\":\"POLYGON\",\"srid\":4326}",
+            "{\"schema\":\"demo\",\"table_name\":\"unknown_crs\",\"geometry_column\":\"geom\",\"type\":\"POLYGON\",\"srid\":0}",
+            "{\"schema\":\"demo\",\"table_name\":\"区划 odd\\\" table\",\"geometry_column\":\"边界 odd\",\"type\":\"POLYGON\",\"srid\":4326}"
+          ]
+        },
+        {
+          "name": "read_attributes",
+          "seconds": 0.002,
+          "isError": false,
+          "value": {
+            "id": 1,
+            "name": "北京测试范围"
+          },
+          "text": [
+            "{\"id\":1,\"name\":\"北京测试范围\"}"
+          ]
+        },
+        {
+          "name": "read_fields",
+          "seconds": 0.002,
+          "isError": false,
+          "value": [
+            {
+              "name": "id",
+              "type": "integer"
+            },
+            {
+              "name": "name",
+              "type": "text"
+            },
+            {
+              "name": "geom",
+              "type": "geometry(Polygon,3857)"
+            }
+          ],
+          "text": [
+            "{\"name\":\"id\",\"type\":\"integer\"}",
+            "{\"name\":\"name\",\"type\":\"text\"}",
+            "{\"name\":\"geom\",\"type\":\"geometry(Polygon,3857)\"}"
+          ]
+        },
+        {
+          "name": "transform_3857_to_4326_preserve_hole",
+          "seconds": 0.007,
+          "isError": false,
+          "value": {
+            "geometry": {
+              "coordinates": [
+                [
+                  [
+                    116.1,
+                    39.6
+                  ],
+                  [
+                    116.3,
+                    39.6
+                  ],
+                  [
+                    116.3,
+                    39.8
+                  ],
+                  [
+                    116.1,
+                    39.8
+                  ],
+                  [
+                    116.1,
+                    39.6
+                  ]
+                ],
+                [
+                  [
+                    116.15,
+                    39.65
+                  ],
+                  [
+                    116.2,
+                    39.65
+                  ],
+                  [
+                    116.2,
+                    39.7
+                  ],
+                  [
+                    116.15,
+                    39.7
+                  ],
+                  [
+                    116.15,
+                    39.65
+                  ]
+                ]
+              ],
+              "type": "Polygon"
+            }
+          },
+          "text": [
+            "{\"geometry\":{\"coordinates\":[[[116.1,39.6],[116.3,39.6],[116.3,39.8],[116.1,39.8],[116.1,39.6]],[[116.15,39.65],[116.2,39.65],[116.2,39.7],[116.15,39.7],[116.15,39.65]]],\"type\":\"Polygon\"}}"
+          ]
+        },
+        {
+          "name": "row_level_security",
+          "seconds": 0.002,
+          "isError": false,
+          "value": {
+            "count": 1
+          },
+          "text": [
+            "{\"count\":1}"
+          ]
+        },
+        {
+          "name": "quoted_unicode_identifier",
+          "seconds": 0.001,
+          "isError": false,
+          "value": {
+            "srid": 4326
+          },
+          "text": [
+            "{\"srid\":4326}"
+          ]
+        },
+        {
+          "name": "multiple_geometry_columns_nulls",
+          "seconds": 0.002,
+          "isError": false,
+          "value": {
+            "count": 2,
+            "geometry_count": 1,
+            "backup_count": 1
+          },
+          "text": [
+            "{\"count\":2,\"geometry_count\":1,\"backup_count\":1}"
+          ]
+        },
+        {
+          "name": "view_read",
+          "seconds": 0.001,
+          "isError": false,
+          "value": {
+            "srid": 4326
+          },
+          "text": [
+            "{\"srid\":4326}"
+          ]
+        },
+        {
+          "name": "unknown_table_error",
+          "seconds": 0.001,
+          "isError": true,
+          "value": null,
+          "text": [
+            "error processing request: unable to execute query: ERROR: relation \"demo.table_does_not_exist\" does not exist (SQLSTATE 42P01)"
+          ]
+        }
+      ]
+    }
+  ]
+}

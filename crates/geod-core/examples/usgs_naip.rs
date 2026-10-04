@@ -29,18 +29,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         grids: vec![grid],
         output_geotiff: true,
         output_mbtiles: true,
+        extra_outputs: Vec::new(),
+        export_options: geod_core::imagery::ExportOptions::default(), overlays: Vec::new(),
         max_tiles: 4,
         max_decoded_rgba_bytes: 4 * u64::from(tile_size).pow(2) * 4,
         destination: destination.clone(),
         deadline: Duration::from_secs(90),
     };
-    let source = HttpSource {
-        id: "usgs-naip-plus-conus".into(), name: "USGS NAIP Plus (CONUS)".into(),
+    let source = HttpSource { subdomains: Vec::new(), coordinate_system: None, elevation_encoding: None, id: "usgs-naip-plus-conus".into(), name: "USGS NAIP Plus (CONUS)".into(),
         attribution: "USGS, USDA, The National Map: Orthoimagery".into(),
         license: "USGS The National Map public-domain CONUS imagery".into(),
         url_template: "https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPPlus/ImageServer/exportImage".into(),
         scheme: TileScheme::XYZ, tile_size, network_policy: NetworkPolicy::PublicHttps,
-        min_interval_ms: 500,
+        min_interval_ms: 500, authentication: None, runtime_token: None,
     };
     let produced = fetch_bundle(&request, &source)
         .await

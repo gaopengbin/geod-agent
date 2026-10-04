@@ -1,0 +1,56 @@
+{
+  "name": "pypdf",
+  "version": "6.19.0",
+  "license": "BSD-3-Clause",
+  "wheel": "pypdf-6.19.0-py3-none-any.whl",
+  "url": "https://files.pythonhosted.org/packages/3c/2c/c43c03eaf630435f023f1dc61ec4a4a78951ad5530a62c71cc89bde307b7/pypdf-6.19.0-py3-none-any.whl",
+  "sha256": "7e5d6e730e7dae87d560a2cee218b852f6498c8be61966f3cd02ead971e48d14",
+  "metadataSource": "https://pypi.org/pypi/pypdf/6.19.0/json",
+  "dependencies": [
+    {
+      "name": "msoffcrypto-tool",
+      "version": "6.0.0",
+      "license": "MIT",
+      "wheel": "msoffcrypto_tool-6.0.0-py3-none-any.whl",
+      "url": "https://files.pythonhosted.org/packages/3c/85/9e359fa9279e1d6861faaf9b6f037a3226374deb20a054c3937be6992013/msoffcrypto_tool-6.0.0-py3-none-any.whl",
+      "sha256": "46c394ed5d9641e802fc79bf3fb0666a53748b23fa8c4aa634ae9d30d46fe397",
+      "metadataSource": "https://pypi.org/pypi/msoffcrypto-tool/6.0.0/json"
+    },
+    {
+      "name": "cryptography",
+      "version": "50.0.2",
+      "license": "Apache-2.0 OR BSD-3-Clause",
+      "wheel": "cryptography-50.0.2-cp311-abi3-win_amd64.whl",
+      "url": "https://files.pythonhosted.org/packages/9a/4f/adfc442765721292fff86d314ce385d3249d22db42295c0dd057727b60f3/cryptography-50.0.2-cp311-abi3-win_amd64.whl",
+      "sha256": "7afa5a6602a9f29af1f3a2965f831bae7c9d5d597b7cbb716d41ab3b7d89879c",
+      "metadataSource": "https://pypi.org/pypi/cryptography/50.0.2/json"
+    },
+    {
+      "name": "cffi",
+      "version": "2.1.1",
+      "license": "MIT",
+      "wheel": "cffi-2.1.1-cp313-cp313-win_amd64.whl",
+      "url": "https://files.pythonhosted.org/packages/60/a6/8b149b2c3f2e11aaa1618ef64500b45f50f22c57a977a4dff1aff1f91042/cffi-2.1.1-cp313-cp313-win_amd64.whl",
+      "sha256": "1aa5645c30469b09530c4ebca77ebf8f17618293c58f8549cb1a543a50236e7d",
+      "metadataSource": "https://pypi.org/pypi/cffi/2.1.1/json"
+    },
+    {
+      "name": "pycparser",
+      "version": "3.0",
+      "license": "BSD-3-Clause",
+      "wheel": "pycparser-3.0-py3-none-any.whl",
+      "url": "https://files.pythonhosted.org/packages/0c/c3/44f3fbbfa403ea2a7c779186dc20772604442dde72947e7d01069cbe98e3/pycparser-3.0-py3-none-any.whl",
+      "sha256": "b727414169a36b7d524c1c3e31839a521725078d7b2ff038656844266160a992",
+      "metadataSource": "https://pypi.org/pypi/pycparser/3.0/json"
+    },
+    {
+      "name": "olefile",
+      "version": "0.47",
+      "license": "BSD-2-Clause",
+      "wheel": "olefile-0.47-py2.py3-none-any.whl",
+      "url": "https://files.pythonhosted.org/packages/17/d3/b64c356a907242d719fc668b71befd73324e47ab46c8ebbbede252c154b2/olefile-0.47-py2.py3-none-any.whl",
+      "sha256": "543c7da2a7adadf21214938bb79c83ea12b473a4b6ee4ad4bf854e7715e13d1f",
+      "metadataSource": "https://pypi.org/pypi/olefile/0.47/json"
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "repository": "https://github.com/gaopengbin/cesium-mcp",
+  "packages": [
+    {
+      "name": "cesium-mcp-bridge",
+      "version": "1.146.0",
+      "artifact": "cesium-mcp-bridge-1.146.0.tgz",
+      "url": "https://registry.npmjs.org/cesium-mcp-bridge/-/cesium-mcp-bridge-1.146.0.tgz",
+      "sha256": "612b95abe1af0d8a44b14eb4dd25b55211125d1003464208a497731c45c2fba7",
+      "license": "MIT",
+      "copyright": "Copyright (c) 2025 GeoAgent Contributors"
+    },
+    {
+      "name": "cesium-mcp-contracts",
+      "version": "0.7.0",
+      "artifact": "cesium-mcp-contracts-0.7.0.tgz",
+      "url": "https://registry.npmjs.org/cesium-mcp-contracts/-/cesium-mcp-contracts-0.7.0.tgz",
+      "sha256": "e8f15503c46b4a55bd640aa0370b54b70356e5d44c3f92f4ae274a190adc66ff",
+      "license": "MIT",
+      "copyright": "Copyright (c) 2026 gaopengbin"
+    }
+  ],
+  "cesiumCompatibility": {
+    "appVersion": "1.146.0",
+    "upstreamPeerRange": "~1.143.0 || ~1.145.0",
+    "override": "Use the application's single Cesium instance",
+    "verification": "GeoD native camera, entities, layers and OSM globe integration; not an upstream compatibility guarantee"
+  },
+  "modifiedPackages": false,
+  "transport": "MCP SDK Client + Server over InMemoryTransport; conversation metadata scopes calls to the mounted viewer",
+  "report": "../../../docs/implementation/2026-10-03-cesium-mcp-integration.md"
+}

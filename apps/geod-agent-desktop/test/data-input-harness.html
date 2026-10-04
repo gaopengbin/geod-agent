@@ -1,0 +1,3 @@
+<!doctype html><html><head><meta charset="utf-8"><title>GeoD data input test</title></head><body><div id="root"></div><script>
+window.__TAURI__={};window.__TAURI_INTERNALS__={invoke:async(command,args)=>{const value=await(await fetch('http://127.0.0.1:1421/rpc',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({command,args})})).json();if(value.error)throw value.error;return value.value;}};
+</script><script type="module" src="/test/data-input-harness.tsx"></script></body></html>

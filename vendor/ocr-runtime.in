@@ -1,0 +1,4 @@
+# Application-local Windows CPython 3.13 CPU OCR and PDF rendering.
+rapidocr==3.9.2
+onnxruntime==1.30.0
+pypdfium2==5.13.0

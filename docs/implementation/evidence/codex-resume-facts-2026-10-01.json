@@ -1,0 +1,79 @@
+{
+  "conversationId": "ea758f46-6465-4f5a-89bd-c321bfa69560",
+  "active": [],
+  "jobs": [
+    {
+      "jobId": "85c021c9-6916-4a7e-bdc3-ede88d897ba9",
+      "planId": "tool-9a84a07b19cd44e8caeb3878aed112ad5a761bfdb021493c9b32baab817b4214",
+      "approvalId": "99243434-23fa-4392-b782-3e675ee8f748",
+      "planHash": "49398f68fb95cf98b1e9165444bbb61ec414eeea313e2f9e468041dd0ccc440b",
+      "idempotencyKey": "68fb657b-745d-4898-9609-8aeb2bb471d0:call_00_IC6Qe7qpoVDx8X8DmpkH0788",
+      "state": "completed",
+      "version": 90,
+      "createdAt": "2026-09-30T13:36:43.140705500Z",
+      "events": [
+        {
+          "jobId": "85c021c9-6916-4a7e-bdc3-ede88d897ba9",
+          "seq": 88,
+          "occurredAt": "2026-09-30T17:25:28.905608800Z",
+          "state": "downloading",
+          "completedTiles": 600,
+          "totalTiles": 600
+        },
+        {
+          "jobId": "85c021c9-6916-4a7e-bdc3-ede88d897ba9",
+          "seq": 89,
+          "occurredAt": "2026-09-30T17:25:36.464410100Z",
+          "state": "verifying"
+        },
+        {
+          "jobId": "85c021c9-6916-4a7e-bdc3-ede88d897ba9",
+          "seq": 90,
+          "occurredAt": "2026-09-30T17:25:38.494777900Z",
+          "state": "completed"
+        }
+      ]
+    }
+  ],
+  "tools": [
+    {
+      "id": "call_00_q4ibqdfiYsZHcBfmAXs44641",
+      "result": {
+        "checkedAt": "2026-09-30T17:19:37.181Z",
+        "completedTiles": 448,
+        "jobId": "85c021c9-6916-4a7e-bdc3-ede88d897ba9",
+        "latestError": null,
+        "ledgerState": "downloading",
+        "monitoring": "desktop-background",
+        "percent": 75,
+        "planId": "tool-9a84a07b19cd44e8caeb3878aed112ad5a761bfdb021493c9b32baab817b4214",
+        "progressRecordedAt": "2026-09-30T13:44:43.045254600Z",
+        "state": "interrupted",
+        "totalTiles": 600,
+        "version": 40,
+        "workerActive": false
+      }
+    },
+    {
+      "id": "call_00_tU0Oq4N04Mk4ozFoINsD5890",
+      "result": {
+        "checkedAt": "2026-09-30T17:19:39.652Z",
+        "completedTiles": 448,
+        "jobId": "85c021c9-6916-4a7e-bdc3-ede88d897ba9",
+        "latestError": null,
+        "ledgerState": "downloading",
+        "monitoring": "desktop-background",
+        "operation": "resumed",
+        "percent": 75,
+        "planId": "tool-9a84a07b19cd44e8caeb3878aed112ad5a761bfdb021493c9b32baab817b4214",
+        "progressRecordedAt": "2026-09-30T13:44:43.045254600Z",
+        "resumed": true,
+        "reused": true,
+        "state": "downloading",
+        "totalTiles": 600,
+        "version": 40,
+        "workerActive": true
+      }
+    }
+  ]
+}

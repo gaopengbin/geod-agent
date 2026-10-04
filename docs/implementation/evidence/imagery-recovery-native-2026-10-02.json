@@ -1,0 +1,409 @@
+{
+  "pass": true,
+  "checkedAt": "2026-10-02T13:59:25.675Z",
+  "conversationId": "recovery-a7d31cf0-19a0-4376-a115-53ba1d1cf8ad",
+  "workspace": "G:\\code\\geod-agent\\artifacts\\desktop-parity\\recovery-a7d31cf0-19a0-4376-a115-53ba1d1cf8ad",
+  "original": {
+    "planId": "tool-1dc50059ecb21bd2c34860317a787861bf6f4d66c8274e4502db75babd5effaa",
+    "plan": {
+      "schemaVersion": "0.1",
+      "spec": {
+        "schemaVersion": "0.1",
+        "kind": "imagery",
+        "sourceId": "recovery-esri-77a878f6",
+        "bounds": [
+          116.402,
+          39.914,
+          116.406,
+          39.917
+        ],
+        "zoomLevels": [
+          16
+        ],
+        "outputFormats": [
+          "geotiff",
+          "mbtiles"
+        ],
+        "outputDirectory": "\\\\?\\G:\\code\\geod-agent\\artifacts\\desktop-parity\\recovery-a7d31cf0-19a0-4376-a115-53ba1d1cf8ad\\imagery-20261002-135924-3506e0c3",
+        "limits": {
+          "maxTiles": 1000000,
+          "maxDecodedRgbaBytes": 1099511627776
+        }
+      },
+      "sourceName": "Esri recovery acceptance",
+      "attribution": "Esri",
+      "license": "",
+      "sourceFingerprint": "8551c9017f38a27d8026c6b694db5ca334213f4a3207706501c46fc9284df120",
+      "policyVersion": "imagery-plan-0.1",
+      "tileGrids": [
+        {
+          "zoom": 16,
+          "xMin": 53958,
+          "yMin": 24830,
+          "xMax": 53959,
+          "yMax": 24830,
+          "columns": 2,
+          "rows": 1,
+          "tileCount": 2,
+          "pixelWidth": 512,
+          "pixelHeight": 256,
+          "actualBounds": [
+            116.400146484375,
+            39.91394967016644,
+            116.4111328125,
+            39.91816284660945
+          ]
+        }
+      ],
+      "totalTiles": 2,
+      "decodedRgbaBytes": 524288,
+      "requiredFreeDiskBytes": 18939904,
+      "createdAt": "2026-10-02T13:59:24.229591900Z",
+      "expiresAt": "2026-10-02T14:29:24.229591900Z",
+      "planHash": "dec3a1e2282bdb8ae14fbb589f7823f5fde5edba0ac41f0a125e09f5d8cf999b"
+    }
+  },
+  "originalJob": {
+    "jobId": "6ace60c7-0295-4d55-82cb-ff57ab6f5b9c",
+    "planId": "tool-1dc50059ecb21bd2c34860317a787861bf6f4d66c8274e4502db75babd5effaa",
+    "approvalId": "2e44c2d9-6588-40c7-ab5e-313901c9ad6e",
+    "planHash": "dec3a1e2282bdb8ae14fbb589f7823f5fde5edba0ac41f0a125e09f5d8cf999b",
+    "idempotencyKey": "81078578-8547-4b30-8506-63ef72d96165",
+    "state": "queued",
+    "version": 1,
+    "createdAt": "2026-10-02T13:59:24.249926400Z"
+  },
+  "originalManifest": {
+    "schemaVersion": "1.0",
+    "kind": "geod-bundle",
+    "id": "geod-agent-job-6ace60c7-0295-4d55-82cb-ff57ab6f5b9c",
+    "name": "Esri recovery acceptance",
+    "createdAt": "2026-10-02T13:59:24.273782+00:00",
+    "bounds": [
+      116.402,
+      39.914,
+      116.406,
+      39.917
+    ],
+    "assets": [
+      {
+        "id": "imagery-z16",
+        "kind": "raster",
+        "role": "analysis",
+        "path": "imagery-z16.tif",
+        "mimeType": "image/tiff",
+        "bytes": 130931,
+        "sha256": "968ad0c0b9ace191b3d290121cbbff49d8100a63106df9c59fb6d100aaf7e4fe",
+        "crs": "EPSG:3857",
+        "bounds": [
+          116.40199184417725,
+          39.91399904482876,
+          116.40600442886353,
+          39.9170108319224
+        ],
+        "width": 187,
+        "height": 183
+      },
+      {
+        "id": "imagery-preview",
+        "kind": "raster",
+        "role": "preview",
+        "path": "preview.png",
+        "mimeType": "image/png",
+        "bytes": 92506,
+        "sha256": "167a49a905fef6cfb38f809f55e46117823f1a3571827f87ee772883ea824680",
+        "crs": "EPSG:3857",
+        "bounds": [
+          116.40199184417725,
+          39.91399904482876,
+          116.40600442886353,
+          39.9170108319224
+        ],
+        "width": 187,
+        "height": 183
+      },
+      {
+        "id": "imagery-mbtiles",
+        "kind": "raster",
+        "role": "offline",
+        "path": "imagery.mbtiles",
+        "mimeType": "application/vnd.mbtiles",
+        "bytes": 401408,
+        "sha256": "2c4b43ce72638f3c7a8d21ae925900ac246421292c0b673779b7799c120ffb85",
+        "crs": "EPSG:4326",
+        "bounds": [
+          116.402,
+          39.914,
+          116.406,
+          39.917
+        ]
+      }
+    ],
+    "layers": [],
+    "quality": {
+      "status": "complete",
+      "missingTiles": 0,
+      "warnings": []
+    },
+    "provenance": [
+      {
+        "source": "Esri recovery acceptance",
+        "attribution": "Esri",
+        "retrievedAt": "2026-10-02T13:59:24.273790200+00:00"
+      }
+    ]
+  },
+  "cached": {
+    "stored": {
+      "planId": "tool-c0bd9f4acb544f003deab406b2ac7b26eb25035dca5fa3cdeeb225648e24b0fe",
+      "plan": {
+        "schemaVersion": "0.1",
+        "spec": {
+          "schemaVersion": "0.1",
+          "kind": "imagery",
+          "sourceId": "recovery-esri-77a878f6",
+          "bounds": [
+            116.402,
+            39.914,
+            116.406,
+            39.917
+          ],
+          "zoomLevels": [
+            16
+          ],
+          "outputFormats": [
+            "geotiff",
+            "mbtiles"
+          ],
+          "exportOptions": {
+            "cacheOnly": true,
+            "compression": "lzw",
+            "buildPyramid": false,
+            "generateSidecars": false,
+            "jpegQuality": 90
+          },
+          "outputDirectory": "\\\\?\\G:\\code\\geod-agent\\artifacts\\desktop-parity\\recovery-a7d31cf0-19a0-4376-a115-53ba1d1cf8ad\\imagery-cached-20261002-135924-ec3355af620f",
+          "limits": {
+            "maxTiles": 1000000,
+            "maxDecodedRgbaBytes": 1099511627776
+          }
+        },
+        "sourceName": "Esri recovery acceptance",
+        "attribution": "Esri",
+        "license": "",
+        "sourceFingerprint": "8551c9017f38a27d8026c6b694db5ca334213f4a3207706501c46fc9284df120",
+        "policyVersion": "imagery-plan-0.1",
+        "tileGrids": [
+          {
+            "zoom": 16,
+            "xMin": 53958,
+            "yMin": 24830,
+            "xMax": 53959,
+            "yMax": 24830,
+            "columns": 2,
+            "rows": 1,
+            "tileCount": 2,
+            "pixelWidth": 512,
+            "pixelHeight": 256,
+            "actualBounds": [
+              116.400146484375,
+              39.91394967016644,
+              116.4111328125,
+              39.91816284660945
+            ]
+          }
+        ],
+        "totalTiles": 2,
+        "decodedRgbaBytes": 524288,
+        "requiredFreeDiskBytes": 18939904,
+        "createdAt": "2026-10-02T13:59:24.904549900Z",
+        "expiresAt": "2026-10-02T14:29:24.904549900Z",
+        "planHash": "29dfb9ae2c9db061418428024e80d6f937632659594b80983385c66aa044722f"
+      }
+    },
+    "originalJobId": "6ace60c7-0295-4d55-82cb-ff57ab6f5b9c",
+    "mode": "exportAvailable",
+    "permission": "fullAccess",
+    "requiresPlanConfirmation": false
+  },
+  "cachedJob": {
+    "jobId": "d380b992-0dfb-4862-bbfb-349ce888d13d",
+    "planId": "tool-c0bd9f4acb544f003deab406b2ac7b26eb25035dca5fa3cdeeb225648e24b0fe",
+    "approvalId": "accf5530-9f98-430d-abc8-a3a2e3d217bb",
+    "planHash": "29dfb9ae2c9db061418428024e80d6f937632659594b80983385c66aa044722f",
+    "idempotencyKey": "ee338d6b-2b8f-4aad-a479-aa5fe9042dc8",
+    "state": "queued",
+    "version": 1,
+    "createdAt": "2026-10-02T13:59:24.933239100Z"
+  },
+  "cachedManifest": {
+    "schemaVersion": "1.0",
+    "kind": "geod-bundle",
+    "id": "geod-agent-job-d380b992-0dfb-4862-bbfb-349ce888d13d",
+    "name": "Esri recovery acceptance",
+    "createdAt": "2026-10-02T13:59:24.953549100+00:00",
+    "bounds": [
+      116.402,
+      39.914,
+      116.406,
+      39.917
+    ],
+    "assets": [
+      {
+        "id": "imagery-z16",
+        "kind": "raster",
+        "role": "analysis",
+        "path": "imagery-z16.tif",
+        "mimeType": "image/tiff",
+        "bytes": 130931,
+        "sha256": "968ad0c0b9ace191b3d290121cbbff49d8100a63106df9c59fb6d100aaf7e4fe",
+        "crs": "EPSG:3857",
+        "bounds": [
+          116.40199184417725,
+          39.91399904482876,
+          116.40600442886353,
+          39.9170108319224
+        ],
+        "width": 187,
+        "height": 183
+      },
+      {
+        "id": "imagery-preview",
+        "kind": "raster",
+        "role": "preview",
+        "path": "preview.png",
+        "mimeType": "image/png",
+        "bytes": 92506,
+        "sha256": "167a49a905fef6cfb38f809f55e46117823f1a3571827f87ee772883ea824680",
+        "crs": "EPSG:3857",
+        "bounds": [
+          116.40199184417725,
+          39.91399904482876,
+          116.40600442886353,
+          39.9170108319224
+        ],
+        "width": 187,
+        "height": 183
+      },
+      {
+        "id": "imagery-mbtiles",
+        "kind": "raster",
+        "role": "offline",
+        "path": "imagery.mbtiles",
+        "mimeType": "application/vnd.mbtiles",
+        "bytes": 401408,
+        "sha256": "d5747af2c804cb1e293cad165e702e73e4bab5f5f9236675748049352061e91c",
+        "crs": "EPSG:4326",
+        "bounds": [
+          116.402,
+          39.914,
+          116.406,
+          39.917
+        ]
+      }
+    ],
+    "layers": [],
+    "quality": {
+      "status": "complete",
+      "missingTiles": 0,
+      "warnings": [
+        "Exported from verified local cache only; cached imagery may predate this export. No source tiles were requested."
+      ]
+    },
+    "provenance": [
+      {
+        "source": "Esri recovery acceptance",
+        "attribution": "Esri",
+        "retrievedAt": "2026-10-02T13:59:24.953557800+00:00"
+      }
+    ]
+  },
+  "retry": {
+    "stored": {
+      "planId": "tool-6b8cbb42f241ec5718629bcb6d5955cc5638f9e23f014b5a9230368f76517584",
+      "plan": {
+        "schemaVersion": "0.1",
+        "spec": {
+          "schemaVersion": "0.1",
+          "kind": "imagery",
+          "sourceId": "recovery-esri-77a878f6",
+          "bounds": [
+            116.402,
+            39.914,
+            116.406,
+            39.917
+          ],
+          "zoomLevels": [
+            16
+          ],
+          "outputFormats": [
+            "geotiff",
+            "mbtiles"
+          ],
+          "exportOptions": {
+            "reuseVerifiedCache": true,
+            "compression": "lzw",
+            "buildPyramid": false,
+            "generateSidecars": false,
+            "jpegQuality": 90
+          },
+          "outputDirectory": "\\\\?\\G:\\code\\geod-agent\\artifacts\\desktop-parity\\recovery-a7d31cf0-19a0-4376-a115-53ba1d1cf8ad\\imagery-repair-20261002-135925-0bf98788bc96",
+          "limits": {
+            "maxTiles": 1000000,
+            "maxDecodedRgbaBytes": 1099511627776
+          }
+        },
+        "sourceName": "Esri recovery acceptance",
+        "attribution": "Esri",
+        "license": "",
+        "sourceFingerprint": "8551c9017f38a27d8026c6b694db5ca334213f4a3207706501c46fc9284df120",
+        "policyVersion": "imagery-plan-0.1",
+        "tileGrids": [
+          {
+            "zoom": 16,
+            "xMin": 53958,
+            "yMin": 24830,
+            "xMax": 53959,
+            "yMax": 24830,
+            "columns": 2,
+            "rows": 1,
+            "tileCount": 2,
+            "pixelWidth": 512,
+            "pixelHeight": 256,
+            "actualBounds": [
+              116.400146484375,
+              39.91394967016644,
+              116.4111328125,
+              39.91816284660945
+            ]
+          }
+        ],
+        "totalTiles": 2,
+        "decodedRgbaBytes": 524288,
+        "requiredFreeDiskBytes": 18939904,
+        "createdAt": "2026-10-02T13:59:25.292923200Z",
+        "expiresAt": "2026-10-02T14:29:25.292923200Z",
+        "planHash": "7163874094f6c0d7905709d9a81e26add77c5fced7aab95327fa39b0731a0b7c"
+      }
+    },
+    "originalJobId": "6ace60c7-0295-4d55-82cb-ff57ab6f5b9c",
+    "mode": "retryMissing",
+    "permission": "confirmEach",
+    "requiresPlanConfirmation": true
+  },
+  "retryJob": {
+    "jobId": "ce31baba-d8a9-457b-a036-7191ef537791",
+    "planId": "tool-6b8cbb42f241ec5718629bcb6d5955cc5638f9e23f014b5a9230368f76517584",
+    "approvalId": "88d6a8ab-a8e0-41b1-a89c-3a0214d1e307",
+    "planHash": "7163874094f6c0d7905709d9a81e26add77c5fced7aab95327fa39b0731a0b7c",
+    "idempotencyKey": "a12bd81c-6499-463a-ac55-176a7e9470cb",
+    "state": "queued",
+    "version": 1,
+    "createdAt": "2026-10-02T13:59:25.325086400Z"
+  },
+  "originalArtifactsUnchanged": true,
+  "concurrentRequestIdempotent": true,
+  "confirmEachEnforced": true,
+  "crossConversationDenied": true,
+  "sourceRevisionChangeDenied": true
+}

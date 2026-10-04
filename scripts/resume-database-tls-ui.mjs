@@ -1,0 +1,20 @@
+/** Interrupt only the owned failed QA turn and capture actual renderer errors. */
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import {pathToFileURL} from 'node:url';
+const root=path.resolve('artifacts/product-gaps-20261004/database-tls'),qa=JSON.parse(fs.readFileSync(path.join(root,'qa-state.json'),'utf8'));
+const {chromium}=await import(pathToFileURL('C:/Users/Administrator/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs').href);
+const browser=await chromium.connectOverCDP('http://127.0.0.1:9233'),page=browser.contexts().flatMap(c=>c.pages()).find(p=>p.url().includes(':1420'));assert(page);
+const errors=[];page.on('pageerror',error=>{errors.push({message:error.message,stack:error.stack});fs.writeFileSync(path.join(root,'actual-ui-renderer-errors.json'),JSON.stringify(errors,null,2));});
+console.log(JSON.stringify({interrupted:await page.evaluate(async()=>{try{await window.__TAURI_INTERNALS__.invoke('codex_command',{runId:'e14dd7dc-a4fc-46bd-aa20-6524d5dcfc6b',command:{type:'interrupt'}});return true;}catch(e){return e.code;}})}));
+await page.reload();await page.locator('.conversation-account-trigger').waitFor();
+await page.getByRole('button',{name:'检查状态',exact:true}).click();
+await page.waitForFunction(()=>{const button=document.querySelector('.prompt-input-model-trigger');return button&&!button.disabled;},null,{timeout:60000});
+const prompt='继续实际连接验收。通过 sql_connection_connect 使用工作区相对配置 '+path.basename(qa.uiCredentialFile.file)+'。如果认证或证书失败，使用原生设置等我选择 CA 和客户端证书。不要 shell，不要索要密钥。成功后查询 regions 的 marker。';
+page.on('framenavigated',frame=>{if(frame===page.mainFrame())console.log(JSON.stringify({navigation:frame.url()}));});
+await page.locator('textarea').fill(prompt);await page.locator('textarea').press('Enter');
+await new Promise(resolve=>setTimeout(resolve,20000));
+fs.writeFileSync(path.join(root,'actual-ui-renderer-errors.json'),JSON.stringify(errors,null,2));
+console.log(JSON.stringify({rendererErrors:errors}));
+await browser.close();

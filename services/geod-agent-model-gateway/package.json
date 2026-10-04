@@ -11,7 +11,10 @@
     "smoke:native": "node test/native-live-smoke.mjs"
   },
   "dependencies": {
+    "alipay-sdk": "4.14.0",
     "better-sqlite3": "^12.0.0"
   },
-  "engines": { "node": ">=22.15.0" }
+  "engines": {
+    "node": ">=22.15.0"
+  }
 }

@@ -1,0 +1,4 @@
+const pages=await(await fetch('http://127.0.0.1:9233/json/list')).json(),page=pages.find(p=>p.title==='GeoD Agent');
+const socket=new WebSocket(page.webSocketDebuggerUrl);await new Promise(r=>socket.addEventListener('open',r,{once:true}));
+const done=new Promise(r=>socket.addEventListener('message',event=>{const data=JSON.parse(event.data);if(data.id===1)r(data);}));
+socket.send(JSON.stringify({id:1,method:'Runtime.evaluate',params:{expression:`Object.keys(localStorage).filter(k=>k.startsWith('geod-agent-conversations-0.1:account:')).flatMap(k=>JSON.parse(localStorage.getItem(k)||'[]')).filter(c=>c.conversationId==='ee9141af-d285-48c4-ad20-1d0974b0ac2b').map(c=>({id:c.conversationId,errors:c.display.filter(m=>m.toolName==='data_download_load').map(m=>({status:m.toolStatus,details:m.details}))}))`,returnByValue:true}}));console.log(JSON.stringify(await done));socket.close();

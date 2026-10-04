@@ -1,0 +1,41 @@
+{
+  "pass": true,
+  "viewer": "production Tiles3dPreview",
+  "network": "all non-loopback requests blocked",
+  "evidence": [
+    {
+      "sample": "tiles3d-request-volume-20261002",
+      "result": {
+        "loaded": true,
+        "radius": 285.65232127256763
+      },
+      "screenshot": "tiles3d-request-volume-20261002-preview.png"
+    },
+    {
+      "sample": "tiles3d-multiple-contents-20261002",
+      "result": {
+        "loaded": true,
+        "radius": 0.714142842854285
+      },
+      "screenshot": "tiles3d-multiple-contents-20261002-preview.png"
+    },
+    {
+      "sample": "tiles3d-implicit-quad-20261002",
+      "result": {
+        "loaded": true,
+        "radius": 0.707134402005729
+      },
+      "screenshot": "tiles3d-implicit-quad-20261002-preview.png"
+    },
+    {
+      "sample": "tiles3d-implicit-oct-20261002",
+      "result": {
+        "loaded": true,
+        "radius": 0.8660254037844386
+      },
+      "screenshot": "tiles3d-implicit-oct-20261002-preview.png"
+    }
+  ],
+  "remoteRequestsBlocked": [],
+  "runtimeErrors": []
+}

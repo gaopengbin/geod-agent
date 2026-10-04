@@ -1,0 +1,77 @@
+{
+  "date": "2026-10-01",
+  "scope": "read-only code and protocol assessment; not a feature execution test",
+  "runtimeVersionOutput": "codex-cli 0.159.2",
+  "schemaCommand": "codex app-server generate-ts --experimental --out <temporary audit directory>",
+  "includesExperimental": true,
+  "schemaDirectory": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\geod-agent-open-source-research\\codex-probe\\protocol-0.159.2-audit",
+  "protocolChecks": {
+    "ClientRequest.ts": {
+      "thread/start": true,
+      "thread/resume": true,
+      "thread/read": true,
+      "thread/fork": true,
+      "thread/compact/start": true,
+      "turn/steer": true,
+      "turn/interrupt": true,
+      "skills/list": true,
+      "plugin/list": true,
+      "mcpServerStatus/list": true,
+      "mcpServer/oauth/login": true,
+      "thread/backgroundTerminals/list": true,
+      "thread/backgroundTerminals/clean": true,
+      "command/exec": true
+    },
+    "ServerRequest.ts": {
+      "item/tool/call": true,
+      "item/tool/requestUserInput": true,
+      "item/permissions/requestApproval": true,
+      "mcpServer/elicitation/request": true
+    },
+    "ServerNotification.ts": {
+      "item/started": true,
+      "item/completed": true,
+      "item/reasoning/summaryTextDelta": true,
+      "item/commandExecution/outputDelta": true,
+      "item/mcpToolCall/progress": true,
+      "thread/tokenUsage/updated": true,
+      "thread/compacted": true,
+      "turn/completed": true
+    }
+  },
+  "threadItemVariants": [
+    "userMessage",
+    "hookPrompt",
+    "agentMessage",
+    "functionCallOutput",
+    "plan",
+    "reasoning",
+    "commandExecution",
+    "fileChange",
+    "mcpToolCall",
+    "dynamicToolCall",
+    "collabAgentToolCall",
+    "subAgentActivity",
+    "webSearch",
+    "imageView",
+    "sleep",
+    "imageGeneration",
+    "enteredReviewMode",
+    "exitedReviewMode",
+    "contextCompaction"
+  ],
+  "geodDynamicToolCount": 27,
+  "sourceTreeSnapshot": {
+    "commit": "7219fd735bef2f9cfd0363fecdbbb212e3df5255",
+    "commitTimeUtc": "2026-09-30T13:16:08Z",
+    "completeCheckout": false,
+    "note": "Existing cached tree and source fragments; not every fragment belongs to the tree commit."
+  },
+  "officialSources": [
+    "https://learn.chatgpt.com/docs/open-source",
+    "https://learn.chatgpt.com/docs/app-server",
+    "https://learn.chatgpt.com/docs/codex-sdk",
+    "https://learn.chatgpt.com/docs/build-skills",
+    "https://learn.chatgpt.com/docs/extend/mcp?surface=cli"
+  ]
+}

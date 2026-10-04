@@ -9,9 +9,11 @@ use sha2::{Digest, Sha256};
 use std::path::{Component, Path};
 
 pub mod ledger;
+pub mod boundary_store;
+pub mod schedule_store;
 
-const MAX_PLAN_TILES: u64 = 4096;
-const MAX_PLAN_RGBA_BYTES: u64 = 512 * 1024 * 1024;
+const MAX_PLAN_TILES: u64 = 1_000_000;
+const MAX_PLAN_RGBA_BYTES: u64 = 1024 * 1024 * 1024 * 1024;
 const POLICY_VERSION: &str = "imagery-plan-0.1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -34,6 +36,14 @@ pub enum OutputFormat {
     GeoTiff,
     #[serde(rename = "mbtiles")]
     Mbtiles,
+    #[serde(rename = "png")]
+    Png,
+    #[serde(rename = "jpeg")]
+    Jpeg,
+    #[serde(rename = "gpkg")]
+    GeoPackage,
+    #[serde(rename = "tiles")]
+    Tiles,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -61,6 +71,8 @@ pub struct TaskSpec {
     pub boundary: Option<BoundaryGeometry>,
     pub zoom_levels: Vec<u8>,
     pub output_formats: Vec<OutputFormat>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub export_options: Option<geod_core::imagery::ExportOptions>,
     pub output_directory: String,
     pub limits: ResourceLimits,
 }
@@ -84,6 +96,8 @@ pub struct SourceDescriptor {
     pub config_revision: String,
     /// Version of a credential reference, never the credential itself.
     pub credential_ref_version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub elevation_encoding: Option<geod_core::imagery::ElevationEncoding>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -211,6 +225,11 @@ pub fn plan(
     source: &SourceDescriptor,
     now: DateTime<Utc>,
 ) -> Result<Plan, PlanError> {
+    if let Some(encoding)=source.elevation_encoding {
+        let options=spec.export_options.get_or_insert_with(Default::default);
+        if options.elevation_encoding.is_some_and(|e|e!=encoding) {return Err(PlanError::new("INVALID_DEM_OUTPUT","Source elevation encoding does not match export"));}
+        options.elevation_encoding=Some(encoding);
+    }
     if source.id.is_empty() || source.id != spec.source_id || !source.bulk_download_allowed {
         return Err(PlanError::new(
             "SOURCE_UNAUTHORIZED",
@@ -218,8 +237,6 @@ pub fn plan(
         ));
     }
     if source.display_name.trim().is_empty()
-        || source.attribution.trim().is_empty()
-        || source.license.trim().is_empty()
         || source.config_revision.trim().is_empty()
         || !matches!(source.tile_size, 256 | 512)
         || source.min_zoom > source.max_zoom
@@ -260,10 +277,22 @@ pub fn plan(
     spec.zoom_levels.dedup();
     spec.output_formats.sort_unstable();
     spec.output_formats.dedup();
-    if spec.boundary.is_some() && !spec.output_formats.contains(&OutputFormat::GeoTiff) {
+    if spec.export_options.as_ref().is_some_and(|options| options.jpeg_quality == 0 || options.jpeg_quality > 100) {
+        return Err(PlanError::new("INVALID_SPEC", "JPEG quality must be between 1 and 100"));
+    }
+    if let Some(options) = &spec.export_options {
+        if options.elevation_encoding.is_some() && (spec.output_formats != [OutputFormat::GeoTiff] || !options.overlay_sources.is_empty()) {
+            return Err(PlanError::new("INVALID_DEM_OUTPUT", "Elevation requires GeoTIFF only, without annotation overlays"));
+        }
+        let mut ids=std::collections::HashSet::new();
+        if options.overlay_sources.len()>4 || options.overlay_sources.iter().any(|r| r.source_id==source.id || !ids.insert(&r.source_id) || r.config_revision.len()!=64 || !r.config_revision.bytes().all(|v| v.is_ascii_hexdigit())) {
+            return Err(PlanError::new("INVALID_OVERLAY", "Invalid or repeated annotation source references"));
+        }
+    }
+    if spec.boundary.is_some() && !spec.output_formats.iter().any(|format| matches!(format, OutputFormat::GeoTiff | OutputFormat::Png | OutputFormat::Jpeg)) {
         return Err(PlanError::new(
             "INVALID_BOUNDARY",
-            "Polygon clipping requires GeoTIFF output; MBTiles preserves complete source tiles",
+            "Polygon clipping requires GeoTIFF, PNG or JPEG output; tile containers preserve complete source tiles",
         ));
     }
     if spec
@@ -307,7 +336,9 @@ pub fn plan(
         ));
     }
     let required_free_disk_bytes =
-        geod_core::imagery::required_free_disk_bytes(total_tiles, source.tile_size)
+        geod_core::imagery::required_free_disk_bytes_for_outputs(total_tiles, source.tile_size,
+            spec.output_formats.len(), spec.output_formats.contains(&OutputFormat::GeoTiff)
+                && spec.export_options.as_ref().is_some_and(|options| options.build_pyramid))
             .map_err(|cause| PlanError::new(cause.code, cause.message))?;
 
     let source_fingerprint = hash_json(source);

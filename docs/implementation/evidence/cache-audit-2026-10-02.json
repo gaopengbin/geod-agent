@@ -1,0 +1,89 @@
+{
+  "checkedAt": "2026-10-02T13:44:34.607565400Z",
+  "directory": "C:\\Users\\Administrator\\AppData\\Roaming\\dev.geod-agent.desktop\\tile-cache",
+  "inventory": {
+    "jobCaches": [
+      {
+        "bindingPresent": true,
+        "bytes": 53248,
+        "jobId": "0fd59065-7927-47c7-9607-a205c1666820",
+        "sourceRevision": "42a5dd2a37f0c274c3ed64e2a6d7dff470379080efff9b94603c5b657f133056",
+        "tileCount": 0
+      },
+      {
+        "bindingPresent": true,
+        "bytes": 377007,
+        "jobId": "7bc06a9d-ffb5-46c0-9c30-61aa4aeedfde",
+        "sourceRevision": "b5d9ccab40f83a688f0580499f5a037c0f76b1adbebb70abb6c02eb50ccef2d1",
+        "tileCount": 20
+      },
+      {
+        "bindingPresent": true,
+        "bytes": 53248,
+        "jobId": "bad1b8c1-30e5-4f19-8bd2-8348822d742b",
+        "sourceRevision": "a185d7e42fc4d40f3443b2a87cfe1873a45afe93231791d3d64161862b0c00fb",
+        "tileCount": 0
+      },
+      {
+        "bindingPresent": true,
+        "bytes": 53248,
+        "jobId": "d7cb9b8e-bced-4557-82b2-fcc41eda4f06",
+        "sourceRevision": "de937355f118a25cb0f5656a6bc53116f8ef5ef29bf981f8c443b9ec9bbe43f1",
+        "tileCount": 0
+      },
+      {
+        "bindingPresent": true,
+        "bytes": 100004,
+        "jobId": "ea9c740b-01c5-46ba-81d0-eb737e25cd27",
+        "sourceRevision": "b5d9ccab40f83a688f0580499f5a037c0f76b1adbebb70abb6c02eb50ccef2d1",
+        "tileCount": 3
+      }
+    ],
+    "sharedCaches": [
+      {
+        "bytes": 1328470,
+        "expiredTiles": 0,
+        "revision": "9d42d4630a35674d097da0b7f64736630e4124a111751b0f8953eeccaba02a56",
+        "tileCount": 6
+      },
+      {
+        "bytes": 45056,
+        "expiredTiles": 0,
+        "revision": "a185d7e42fc4d40f3443b2a87cfe1873a45afe93231791d3d64161862b0c00fb",
+        "tileCount": 0
+      },
+      {
+        "bytes": 226490,
+        "expiredTiles": 0,
+        "revision": "b5d9ccab40f83a688f0580499f5a037c0f76b1adbebb70abb6c02eb50ccef2d1",
+        "tileCount": 8
+      },
+      {
+        "bytes": 45056,
+        "expiredTiles": 0,
+        "revision": "de937355f118a25cb0f5656a6bc53116f8ef5ef29bf981f8c443b9ec9bbe43f1",
+        "tileCount": 0
+      },
+      {
+        "bytes": 182211,
+        "expiredTiles": 0,
+        "revision": "fdfb70397b4a50500779b751506c539638e3f0dae3fc56c50a758eb928e223d7",
+        "tileCount": 4
+      }
+    ],
+    "totalBytes": 2464038,
+    "unreadableEntries": 0
+  },
+  "readOnly": true,
+  "verification": {
+    "bytes": 1972518,
+    "checked": 41,
+    "currentJob": null,
+    "invalid": 0,
+    "migrated": 0,
+    "phase": "completed",
+    "skipped": 0,
+    "total": 41,
+    "warnings": []
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "pass": true,
+  "checkedAt": "2026-10-02T14:29:21.562Z",
+  "checks": [
+    "AI draft connection and native plan reference",
+    "native Windows Vault save and no credential readback",
+    "credential change invalidates old plan before network execution",
+    "add and remove header credentials",
+    "actual public tileset connection test from production form",
+    "connection removal"
+  ],
+  "layout": {
+    "width": 390,
+    "scroll": 390,
+    "left": 16,
+    "right": 374
+  },
+  "errors": [],
+  "ionLiveAsset": "credential-dependent; no user Ion token provided"
+}

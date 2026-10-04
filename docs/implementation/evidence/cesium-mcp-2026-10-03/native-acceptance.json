@@ -1,0 +1,123 @@
+{
+  "pass": true,
+  "conversationId": "ion-buildings-4d47a261-2cd6-41e1-ae3d-473831f572bd",
+  "task": {
+    "id": "30d9fb3c-00fe-43dd-a106-a21ff60dd204",
+    "title": "名古屋市中心 · Cesium OSM Buildings 三维瓦片",
+    "updatedAt": "2026-10-03T04:21:47.439934300+00:00"
+  },
+  "loaded": {
+    "loaded": true,
+    "radius": 11022782.565540954,
+    "taskId": "30d9fb3c-00fe-43dd-a106-a21ff60dd204",
+    "kind": "tiles3d",
+    "title": "名古屋市中心 · Cesium OSM Buildings 三维瓦片"
+  },
+  "toolCount": 64,
+  "cameraBefore": {
+    "longitude": 136.90253767643517,
+    "latitude": 35.16640047257926,
+    "height": 3995.5580647936094,
+    "heading": 5.088887490341627e-14,
+    "pitch": -60.02066426364367,
+    "roll": 359.99999999999994
+  },
+  "cameraAfter": {
+    "longitude": 136.8923203216355,
+    "latitude": 35.151865347914,
+    "height": 3995.8306395757127,
+    "heading": 29.994064265377805,
+    "pitch": -65.01666595970674,
+    "roll": 0.000057448305387173275
+  },
+  "scene": {
+    "opened": true,
+    "scene": "Cesium",
+    "taskId": "30d9fb3c-00fe-43dd-a106-a21ff60dd204",
+    "title": "名古屋市中心 · Cesium OSM Buildings 三维瓦片",
+    "bounds": [
+      136.89151961,
+      35.17784976,
+      136.91355591,
+      35.19650728
+    ],
+    "camera": {
+      "longitude": 136.90253767643517,
+      "latitude": 35.16640047257926,
+      "height": 3995.5580647936094,
+      "heading": 5.088887490341627e-14,
+      "pitch": -60.02066426364367,
+      "roll": 359.99999999999994
+    },
+    "globe": true,
+    "layers": [
+      {
+        "id": "download-30d9fb3c-00fe-43dd-a106-a21ff60dd204",
+        "name": "名古屋市中心 · Cesium OSM Buildings 三维瓦片",
+        "type": "3D Tiles",
+        "visible": true,
+        "color": "#8B5CF6"
+      },
+      {
+        "id": "imagery-5cd23d77-0cb7-4501-ac98-254792e31f5b",
+        "name": "OpenStreetMap",
+        "type": "imagery",
+        "visible": true,
+        "color": "#3B82F6"
+      }
+    ],
+    "imagery": [
+      {
+        "id": "imagery-5cd23d77-0cb7-4501-ac98-254792e31f5b",
+        "sourceId": null,
+        "visible": true,
+        "opacity": 1,
+        "loaded": 86,
+        "failed": 0,
+        "pending": 0,
+        "lastError": null,
+        "state": "ready"
+      }
+    ]
+  },
+  "marker": {
+    "success": true,
+    "data": {
+      "entityId": "72c4c3cd-7fa8-47f2-8e2a-cbc44bad9707"
+    },
+    "message": "Marker added"
+  },
+  "properties": {
+    "success": true,
+    "data": {
+      "entityId": "72c4c3cd-7fa8-47f2-8e2a-cbc44bad9707",
+      "type": "marker",
+      "position": {
+        "longitude": 136.90253776,
+        "latitude": 35.18717852,
+        "height": 0
+      },
+      "properties": {},
+      "graphicProperties": {
+        "pixelSize": 12,
+        "color": "rgb(255,204,0)",
+        "outlineColor": "rgb(255,255,255)",
+        "outlineWidth": 1
+      }
+    },
+    "message": "Properties for entity '72c4c3cd-7fa8-47f2-8e2a-cbc44bad9707'"
+  },
+  "checks": [
+    "production native preview",
+    "published bridge and contracts",
+    "MCP listTools/callTool",
+    "actual camera readback",
+    "entity create/read/remove",
+    "downloaded layer hide/show",
+    "registered Esri source loaded",
+    "native OSM imagery loaded",
+    "conversation isolation"
+  ],
+  "pageErrors": [],
+  "checkedAt": "2026-10-03T04:54:04.825Z"
+}

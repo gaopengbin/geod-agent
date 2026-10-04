@@ -1,0 +1,177 @@
+{
+  "date": "2026-10-02",
+  "candidateVersion": "geod-flash-candidate-2026-10-02",
+  "priceSource": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+  "subscriptionCandidate": {
+    "monthlyCny": 29,
+    "includedAiCreditCny": 10
+  },
+  "retailRatesCnyPerMillion": {
+    "cachedInput": 0.08,
+    "uncachedInput": 4,
+    "output": 16
+  },
+  "scenarios": [
+    {
+      "scenario": "batch-agent-model-2026-10-02.json",
+      "acceptancePass": true,
+      "taskOutcome": "completed",
+      "declaredLocalFaultFixture": false,
+      "modelRequests": 12,
+      "inputTokens": 289338,
+      "cachedInputTokens": 265344,
+      "outputTokens": 2411,
+      "cacheRate": 0.9170727661074591,
+      "modelSeconds": 52.019,
+      "estimatedOffPeakCny": 0.03894488,
+      "estimatedPeakCny": 0.07788976,
+      "allCacheMissPeakStressCny": 0.597964,
+      "candidateRetailBeforeRefundCny": 0.15577952,
+      "refundCny": 0,
+      "candidateRetailCny": 0.15577952,
+      "nativeJobs": [
+        {
+          "jobId": "9363e4e8-6120-42e3-aec5-dc4f58a1c299",
+          "state": "completed"
+        }
+      ],
+      "toolCalls": 14,
+      "toolFailures": []
+    },
+    {
+      "scenario": "gpkg-agent-download-2026-10-02.json",
+      "acceptancePass": true,
+      "taskOutcome": "completed",
+      "declaredLocalFaultFixture": false,
+      "modelRequests": 12,
+      "inputTokens": 254091,
+      "cachedInputTokens": 246528,
+      "outputTokens": 1837,
+      "cacheRate": 0.9702350732611544,
+      "modelSeconds": 32.994,
+      "estimatedOffPeakCny": 0.01984156,
+      "estimatedPeakCny": 0.03968312,
+      "allCacheMissPeakStressCny": 0.522878,
+      "candidateRetailBeforeRefundCny": 0.07936624,
+      "refundCny": 0,
+      "candidateRetailCny": 0.07936624,
+      "nativeJobs": [
+        {
+          "jobId": "6761dbcf-76e9-45cf-8610-af84a4b79b4d",
+          "state": "completed"
+        }
+      ],
+      "toolCalls": 13,
+      "toolFailures": [
+        {
+          "tool": "workspace_gis_files_list",
+          "error": "Error: Command not allowed"
+        },
+        {
+          "tool": "mcp_call",
+          "error": "MAP_TOOL_FAILED"
+        }
+      ]
+    },
+    {
+      "scenario": "postgis-agent-download-2026-10-02.json",
+      "acceptancePass": true,
+      "taskOutcome": "completed",
+      "declaredLocalFaultFixture": false,
+      "modelRequests": 9,
+      "inputTokens": 231269,
+      "cachedInputTokens": 215808,
+      "outputTokens": 1242,
+      "cacheRate": 0.9331471143992494,
+      "modelSeconds": 18.219,
+      "estimatedOffPeakCny": 0.02474516,
+      "estimatedPeakCny": 0.04949032,
+      "allCacheMissPeakStressCny": 0.472474,
+      "candidateRetailBeforeRefundCny": 0.09898064,
+      "refundCny": 0,
+      "candidateRetailCny": 0.09898064,
+      "nativeJobs": [
+        {
+          "jobId": "a2e5ea13-c444-4657-b535-fc7aa9a71d11",
+          "state": "completed"
+        }
+      ],
+      "toolCalls": 7,
+      "toolFailures": []
+    },
+    {
+      "scenario": "online-agent-download-2026-10-02.json",
+      "acceptancePass": true,
+      "taskOutcome": "completed",
+      "declaredLocalFaultFixture": false,
+      "modelRequests": 7,
+      "inputTokens": 197702,
+      "cachedInputTokens": 193664,
+      "outputTokens": 734,
+      "cacheRate": 0.979575320431761,
+      "modelSeconds": 15.954,
+      "estimatedOffPeakCny": 0.01084728,
+      "estimatedPeakCny": 0.02169456,
+      "allCacheMissPeakStressCny": 0.401276,
+      "candidateRetailBeforeRefundCny": 0.04338912,
+      "refundCny": 0,
+      "candidateRetailCny": 0.04338912,
+      "nativeJobs": [
+        {
+          "jobId": "7fe3dbfd-4240-444f-b224-e963b770af53",
+          "state": "completed"
+        }
+      ],
+      "toolCalls": 5,
+      "toolFailures": []
+    },
+    {
+      "scenario": "failed-agent-download-2026-10-02.json",
+      "acceptancePass": true,
+      "taskOutcome": "failed",
+      "declaredLocalFaultFixture": true,
+      "modelRequests": 7,
+      "inputTokens": 129718,
+      "cachedInputTokens": 121088,
+      "outputTokens": 1234,
+      "cacheRate": 0.9334710680090659,
+      "modelSeconds": 13.905,
+      "estimatedOffPeakCny": 0.01598776,
+      "estimatedPeakCny": 0.03197552,
+      "allCacheMissPeakStressCny": 0.269308,
+      "candidateRetailBeforeRefundCny": 0.06395104,
+      "refundCny": 0.06395104,
+      "candidateRetailCny": 0,
+      "nativeJobs": [
+        {
+          "jobId": "0fd59065-7927-47c7-9607-a205c1666820",
+          "state": "failed"
+        }
+      ],
+      "toolCalls": 7,
+      "toolFailures": []
+    }
+  ],
+  "preview": {
+    "active": false,
+    "creditedCny": 10,
+    "balanceCny": 9.62248448,
+    "receiptCount": 47,
+    "duplicateCharges": 0,
+    "databasePath": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\geod-billing-preview-mqpdFf\\preview.sqlite"
+  },
+  "outcomeEvidence": {
+    "normalCompleted": 4,
+    "normalTested": 4,
+    "intentionalFaultDetected": 1,
+    "intentionalFaultTested": 1,
+    "productionFailureRate": null
+  },
+  "limits": [
+    "Provider cost is an estimate using public rates, not an invoice. Both peak and off-peak shown; no holiday calendar assumption.",
+    "Four successful small tasks and warm shared model prefix; not a representative failure rate or production p95.",
+    "Intentional HTTP503 failure is separate from normal task samples; never report it as a 20% production failure rate.",
+    "Failed whole-task AI credit refunded once using native terminal failure evidence; supplier cost retained.",
+    "No production payment, quota or wallet changes. Local conversion, download and scheduler monitoring do not consume model tokens."
+  ]
+}

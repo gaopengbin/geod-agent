@@ -1,0 +1,40 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { DownloadTelemetry, restoreDownloadState } from '../src/download-telemetry.ts';
+import { randomUUID } from 'node:crypto';
+const at = Date.now();
+const snapshot = (state, time = at - 1000, errorCode) => ({ job: { state, createdAt: new Date(time).toISOString(), jobId: 'private-id' }, events: [{ state, occurredAt: new Date(at).toISOString(), errorCode }] });
+test('restored pending events cannot upload arbitrary fields from local storage', () => {
+  const event = { event_id: randomUUID(), attempt_id: randomUUID(), state: 'completed', occurred_at: new Date().toISOString(), duration: 'unknown', reason: 'none', path: 'private.tif' };
+  const restored = restoreDownloadState({ attempts: {}, queue: [event, { ...event, reason: 'raw private error' }] });
+  assert.equal(restored.queue.length, 1);
+  assert.equal('path' in restored.queue[0], false);
+  assert.equal(restoreDownloadState({ queue: 'broken' }), null);
+});
+test('historical jobs stay excluded; live outcomes and retries retain stable private-safe IDs', () => {
+  let n = 0; const tracker = new DownloadTelemetry(null, at, () => `random-${++n}`);
+  tracker.observe({ old: snapshot('completed'), live: snapshot('downloading') }, at);
+  assert.equal(tracker.state.queue.length, 1);
+  const attempt = tracker.state.queue[0].attempt_id;
+  tracker.observe({ live: snapshot('paused') }, at);
+  tracker.observe({ live: snapshot('completed') }, at);
+  tracker.observe({ live: snapshot('completed') }, at);
+  assert.equal(tracker.state.queue.length, 2);
+  assert.equal(tracker.state.queue[1].attempt_id, attempt);
+  assert.equal(tracker.state.queue[1].duration, 'unknown');
+  const resumed = new DownloadTelemetry(JSON.parse(JSON.stringify(tracker.state)), at, () => `random-${++n}`);
+  const batch = resumed.state.queue.slice(); resumed.observe({ live: snapshot('completed') }, at);
+  assert.deepEqual(resumed.state.queue, batch);
+  assert.doesNotMatch(JSON.stringify(batch), /private-id|old|live/);
+  resumed.acknowledge(batch); assert.equal(resumed.state.queue.length, 0);
+});
+test('fast jobs and resumed failures produce distinct attempts; partial never counts as complete', () => {
+  let n = 0; const tracker = new DownloadTelemetry(null, at, () => `random-${++n}`);
+  tracker.observe({ fast: snapshot('partial', at) }, at);
+  assert.deepEqual(tracker.state.queue.map(event => event.state), ['started','partial']);
+  tracker.observe({ fast: snapshot('downloading', at) }, at + 1000);
+  tracker.observe({ fast: snapshot('failed', at, 'NETWORK_ERROR private secret') }, at + 2000);
+  assert.equal(tracker.state.queue.at(-1).reason, 'network');
+  assert.notEqual(tracker.state.queue[0].attempt_id, tracker.state.queue.at(-1).attempt_id);
+  assert.doesNotMatch(JSON.stringify(tracker.state.queue), /private secret/);
+});

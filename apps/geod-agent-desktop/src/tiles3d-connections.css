@@ -1,0 +1,28 @@
+.dialog.tiles3d-connections {width:min(600px,calc(100vw - 32px));max-height:calc(100dvh - 40px);display:flex;flex-direction:column;}
+.tiles3d-connections-scroll {min-height:0;flex:1;}
+.tiles3d-connections-body {display:flex;flex-direction:column;gap:18px;}
+.tiles3d-connections-body .field {margin:0;}
+.tiles3d-connections-body .field small {font-size:12px;line-height:1.6;color:var(--muted-foreground);}
+.connection-back {align-self:flex-start;margin-left:-8px;}
+.connection-list-heading,.connection-section-heading {display:flex;justify-content:space-between;align-items:center;gap:12px;}
+.connection-list-heading>span,.connection-muted {font-size:12px;color:var(--muted-foreground);}
+.connection-muted {display:flex;align-items:center;gap:6px;line-height:1.6;margin:0;}
+.connection-empty {display:grid;place-items:center;text-align:center;padding:30px 12px;color:var(--muted-foreground);gap:12px;}
+.connection-empty p {font-size:13px;line-height:1.7;margin:0;}
+.connection-list {display:grid;gap:4px;}
+.connection-list-row {display:flex;align-items:center;border-bottom:1px solid var(--border);gap:4px;padding-bottom:4px;}
+.connection-list-select {flex:1;min-width:0;justify-content:flex-start;text-align:left;height:auto;padding:12px 8px;}
+.connection-list-select>span {display:grid;gap:4px;min-width:0;flex:1;}
+.connection-list-select strong {font-size:13px;overflow-wrap:anywhere;font-weight:600;}
+.connection-list-select small {font-size:12px;color:var(--muted-foreground);font-weight:400;}
+.connection-ready,.connection-pending {font-size:11px;font-style:normal;white-space:nowrap;}
+.connection-ready {color:var(--muted-foreground);}.connection-pending {color:var(--warning-text,#b7791f);}
+.connection-source {display:flex;align-items:flex-start;gap:10px;padding:12px;border:1px solid var(--border);border-radius:10px;}
+.connection-source>div {flex:1;min-width:0;}.connection-source strong {font-size:13px;font-weight:500;}
+.connection-source p {font-size:12px;margin:5px 0 0;overflow-wrap:anywhere;color:var(--muted-foreground);}
+.connection-headers {display:grid;gap:10px;border-top:1px solid var(--border);padding-top:14px;}
+.connection-section-heading h3 {font-size:13px;font-weight:600;margin:0;}.connection-section-heading h3 span {font-size:12px;color:var(--muted-foreground);font-weight:400;margin-left:8px;}
+.tiles3d-connections .connection-header-row {display:grid;grid-template-columns:minmax(110px,2fr) minmax(140px,3fr) 32px;gap:8px;align-items:center;}
+.connection-header-row input {min-width:0;}.connection-notice {display:flex;align-items:flex-start;gap:7px;font-size:12px;line-height:1.6;color:var(--foreground);margin:0;}
+.connection-notice svg,.error-box svg,.connection-source svg {flex-shrink:0;}
+@media(max-width:440px){.tiles3d-connections .connection-header-row{grid-template-columns:minmax(0,1fr) 32px;}.connection-header-row input:first-child{grid-column:1;}.connection-header-row input:nth-child(2){grid-column:1;grid-row:2;}.connection-header-row button{grid-column:2;grid-row:1 / 3;}.connection-source{flex-wrap:wrap;}.tiles3d-connections-body{gap:14px;}}

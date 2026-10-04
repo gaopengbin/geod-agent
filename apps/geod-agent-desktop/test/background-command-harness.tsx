@@ -1,0 +1,10 @@
+import { createRoot } from "react-dom/client";
+import { BackgroundCommandPanel } from "../src/background-command-panel";
+import { focusBackgroundCommand } from "../src/background-commands";
+import "../src/theme.css";
+import "../src/styles.css";
+import "../src/workspace.css";
+const query = new URLSearchParams(location.search), id = query.get("conversationId")!;
+document.documentElement.dataset.theme = query.get("theme") ?? "light";
+if (query.has("commandId")) focusBackgroundCommand(id, query.get("commandId")!);
+createRoot(document.getElementById("root")!).render(<main className="right-panel task-panel" style={{ width: 360, height: "100vh" }}><div className="task-detail-scroll"><BackgroundCommandPanel conversationId={id} permission={query.get("permission") ?? "confirmEach"}/></div></main>);

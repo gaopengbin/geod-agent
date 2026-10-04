@@ -10,6 +10,16 @@ function store() {
   };
 }
 
+test("Codex recovery keeps its engine and token meter across a commit interruption", () => {
+  const storage = store();
+  savePending(storage, { conversationId: "codex-chat", generationId: "generation", userId: "user", engine: "codex", messages: [] });
+  const codexContext = { inputTokens: 123, outputTokens: 20, cachedInputTokens: 0, modelContextWindow: 258400 };
+  commitPending(storage, "codex-chat", "generation", { messages: [], display: [], engine: "codex", codexContext });
+  const recovered = restorePendingChats(storage, []);
+  assert.equal(recovered[0].engine, "codex");assert.deepEqual(recovered[0].codexContext, codexContext);
+  assert.equal(recovered[0].pendingId, undefined);
+});
+
 test("generation ID and exact context survive an interrupted response", () => {
   const storage = store();
   const request = { conversationId: "chat-1", generationId: "generation-1", userId: "geod-user-1", messages: [{ role: "user", content: "下载已授权影像" }] };
@@ -39,7 +49,7 @@ test("unlisted pending conversation is restored ahead of a full recent list", ()
   savePending(storage, { conversationId: "recover-me", generationId: "generation-31", userId: "geod-user", messages: [{ role: "user", content: "保存中的请求" }], display: [{ id: "visible-1", role: "user", content: "保存中的请求" }] });
   const chats = Array.from({ length: 30 }, (_, index) => ({ conversationId: `chat-${index}`, messages: [], display: [] }));
   const recovered = restorePendingChats(storage, chats);
-  assert.equal(recovered.length, 30);
+  assert.equal(recovered.length, 31);
   assert.equal(recovered[0].conversationId, "recover-me");
   assert.equal(recovered[0].display[0].content, "保存中的请求");
 });

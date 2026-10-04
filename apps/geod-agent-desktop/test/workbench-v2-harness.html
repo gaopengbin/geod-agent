@@ -1,0 +1,19 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>GeoD UI v2 · 演示数据验收</title></head><body><div id="root"></div>
+<script>
+// Isolated UI fixture. These commands never reach a database, model or download worker.
+const sources = [{schemaVersion:'0.1',id:'esri-world-imagery',displayName:'Esri World Imagery',attribution:'Esri and the GIS User Community',license:'影像底图配置',bulkDownloadAllowed:true,scheme:'XYZ',tileSize:256,minZoom:0,maxZoom:22,configRevision:'fixture',credentialRefVersion:null},{schemaVersion:'0.1',id:'usgs-naip',displayName:'USGS NAIP Plus',attribution:'USGS, USDA',license:'美国本土影像',bulkDownloadAllowed:true,scheme:'XYZ',tileSize:256,minZoom:10,maxZoom:18,configRevision:'fixture',credentialRefVersion:null}];
+let networkSettings={mode:'auto',manualUrl:null};
+const networkStatus=()=>({settings:networkSettings,source:networkSettings.mode==='direct'?'直连':networkSettings.mode==='manual'?'手动代理':'Windows 系统代理',effectiveProxy:networkSettings.mode==='direct'?null:networkSettings.manualUrl||'http://127.0.0.1:10808'});
+window.isTauri=true;window.__TAURI__={};window.__TAURI_INTERNALS__={invoke:async(command,args)=>{
+ if(command==='network_get')return networkStatus();
+ if(command==='network_test'){await new Promise(resolve=>setTimeout(resolve,1800));return {...networkStatus(),elapsedMs:120};}
+ if(command==='network_set'){await new Promise(resolve=>setTimeout(resolve,900));networkSettings=args.settings;return networkStatus();}
+ if(command==='osm_basemap_tile'){const bytes=new Uint8Array(await(await fetch(`https://tile.openstreetmap.org/${args.z}/${args.x}/${args.y}.png`)).arrayBuffer());return btoa(String.fromCharCode(...bytes));}
+ if(command==='sources_list')return sources;
+ if(command==='sources_save'){await new Promise(resolve=>setTimeout(resolve,900));const item={schemaVersion:'0.1',id:args.endpoint.id,displayName:args.endpoint.name,attribution:args.endpoint.attribution,license:args.endpoint.license,bulkDownloadAllowed:true,scheme:args.endpoint.scheme,tileSize:args.endpoint.tileSize,minZoom:args.minZoom,maxZoom:args.maxZoom,configRevision:'fixture',credentialRefVersion:null};const index=sources.findIndex(source=>source.id===item.id);if(index>=0)sources[index]=item;else sources.push(item);return item;}
+ if(command==='sources_get')return {descriptor:sources.find(s=>s.id===args.sourceId),endpoint:{id:args.sourceId,name:sources.find(s=>s.id===args.sourceId).displayName,attribution:'Esri',license:'',urlTemplate:'https://example.com/{z}/{x}/{y}.png',scheme:'XYZ',tileSize:256,networkPolicy:'PublicHttps',minIntervalMs:0}};
+ if(command==='extensions_list')return {skills:[],connectors:[{id:'humaps',name:'humaps',url:'https://api.humaps.org/mcp',enabled:true,transport:'http'}]};
+ if(command==='mcp_tools')return {connectorId:args.id,tools:[{name:'search_map_layers',description:'检索图层',inputSchema:{type:'object'}}]};
+ throw new Error('UI fixture does not implement '+command);
+}};
+</script><script type="module" src="/test/workbench-v2-harness.tsx"></script></body></html>

@@ -2,7 +2,7 @@
 
 日期：2026-09-27，模型方案更新于 2026-09-28。状态：产品设计快照；当前实现与剩余验收以[桌面与网关实施记录](../implementation/2026-09-28-desktop-and-gateway.md)为准。
 
-实施层面的模块边界、任务合同、恢复、安全与发布门槛见[技术架构设计](geod-agent-desktop-technical-architecture.md)。
+实施层面的模块边界、任务合同、恢复、安全与发布门槛见[技术架构设计](geod-agent-desktop-technical-architecture.md)。第三方卫星数据平台的授权、下载权益和 Agent 复用路径见[数据源授权与下载接入方案](provider-authorization-and-data-download-2026-09-28.md)。
 
 ## 1. 产品决定
 

@@ -105,11 +105,86 @@
         "polygons"
       ]
     },
+    "ElevationEncoding": {
+      "type": "string",
+      "enum": [
+        "terrarium"
+      ]
+    },
+    "ExportOptions": {
+      "type": "object",
+      "properties": {
+        "buildPyramid": {
+          "type": "boolean",
+          "default": false
+        },
+        "cacheOnly": {
+          "description": "Explicitly export verified cached tiles; never make a tile network request.",
+          "type": "boolean"
+        },
+        "compression": {
+          "$ref": "#/$defs/TiffCompression",
+          "default": "lzw"
+        },
+        "elevationEncoding": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ElevationEncoding"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "generateSidecars": {
+          "type": "boolean",
+          "default": false
+        },
+        "jpegQuality": {
+          "type": "integer",
+          "format": "uint8",
+          "default": 90,
+          "maximum": 255,
+          "minimum": 0
+        },
+        "overlaySources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/OverlaySourceRef"
+          }
+        },
+        "reuseVerifiedCache": {
+          "description": "A recovery plan keeps previously verified pixels even after the normal\nfreshness window. Hash, size, decoding and source revision still apply.",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
     "OutputFormat": {
       "type": "string",
       "enum": [
         "geotiff",
-        "mbtiles"
+        "mbtiles",
+        "png",
+        "jpeg",
+        "gpkg",
+        "tiles"
+      ]
+    },
+    "OverlaySourceRef": {
+      "type": "object",
+      "properties": {
+        "configRevision": {
+          "type": "string"
+        },
+        "sourceId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "sourceId",
+        "configRevision"
       ]
     },
     "PlanTileGrid": {
@@ -246,6 +321,16 @@
           "maxItems": 4,
           "minItems": 4
         },
+        "exportOptions": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExportOptions"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "kind": {
           "$ref": "#/$defs/TaskKind"
         },
@@ -287,6 +372,14 @@
         "outputFormats",
         "outputDirectory",
         "limits"
+      ]
+    },
+    "TiffCompression": {
+      "type": "string",
+      "enum": [
+        "none",
+        "lzw",
+        "deflate"
       ]
     }
   }

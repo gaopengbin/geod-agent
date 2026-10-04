@@ -1,0 +1,88 @@
+{
+  "conversationId": "docker-wfs-native-0ed763f6-6888-4891-8445-9f510eaf5027",
+  "cases": [
+    {
+      "case": "WFS 2.0 GeoJSON",
+      "url": "http://127.0.0.1:18083/geoserver/wfs?service=WFS&version=2.0.0&request=GetFeature&typeNames=geod%3Aboundary&srsName=EPSG%3A4326&outputFormat=application%2Fjson",
+      "pass": true,
+      "bounds": [
+        116.1,
+        39.6,
+        116.3,
+        39.8
+      ],
+      "polygonCount": 1,
+      "holesPreserved": true
+    },
+    {
+      "case": "WFS GeoJSON projected EPSG:3857",
+      "url": "http://127.0.0.1:18083/geoserver/wfs?service=WFS&version=2.0.0&request=GetFeature&typeNames=geod%3Aboundary&srsName=EPSG%3A3857&outputFormat=application%2Fjson",
+      "pass": true,
+      "bounds": [
+        116.1,
+        39.6,
+        116.3,
+        39.8
+      ],
+      "polygonCount": 1,
+      "holesPreserved": true
+    },
+    {
+      "case": "WFS 1.0 GML2",
+      "url": "http://127.0.0.1:18083/geoserver/wfs?service=WFS&version=1.0.0&request=GetFeature&typeNames=geod%3Aboundary&srsName=EPSG%3A4326&outputFormat=GML2&typeName=geod%3Aboundary",
+      "pass": true,
+      "bounds": [
+        116.1,
+        39.6,
+        116.3,
+        39.8
+      ],
+      "polygonCount": 1,
+      "holesPreserved": true
+    },
+    {
+      "case": "WFS 2.0 GML3.2 latitude longitude axis order",
+      "url": "http://127.0.0.1:18083/geoserver/wfs?service=WFS&version=2.0.0&request=GetFeature&typeNames=geod%3Aboundary&srsName=urn%3Aogc%3Adef%3Acrs%3AEPSG%3A%3A4326&outputFormat=application%2Fgml%2Bxml%3B+version%3D3.2",
+      "pass": true,
+      "bounds": [
+        116.1,
+        39.6,
+        116.3,
+        39.8
+      ],
+      "polygonCount": 1,
+      "holesPreserved": true
+    },
+    {
+      "case": "WFS MultiPolygon",
+      "url": "http://127.0.0.1:18083/geoserver/wfs?service=WFS&version=2.0.0&request=GetFeature&typeNames=geod%3Aregions&srsName=EPSG%3A4326&outputFormat=application%2Fjson",
+      "pass": true,
+      "bounds": [
+        116.1,
+        39.6,
+        116.7,
+        39.8
+      ],
+      "polygonCount": 2,
+      "holesPreserved": true
+    },
+    {
+      "case": "WFS GeoJSON pagination rejected",
+      "url": "http://127.0.0.1:18083/geoserver/wfs?service=WFS&version=2.0.0&request=GetFeature&typeNames=geod%3Amany_regions&srsName=EPSG%3A4326&outputFormat=application%2Fjson&count=1",
+      "pass": true,
+      "code": "INPUT_PAGED_RESULT"
+    },
+    {
+      "case": "WFS GML pagination rejected",
+      "url": "http://127.0.0.1:18083/geoserver/wfs?service=WFS&version=2.0.0&request=GetFeature&typeNames=geod%3Amany_regions&srsName=EPSG%3A4326&outputFormat=application%2Fgml%2Bxml%3B+version%3D3.2&count=1",
+      "pass": true,
+      "code": "INPUT_PAGED_RESULT"
+    },
+    {
+      "case": "WFS nonexistent layer error",
+      "url": "http://127.0.0.1:18083/geoserver/wfs?service=WFS&version=2.0.0&request=GetFeature&typeNames=geod%3Adoes_not_exist&srsName=EPSG%3A4326&outputFormat=application%2Fjson",
+      "pass": true,
+      "code": "INPUT_NETWORK_FAILED"
+    }
+  ]
+}

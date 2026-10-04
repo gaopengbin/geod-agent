@@ -1,0 +1,38 @@
+.data-input-dialog { position: fixed; z-index: 90; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(520px, calc(100vw - 32px)); max-height: min(740px, calc(100dvh - 48px)); display: flex; flex-direction: column; background: var(--background); color: var(--foreground); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 18px 64px #0003; }
+.data-input-heading { padding: 20px 22px 14px; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.data-input-heading h2 { font-size: 16px; font-weight: 600; margin: 0 0 6px; }
+.data-input-heading p, .data-input-hint { font-size: 12px; color: var(--muted-foreground); line-height: 1.7; margin: 0; }
+.data-input-tabs { display: flex; gap: 5px; padding: 0 20px 10px; border-bottom: 1px solid var(--border); }
+.data-input-tabs [aria-pressed=true], .data-input-ssl [aria-pressed=true] { background: var(--app-blue-soft); color: var(--app-blue-text); }
+.data-input-body { overflow-y: auto; padding: 18px 22px; display: flex; flex-direction: column; gap: 14px; }
+.data-input-body form, .data-input-body label { display: flex; flex-direction: column; gap: 8px; }
+.data-input-body label { font-size: 12px; font-weight: 500; }
+.data-input-body input, .data-input-body textarea { width: 100%; border: 1px solid var(--border); border-radius: 7px; background: var(--background); color: var(--foreground); padding: 9px 10px; font-size: 13px; outline: none; }
+.data-input-body input:focus, .data-input-body textarea:focus { border-color: var(--ring); box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 20%, transparent); }
+.data-input-body .data-input-db-form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.data-input-db-form > p, .data-input-db-form > button, .data-input-ssl { grid-column: 1 / -1; }
+.data-input-ssl { display: flex; align-items: center; gap: 5px; font-size: 12px; flex-wrap: wrap; }
+.data-input-connections > div { display: flex; align-items: center; gap: 6px; border-bottom: 1px solid var(--border); }
+.data-input-connections > div > button:first-child { flex: 1; justify-content: flex-start; }
+.data-input-connections span, .data-input-layers span { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; text-align: left; }
+.data-input-connections small, .data-input-layers small { color: var(--muted-foreground); font-size: 12px; }
+.data-input-connections strong, .data-input-layers strong, .data-input-connections small, .data-input-layers small { overflow-wrap: anywhere; }
+.data-input-layers { display: flex; flex-direction: column; gap: 6px; max-height: 230px; overflow-y: auto; font-size: 13px; }
+.data-input-layers > button { height: auto; padding: 10px; justify-content: flex-start; }
+.data-input-status { display: flex; gap: 8px; align-items: center; font-size: 12px; line-height: 1.6; color: var(--muted-foreground); margin: 0; }
+.data-input-status.success { color: var(--foreground); }
+.data-input-footer { display: flex; justify-content: flex-end; }
+.data-input-online-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.data-input-ca { grid-column: 1 / -1; }
+.data-input-ca textarea { font-family: var(--font-mono, monospace); resize: vertical; }
+.data-input-ca > button { align-self: flex-start; }
+.data-input-client-tls { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--border); padding-top: 10px; }
+.data-input-client-tls > button { justify-content: space-between; padding-inline: 0; }
+.data-input-cert-files { display: flex; flex-direction: column; gap: 8px; }
+.data-input-cert-files > div { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 12px; }
+.data-input-cert-files > div > span { min-width: 76px; color: var(--muted-foreground); }
+.data-input-cert-files > div > button { min-width: 0; height: auto; min-height: 32px; white-space: normal; overflow-wrap: anywhere; }
+@media(max-width: 440px) { .data-input-body .data-input-db-form { grid-template-columns: 1fr; } }
+.data-input-auth-summary { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 4px; font-size: 13px; overflow-wrap: anywhere; }
+.data-input-auth-summary span { color: var(--text-muted); font-size: 12px; }
+.data-input-auth-summary + label { grid-column: 1 / -1; }

@@ -1,0 +1,193 @@
+{
+  "pass": true,
+  "conversationId": "data-schedule-fd56cc9d-9678-4516-a9dc-ef757e217ff2",
+  "workspace": "G:\\code\\geod-agent\\artifacts\\desktop-parity\\data-schedule-fd56cc9d-9678-4516-a9dc-ef757e217ff2",
+  "checks": [
+    "real timer creates separate pending task under confirmEach",
+    "cancels waiting occurrence and its task",
+    "real timer starts public download with full access",
+    "disabled schedule never fires",
+    "permission re-read at occurrence dispatch",
+    "immutable workspace rejects relocation before scheduled write"
+  ],
+  "records": [
+    {
+      "schedule": {
+        "id": "e96f22c8-c754-4941-b9b7-7fa463ef606f",
+        "conversationId": "data-schedule-fd56cc9d-9678-4516-a9dc-ef757e217ff2",
+        "templateTaskId": "47d44425-38ca-4857-bad7-8be1f9690f83",
+        "name": "完全访问实际定时下载",
+        "enabled": true,
+        "nextRunAt": "2026-10-02T14:29:11Z",
+        "repeatSeconds": null,
+        "appMustBeRunning": true
+      },
+      "run": {
+        "id": "904621f2-7db0-4457-8826-0a3b62aa889e",
+        "scheduleId": "e96f22c8-c754-4941-b9b7-7fa463ef606f",
+        "conversationId": "data-schedule-fd56cc9d-9678-4516-a9dc-ef757e217ff2",
+        "scheduledAt": "2026-10-02T14:29:11Z",
+        "state": "succeeded",
+        "taskId": "03ded7be-896f-4f70-ab32-6213c4d95f65",
+        "error": null,
+        "updatedAt": "2026-10-02T14:29:18Z"
+      },
+      "task": {
+        "id": "03ded7be-896f-4f70-ab32-6213c4d95f65",
+        "conversationId": "data-schedule-fd56cc9d-9678-4516-a9dc-ef757e217ff2",
+        "kind": "vector",
+        "title": "完全访问实际定时下载",
+        "status": "completed",
+        "planHash": "67125000cfa86bf2c89c41093d77a0676b7fde70b00c88d886529b182e465d07",
+        "request": {
+          "kind": "vector",
+          "spec": {
+            "source": {
+              "type": "mvt",
+              "id": "maplibre-demo-countries",
+              "name": "MapLibre 国家矢量",
+              "urlTemplate": "https://demotiles.maplibre.org/tiles/{z}/{x}/{y}.pbf",
+              "scheme": "xyz",
+              "layers": [],
+              "attribution": ""
+            },
+            "bounds": [
+              13.404,
+              52.52,
+              13.406,
+              52.522
+            ],
+            "zoomLevels": [
+              2
+            ],
+            "outputs": [
+              "geojson",
+              "gpkg"
+            ],
+            "allowPartial": false
+          }
+        },
+        "outputDir": "\\\\?\\G:\\code\\geod-agent\\artifacts\\desktop-parity\\data-schedule-fd56cc9d-9678-4516-a9dc-ef757e217ff2\\vector-20261002-142912-03ded7be",
+        "progress": {
+          "phase": "completed",
+          "completed": 1,
+          "total": 1,
+          "bytes": 69624,
+          "cacheHits": 0,
+          "failures": 0
+        },
+        "manifest": {
+          "assets": [
+            {
+              "kind": "geojson",
+              "path": "features.geojson",
+              "sha256": "4c6e4a1bbf1944733494fac7a4a8863a9ac89be610dcfe4d4636e733b72fbd68",
+              "size": 16006
+            },
+            {
+              "kind": "gpkg",
+              "path": "features.gpkg",
+              "sha256": "f1e3eb5ad0c40fae647e6eb3f2d7c92bd5146b483cbe2d34c51793c7801053e6",
+              "size": 53248
+            },
+            {
+              "kind": "preview",
+              "path": "preview.geojson",
+              "sha256": "f2ce43be0c220d2f459d6f43391bf3228af6c9f8a850da190b403b2011c83375",
+              "size": 16006
+            }
+          ],
+          "bounds": [
+            13.404,
+            52.52,
+            13.406,
+            52.522
+          ],
+          "createdAt": "2026-10-02T14:29:12.766326600+00:00",
+          "dataTimestamp": null,
+          "failures": [],
+          "featureCount": 1,
+          "planHash": "6000bf3989834ff84b9a35cf569821510c59e22e1c0cab8066f108592310f752",
+          "previewFeatureCount": 1,
+          "previewTruncated": false,
+          "schemaVersion": 1,
+          "sourceName": "MapLibre 国家矢量",
+          "tileCount": 1,
+          "warnings": [
+            "GeoJSON and GeoPackage retain complete features intersecting the requested area, excluding holes and outside features; geometry is not cut at the boundary. PBF and MBTiles retain complete selected tiles.",
+            "Vector tile exports preserve tile boundaries and buffered features; features split across tiles or zoom levels are not merged."
+          ]
+        },
+        "error": null,
+        "createdAt": "2026-10-02T14:29:12.607475900+00:00",
+        "updatedAt": "2026-10-02T14:29:16.820540+00:00"
+      }
+    },
+    {
+      "schedule": {
+        "id": "8e45ee41-8a1f-4512-a740-54ddef46f7a5",
+        "conversationId": "data-schedule-fd56cc9d-9678-4516-a9dc-ef757e217ff2",
+        "templateTaskId": "47d44425-38ca-4857-bad7-8be1f9690f83",
+        "name": "逐次确认定时测试",
+        "enabled": true,
+        "nextRunAt": "2026-10-02T14:29:07Z",
+        "repeatSeconds": null,
+        "appMustBeRunning": true
+      },
+      "run": {
+        "id": "73cd7143-020a-4a11-a6dc-0cea4a757efd",
+        "scheduleId": "8e45ee41-8a1f-4512-a740-54ddef46f7a5",
+        "conversationId": "data-schedule-fd56cc9d-9678-4516-a9dc-ef757e217ff2",
+        "scheduledAt": "2026-10-02T14:29:07Z",
+        "state": "waiting_confirmation",
+        "taskId": "94ae0d8d-3ade-45bf-99c4-4459069ec9ff",
+        "error": null,
+        "updatedAt": "2026-10-02T14:29:09Z"
+      }
+    },
+    {
+      "schedule": {
+        "id": "0ddeff6e-cb3c-4b6b-aa69-f4bfc78e4746",
+        "conversationId": "data-schedule-fd56cc9d-9678-4516-a9dc-ef757e217ff2",
+        "templateTaskId": "47d44425-38ca-4857-bad7-8be1f9690f83",
+        "name": "动态权限降级测试",
+        "enabled": true,
+        "nextRunAt": "2026-10-02T14:29:26Z",
+        "repeatSeconds": null,
+        "appMustBeRunning": true
+      },
+      "run": {
+        "id": "4bbce212-3971-443e-95d3-e01fc8c613e6",
+        "scheduleId": "0ddeff6e-cb3c-4b6b-aa69-f4bfc78e4746",
+        "conversationId": "data-schedule-fd56cc9d-9678-4516-a9dc-ef757e217ff2",
+        "scheduledAt": "2026-10-02T14:29:26Z",
+        "state": "waiting_confirmation",
+        "taskId": "655aa232-af7c-43a5-a1bd-06b20b51a9da",
+        "error": null,
+        "updatedAt": "2026-10-02T14:29:27Z"
+      }
+    },
+    {
+      "schedule": {
+        "id": "ce73d26a-29a9-4810-a4f3-abe648c1ffae",
+        "conversationId": "data-schedule-fd56cc9d-9678-4516-a9dc-ef757e217ff2",
+        "templateTaskId": "47d44425-38ca-4857-bad7-8be1f9690f83",
+        "name": "工作区变更测试",
+        "enabled": true,
+        "nextRunAt": "2026-10-02T14:29:30Z",
+        "repeatSeconds": null,
+        "appMustBeRunning": true
+      },
+      "run": {
+        "id": "ab5d9212-8761-4c7b-9888-18adde063638",
+        "scheduleId": "ce73d26a-29a9-4810-a4f3-abe648c1ffae",
+        "conversationId": "data-schedule-fd56cc9d-9678-4516-a9dc-ef757e217ff2",
+        "scheduledAt": "2026-10-02T14:29:30Z",
+        "state": "waiting_confirmation",
+        "taskId": "ddb2d1a7-4813-4ebb-a8c7-3089616564f3",
+        "error": null,
+        "updatedAt": "2026-10-02T14:29:30Z"
+      }
+    }
+  ]
+}

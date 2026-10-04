@@ -1,0 +1,165 @@
+{
+  "checkedAt": "2026-10-01",
+  "repositories": [
+    {
+      "repo": "crystaldba/postgres-mcp",
+      "url": "https://github.com/crystaldba/postgres-mcp",
+      "sha": "15c8e33353546148acc2d8bd784551cf3905d1e2",
+      "commitDate": "2026-08-16T05:33:37Z",
+      "pushedAt": "2026-08-17T05:06:35Z",
+      "stars": 3359,
+      "archived": false,
+      "license": "MIT",
+      "release": "v0.3.0",
+      "releaseDate": "2025-05-16T14:45:33Z",
+      "assets": [
+        {
+          "name": "postgres_mcp-0.3.0-py3-none-any.whl",
+          "url": "https://github.com/crystaldba/postgres-mcp/releases/download/v0.3.0/postgres_mcp-0.3.0-py3-none-any.whl"
+        },
+        {
+          "name": "postgres_mcp-0.3.0.tar.gz",
+          "url": "https://github.com/crystaldba/postgres-mcp/releases/download/v0.3.0/postgres_mcp-0.3.0.tar.gz"
+        }
+      ],
+      "testFileCount": 21
+    },
+    {
+      "repo": "pgEdge/pgedge-postgres-mcp",
+      "url": "https://github.com/pgEdge/pgedge-postgres-mcp",
+      "sha": "d451081fe88e637e61ba0c0300943d2cc9808958",
+      "commitDate": "2026-09-28T08:56:50Z",
+      "pushedAt": "2026-09-28T08:56:57Z",
+      "stars": 231,
+      "archived": false,
+      "license": "PostgreSQL",
+      "release": "v1.1.0",
+      "releaseDate": "2026-09-04T08:29:31Z",
+      "assets": [
+        {
+          "name": "checksums.txt",
+          "url": "https://github.com/pgEdge/pgedge-postgres-mcp/releases/download/v1.1.0/checksums.txt"
+        },
+        {
+          "name": "pgedge-nla-web_1.1.0_noarch.tar.gz",
+          "url": "https://github.com/pgEdge/pgedge-postgres-mcp/releases/download/v1.1.0/pgedge-nla-web_1.1.0_noarch.tar.gz"
+        },
+        {
+          "name": "pgedge-postgres-mcp-cli_1.1.0_darwin_arm64.tar.gz",
+          "url": "https://github.com/pgEdge/pgedge-postgres-mcp/releases/download/v1.1.0/pgedge-postgres-mcp-cli_1.1.0_darwin_arm64.tar.gz"
+        },
+        {
+          "name": "pgedge-postgres-mcp-cli_1.1.0_darwin_x86_64.tar.gz",
+          "url": "https://github.com/pgEdge/pgedge-postgres-mcp/releases/download/v1.1.0/pgedge-postgres-mcp-cli_1.1.0_darwin_x86_64.tar.gz"
+        },
+        {
+          "name": "pgedge-postgres-mcp-cli_1.1.0_linux_arm64.tar.gz",
+          "url": "https://github.com/pgEdge/pgedge-postgres-mcp/releases/download/v1.1.0/pgedge-postgres-mcp-cli_1.1.0_linux_arm64.tar.gz"
+        },
+        {
+          "name": "pgedge-postgres-mcp-cli_1.1.0_linux_x86_64.tar.gz",
+          "url": "https://github.com/pgEdge/pgedge-postgres-mcp/releases/download/v1.1.0/pgedge-postgres-mcp-cli_1.1.0_linux_x86_64.tar.gz"
+        },
+        {
+          "name": "pgedge-postgres-mcp-cli_1.1.0_windows_x86_64.zip",
+          "url": "https://github.com/pgEdge/pgedge-postgres-mcp/releases/download/v1.1.0/pgedge-postgres-mcp-cli_1.1.0_windows_x86_64.zip"
+        },
+        {
+          "name": "pgedge-postgres-mcp-server_1.1.0_darwin_arm64.tar.gz",
+          "url": "https://github.com/pgEdge/pgedge-postgres-mcp/releases/download/v1.1.0/pgedge-postgres-mcp-server_1.1.0_darwin_arm64.tar.gz"
+        },
+        {
+          "name": "pgedge-postgres-mcp-server_1.1.0_darwin_x86_64.tar.gz",
+          "url": "https://github.com/pgEdge/pgedge-postgres-mcp/releases/download/v1.1.0/pgedge-postgres-mcp-server_1.1.0_darwin_x86_64.tar.gz"
+        },
+        {
+          "name": "pgedge-postgres-mcp-server_1.1.0_linux_arm64.tar.gz",
+          "url": "https://github.com/pgEdge/pgedge-postgres-mcp/releases/download/v1.1.0/pgedge-postgres-mcp-server_1.1.0_linux_arm64.tar.gz"
+        },
+        {
+          "name": "pgedge-postgres-mcp-server_1.1.0_linux_x86_64.tar.gz",
+          "url": "https://github.com/pgEdge/pgedge-postgres-mcp/releases/download/v1.1.0/pgedge-postgres-mcp-server_1.1.0_linux_x86_64.tar.gz"
+        },
+        {
+          "name": "pgedge-postgres-mcp-server_1.1.0_windows_x86_64.zip",
+          "url": "https://github.com/pgEdge/pgedge-postgres-mcp/releases/download/v1.1.0/pgedge-postgres-mcp-server_1.1.0_windows_x86_64.zip"
+        }
+      ],
+      "testFileCount": 121
+    },
+    {
+      "repo": "JordanGunn/gdal-mcp",
+      "url": "https://github.com/JordanGunn/gdal-mcp",
+      "sha": "418f401c7987e388eaaee6ad13289798a1ff69b6",
+      "commitDate": "2026-05-21T22:11:32Z",
+      "pushedAt": "2026-05-25T16:51:16Z",
+      "stars": 80,
+      "archived": false,
+      "license": "MIT",
+      "release": "v1.1.3",
+      "releaseDate": "2026-02-01T06:08:15Z",
+      "assets": [],
+      "testFileCount": 25
+    },
+    {
+      "repo": "neverinfamous/postgres-mcp",
+      "url": "https://github.com/neverinfamous/postgres-mcp",
+      "sha": "eb134e81a189d21f977bc9fdb8b77a5357ac7ca9",
+      "commitDate": "2026-09-21T07:15:57Z",
+      "pushedAt": "2026-09-28T07:17:13Z",
+      "stars": 12,
+      "archived": false,
+      "license": "MIT",
+      "release": "v3.1.0",
+      "releaseDate": "2026-05-14T20:53:55Z",
+      "assets": [],
+      "testFileCount": 119
+    },
+    {
+      "repo": "receptopalak/postgis-mcp",
+      "url": "https://github.com/receptopalak/postgis-mcp",
+      "sha": "f8c00f2092be72245004b47a709c01030d845efa",
+      "commitDate": "2026-04-21T13:20:00Z",
+      "pushedAt": "2026-04-21T13:20:05Z",
+      "stars": 18,
+      "archived": false,
+      "license": null,
+      "release": null,
+      "releaseDate": null,
+      "assets": [],
+      "testFileCount": 2
+    },
+    {
+      "repo": "microsoft/postgres-mcp",
+      "url": "https://github.com/microsoft/postgres-mcp",
+      "sha": "4e69353c5626b2418e05e199c1eead6b2b7def44",
+      "commitDate": "2026-09-04T17:53:07Z",
+      "pushedAt": "2026-09-04T17:53:07Z",
+      "stars": 30,
+      "archived": false,
+      "license": "MIT",
+      "release": null,
+      "releaseDate": null,
+      "assets": [],
+      "testFileCount": 0
+    },
+    {
+      "repo": "googleapis/mcp-toolbox",
+      "url": "https://github.com/googleapis/mcp-toolbox",
+      "sha": "912189f6c842fdf8fc6ceb7d7a556cf9fa05286b",
+      "commitDate": "2026-09-30T19:49:56Z",
+      "pushedAt": "2026-10-01T10:16:55Z",
+      "stars": 16544,
+      "archived": false,
+      "license": "Apache-2.0",
+      "release": "v1.13.1",
+      "releaseDate": "2026-09-25T23:10:25Z",
+      "assets": [],
+      "googleHashHeader": "crc32c=cfAfhg==,md5=HWLjWzKyStxGhruaezABkw==",
+      "binaryUrl": "https://storage.googleapis.com/mcp-toolbox-for-databases/v1.13.1/windows/amd64/toolbox.exe",
+      "binarySha256": "fbc00ac9d5be48c5c9948189a33db800087f9bd71778ac1c9c401fcb72a59582",
+      "binaryBytes": 293772440,
+      "testFileCount": 546
+    }
+  ]
+}

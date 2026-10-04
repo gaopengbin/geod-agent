@@ -1,0 +1,15 @@
+{
+  "name": "pgEdge PostgreSQL MCP",
+  "version": "1.1.0",
+  "platform": "windows-x86_64",
+  "license": "PostgreSQL",
+  "repository": "https://github.com/pgEdge/pgedge-postgres-mcp",
+  "release": "https://github.com/pgEdge/pgedge-postgres-mcp/releases/tag/v1.1.0",
+  "archive": "https://github.com/pgEdge/pgedge-postgres-mcp/releases/download/v1.1.0/pgedge-postgres-mcp-server_1.1.0_windows_x86_64.zip",
+  "checksums": "https://github.com/pgEdge/pgedge-postgres-mcp/releases/download/v1.1.0/checksums.txt",
+  "archiveSha256": "6db8f45f8f3d04d3637def1f095bdf70e5999dfb1d1ca61c0f2da2a6564ca885",
+  "files": {
+    "pgedge-postgres-mcp.exe": "8640a0d089284dc0a2005c550dc1c08f88a4c4b1e333f6f11b9bd8bd35766dae",
+    "LICENSE.md": "38d83d6bafd6c82cccbd6b180ab36a7ebbb0a3871e15c6aee511b709012217c8"
+  }
+}

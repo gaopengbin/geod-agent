@@ -1,0 +1,38 @@
+[
+  {
+    "id": "osm",
+    "name": "OpenStreetMap",
+    "type": "tile",
+    "visible": true,
+    "opacity": 1,
+    "zIndex": 0,
+    "state": "ready",
+    "sourceId": null,
+    "jobId": null,
+    "kind": null
+  },
+  {
+    "id": "artifact-24d0c5b5-8276-4e2f-a73a-fe38a00117e9-imagery-z12",
+    "name": "驻马店市影像",
+    "type": "raster",
+    "visible": true,
+    "opacity": 1,
+    "zIndex": 750,
+    "state": "ready",
+    "sourceId": null,
+    "jobId": "24d0c5b5-8276-4e2f-a73a-fe38a00117e9",
+    "kind": "downloaded-geotiff"
+  },
+  {
+    "id": "artifact-519a34f9-c709-4ac8-a382-b77c55882be0-imagery-z11",
+    "name": "信阳市影像",
+    "type": "raster",
+    "visible": true,
+    "opacity": 1,
+    "zIndex": 750,
+    "state": "ready",
+    "sourceId": null,
+    "jobId": "519a34f9-c709-4ac8-a382-b77c55882be0",
+    "kind": "downloaded-geotiff"
+  }
+]

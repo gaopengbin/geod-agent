@@ -1,0 +1,664 @@
+{
+  "createdAt": "2026-10-02T06:28:27.784Z",
+  "records": [
+    {
+      "name": "一次真实图源定时",
+      "conversationId": "f2dedf82-a383-42ea-b6dd-3e753cf441bb",
+      "schedule": {
+        "scheduleId": "schedule-c6e8c171a9d54a601358ad78910673fe194e681823198e084aa5b1f4baed8ade",
+        "conversationId": "f2dedf82-a383-42ea-b6dd-3e753cf441bb",
+        "name": "一次真实图源定时",
+        "enabled": true,
+        "nextRunAt": "2026-10-02T06:26:55.250Z",
+        "repeatSeconds": null,
+        "maxRetries": 2,
+        "sourceId": "esri-world-imagery",
+        "zoomLevels": [
+          10
+        ],
+        "appMustBeRunning": true
+      },
+      "run": {
+        "runId": "87430c54-3e83-4fff-bb24-f8a36dd01fea",
+        "scheduleId": "schedule-c6e8c171a9d54a601358ad78910673fe194e681823198e084aa5b1f4baed8ade",
+        "scheduledAt": "2026-10-02T06:26:55.250Z",
+        "state": "succeeded",
+        "attempt": 1,
+        "nextAttemptAt": "2026-10-02T06:26:56.871916700Z",
+        "leaseUntil": "2026-10-02T06:27:14.914404100Z",
+        "leaseOwner": "54cdfc68-3a96-4f48-88b4-48576b8c0e87",
+        "planId": "tool-8ebf622d656883938ed4b5759f0c0e4a9cbc30f1dc00c3564552c5ff81ee4889",
+        "jobId": "8d8292e5-bb94-4daa-967f-d480f28a37b3",
+        "errorCode": null,
+        "finishedAt": "2026-10-02T06:26:59.919079200Z"
+      },
+      "outputDirectory": "\\\\?\\C:\\Users\\Administrator\\AppData\\Local\\Temp\\geod-schedule-f2dedf82-a383-42ea-b6dd-3e753cf441bb\\imagery-20261002-062655-87430c54",
+      "quality": {
+        "status": "complete",
+        "missingTiles": 0,
+        "warnings": []
+      },
+      "raster": {
+        "jobId": "8d8292e5-bb94-4daa-967f-d480f28a37b3",
+        "assetId": "imagery-z10",
+        "sha256": "4bb123855f4729c4cde32256983afe51c41cd2c7a75621d20f2f6f6c62de051d",
+        "width": 147,
+        "height": 190,
+        "maxStripBytes": 111720,
+        "samples": [
+          97,
+          98,
+          58,
+          255,
+          81,
+          89,
+          50,
+          255,
+          110,
+          123,
+          80,
+          255,
+          80,
+          86,
+          48,
+          255,
+          118,
+          118,
+          80,
+          255,
+          87,
+          89,
+          49,
+          255,
+          79,
+          89,
+          54,
+          255,
+          105,
+          111,
+          77,
+          255,
+          100,
+          100,
+          62,
+          255,
+          78,
+          80,
+          41,
+          255,
+          90,
+          97,
+          63,
+          255,
+          96,
+          100,
+          67,
+          255,
+          96,
+          93,
+          58,
+          255,
+          93,
+          90,
+          55,
+          255,
+          73,
+          77,
+          44,
+          255,
+          72,
+          73,
+          41,
+          255
+        ],
+        "protocol": "http",
+        "dataTile": {
+          "type": "Uint8Array",
+          "bandCount": 5,
+          "length": 327680,
+          "nonzeroValues": 175222
+        }
+      }
+    },
+    {
+      "name": "重复触发暂存",
+      "conversationId": "f2dedf82-a383-42ea-b6dd-3e753cf441bb",
+      "schedule": {
+        "scheduleId": "schedule-fe1d997c7c744a6a2305f800e510982f47015bae47a9ed0c45d605c48b5fcf21",
+        "conversationId": "f2dedf82-a383-42ea-b6dd-3e753cf441bb",
+        "name": "重复触发暂存",
+        "enabled": true,
+        "nextRunAt": "2026-10-02T06:27:02.998Z",
+        "repeatSeconds": 60,
+        "maxRetries": 2,
+        "sourceId": "esri-world-imagery",
+        "zoomLevels": [
+          10
+        ],
+        "appMustBeRunning": true
+      },
+      "run": {
+        "runId": "49fbec93-7241-4ff3-b6f2-5cc6d38367b5",
+        "scheduleId": "schedule-fe1d997c7c744a6a2305f800e510982f47015bae47a9ed0c45d605c48b5fcf21",
+        "scheduledAt": "2026-10-02T06:27:02.998Z",
+        "state": "succeeded",
+        "attempt": 1,
+        "nextAttemptAt": "2026-10-02T06:27:02.930859300Z",
+        "leaseUntil": "2026-10-02T06:27:20.955341600Z",
+        "leaseOwner": "54cdfc68-3a96-4f48-88b4-48576b8c0e87",
+        "planId": "tool-8869348f3efa589b3c858b7106218499863af6092d98c6f6452301c7e1cb9a9a",
+        "jobId": "4a265aa3-8691-41ba-87ae-cc7325e5ae99",
+        "errorCode": null,
+        "finishedAt": "2026-10-02T06:27:05.960052200Z"
+      },
+      "outputDirectory": "\\\\?\\C:\\Users\\Administrator\\AppData\\Local\\Temp\\geod-schedule-f2dedf82-a383-42ea-b6dd-3e753cf441bb\\imagery-20261002-062702-49fbec93",
+      "quality": {
+        "status": "complete",
+        "missingTiles": 0,
+        "warnings": []
+      },
+      "raster": {
+        "jobId": "4a265aa3-8691-41ba-87ae-cc7325e5ae99",
+        "assetId": "imagery-z10",
+        "sha256": "4bb123855f4729c4cde32256983afe51c41cd2c7a75621d20f2f6f6c62de051d",
+        "width": 147,
+        "height": 190,
+        "maxStripBytes": 111720,
+        "samples": [
+          97,
+          98,
+          58,
+          255,
+          81,
+          89,
+          50,
+          255,
+          110,
+          123,
+          80,
+          255,
+          80,
+          86,
+          48,
+          255,
+          118,
+          118,
+          80,
+          255,
+          87,
+          89,
+          49,
+          255,
+          79,
+          89,
+          54,
+          255,
+          105,
+          111,
+          77,
+          255,
+          100,
+          100,
+          62,
+          255,
+          78,
+          80,
+          41,
+          255,
+          90,
+          97,
+          63,
+          255,
+          96,
+          100,
+          67,
+          255,
+          96,
+          93,
+          58,
+          255,
+          93,
+          90,
+          55,
+          255,
+          73,
+          77,
+          44,
+          255,
+          72,
+          73,
+          41,
+          255
+        ],
+        "protocol": "http",
+        "dataTile": {
+          "type": "Uint8Array",
+          "bandCount": 5,
+          "length": 327680,
+          "nonzeroValues": 175222
+        }
+      }
+    },
+    {
+      "name": "逐次确认待处理",
+      "schedule": {
+        "scheduleId": "schedule-2e61cff93df63d48e2ff5e08a988185b09fe97302c4cc673e47f13c83a3c1202",
+        "conversationId": "3ba34714-55e8-422c-841f-deb362c46083",
+        "name": "逐次确认待处理",
+        "enabled": true,
+        "nextRunAt": "2026-10-02T06:27:10.689Z",
+        "repeatSeconds": null,
+        "maxRetries": 2,
+        "sourceId": "esri-world-imagery",
+        "zoomLevels": [
+          10
+        ],
+        "appMustBeRunning": true
+      },
+      "run": {
+        "runId": "9184ce6d-8533-49f9-97f4-7b2f3b9258f0",
+        "scheduleId": "schedule-2e61cff93df63d48e2ff5e08a988185b09fe97302c4cc673e47f13c83a3c1202",
+        "scheduledAt": "2026-10-02T06:27:10.689Z",
+        "state": "waiting_confirmation",
+        "attempt": 1,
+        "nextAttemptAt": "2026-10-02T06:27:12.000374200Z",
+        "leaseUntil": "2026-10-02T06:27:27.003728500Z",
+        "leaseOwner": "54cdfc68-3a96-4f48-88b4-48576b8c0e87",
+        "planId": "tool-b2a6aa071feb2bcda5b8a33737d2f1a1911523814345c71518814e88cf5f053a",
+        "jobId": null,
+        "errorCode": null,
+        "finishedAt": null
+      },
+      "cancelled": true,
+      "noJobStarted": true
+    },
+    {
+      "name": "临时错误恢复",
+      "conversationId": "57bd4008-80e4-4630-8896-df90a2c9ed09",
+      "schedule": {
+        "scheduleId": "schedule-7dfde235f599a24775ad7bd1d1e4f18df45851753c8564046f4222278f3c83f2",
+        "conversationId": "57bd4008-80e4-4630-8896-df90a2c9ed09",
+        "name": "临时错误恢复",
+        "enabled": true,
+        "nextRunAt": "2026-10-02T06:27:20.478Z",
+        "repeatSeconds": null,
+        "maxRetries": 1,
+        "sourceId": "schedule-retry-79009c79-512a-46eb-a0ae-1f365c255f65",
+        "zoomLevels": [
+          10
+        ],
+        "appMustBeRunning": true
+      },
+      "run": {
+        "runId": "96f64954-6243-4f40-a9a6-db7836abc0ea",
+        "scheduleId": "schedule-7dfde235f599a24775ad7bd1d1e4f18df45851753c8564046f4222278f3c83f2",
+        "scheduledAt": "2026-10-02T06:27:20.478Z",
+        "state": "succeeded",
+        "attempt": 2,
+        "nextAttemptAt": "2026-10-02T06:28:24.254583200Z",
+        "leaseUntil": "2026-10-02T06:28:42.402107Z",
+        "leaseOwner": "54cdfc68-3a96-4f48-88b4-48576b8c0e87",
+        "planId": "tool-33430a50e9f541d3b506a4caec5283e42a476b2bf97da501f704c4c07393f0ff",
+        "jobId": "33ed81a1-d767-4f91-820d-ee47402ac239",
+        "errorCode": null,
+        "finishedAt": "2026-10-02T06:28:27.406890400Z"
+      },
+      "outputDirectory": "\\\\?\\C:\\Users\\Administrator\\AppData\\Local\\Temp\\geod-schedule-57bd4008-80e4-4630-8896-df90a2c9ed09\\imagery-20261002-062720-96f64954",
+      "quality": {
+        "status": "complete",
+        "missingTiles": 0,
+        "warnings": []
+      },
+      "raster": {
+        "jobId": "33ed81a1-d767-4f91-820d-ee47402ac239",
+        "assetId": "imagery-z10",
+        "sha256": "5c37ffa896ebf637b05f4592287b6804de9ca964b01ee50bdd2f650ec88ec9c4",
+        "width": 147,
+        "height": 190,
+        "maxStripBytes": 111720,
+        "samples": [
+          97,
+          98,
+          58,
+          255,
+          81,
+          89,
+          50,
+          255,
+          110,
+          123,
+          80,
+          255,
+          80,
+          86,
+          48,
+          255,
+          118,
+          118,
+          80,
+          255,
+          87,
+          89,
+          49,
+          255,
+          79,
+          89,
+          54,
+          255,
+          105,
+          111,
+          77,
+          255,
+          100,
+          100,
+          62,
+          255,
+          78,
+          80,
+          41,
+          255,
+          90,
+          97,
+          63,
+          255,
+          96,
+          100,
+          67,
+          255,
+          96,
+          93,
+          58,
+          255,
+          93,
+          90,
+          55,
+          255,
+          73,
+          77,
+          44,
+          255,
+          72,
+          73,
+          41,
+          255
+        ],
+        "protocol": "http",
+        "dataTile": {
+          "type": "Uint8Array",
+          "bandCount": 5,
+          "length": 327680,
+          "nonzeroValues": 175221
+        }
+      },
+      "failedRun": {
+        "runId": "96f64954-6243-4f40-a9a6-db7836abc0ea",
+        "scheduleId": "schedule-7dfde235f599a24775ad7bd1d1e4f18df45851753c8564046f4222278f3c83f2",
+        "scheduledAt": "2026-10-02T06:27:20.478Z",
+        "state": "retrying",
+        "attempt": 1,
+        "nextAttemptAt": "2026-10-02T06:28:24.254583200Z",
+        "leaseUntil": "2026-10-02T06:28:09.244561Z",
+        "leaseOwner": "54cdfc68-3a96-4f48-88b4-48576b8c0e87",
+        "planId": "tool-33430a50e9f541d3b506a4caec5283e42a476b2bf97da501f704c4c07393f0ff",
+        "jobId": "33ed81a1-d767-4f91-820d-ee47402ac239",
+        "errorCode": "SOURCE_TEMPORARY",
+        "finishedAt": null
+      },
+      "http503Requests": 12,
+      "http200Requests": 2,
+      "declaredLocalFaultFixture": true
+    }
+  ],
+  "preRestartPass": true,
+  "restart": {
+    "t": {
+      "conversationId": "1641149e-3b34-47f2-877b-93aed5896f70",
+      "directory": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\geod-schedule-1641149e-3b34-47f2-877b-93aed5896f70",
+      "plan": {
+        "planId": "tool-e32742e295dfadfbf814609e2160c0d3ff6d6baee83d3f3f5aeade29b392a6b8",
+        "plan": {
+          "schemaVersion": "0.1",
+          "spec": {
+            "schemaVersion": "0.1",
+            "kind": "imagery",
+            "sourceId": "esri-world-imagery",
+            "bounds": [
+              116.1,
+              39.6,
+              116.3,
+              39.8
+            ],
+            "boundary": {
+              "polygons": [
+                [
+                  [
+                    [
+                      116.1,
+                      39.6
+                    ],
+                    [
+                      116.3,
+                      39.6
+                    ],
+                    [
+                      116.3,
+                      39.8
+                    ],
+                    [
+                      116.1,
+                      39.8
+                    ],
+                    [
+                      116.1,
+                      39.6
+                    ]
+                  ],
+                  [
+                    [
+                      116.15,
+                      39.65
+                    ],
+                    [
+                      116.2,
+                      39.65
+                    ],
+                    [
+                      116.2,
+                      39.7
+                    ],
+                    [
+                      116.15,
+                      39.7
+                    ],
+                    [
+                      116.15,
+                      39.65
+                    ]
+                  ]
+                ]
+              ]
+            },
+            "zoomLevels": [
+              10
+            ],
+            "outputFormats": [
+              "geotiff"
+            ],
+            "outputDirectory": "\\\\?\\C:\\Users\\Administrator\\AppData\\Local\\Temp\\geod-schedule-1641149e-3b34-47f2-877b-93aed5896f70\\imagery-20261002-062938-71dd07a1-boundary",
+            "limits": {
+              "maxTiles": 4096,
+              "maxDecodedRgbaBytes": 536870912
+            }
+          },
+          "sourceName": "Esri World Imagery",
+          "attribution": "Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community",
+          "license": "",
+          "sourceFingerprint": "b178c5c3a9c4e490cccff6195663c645cae1f8288249414c1fa7756ef039e2cb",
+          "policyVersion": "imagery-plan-0.1",
+          "tileGrids": [
+            {
+              "zoom": 10,
+              "xMin": 842,
+              "yMin": 388,
+              "xMax": 842,
+              "yMax": 389,
+              "columns": 1,
+              "rows": 2,
+              "tileCount": 2,
+              "pixelWidth": 256,
+              "pixelHeight": 512,
+              "actualBounds": [
+                116.015625,
+                39.36827914916013,
+                116.3671875,
+                39.909736234537185
+              ]
+            }
+          ],
+          "totalTiles": 2,
+          "decodedRgbaBytes": 524288,
+          "requiredFreeDiskBytes": 18939904,
+          "createdAt": "2026-10-02T06:29:38.547123300Z",
+          "expiresAt": "2026-10-02T06:59:38.547123300Z",
+          "planHash": "042b5107ba89d97b63acb874d627784d44a9a2f2ffb78cac2f108468fd729ca3"
+        }
+      }
+    },
+    "schedule": {
+      "scheduleId": "schedule-1c267f71f9665d50a68328f18e4e2b61246f177bffc6a8e50e4af75ca32b6fc2",
+      "conversationId": "1641149e-3b34-47f2-877b-93aed5896f70",
+      "name": "关闭期间补执行",
+      "enabled": true,
+      "nextRunAt": "2026-10-02T06:29:53.553Z",
+      "repeatSeconds": 60,
+      "maxRetries": 2,
+      "sourceId": "esri-world-imagery",
+      "zoomLevels": [
+        10
+      ],
+      "appMustBeRunning": true
+    },
+    "preparedAt": "2026-10-02T06:29:38.567Z",
+    "result": {
+      "name": "关闭期间补执行",
+      "conversationId": "1641149e-3b34-47f2-877b-93aed5896f70",
+      "schedule": {
+        "scheduleId": "schedule-1c267f71f9665d50a68328f18e4e2b61246f177bffc6a8e50e4af75ca32b6fc2",
+        "conversationId": "1641149e-3b34-47f2-877b-93aed5896f70",
+        "name": "关闭期间补执行",
+        "enabled": true,
+        "nextRunAt": "2026-10-02T06:29:53.553Z",
+        "repeatSeconds": 60,
+        "maxRetries": 2,
+        "sourceId": "esri-world-imagery",
+        "zoomLevels": [
+          10
+        ],
+        "appMustBeRunning": true
+      },
+      "run": {
+        "runId": "4d1b1570-b284-4abf-8f7b-797017b4a015",
+        "scheduleId": "schedule-1c267f71f9665d50a68328f18e4e2b61246f177bffc6a8e50e4af75ca32b6fc2",
+        "scheduledAt": "2026-10-02T06:29:53.553Z",
+        "state": "succeeded",
+        "attempt": 1,
+        "nextAttemptAt": "2026-10-02T06:31:04.258031500Z",
+        "leaseUntil": "2026-10-02T06:31:22.300208Z",
+        "leaseOwner": "f43547fc-a838-4c78-81c2-40997f9e169c",
+        "planId": "tool-3e2ee3b0038d97d54ea157707e1df3659a36e05bf6503844f4747e82cffdad44",
+        "jobId": "e6f001cb-0d69-4247-ac3b-d93665643985",
+        "errorCode": null,
+        "finishedAt": "2026-10-02T06:31:07.304811800Z"
+      },
+      "outputDirectory": "\\\\?\\C:\\Users\\Administrator\\AppData\\Local\\Temp\\geod-schedule-1641149e-3b34-47f2-877b-93aed5896f70\\imagery-20261002-062953-4d1b1570",
+      "quality": {
+        "status": "complete",
+        "missingTiles": 0,
+        "warnings": []
+      },
+      "raster": {
+        "jobId": "e6f001cb-0d69-4247-ac3b-d93665643985",
+        "assetId": "imagery-z10",
+        "sha256": "4bb123855f4729c4cde32256983afe51c41cd2c7a75621d20f2f6f6c62de051d",
+        "width": 147,
+        "height": 190,
+        "maxStripBytes": 111720,
+        "samples": [
+          97,
+          98,
+          58,
+          255,
+          81,
+          89,
+          50,
+          255,
+          110,
+          123,
+          80,
+          255,
+          80,
+          86,
+          48,
+          255,
+          118,
+          118,
+          80,
+          255,
+          87,
+          89,
+          49,
+          255,
+          79,
+          89,
+          54,
+          255,
+          105,
+          111,
+          77,
+          255,
+          100,
+          100,
+          62,
+          255,
+          78,
+          80,
+          41,
+          255,
+          90,
+          97,
+          63,
+          255,
+          96,
+          100,
+          67,
+          255,
+          96,
+          93,
+          58,
+          255,
+          93,
+          90,
+          55,
+          255,
+          73,
+          77,
+          44,
+          255,
+          72,
+          73,
+          41,
+          255
+        ],
+        "protocol": "http",
+        "dataTile": {
+          "type": "Uint8Array",
+          "bandCount": 5,
+          "length": 327680,
+          "nonzeroValues": 175222
+        }
+      }
+    },
+    "pass": true
+  },
+  "pass": true
+}

@@ -26,8 +26,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         return Err("Both parent directories must already exist".into());
     }
-    let source = HttpSource {
-        id: "usgs-naip-plus-conus".into(),
+    let source = HttpSource { subdomains: Vec::new(), coordinate_system: None, elevation_encoding: None, id: "usgs-naip-plus-conus".into(),
         name: "USGS NAIP Plus (CONUS)".into(),
         attribution: "USGS, USDA, The National Map: Orthoimagery".into(),
         license: "USGS The National Map public-domain CONUS imagery".into(),
@@ -35,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         scheme: HttpTileScheme::XYZ,
         tile_size,
         network_policy: NetworkPolicy::PublicHttps,
-        min_interval_ms: 500,
+        min_interval_ms: 500, authentication: None, runtime_token: None,
     };
     let mut store = TaskStore::open(&database)?;
     // This example's explicit USGS source is the only permitted source here.
@@ -48,6 +47,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         boundary: None,
         zoom_levels: vec![12],
         output_formats: vec![OutputFormat::GeoTiff, OutputFormat::Mbtiles],
+        export_options: None,
         output_directory: output.to_string_lossy().into_owned(),
         limits: ResourceLimits {
             max_tiles: 4,

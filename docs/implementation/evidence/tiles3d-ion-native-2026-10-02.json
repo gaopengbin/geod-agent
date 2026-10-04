@@ -1,0 +1,164 @@
+{
+  "pass": true,
+  "checkedAt": "2026-10-02T15:30:47.714Z",
+  "conversationId": "ion-buildings-4d47a261-2cd6-41e1-ae3d-473831f572bd",
+  "connectionId": "65aad306-8dcc-453f-a01b-123efc55a64d",
+  "bounds": [
+    116.456,
+    39.91,
+    116.461,
+    39.915
+  ],
+  "workspace": "G:\\code\\geod-agent\\artifacts\\desktop-parity\\ion-buildings-4d47a261-2cd6-41e1-ae3d-473831f572bd",
+  "limits": {
+    "native": {
+      "concurrency": 8,
+      "maxResources": 100000,
+      "maxAssetBytes": 268435456,
+      "maxTotalBytes": 107374182400
+    },
+    "monitoring": {
+      "timeoutMs": 180000,
+      "maxObservedBytes": 134217728,
+      "maxObservedResources": 512,
+      "mode": "cancel after observation; not a hard transfer cap"
+    }
+  },
+  "checks": [
+    "approved native plan binds existing connection revision and small Beijing range",
+    "real Ion native worker completed",
+    "offline manifest matches approved connection and extent",
+    "contains actual 3D content",
+    "independent file sizes and SHA256 match every manifest resource"
+  ],
+  "assetId": 96188,
+  "connectionRevision": "63528a8b-84fe-4c08-9ab3-538041dc7acb",
+  "taskId": "560bcca1-fe3e-416c-9341-38d9a4a6b792",
+  "outputDirectory": "\\\\?\\G:\\code\\geod-agent\\artifacts\\desktop-parity\\ion-buildings-4d47a261-2cd6-41e1-ae3d-473831f572bd\\tiles3d-20261002-153047-560bcca1",
+  "manifest": {
+    "bounds": [
+      116.456,
+      39.91,
+      116.461,
+      39.915
+    ],
+    "entrypoint": "tileset.json",
+    "resources": [
+      {
+        "bytes": 1015,
+        "kind": "tileset",
+        "path": "assets/069092f8d5dcdb8668b05b79a83e2c936fcc69b0c53cd615e7cad3471d51ad02.json",
+        "sha256": "3383b5988e10bbdf1d93c27700d5b79dedcc582b3ac7c50bcde2358a27ad2e3f"
+      },
+      {
+        "bytes": 1357976,
+        "kind": "b3dm",
+        "path": "assets/131c7d4c169aa81e5f46d71a58b64c1b36cd1de85c66cfde0aa6b9a6562ecac8.b3dm",
+        "sha256": "1d4fef32f63ede09446a6681b03e28ddb5b156daa808580549b6b3a064bd6823"
+      },
+      {
+        "bytes": 485704,
+        "kind": "b3dm",
+        "path": "assets/230095caffe554d3cf938a5be2eaff7a7e44769ebce514637fe40ca93edbe5df.b3dm",
+        "sha256": "99fa37b1a17bddc19c2a8edb0a6057958e70ab2714907c9c79b36629474b2bab"
+      },
+      {
+        "bytes": 1223928,
+        "kind": "b3dm",
+        "path": "assets/2f59625e6a2db91568e11682c36c4e88fee0d73c9af849f94679c4a1653eecb0.b3dm",
+        "sha256": "740932218d921c02ee8482a619257d8a6854951dbd6b4a62b06353302870d8f4"
+      },
+      {
+        "bytes": 731,
+        "kind": "tileset",
+        "path": "assets/5a59e9c5f7d9c95e0cb47d66068ea30f0282f09cd3295202b9d580c91832bb83.json",
+        "sha256": "61c1c5dc513daeb0e69958e23a0e96acec3d443186d2139458009c21d00be7c2"
+      },
+      {
+        "bytes": 400,
+        "kind": "b3dm",
+        "path": "assets/5c2c555d64587b74461fa018089090b62eb7736dfae7fe8fcd0aaf2855780233.b3dm",
+        "sha256": "287706df494d6f3e0a359e8a406abecd462fa4655f35f3fe3f8e15d9ca0e20a0"
+      },
+      {
+        "bytes": 97688,
+        "kind": "b3dm",
+        "path": "assets/61021362cb785f132fc51cde0d34c09070460599baf9206331baf116049a4043.b3dm",
+        "sha256": "28505b9d99b4dc34f9cb1c186ab6ee21299b2729387e8c52a0cf866ac0fefcb9"
+      },
+      {
+        "bytes": 1284776,
+        "kind": "b3dm",
+        "path": "assets/6c09762ef4c80241353eb8a37dd75d2a9cfc8e5122288893cbcbded1712d521a.b3dm",
+        "sha256": "bbf7734689543fb1588f0ee91c40056d08393498958eb240cc5863f60b649871"
+      },
+      {
+        "bytes": 389304,
+        "kind": "b3dm",
+        "path": "assets/81ccb662ee62891467adfc8bf42093b2030074a43e0d14ff424b74fba8f6564a.b3dm",
+        "sha256": "904527327c1bdda1d4f82c2786343cc18ea29c5d385e408ea350a9239cdaea21"
+      },
+      {
+        "bytes": 1318840,
+        "kind": "b3dm",
+        "path": "assets/85c0844fa44702c458fe03a09c6949434df9f7b86d1ed723ad6b5ee819572b21.b3dm",
+        "sha256": "7de346f3a6b9fd5a53d8a24e94784c490e7636960eca54f5564cbdd44ca9efc2"
+      },
+      {
+        "bytes": 1246184,
+        "kind": "b3dm",
+        "path": "assets/b4e23c1967d1fcf9a4e5212f35b09a3c45ab383482c2cf28ee3e6857169b1ba0.b3dm",
+        "sha256": "2a2f1675c8505a132ffaf4cfa00b5ba4f08e4293088ae70ec37d6657a68fc3c8"
+      },
+      {
+        "bytes": 2423,
+        "kind": "tileset",
+        "path": "assets/c7123495f82fa4e783b736c508aefb9852ec99bb915a06453fc0e604f96da004.json",
+        "sha256": "2b89ca1c7547cccddf859fb9d6c3ab0b20e440a4a601e1070f69b87d7881abc5"
+      },
+      {
+        "bytes": 1437216,
+        "kind": "b3dm",
+        "path": "assets/d16c1013659b78dc6bf0a8b075500802569791dde725f27e95fd4747edb8c573.b3dm",
+        "sha256": "12150c34872215513e58a0aeb6920927e3f771bf0a1e8e513c19a2d503c19e51"
+      },
+      {
+        "bytes": 1132,
+        "kind": "tileset",
+        "path": "assets/d33ca6b33c2e00c52e425d114fa4bff52885aa0c1da8731f2717b73c33289b4e.json",
+        "sha256": "e17430534f784492639846f0e1726da154831361ae6588762fb570a0ec63d3e1"
+      },
+      {
+        "bytes": 17616,
+        "kind": "b3dm",
+        "path": "assets/eda9d595d0176d90be36bfb00adb36913661f753bf192677fc23a9aaf7af6f73.b3dm",
+        "sha256": "858e0b21bbb97fc317c660e8fc62a42f0e2ca8eeb689b4747d6ad388e1188708"
+      },
+      {
+        "bytes": 255304,
+        "kind": "b3dm",
+        "path": "assets/f9a24bf0178eb8cae0ced478ba7a5eef88b932f53484907f56458b2ec3897b02.b3dm",
+        "sha256": "bc15f9c62aed3ac15e5ad449c81012ee10b0fb501668bff0b9aaac3f6c678bbf"
+      },
+      {
+        "bytes": 221896,
+        "kind": "b3dm",
+        "path": "assets/ff1cb97e53dd43c1e3f931e04e557b50a5b40c60e65a089690bf2e6979ce127b.b3dm",
+        "sha256": "d0d0875a0d2490b0d7db925879de6a6274f73cd38158606fc3d389792d1168c3"
+      },
+      {
+        "bytes": 1157,
+        "kind": "tileset",
+        "path": "tileset.json",
+        "sha256": "d2f117d3541f786499cce5a61ac3fe0233570a1ddd22677686bcc7f6cf031cb4"
+      }
+    ],
+    "schemaVersion": 1,
+    "selectedTiles": 19,
+    "sourceFingerprint": "67a8af13c2bcf09868db1c1edd79c949e9d831625c34b484237c72517993cbb6",
+    "totalBytes": 9343290,
+    "warnings": []
+  },
+  "visualPreview": "not evaluated by this script; inspect actual rendered Beijing buildings separately",
+  "durationMs": 8976
+}

@@ -1,0 +1,18 @@
+{
+  "pass": true,
+  "conversationId": "data-schedule-ui-0b686e0c-d9cd-4a5d-8f28-1db4dc483269",
+  "taskId": "a56c8c8c-5cff-43fe-b751-baf0b04e0037",
+  "checks": [
+    "real native schedule creation",
+    "styled frequency selector",
+    "pause",
+    "resume",
+    "reload",
+    "light dark and narrow render"
+  ],
+  "layout": {
+    "width": 300,
+    "scroll": 300
+  },
+  "errors": []
+}

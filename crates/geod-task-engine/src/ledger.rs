@@ -14,7 +14,7 @@ use std::{
 };
 use uuid::Uuid;
 
-const DB_VERSION: i64 = 2;
+const DB_VERSION: i64 = 4;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -24,7 +24,7 @@ pub struct LedgerError {
 }
 
 impl LedgerError {
-    fn new(code: &'static str, message: impl Into<String>) -> Self {
+    pub(crate) fn new(code: &'static str, message: impl Into<String>) -> Self {
         Self {
             code,
             message: message.into(),
@@ -75,7 +75,8 @@ pub struct Approval {
 pub struct RegisteredSource {
     pub descriptor: SourceDescriptor,
     pub endpoint: HttpSource,
-    pub permission_confirmed_at: DateTime<Utc>,
+    #[serde(alias = "permissionConfirmedAt")]
+    pub configured_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -121,7 +122,7 @@ pub struct JobEvent {
 }
 
 pub struct TaskStore {
-    conn: Connection,
+    pub(crate) conn: Connection,
     db_path: PathBuf,
 }
 
@@ -187,29 +188,62 @@ impl TaskStore {
                  COMMIT;",
             )?;
         }
+        if version < 3 {
+            if version != 0 {
+                let backup = path.with_extension(format!("pre-v3-{}.sqlite", Uuid::new_v4()));
+                conn.execute("VACUUM INTO ?1", [backup.to_string_lossy().as_ref()])?;
+            }
+            conn.execute_batch(
+                "BEGIN IMMEDIATE;
+                 CREATE TABLE boundaries (
+                   boundary_id TEXT PRIMARY KEY,
+                   conversation_id TEXT NOT NULL,
+                   body TEXT NOT NULL
+                 );
+                 CREATE INDEX boundaries_conversation ON boundaries(conversation_id);
+                 PRAGMA user_version=3;
+                 COMMIT;",
+            )?;
+        }
+        if version < 4 {
+            if version != 0 {
+                let backup = path.with_extension(format!("pre-v4-{}.sqlite", Uuid::new_v4()));
+                conn.execute("VACUUM INTO ?1", [backup.to_string_lossy().as_ref()])?;
+            }
+            conn.execute_batch(
+                "BEGIN IMMEDIATE;
+                 CREATE TABLE schedules (
+                   schedule_id TEXT PRIMARY KEY, owner_id TEXT NOT NULL,
+                   conversation_id TEXT NOT NULL, enabled INTEGER NOT NULL,
+                   next_run_at INTEGER NOT NULL, body TEXT NOT NULL
+                 );
+                 CREATE INDEX schedules_due ON schedules(enabled,next_run_at);
+                 CREATE TABLE schedule_runs (
+                   run_id TEXT PRIMARY KEY, schedule_id TEXT NOT NULL REFERENCES schedules(schedule_id),
+                   scheduled_at INTEGER NOT NULL, state TEXT NOT NULL,
+                   body TEXT NOT NULL, UNIQUE(schedule_id,scheduled_at)
+                 );
+                 PRAGMA user_version=4;
+                 COMMIT;",
+            )?;
+        }
         let db_path = std::fs::canonicalize(path)
             .map_err(|error| LedgerError::new("STORAGE_ERROR", error.to_string()))?;
         Ok(Self { conn, db_path })
     }
 
-    /// Register a credential-free tile source after an explicit user license
-    /// acknowledgement. Keep this command outside the model tool set.
+    /// Save technical configuration. Metadata is optional; replacing an existing
+    /// different configuration is reserved for an explicit edit.
     pub fn save_source(
         &mut self,
         endpoint: HttpSource,
         min_zoom: u8,
         max_zoom: u8,
-        permission_acknowledged: bool,
+        replace_existing: bool,
         now: DateTime<Utc>,
     ) -> Result<SourceDescriptor, LedgerError> {
-        if !permission_acknowledged {
-            return Err(LedgerError::new(
-                "SOURCE_UNAUTHORIZED",
-                "Confirm source license and bulk download permission",
-            ));
-        }
         endpoint
-            .validate()
+            .validate_configuration()
             .map_err(|e| LedgerError::new(e.code, e.message))?;
         if endpoint.id.len() > 160
             || !endpoint
@@ -225,8 +259,7 @@ impl TaskStore {
                 "Invalid source ID, zoom range, or request interval",
             ));
         }
-        let descriptor = SourceDescriptor {
-            schema_version: crate::SchemaVersion::V0_1,
+        let descriptor = SourceDescriptor { schema_version: crate::SchemaVersion::V0_1,
             id: endpoint.id.clone(),
             display_name: endpoint.name.clone(),
             attribution: endpoint.attribution.clone(),
@@ -240,18 +273,31 @@ impl TaskStore {
             min_zoom,
             max_zoom,
             config_revision: endpoint.configuration_revision(),
-            credential_ref_version: None,
+            credential_ref_version: endpoint.authentication.as_ref().map(|auth| auth.version.clone()),
+            elevation_encoding: endpoint.elevation_encoding,
         };
         let entry = RegisteredSource {
             descriptor: descriptor.clone(),
             endpoint,
-            permission_confirmed_at: now,
+            configured_at: now,
         };
-        self.conn.execute(
+        let tx = self.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let previous: Option<String> = tx.query_row("SELECT body FROM sources WHERE source_id=?1", [&descriptor.id], |row| row.get(0)).optional()?;
+        if !replace_existing {
+            if let Some(body) = previous {
+                let saved: RegisteredSource = serde_json::from_str(&body)?;
+                if serde_json::to_value(&saved.endpoint)? == serde_json::to_value(&entry.endpoint)? && saved.descriptor.min_zoom == min_zoom && saved.descriptor.max_zoom == max_zoom {
+                    return Ok(saved.descriptor);
+                }
+                return Err(LedgerError::new("SOURCE_EXISTS", "Source ID already has different parameters; use a new ID or explicitly edit it"));
+            }
+        }
+        tx.execute(
             "INSERT INTO sources(source_id, body) VALUES (?1, ?2)
              ON CONFLICT(source_id) DO UPDATE SET body=excluded.body",
             params![descriptor.id, serde_json::to_string(&entry)?],
         )?;
+        tx.commit()?;
         Ok(descriptor)
     }
 
@@ -288,6 +334,7 @@ impl TaskStore {
         source: &SourceDescriptor,
         now: DateTime<Utc>,
     ) -> Result<StoredPlan, LedgerError> {
+        self.plan_overlays(&spec, source)?;
         let plan = plan(spec, source, now).map_err(|e| LedgerError::new(e.code, e.message))?;
         let stored = StoredPlan {
             plan_id: Uuid::new_v4().to_string(),
@@ -318,6 +365,7 @@ impl TaskStore {
         if let Some(existing) = self.get_plan(&plan_id)? {
             return Ok(existing);
         }
+        self.plan_overlays(&spec, source)?;
         let planned = plan(spec, source, now).map_err(|e| LedgerError::new(e.code, e.message))?;
         self.conn.execute(
             "INSERT OR IGNORE INTO plans(plan_id, plan_hash, body) VALUES (?1, ?2, ?3)",
@@ -351,7 +399,61 @@ impl TaskStore {
             .transpose()
     }
 
-    /// Call only from a user-initiated confirmation UI, never from model tools.
+    pub fn plan_overlays(&self, spec: &TaskSpec, source: &SourceDescriptor) -> Result<Vec<HttpSource>,LedgerError> {
+        let references = spec.export_options.as_ref().map(|o| o.overlay_sources.as_slice()).unwrap_or_default();
+        if references.len()>4 {return Err(LedgerError::new("INVALID_OVERLAY","At most four annotation sources are supported"));}
+        let mut ids=std::collections::HashSet::new();
+        references.iter().map(|reference| {
+            if reference.source_id==source.id || !ids.insert(&reference.source_id) {return Err(LedgerError::new("INVALID_OVERLAY","Repeated or self overlay"));}
+            let overlay=self.get_registered_source(&reference.source_id)?.ok_or_else(|| LedgerError::new("SOURCE_NOT_FOUND","Annotation source is no longer configured"))?;
+            if overlay.descriptor.config_revision!=reference.config_revision {return Err(LedgerError::new("PLAN_STALE","Annotation configuration has changed"));}
+            if overlay.descriptor.tile_size!=source.tile_size || spec.zoom_levels.iter().any(|z| *z<overlay.descriptor.min_zoom || *z>overlay.descriptor.max_zoom) {
+                return Err(LedgerError::new("INVALID_OVERLAY","Annotation pixel size or zoom range is incompatible"));
+            }
+            Ok(overlay.endpoint)
+        }).collect()
+    }
+
+    /// Recheck an unstarted plan against the current source before a user starts it.
+    /// Time alone may expire; execution inputs must remain exactly the same.
+    pub fn revalidate_plan(
+        &mut self,
+        plan_id: &str,
+        plan_hash: &str,
+        current_source: &SourceDescriptor,
+        now: DateTime<Utc>,
+    ) -> Result<StoredPlan, LedgerError> {
+        let tx = self.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let body: String = tx.query_row(
+            "SELECT body FROM plans WHERE plan_id=?1", [plan_id], |row| row.get(0),
+        ).optional()?.ok_or_else(|| LedgerError::new("PLAN_NOT_FOUND", "计划不存在，请重新生成计划"))?;
+        let mut stored: Plan = serde_json::from_str(&body)?;
+        if stored.plan_hash != plan_hash {
+            return Err(LedgerError::new("PLAN_STALE", "计划内容已经变化，请重新生成并核对计划"));
+        }
+        let has_job: bool = tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM jobs WHERE plan_id=?1)", [plan_id], |row| row.get(0),
+        )?;
+        if has_job {
+            return Err(LedgerError::new("JOB_STATE_CONFLICT", "计划已有作业，请查看任务状态"));
+        }
+        let refreshed = plan(stored.spec.clone(), current_source, now)
+            .map_err(|cause| LedgerError::new(cause.code, cause.message))?;
+        if refreshed.plan_hash != stored.plan_hash {
+            return Err(LedgerError::new("PLAN_STALE", "图源配置已经变化，请重新生成并核对计划"));
+        }
+        if now >= stored.expires_at {
+            // Preserve the original ID, name, creation time, hash and geometry.
+            stored.expires_at = refreshed.expires_at;
+            tx.execute("UPDATE plans SET body=?1 WHERE plan_id=?2",
+                params![serde_json::to_string(&stored)?, plan_id])?;
+        }
+        tx.commit()?;
+        Ok(StoredPlan { plan_id: plan_id.into(), plan: stored })
+    }
+
+    /// The desktop records either a per-plan UI confirmation or an explicit,
+    /// persisted workspace full-access grant after checking the plan destination.
     pub fn grant_approval(
         &mut self,
         plan_id: &str,
@@ -599,11 +701,7 @@ impl TaskStore {
                     JobState::Completed
                 };
                 self.transition(job_id, JobState::Verifying, final_state, None, Utc::now())?;
-                let cache_parent = self
-                    .db_path
-                    .parent()
-                    .ok_or_else(|| LedgerError::new("STORAGE_ERROR", "Database has no parent"))?
-                    .join("tile-cache");
+                let cache_parent = geod_core::cache_maintenance::cache_root_for_database(&self.db_path).map_err(|e| LedgerError::new(e.code, e.message))?;
                 let cache_root = cache_parent.join(job_id);
                 if let (Ok(parent), Ok(root)) = (
                     std::fs::canonicalize(&cache_parent),
@@ -882,6 +980,39 @@ impl TaskStore {
         cancelled: &AtomicBool,
         paused: &AtomicBool,
     ) -> Result<Manifest, LedgerError> {
+        self.run_job_with_control_proxy(
+            job_id,
+            current_source,
+            endpoint,
+            now,
+            cancelled,
+            paused,
+            imagery::ProxyRoute::Environment,
+        )
+        .await
+    }
+
+    pub async fn run_job_with_control_proxy(
+        &mut self,
+        job_id: &str,
+        current_source: &SourceDescriptor,
+        endpoint: &HttpSource,
+        now: DateTime<Utc>,
+        cancelled: &AtomicBool,
+        paused: &AtomicBool,
+        proxy: imagery::ProxyRoute<'_>,
+    ) -> Result<Manifest, LedgerError> {
+        let job = self.get_job(job_id)?.ok_or_else(|| LedgerError::new("JOB_NOT_FOUND", "Job was not found"))?;
+        let stored = self.get_plan(&job.plan_id)?.ok_or_else(|| LedgerError::new("PLAN_NOT_FOUND", "Plan was not found"))?;
+        let overlays = self.plan_overlays(&stored.plan.spec, current_source)?;
+        self.run_job_with_control_proxy_and_overlays(job_id, current_source, endpoint, &overlays, now, cancelled, paused, proxy).await
+    }
+
+    /// Native callers resolve credential references before entering the worker.
+    pub async fn run_job_with_control_proxy_and_overlays(
+        &mut self, job_id: &str, current_source: &SourceDescriptor, endpoint: &HttpSource, overlays: &[HttpSource],
+        now: DateTime<Utc>, cancelled: &AtomicBool, paused: &AtomicBool, proxy: imagery::ProxyRoute<'_>,
+    ) -> Result<Manifest, LedgerError> {
         let mut job = self
             .get_job(job_id)?
             .ok_or_else(|| LedgerError::new("JOB_NOT_FOUND", "Job was not found"))?;
@@ -934,11 +1065,7 @@ impl TaskStore {
             ));
         }
         let destination = PathBuf::from(&stored.plan.spec.output_directory);
-        let cache_parent = self
-            .db_path
-            .parent()
-            .ok_or_else(|| LedgerError::new("STORAGE_ERROR", "Database has no parent"))?
-            .join("tile-cache");
+        let cache_parent = geod_core::cache_maintenance::cache_root_for_database(&self.db_path).map_err(|e| LedgerError::new(e.code, e.message))?;
         std::fs::create_dir_all(&cache_parent)
             .map_err(|error| LedgerError::new("STORAGE_ERROR", error.to_string()))?;
         let cache = imagery::TileCacheConfig {
@@ -962,9 +1089,18 @@ impl TaskStore {
                 .output_formats
                 .contains(&OutputFormat::Mbtiles),
             max_tiles: stored.plan.spec.limits.max_tiles,
+            extra_outputs: stored.plan.spec.output_formats.iter().filter_map(|format| match format {
+                OutputFormat::Png => Some(imagery::ExtraOutput::Png),
+                OutputFormat::Jpeg => Some(imagery::ExtraOutput::Jpeg),
+                OutputFormat::GeoPackage => Some(imagery::ExtraOutput::GeoPackage),
+                OutputFormat::Tiles => Some(imagery::ExtraOutput::Tiles),
+                _ => None,
+            }).collect(),
+            export_options: stored.plan.spec.export_options.clone().unwrap_or_default(),
+            overlays: overlays.to_vec(),
             max_decoded_rgba_bytes: stored.plan.spec.limits.max_decoded_rgba_bytes,
             destination: destination.clone(),
-            deadline: Duration::from_secs(1800),
+            deadline: Duration::from_secs(1800 + stored.plan.total_tiles.saturating_mul(2)),
         };
         if job.state == JobState::Queued {
             job = self.transition(job_id, JobState::Queued, JobState::Downloading, None, now)?;
@@ -980,12 +1116,13 @@ impl TaskStore {
                 Ok(manifest)
             })
         } else {
-            imagery::fetch_bundle_with_cache_control(
+            imagery::fetch_bundle_with_cache_control_proxy(
                 &request,
                 endpoint,
                 cancelled,
                 paused,
                 &cache,
+                proxy,
                 |completed, total| {
                     if cancelled.load(std::sync::atomic::Ordering::Relaxed) {
                         return Err(geod_core::imagery::CoreError::new(

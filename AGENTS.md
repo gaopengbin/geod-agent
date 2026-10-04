@@ -6,3 +6,10 @@
 - 下载、保存图源和覆盖成果由用户确认具体计划。模型回复不能替代任务状态、审批记录或文件检查。
 - 不使用指向 `geo-downloader` 的本机路径、符号链接或 `file:` 包依赖。跨仓复用需要版本化产物或合同、来源记录和兼容测试。
 - 新功能先在本仓库独立验证；不要为实现 Agent 修改旧产品或其发布流程，除非用户另行要求。
+
+## GeoD 运营数据
+
+- 查询 GeoD 用户和使用情况时，先运行 `scripts/Get-GeoDAnalytics.ps1`，按 `services/geod-analytics/README.md` 的来源与口径报告。
+- GeoD 账号只读取 `geod-studio/accounts/store.json`；禁止使用共享平台的 `accounts` / `account_sessions` 代替。微信工具箱的账号、导出、关注和支付不是 GeoD 数据。
+- 共享官网事件必须固定筛选 `product='geod-web'`；桌面匿名安装 ID、官网访客 ID 与注册账号分别展示，不相加为用户总数。
+- 缺失来源报不可用；内部测试未标记时不宣称是真实外部用户。会话包含注册自动登录和清理影响，不当作完整登录次数。

@@ -1,0 +1,10 @@
+<!doctype html><html><head><meta charset="utf-8"><title>GeoD 多区域真实流程验证</title></head><body><div id="root"></div><script>
+window.__TAURI__={};window.isTauri=true;
+const callbacks=new Map();let serial=0;
+async function rpc(command,args){const result=await(await fetch('http://127.0.0.1:1421/rpc',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({command,args})})).json();if(result.error)throw result.error;return result.value;}
+window.__TAURI_INTERNALS__={convertFileSrc:path=>'http://127.0.0.1:1421/raster/'+path,transformCallback:callback=>{const id=++serial;callbacks.set(id,callback);return id},unregisterCallback:id=>callbacks.delete(id),invoke:async(command,args)=>{
+ if(command!=='codex_turn')return rpc(command,args);
+ const callback=callbacks.get(args.events.id);await rpc('test_codex_start',args);let index=0;
+ while(true){const state=await rpc('test_codex_poll',{runId:args.runId});for(const message of state.events)callback({index:index++,message});if(state.done){if(state.error)throw state.error;return state.value}await new Promise(resolve=>setTimeout(resolve,100));}
+}};
+</script><script type="module" src="/test/batch-workflow-harness.tsx"></script></body></html>

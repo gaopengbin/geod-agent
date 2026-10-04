@@ -1,0 +1,15 @@
+[[sources]]
+id = "default"
+dsn = "${GEOD_DBHUB_DSN}"
+connection_timeout = 15
+query_timeout = 20
+
+[[tools]]
+name = "execute_sql"
+source = "default"
+readonly = true
+max_rows = 500
+
+[[tools]]
+name = "search_objects"
+source = "default"

@@ -1,16 +1,54 @@
-import type { AgentMessage, BoundaryImport } from "./api";
+import type { AgentMessage, BoundaryImport, SourceRegistrationDraft, ImageAttachment, DocumentAttachment } from "./api";
 
-export interface DisplayMessage { id: string; role: "user" | "assistant" | "tool"; content: string }
-export interface SavedChat { conversationId: string; messages: AgentMessage[]; display: DisplayMessage[]; pendingId?: string; planId?: string }
-export interface CompletedGeneration { messages: AgentMessage[]; display: DisplayMessage[]; planId?: string }
-export interface PendingGeneration { conversationId: string; generationId: string; userId: string | null; messages: AgentMessage[]; display?: DisplayMessage[]; boundary?: BoundaryImport | null; boundaryRequired?: boolean; committed?: CompletedGeneration }
+export interface ExtensionProposal { kind: "mcp" | "skill"; id: string; name: string; description: string; detail: string; toolNames?: string[]; sha256?: string }
+export interface BackgroundJob { jobId: string; planId: string; sourceName: string; totalTiles: number; zoomLevels: number[]; outputFormats: string[] }
+
+export interface DisplayMessage {
+  id: string;
+  role: "user" | "assistant" | "tool";
+  content: string;
+  images?:ImageAttachment[];
+  documents?:DocumentAttachment[];
+  phase?: "progress" | "final";
+  streaming?: boolean;
+  turnId?: string;
+  itemType?: string;
+  details?: string;
+  toolName?: string;
+  toolStatus?: "running" | "success" | "attention";
+  sourceDraft?: SourceRegistrationDraft;
+  extensionProposal?: ExtensionProposal;
+  backgroundJob?: BackgroundJob;
+  monitorTrace?: DisplayMessage[];
+}
+export interface QueuedInput{id:string;text:string;images?:ImageAttachment[];documents?:DocumentAttachment[];createdAt:string}
+export interface SavedChat { conversationId: string; messages: AgentMessage[]; display: DisplayMessage[]; pendingId?: string; planId?: string; planIds?: string[]; workspaceDirectory?: string; updatedAt?: string; lastInputTokens?: number; contextCompressed?: boolean; engine?: "codex" | "legacy"; title?:string;forkFromConversationId?:string;queuedInputs?:QueuedInput[];queuePaused?:boolean; archived?:boolean;pinned?:boolean; codexContext?: { inputTokens: number; outputTokens: number; cachedInputTokens: number; modelContextWindow: number | null } }
+export interface CompletedGeneration { messages: AgentMessage[]; display: DisplayMessage[]; planId?: string; planIds?: string[]; lastInputTokens?: number; contextCompressed?: boolean; engine?: SavedChat["engine"]; codexContext?: SavedChat["codexContext"] }
+export interface PendingGeneration { conversationId: string; generationId: string; userId: string | null; messages: AgentMessage[]; display?: DisplayMessage[]; boundary?: BoundaryImport | null; boundaryRequired?: boolean; committed?: CompletedGeneration; engine?: "codex" | "legacy" }
 
 export const PENDING_KEY = "geod-agent-pending-generations-0.1";
 export const CHAT_LIST_KEY = "geod-agent-conversations-0.1";
 export const LEGACY_CHAT_KEY = "geod-agent-chat-0.1";
 export const LEGACY_IMPORT_MARKER = "geod-agent-legacy-chat-imported-0.1";
+export const DELETED_CHAT_KEY = "geod-agent-deleted-conversations-1";
+export function chatPlanIds(chat: Pick<SavedChat, "planId" | "planIds">): string[] {
+  return [...new Set([...(chat.planIds ?? []), ...(chat.planId ? [chat.planId] : [])].filter(id => typeof id === "string" && id.length > 0))];
+}
 type PendingMap = Record<string, PendingGeneration>;
 type Store = Pick<Storage, "getItem" | "setItem">;
+
+export function deletedConversationIds(store: Store): Set<string> {
+  try { const value = JSON.parse(store.getItem(DELETED_CHAT_KEY) ?? "[]"); return new Set(Array.isArray(value) ? value.filter(id=>typeof id === "string") : []); }
+  catch { return new Set(); }
+}
+export function deleteStoredConversation(store: Store, conversationId: string): SavedChat[] {
+  const deleted=deletedConversationIds(store);deleted.add(conversationId);
+  // Persist the tombstone first, so a late model callback cannot resurrect the row.
+  store.setItem(DELETED_CHAT_KEY,JSON.stringify([...deleted]));
+  clearPending(store,conversationId);
+  const chats=chatList(store,CHAT_LIST_KEY).filter(chat=>!deleted.has(chat.conversationId));
+  store.setItem(CHAT_LIST_KEY,JSON.stringify(chats));return chats;
+}
 
 export function accountChatStore(store: Store, userId: string): Store {
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(userId)) throw new Error("GeoD 账号标识无效，无法读取本机对话。");
@@ -30,7 +68,7 @@ function validChat(value: unknown): value is SavedChat {
 function chatList(store: Store, key: string): SavedChat[] {
   try {
     const value: unknown = JSON.parse(store.getItem(key) ?? "null");
-    return Array.isArray(value) ? value.filter(validChat).slice(0, 30) : validChat(value) ? [value] : [];
+    return Array.isArray(value) ? value.filter(validChat) : validChat(value) ? [value] : [];
   } catch { return []; }
 }
 
@@ -46,7 +84,7 @@ export function importLegacyChats(store: Store, userId: string): SavedChat[] {
   // Old records had no account owner. Only an explicit UI action may copy them;
   // pending requests are not migrated because their owner cannot be proven.
   const imported = legacyChats(store).map(({ pendingId: _pendingId, ...chat }) => chat);
-  const merged = [...current, ...imported.filter(chat => !current.some(item => item.conversationId === chat.conversationId))].slice(0, 30);
+  const merged = [...current, ...imported.filter(chat => !current.some(item => item.conversationId === chat.conversationId))];
   scoped.setItem(CHAT_LIST_KEY, JSON.stringify(merged));
   scoped.setItem(LEGACY_IMPORT_MARKER, "1");
   return merged;
@@ -111,17 +149,22 @@ export function commitPending(store: Store, conversationId: string, generationId
 }
 
 export function persistCompletedChat(store: Store, chat: SavedChat): SavedChat[] {
+  const deleted = deletedConversationIds(store);
   let existing: SavedChat[] = [];
   try {
     const value: unknown = JSON.parse(store.getItem(CHAT_LIST_KEY) ?? "[]");
-    if (Array.isArray(value)) existing = value.filter(item => item && typeof item.conversationId === "string");
+    if (Array.isArray(value)) existing = value.filter(item => validChat(item) && !deleted.has(item.conversationId));
   } catch { /* A damaged chat index cannot discard the completed answer. */ }
-  const updated = [chat, ...existing.filter(item => item.conversationId !== chat.conversationId)].slice(0, 30);
+  if (deleted.has(chat.conversationId)) return existing;
+  const previous=existing.find(item=>item.conversationId===chat.conversationId);
+  const updated = [{...previous,...chat,queuedInputs:chat.queuedInputs??previous?.queuedInputs,queuePaused:chat.queuePaused??previous?.queuePaused,title:chat.title??previous?.title,forkFromConversationId:chat.forkFromConversationId??previous?.forkFromConversationId}, ...existing.filter(item => item.conversationId !== chat.conversationId)];
   store.setItem(CHAT_LIST_KEY, JSON.stringify(updated));
   return updated;
 }
 
 export function restorePendingChats(store: Store, chats: SavedChat[]): SavedChat[] {
+  const deleted = deletedConversationIds(store);
+  chats = chats.filter(chat => !deleted.has(chat.conversationId));
   let pending = readPending(store);
   if (pending === null) {
     pending = Object.fromEntries(chats.filter(chat => chat.pendingId).map(chat => [chat.conversationId, {
@@ -130,17 +173,23 @@ export function restorePendingChats(store: Store, chats: SavedChat[]): SavedChat
     try { store.setItem(PENDING_KEY, JSON.stringify(pending)); }
     catch { /* Sending a new model request will fail if this storage remains unwritable. */ }
   }
+  pending = Object.fromEntries(Object.entries(pending).filter(([id])=>!deleted.has(id)));
   const restored = chats.map(chat => ({
     ...chat,
     pendingId: pending[chat.conversationId]?.committed ? undefined : pending[chat.conversationId]?.generationId,
     messages: pending[chat.conversationId]?.committed?.messages ?? pending[chat.conversationId]?.messages ?? chat.messages,
     display: pending[chat.conversationId]?.committed?.display ?? ((pending[chat.conversationId]?.display?.length ?? 0) > chat.display.length ? pending[chat.conversationId].display! : chat.display),
     planId: pending[chat.conversationId]?.committed?.planId ?? chat.planId,
+    planIds: pending[chat.conversationId]?.committed?.planIds ?? chatPlanIds(chat),
+    lastInputTokens: pending[chat.conversationId]?.committed?.lastInputTokens ?? chat.lastInputTokens,
+    contextCompressed: pending[chat.conversationId]?.committed?.contextCompressed ?? chat.contextCompressed,
+    engine: pending[chat.conversationId]?.committed?.engine ?? pending[chat.conversationId]?.engine ?? chat.engine,
+    codexContext: pending[chat.conversationId]?.committed?.codexContext ?? chat.codexContext,
   }));
   const missing = Object.values(pending)
     .filter(item => !restored.some(chat => chat.conversationId === item.conversationId))
-    .map(item => ({ conversationId: item.conversationId, messages: item.committed?.messages ?? item.messages, display: item.committed?.display ?? item.display ?? [], pendingId: item.committed ? undefined : item.generationId, planId: item.committed?.planId }));
-  const result = [...missing, ...restored].slice(0, 30);
+    .map(item => ({ conversationId: item.conversationId, messages: item.committed?.messages ?? item.messages, display: item.committed?.display ?? item.display ?? [], pendingId: item.committed ? undefined : item.generationId, planId: item.committed?.planId, planIds: item.committed?.planIds ?? (item.committed?.planId ? [item.committed.planId] : []), engine: item.committed?.engine ?? item.engine, codexContext: item.committed?.codexContext }));
+  const result = [...missing, ...restored];
   if (Object.values(pending).some(item => item.committed)) {
     try {
       store.setItem(CHAT_LIST_KEY, JSON.stringify(result));

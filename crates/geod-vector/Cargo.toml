@@ -1,0 +1,26 @@
+[package]
+name = "geod-vector"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Independent vector tile and OpenStreetMap download engine for GeoD Agent"
+
+[dependencies]
+geod-core = { path = "../geod-core" }
+geo = "0.31"
+chrono = { version = "0.4", features = ["serde"] }
+flate2 = "1"
+futures-util = "0.3"
+prost = "0.13"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+schemars = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+tempfile = "3"
+thiserror = "2"
+tokio = { version = "1", features = ["time", "sync"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "io-util"] }

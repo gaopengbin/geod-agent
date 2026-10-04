@@ -1,0 +1,56 @@
+.agent-work-records { min-width: 0; color: var(--app-soft-text); font-size: 14px; }
+.agent-work-records .agent-work-records-trigger { max-width: 100%; height: auto; min-height: 32px; justify-content: flex-start; gap: 8px; padding: 4px 6px 4px 0; border-radius: 6px; font-size: 14px; font-weight: 400; text-align: left; }
+.agent-work-records-trigger .agent-work-records-label { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.agent-work-records-icon { display: grid; flex: none; width: 18px; height: 20px; place-items: center; color: var(--app-faint-text); }
+.agent-work-records.is-active .agent-work-records-icon { color: var(--app-blue); }
+.agent-work-count { flex: none; color: var(--app-soft-text); font-variant-numeric: tabular-nums; }
+.agent-work-warning { display: inline-flex; align-items: center; gap: 4px; color: var(--app-warning); }
+.agent-work-records-trigger > svg, .agent-work-record-trigger > svg { flex: none; transition: transform .26s; color: var(--app-faint-text); }
+.agent-work-records .is-open { transform: rotate(180deg); }
+.agent-work-records-body { overflow: hidden; }
+.agent-work-timeline { position: relative; padding: 2px 0 2px; }
+.agent-work-timeline::before { content: ""; position: absolute; left: 8px; top: 15px; bottom: 17px; width: 1px; background: var(--app-line); }
+.agent-work-record { position: relative; min-width: 0; font-size: 14px; line-height: 1.65; }
+.agent-work-records .agent-work-record-trigger, .agent-work-record-heading { display: flex; align-items: flex-start; width: 100%; min-height: 32px; height: auto; justify-content: flex-start; gap: 10px; padding: 5px 4px 5px 0; text-align: left; font-size: 14px; font-weight: 400; line-height: 1.55; border-radius: 5px; }
+.agent-work-record-trigger > svg { margin: 3px 0 0 auto; }
+.agent-work-records-trigger:hover, .agent-work-record-trigger:hover { background: var(--app-hover); color: var(--app-text); }
+.agent-work-record-trigger:hover .agent-work-record-icon { background: var(--app-hover); }
+.agent-work-record-title { min-width: 0; overflow-wrap: anywhere; }
+.agent-work-record-icon { position: relative; z-index: 1; display: grid; place-items: center; flex: none; width: 18px; height: 22px; color: var(--app-faint-text); background: var(--app-surface); }
+.agent-work-record-icon.is-running { color: var(--app-blue); }
+.agent-work-record.attention .agent-work-record-icon, .agent-work-record.attention .agent-work-record-title { color: var(--app-warning); }
+.agent-work-note { display: flex; align-items: flex-start; gap: 10px; padding: 6px 0; color: var(--app-soft-text); }
+.agent-work-note > .agent-work-content { min-width: 0; flex: 1; }
+.agent-work-records .agent-work-content { line-height: 1.65; }
+.agent-work-records .agent-work-content :is(p, ul, ol, pre) { margin-block: 0 8px; }
+.agent-work-records .agent-work-content > :last-child { margin-bottom: 0; }
+.agent-work-note.is-streaming .agent-work-content::after { content: ""; display: inline-block; width: 2px; height: 1em; margin-left: 3px; vertical-align: -2px; background: var(--app-blue); animation: geod-stream-caret .8s ease-in-out infinite; }
+.agent-work-record-details { overflow: hidden; padding-left: 28px; }
+.agent-work-reasoning { padding: 3px 0 9px; color: var(--app-soft-text); }
+.agent-work-detail-sections { display: grid; gap: 10px; padding: 4px 0 10px; }
+.agent-work-detail-label { display: block; margin-bottom: 4px; color: var(--app-soft-text); font-size: 14px; }
+.agent-work-code-panel { min-width: 0; overflow: hidden; border: 1px solid var(--app-line); border-radius: 12px; background: var(--app-subtle); }
+.agent-work-code-heading { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 4px 10px; border-bottom: 1px solid var(--app-line); color: var(--app-soft-text); font-size: 12px; }
+.agent-work-code-heading > span { font-weight: 500; }
+.agent-work-code-heading > small { color: var(--app-faint-text); font-size: 11px; }
+.agent-work-code-heading .chat-copy { width: 24px; height: 24px; margin: 0 0 0 auto; padding: 0; border-radius: 6px; }
+.agent-work-code-panel.is-empty { border: 0; border-radius: 0; background: transparent; }
+.agent-work-code-panel.is-empty .agent-work-code-heading { border: 0; padding: 0; min-height: 24px; }
+.agent-work-code-area .geod-scroll-viewport { height: auto; max-height: 240px; }
+.agent-work-code, .codex-request-card pre { overflow: auto; max-height: 300px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.7; padding: 12px; margin: 0; background: var(--app-subtle); border: 1px solid var(--app-line); border-radius: 12px; scrollbar-width: none; }
+.agent-work-code-panel .agent-work-code { max-height: none; overflow: visible; border: 0; border-radius: 0; }
+.agent-work-code > code { font: inherit; background: transparent; }
+.agent-work-code::-webkit-scrollbar { display: none; }
+@media (max-width: 420px) { .agent-work-records-trigger { flex-wrap: wrap; } .agent-work-warning { margin-left: 26px; } }
+.codex-request-card { margin: 16px 0; padding: 16px; border: 1px solid var(--app-line); border-radius: 12px; font-size: 14px; }
+.codex-request-card label { display: block; margin: 12px 0; }
+.codex-request-card label > span { display: block; margin-bottom: 8px; }
+.codex-request-field { margin: 12px 0; }
+.codex-request-field > span { display: block; margin-bottom: 8px; }
+.codex-request-card input { box-sizing: border-box; width: 100%; min-height: 36px; padding: 6px 10px; border: 1px solid var(--app-border, #e1e7ef); border-radius: 8px; background: transparent; font-size: 14px; }
+.codex-request-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.codex-browser-flow { margin-top: 12px; padding: 12px; border-radius: 10px; background: var(--app-subtle); border: 1px solid var(--app-line); }
+.codex-browser-destination { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; overflow-wrap: anywhere; }
+.codex-browser-flow code { display: block; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; user-select: text; color: var(--app-text); }
+.codex-browser-flow p { margin: 10px 0 0; font-size: 12px; color: var(--app-muted); line-height: 1.5; }
+.codex-request-card [role=alert] { color: var(--app-warning-text, #b45309); }

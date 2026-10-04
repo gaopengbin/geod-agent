@@ -12,6 +12,7 @@ export function artifactResultForModel(jobId: string, manifest: Manifest) {
       warnings: manifest.quality.warnings.map(warning => warning === boundaryWarning ? warning : "See the desktop results for a local verification warning"),
     },
     assets: manifest.assets.map(asset => ({
+      ...(typeof asset.id === "string" && /^[\w-]{1,100}$/.test(asset.id) ? { id:asset.id } : {}),
       kind: asset.kind,
       role: asset.role,
       bytes: asset.bytes,

@@ -1,0 +1,28 @@
+.dialog.cache-manager { width:min(540px,calc(100vw - 32px)); max-height:calc(100dvh - 40px); display:flex; flex-direction:column; }
+.cache-manager-scroll { min-height:0; flex:1; }
+.cache-manager-body { display:flex; flex-direction:column; gap:18px; }
+.cache-metrics { margin:0; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+.cache-metrics dt,.cache-location>span { font-size:12px; color:var(--muted-foreground); }
+.cache-metrics dd { font-size:20px; font-weight:600; margin:6px 0 0; }
+.cache-metrics small { margin-left:5px; font-size:12px; font-weight:400; color:var(--muted-foreground); }
+.cache-location { display:grid; grid-template-columns:minmax(0,1fr) auto; column-gap:12px; }
+.cache-location>span { grid-column:1; }
+.cache-location>p { grid-column:1; margin:5px 0 0; font-size:12px; overflow-wrap:anywhere; }
+.cache-location>button { grid-column:2; grid-row:1 / 3; align-self:center; }
+.cache-action-row { border-top:1px solid var(--border); padding-top:16px; display:flex; align-items:center; gap:12px; justify-content:space-between; }
+.cache-action-row>div { min-width:0; }
+.cache-action-row>button { flex:0 0 auto; min-width:54px; white-space:nowrap; }
+.cache-action-row strong,.cache-relocation h3,.cache-operation strong { font-size:13px; font-weight:600; }
+.cache-action-row p,.cache-helper,.cache-operation p,.cache-preflight p { margin:5px 0 0; font-size:12px; line-height:1.6; color:var(--muted-foreground); }
+.cache-helper { display:flex; gap:6px; align-items:center; }
+.cache-relocation,.cache-operation { border:1px solid var(--border); border-radius:10px; padding:14px; }
+.cache-relocation h3 { margin:0 0 12px; }
+.cache-path-input { display:flex; align-items:center; gap:4px; }
+.cache-path-input input { min-width:0; flex:1; }
+.cache-buttons { display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; margin-top:14px; }
+.cache-operation-head { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:28px; }
+.cache-operation .progress-track { margin-block:10px; }
+.cache-operation details { margin-top:12px; font-size:12px; }
+.cache-operation summary { cursor:pointer; color:var(--foreground); }
+.cache-warning,.cache-path { overflow-wrap:anywhere; }
+@media(max-width:440px) { .cache-metrics dd{font-size:17px;} .cache-manager-body {gap:14px;} }

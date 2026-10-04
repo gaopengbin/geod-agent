@@ -24,6 +24,17 @@ pub struct TileGrid {
     pub actual_bounds: [f64; 4],
 }
 
+impl TileGrid {
+    /// JSON readers may round the derived geographic extent by one ULP. The
+    /// authoritative tile indices/pixel grid still have to match exactly.
+    pub fn matches_persisted(&self, stored: &Self) -> bool {
+        let mut comparable = stored.clone();
+        comparable.actual_bounds = self.actual_bounds;
+        self == &comparable && self.actual_bounds.iter().zip(stored.actual_bounds).all(|(a, b)|
+            b.is_finite() && (a - b).abs() <= f64::EPSILON * 8.0 * a.abs().max(1.0))
+    }
+}
+
 fn tile_xy(lon: f64, lat: f64, zoom: u8) -> (u32, u32) {
     let n = (1u32 << zoom) as f64;
     let lat = lat.clamp(-MAX_MERCATOR_LAT, MAX_MERCATOR_LAT);
@@ -113,5 +124,17 @@ mod tests {
         let large = grid([-1.0, 1.0, 1.0, 2.0], 1, 512).unwrap();
         assert_eq!(small.tile_count, large.tile_count);
         assert_eq!(large.pixel_width, small.pixel_width * 2);
+    }
+
+    #[test]
+    fn json_roundtrip_preserves_execution_grid_without_accepting_changed_tiles() {
+        let expected = grid([-170.0, 0.0, -100.0, 70.0], 5, 256).unwrap();
+        let mut stored: TileGrid = serde_json::from_slice(&serde_json::to_vec(&expected).unwrap()).unwrap();
+        assert!(expected.matches_persisted(&stored));
+        stored.actual_bounds[0] += 0.001;
+        assert!(!expected.matches_persisted(&stored));
+        stored = expected.clone();
+        stored.x_max += 1;
+        assert!(!expected.matches_persisted(&stored));
     }
 }

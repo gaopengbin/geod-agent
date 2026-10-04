@@ -1,0 +1,25 @@
+// Read-only delivery audit against native state, without restarting or new downloads.
+import assert from 'node:assert/strict';
+import { readFileSync,writeFileSync } from 'node:fs';
+const base=new URL('../../../docs/implementation/evidence/',import.meta.url);
+const read=name=>JSON.parse(readFileSync(new URL(name,base),'utf8'));
+const rpc=async(command,args={})=>{const value=await(await fetch('http://127.0.0.1:1421/rpc',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({command,args})})).json();if(value.error)throw value.error;return value.value;};
+const batch=read('batch-imagery-native-2026-10-02.json');
+const records=['batch-agent-model-2026-10-02.json','gpkg-agent-download-2026-10-02.json','postgis-agent-download-2026-10-02.json','online-agent-download-2026-10-02.json'].map(read);
+records.forEach(r=>assert.equal(r.pass,true));
+const ids=[...new Set([...batch.jobs,...records.flatMap(r=>r.jobs)].map(j=>j.jobId))];
+const jobs=await Promise.all(ids.map(async jobId=>{const job=await rpc('jobs_get',{jobId});assert.equal(job.state,'completed');return {jobId,state:job.state};}));
+const formats=read('data-input-download-native-2026-10-02.json');assert.equal(formats.cases.length,13);formats.cases.forEach(c=>assert(c.pass&&c.quality.status==='complete'));
+const lifecycle=read('native-job-lifecycle-2026-10-02.json');assert(lifecycle.pass&&lifecycle.resumedSameJob);
+const schedules=read('native-schedules-2026-10-02.json');assert(schedules.pass&&schedules.restart.pass);
+const followup=read('schedule-followup-native-2026-10-02.json');assert(followup.pass);
+const conversations=[...new Set([schedules.records[0].conversationId,schedules.records[3].conversationId,schedules.restart.t.conversationId,followup.conversationId])];
+const scheduleStates=await Promise.all(conversations.map(async conversationId=>{const items=await rpc('schedules_list',{conversationId});assert(items.every(s=>!s.enabled),'Acceptance schedule must not keep triggering');return {conversationId,schedules:items.map(s=>({scheduleId:s.scheduleId,enabled:s.enabled}))};}));
+const compatibility=read('schedule-old-thread-model-2026-10-02.json');assert(compatibility.pass);
+const fault=read('failed-agent-download-2026-10-02.json');assert(fault.pass&&fault.expectedFailureVerified);
+const failed=await rpc('jobs_get',{jobId:fault.jobs[0].jobId});assert.equal(failed.state,'failed');
+const price=read('complete-workflow-cost-2026-10-02.json');assert.equal(price.preview.active,false);assert.equal(price.preview.duplicateCharges,0);assert.equal(price.scenarios.at(-1).candidateRetailCny,0);
+const activeJobs=await rpc('jobs_active');
+const report={verifiedAt:new Date().toISOString(),jobs,formatsPassed:13,lifecyclePass:true,schedulerPass:true,compatibilityPass:true,scheduleStates,failedTaskVerified:{jobId:failed.jobId,state:failed.state,refundedCny:price.scenarios.at(-1).refundCny},pricingActive:false,activeJobs,pass:true};
+writeFileSync(new URL('delivery-audit-2026-10-02.json',base),JSON.stringify(report,null,2));
+console.log(JSON.stringify({pass:true,completedJobs:jobs.length,formats:13,activeJobs,scheduler:'passed; test intervals disabled',pricing:'inactive; failed task refunded once'}));

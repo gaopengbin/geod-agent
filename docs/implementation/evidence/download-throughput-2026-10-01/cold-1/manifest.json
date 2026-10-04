@@ -1,0 +1,64 @@
+{
+  "schemaVersion": "1.0",
+  "kind": "geod-bundle",
+  "id": "geod-agent-job-38865df5-f9ca-4592-baee-5780290ee5e6",
+  "name": "cold-1",
+  "createdAt": "2026-10-01T05:27:11.890103600+00:00",
+  "bounds": [
+    116.19141625,
+    39.77477948529546,
+    116.89452125,
+    40.04442758460856
+  ],
+  "assets": [
+    {
+      "id": "imagery-z12",
+      "kind": "raster",
+      "role": "analysis",
+      "path": "imagery-z12.tif",
+      "mimeType": "image/tiff",
+      "bytes": 8389034,
+      "sha256": "1ac7cca1ff99e7892a545d52ad1570a5a6d7fd3b1bf3d3ce5dae0b8c1758dd5f",
+      "crs": "EPSG:3857",
+      "bounds": [
+        116.19140625,
+        39.77476948529546,
+        116.89453125,
+        40.044437584608566
+      ],
+      "width": 2048,
+      "height": 1024
+    },
+    {
+      "id": "imagery-preview",
+      "kind": "raster",
+      "role": "preview",
+      "path": "preview.png",
+      "mimeType": "image/png",
+      "bytes": 1562703,
+      "sha256": "c0f83076519eeb321cace07dc3926307d7be1e425bc16d28435974f5408ee22d",
+      "crs": "EPSG:3857",
+      "bounds": [
+        116.19140625,
+        39.77476948529546,
+        116.89453125,
+        40.044437584608566
+      ],
+      "width": 1024,
+      "height": 512
+    }
+  ],
+  "layers": [],
+  "quality": {
+    "status": "complete",
+    "missingTiles": 0,
+    "warnings": []
+  },
+  "provenance": [
+    {
+      "source": "Esri World Imagery",
+      "attribution": "Esri, Vantor, Earthstar Geographics and the GIS User Community",
+      "retrievedAt": "2026-10-01T05:27:11.890143800+00:00"
+    }
+  ]
+}

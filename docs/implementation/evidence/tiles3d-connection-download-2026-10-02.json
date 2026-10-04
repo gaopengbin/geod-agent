@@ -1,0 +1,73 @@
+{
+  "pass": true,
+  "checkedAt": "2026-10-02T14:31:40.772Z",
+  "conversationId": "connection-download-a45a5540-c6fa-4879-a1f5-61a0b36cea09",
+  "taskId": "13343103-ad58-480b-a4af-363f19bc2e75",
+  "workspace": "G:\\code\\geod-agent\\artifacts\\desktop-parity\\connection-download-a45a5540-c6fa-4879-a1f5-61a0b36cea09",
+  "checks": [
+    "saved credential reference native worker path",
+    "real public 3D download with Referer connection",
+    "source fingerprint matches approved connection revision",
+    "verified offline bundle",
+    "artifact inspection remains available after credential connection removal"
+  ],
+  "manifest": {
+    "bounds": null,
+    "entrypoint": "tileset.json",
+    "resources": [
+      {
+        "bytes": 9688,
+        "kind": "b3dm",
+        "path": "assets/10bf63300e5d0e0c89eab83382b9a1ee55cd178c4563b04520fab3ff5b5e0274.b3dm",
+        "sha256": "4a13443b93a652a6f26da2b33e86d48d9987535a5af572d0085133b1ca200e31"
+      },
+      {
+        "bytes": 9684,
+        "kind": "b3dm",
+        "path": "assets/57b16e1c0293af4117edcbd075faf4b02cecab99a7399bccedd21271ffa53234.b3dm",
+        "sha256": "c1726197d0ca76e303ef1d3cc1411cfb449b067a5a254585ef64fb67f73d7e09"
+      },
+      {
+        "bytes": 993,
+        "kind": "tileset",
+        "path": "assets/5865cdd17b8dd49401723715f0b5af9f278f62c7966c62032e825e4075af9111.json",
+        "sha256": "0d28233ec6a2a1fee8301abe2f875487708520cc99aaa236102e0c2855530a58"
+      },
+      {
+        "bytes": 3665368,
+        "kind": "b3dm",
+        "path": "assets/697a6a78e9692c28e8f83ddbb16c1a5fb7b718acf9aacf9751eb3e20181629b6.b3dm",
+        "sha256": "e43a1a13cf379e3a4ca5ff11afba0fc2aeb3be8fd2bddb2a3d55c0c9785151bb"
+      },
+      {
+        "bytes": 1875124,
+        "kind": "pnts",
+        "path": "assets/d3cbdbc62037258e28c29bc9d8d4d7da194795e6246f4454452d1489e6ba2b86.pnts",
+        "sha256": "826099886bc1fe5e6394dbad673678ce7eee1944249c8550bee0fe2a283eafb6"
+      },
+      {
+        "bytes": 9704,
+        "kind": "b3dm",
+        "path": "assets/fb3caeb6613bca45463b0ab47c019cba3a58566af8ce9fb4daf1e6987629c6e6.b3dm",
+        "sha256": "0c8ebf51da78676da285abc517fb98bd4b4e618429b4c9b5a5574d18d3fecd26"
+      },
+      {
+        "bytes": 9700,
+        "kind": "b3dm",
+        "path": "assets/fe47307515f4238e77783a9cd3a55f7a58753e8ee0241cbeb08c62d9c72e8cea.b3dm",
+        "sha256": "ce9004afac31c4e57cf2c58671dbe0013050642b074edf7ab6a36c2d8178e941"
+      },
+      {
+        "bytes": 1300,
+        "kind": "tileset",
+        "path": "tileset.json",
+        "sha256": "71dd595db15254d004c10074f0cab6b112277a579849bf1c1777f3ebf811d40c"
+      }
+    ],
+    "schemaVersion": 1,
+    "selectedTiles": 9,
+    "sourceFingerprint": "a2bb3fe8e97a667b7f8583b9e96f93699b1b68a1149c2eee1ba3b41605570558",
+    "totalBytes": 5581561,
+    "warnings": []
+  }
+}

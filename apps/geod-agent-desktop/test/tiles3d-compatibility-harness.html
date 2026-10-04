@@ -1,0 +1,27 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><title>实际三维兼容验收</title></head><body style="margin:0"><div id="root" style="position:fixed;inset:0"></div><script type="module">
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import { flushSync } from 'react-dom';
+import { Provider as TooltipProvider } from '@radix-ui/react-tooltip';
+import { cesiumCall } from '/src/cesium-mcp.ts';
+import { Tiles3dPreview } from '/src/tiles3d-preview.tsx';
+import { Cesium3DTileset } from 'cesium';
+// Capture the real instance for diagnostic reads. Preserve the actual loader.
+const fromUrl = Cesium3DTileset.fromUrl;
+Cesium3DTileset.fromUrl = async (...args) => { const value = await fromUrl(...args); window.compatibilityModel = value; return value; };
+const traversal = tile => ({ error: tile.geometricError, visible: tile.isVisible, ready: tile.contentReady,
+  screenError: tile._screenSpaceError, distance: tile._distanceToCamera, mask: tile._visibilityPlaneMask,
+  inRequestVolume: tile._inRequestVolume, deferred: tile.priorityDeferred,
+  children: tile.children.map(traversal) });
+let root;
+window.loadActualTiles = (name, tilesetUrl, bounds) => {
+  window.compatibilityDebug = { name, tilesetUrl, stage: 'starting' };
+  root?.unmount(); root = createRoot(document.getElementById('root'));
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(async () => reject(new Error(`实际模型渲染超时: ${JSON.stringify({ scene: await cesiumCall(`compatibility-${name}`, 'getSceneState', {}), traversal: traversal(window.compatibilityModel.root) })}`)), 20000);
+    flushSync(() => root.render(React.createElement(TooltipProvider, null, React.createElement(Tiles3dPreview, { conversationId: `compatibility-${name}`, taskId: name, title: name, tilesetUrl, bounds,
+      onReady: value => { clearTimeout(timer); setTimeout(() => resolve({ ...value, dynamicScreenSpaceError: window.compatibilityModel.dynamicScreenSpaceError, traversal: traversal(window.compatibilityModel.root) }), 700); }, onError: error => { clearTimeout(timer); reject(new Error(error)); } }))));
+    window.compatibilityDebug = { name, tilesetUrl, stage: 'committed', html: document.getElementById('root').innerHTML };
+  });
+};
+</script></body></html>

@@ -1,0 +1,12 @@
+{
+  "name": "geod-bundled-dbhub-runtime",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Versioned DBHub runtime for GeoD Agent. Drivers are explicitly pinned; no runtime downloads.",
+  "dependencies": {
+    "@bytebase/dbhub": "1.4.0",
+    "mysql2": "3.24.5",
+    "mssql": "11.0.1",
+    "oracledb": "7.0.1"
+  }
+}

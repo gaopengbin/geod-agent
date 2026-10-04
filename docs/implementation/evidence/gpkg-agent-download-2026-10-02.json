@@ -1,0 +1,2652 @@
+{
+  "conversation": "fde66c15-913a-4bb5-b01b-f9ff0e16c843",
+  "input": "读取当前工作区中的 multi.gpkg，发现实际图层并选择 polygons 面图层，按其中真实边界用已注册 Esri World Imagery / Z10 / GeoTIFF 下载裁剪并将成果加载到当前地图。不要使用之前的行政区范围。请实际操作，简短中文回答。",
+  "engine": "bundled Codex app-server",
+  "events": [
+    {
+      "capabilities": {
+        "contextWindow": 128000,
+        "contextWindowSource": "gatewayConfigured",
+        "engine": "Codex",
+        "inputModalities": [
+          "text"
+        ],
+        "maxOutputTokens": 8192,
+        "model": "deepseek-flash",
+        "protocol": "geod-codex-v1",
+        "provider": "DeepSeek",
+        "reasoning": true,
+        "requestMaxBytes": 4000000,
+        "version": "0.159.2"
+      },
+      "runId": "2222b3d4-596d-4e45-a418-b25955587e8b",
+      "type": "capabilities"
+    }
+  ],
+  "generations": [
+    {
+      "conversationId": "fde66c15-913a-4bb5-b01b-f9ff0e16c843",
+      "createdAt": "2026-10-02T05:50:30.968Z",
+      "errorCode": null,
+      "generationId": "0023ddda-01ff-41eb-9b23-41301f41974d",
+      "inputTokens": 15441,
+      "model": "deepseek-flash",
+      "outputTokens": 161,
+      "reservedTokens": 20000,
+      "result": {
+        "content": "我先查看工作区文件、地图 MCP 与已注册图源。",
+        "phase": "commentary",
+        "phaseSource": "compatibility",
+        "reasoning": "Let me start by discovering the workspace GIS files and the OpenLayers MCP tools.\n\nLet me do parallel calls: workspace_gis_files_list, extensions_list (OpenLayers), extensions_list (builtin-data-input), sources_list.\n\nActually extensions_list takes a query. I could call it twice. Let me do that.\n\nAlso workspace_status maybe. Let me just proceed.",
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "function": {
+              "arguments": "{}",
+              "name": "workspace_gis_files_list"
+            },
+            "id": "call_00_StLPGGpuKrJt2AByPjqD3837",
+            "type": "function"
+          },
+          {
+            "function": {
+              "arguments": "{\"query\": \"OpenLayers\"}",
+              "name": "extensions_list"
+            },
+            "id": "call_01_UpmOMsOyVKfji1rSzdji8769",
+            "type": "function"
+          },
+          {
+            "function": {
+              "arguments": "{}",
+              "name": "sources_list"
+            },
+            "id": "call_02_jRstx1LTJ9BibLi72mf52626",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "cachedInputTokens": 15232,
+          "reasoningTokens": 76
+        }
+      },
+      "state": "settled",
+      "updatedAt": "2026-10-02T05:50:32.005Z",
+      "upstreamRequestId": "f79a4384-9124-490b-91ff-6777998f46cf"
+    },
+    {
+      "conversationId": "fde66c15-913a-4bb5-b01b-f9ff0e16c843",
+      "createdAt": "2026-10-02T05:50:35.390Z",
+      "errorCode": null,
+      "generationId": "d052ca98-1521-49fb-a79a-e154afb8cf28",
+      "inputTokens": 19163,
+      "model": "deepseek-flash",
+      "outputTokens": 282,
+      "reservedTokens": 20000,
+      "result": {
+        "content": null,
+        "phase": "commentary",
+        "phaseSource": "compatibility",
+        "reasoning": "workspace_gis_files_list returned \"Command not allowed\"? Interesting. Let me try workspace_status and workspace_boundaries_list.\n\nAlso need builtin-data-input. Let me discover it.\n\nThe gpkg reading: I may need GDAL MCP or the data_input_read tool. data_input_read accepts relativePath — but it says \"a relative workspace vector filename\". GPKG is supported (\"GPKG/SQLite\"). It returns layer choices for multi-layer inputs; repeat with layer.\n\nBut first, list workspace files. workspace_gis_files_list errored. Let me try workspace_status and workspace_boundaries_list, and list directory via shell.\n\nActually shell is allowed within workspace-write. Let me try `Get-ChildItem`. Network restricted but shell read is fine.\n\nLet me do parallel: exec_command to list workspace, extensions_list query \"builtin-data-input\", workspace_status.",
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "function": {
+              "arguments": "{\"cmd\": \"Get-ChildItem -Force | Select-Object Mode,Length,Name | Format-Table -AutoSize\"}",
+              "name": "exec_command"
+            },
+            "id": "call_00_aQhgCzJGtkoi1IHRisgB0169",
+            "type": "function"
+          },
+          {
+            "function": {
+              "arguments": "{\"query\": \"builtin-data-input\"}",
+              "name": "extensions_list"
+            },
+            "id": "call_01_KZH8qIhLmY8JfohvfI0j8443",
+            "type": "function"
+          },
+          {
+            "function": {
+              "arguments": "{}",
+              "name": "workspace_status"
+            },
+            "id": "call_02_ZSMJ739pxctUl0kFzeLK3363",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "cachedInputTokens": 15488,
+          "reasoningTokens": 178
+        }
+      },
+      "state": "settled",
+      "updatedAt": "2026-10-02T05:50:37.107Z",
+      "upstreamRequestId": "37e96fd2-3096-4bbd-bd71-5fe56056675a"
+    },
+    {
+      "conversationId": "fde66c15-913a-4bb5-b01b-f9ff0e16c843",
+      "createdAt": "2026-10-02T05:50:40.793Z",
+      "errorCode": null,
+      "generationId": "60bd92cc-0352-4cbf-b70b-ebf66b1b9744",
+      "inputTokens": 20519,
+      "model": "deepseek-flash",
+      "outputTokens": 65,
+      "reservedTokens": 20000,
+      "result": {
+        "content": "现在读取 `multi.gpkg` 的真实图层结构。",
+        "phase": "commentary",
+        "phaseSource": "compatibility",
+        "reasoning": "Now read multi.gpkg to discover layers.",
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "function": {
+              "arguments": "{\"relativePath\": \"multi.gpkg\"}",
+              "name": "data_input_read"
+            },
+            "id": "call_00_zs6jc5gYKzM0W0Tqvlnl9444",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "cachedInputTokens": 19328,
+          "reasoningTokens": 10
+        }
+      },
+      "state": "settled",
+      "updatedAt": "2026-10-02T05:50:41.611Z",
+      "upstreamRequestId": "8447d3e8-cc25-4e0e-a771-5723bddd0003"
+    },
+    {
+      "conversationId": "fde66c15-913a-4bb5-b01b-f9ff0e16c843",
+      "createdAt": "2026-10-02T05:50:42.788Z",
+      "errorCode": null,
+      "generationId": "702d0da4-89f5-4b2a-ab93-ae9048100a77",
+      "inputTokens": 20677,
+      "model": "deepseek-flash",
+      "outputTokens": 116,
+      "reservedTokens": 20000,
+      "result": {
+        "content": "工作区里 `multi.gpkg` 有两个图层，我选择面图层 `polygons`。",
+        "phase": "commentary",
+        "phaseSource": "compatibility",
+        "reasoning": "Two layers: polygons (1 polygon feature, EPSG:4326) and points. Select polygons.",
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "function": {
+              "arguments": "{\"handle\": \"27423315-100f-43cb-8124-fc69976fedf1\", \"layer\": \"polygons\"}",
+              "name": "data_input_read"
+            },
+            "id": "call_00_AqIpNBSc5n61GvAeT0nC1873",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "cachedInputTokens": 20480,
+          "reasoningTokens": 21
+        }
+      },
+      "state": "settled",
+      "updatedAt": "2026-10-02T05:50:43.607Z",
+      "upstreamRequestId": "cafe2014-855d-4481-b985-59d282f20f21"
+    },
+    {
+      "conversationId": "fde66c15-913a-4bb5-b01b-f9ff0e16c843",
+      "createdAt": "2026-10-02T05:50:44.892Z",
+      "errorCode": null,
+      "generationId": "083ef9db-c6ff-4e6a-bdc5-32b628e2a038",
+      "inputTokens": 20993,
+      "model": "deepseek-flash",
+      "outputTokens": 348,
+      "reservedTokens": 20000,
+      "result": {
+        "content": "面图层已作为独立范围挂载（`range-b118...`，包围盒 116.1–116.3E / 39.6–39.8N）。现在按 Esri 图源 Z10 出 GeoTIFF 计划。",
+        "phase": "commentary",
+        "phaseSource": "compatibility",
+        "reasoning": "Boundary attached: range-b118f85c... bounds [116.1, 39.6, 116.3, 39.8] — that's Beijing area. Good.\n\nNow plan imagery with esri-world-imagery, zoom 10, geotiff, boundaryId explicit.\n\nUse plan_imagery with boundaryId. Zoom 10 over a 0.2x0.2 degree box → at Z10, tile ~0.35°, so a few tiles. Fine.\n\nThen jobs_start (fullAccess).\n\nThen extract job output and load via loadSource/loadArtifact — actually loadArtifact displays a verified GeoTIFF result by jobId.\n\nLet's plan.",
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "function": {
+              "arguments": "{\"sourceId\": \"esri-world-imagery\", \"zoom\": 10, \"outputFormats\": [\"geotiff\"], \"boundaryId\": \"range-b118f85c8e8f5c8dfaa68544247db8d8ed9f3ec428b49fe6f7d8b03e2d8bf4b8\"}",
+              "name": "plan_imagery"
+            },
+            "id": "call_00_5bFepNS9964Hzumq2RzA5000",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "cachedInputTokens": 20736,
+          "reasoningTokens": 146
+        }
+      },
+      "state": "settled",
+      "updatedAt": "2026-10-02T05:50:46.546Z",
+      "upstreamRequestId": "465cea02-d634-42fa-ad80-bf35c89de36a"
+    },
+    {
+      "conversationId": "fde66c15-913a-4bb5-b01b-f9ff0e16c843",
+      "createdAt": "2026-10-02T05:50:46.780Z",
+      "errorCode": null,
+      "generationId": "d3bd962f-a219-4a22-91c8-2cba5da76831",
+      "inputTokens": 21632,
+      "model": "deepseek-flash",
+      "outputTokens": 90,
+      "reservedTokens": 20000,
+      "result": {
+        "content": "计划就绪（Z10，2 张瓦片，约 19 MB），开始下载。",
+        "phase": "commentary",
+        "phaseSource": "compatibility",
+        "reasoning": null,
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "function": {
+              "arguments": "{\"planId\": \"tool-c824114d9de6008945d1a877b34eda75aeb217a516f993671140b094dd423291\"}",
+              "name": "jobs_start"
+            },
+            "id": "call_00_ET_9rkW8FE7kkEffuJ2zLcr2494",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "cachedInputTokens": 21248,
+          "reasoningTokens": 0
+        }
+      },
+      "state": "settled",
+      "updatedAt": "2026-10-02T05:50:47.832Z",
+      "upstreamRequestId": "96d47fe1-c5f4-469c-a47b-b4240cc6f163"
+    },
+    {
+      "conversationId": "fde66c15-913a-4bb5-b01b-f9ff0e16c843",
+      "createdAt": "2026-10-02T05:50:48.036Z",
+      "errorCode": null,
+      "generationId": "df6d8130-6fac-430e-b2e6-8cb353351232",
+      "inputTokens": 21901,
+      "model": "deepseek-flash",
+      "outputTokens": 77,
+      "reservedTokens": 20000,
+      "result": {
+        "content": null,
+        "phase": "commentary",
+        "phaseSource": "compatibility",
+        "reasoning": "Download started in background monitoring. Check status once (not repeatedly). Let's wait a bit and check artifacts_inspect. Let me poll once with a short sleep.",
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "function": {
+              "arguments": "{\"cmd\": \"Start-Sleep -Seconds 6\"}",
+              "name": "exec_command"
+            },
+            "id": "call_00_zU1tKzLEL9CxgJ9oh76V7317",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "cachedInputTokens": 21504,
+          "reasoningTokens": 33
+        }
+      },
+      "state": "settled",
+      "updatedAt": "2026-10-02T05:50:49.096Z",
+      "upstreamRequestId": "f0d4c190-d0db-43db-a0eb-bd3e21c04f7b"
+    },
+    {
+      "conversationId": "fde66c15-913a-4bb5-b01b-f9ff0e16c843",
+      "createdAt": "2026-10-02T05:50:55.562Z",
+      "errorCode": null,
+      "generationId": "2fb5ac4d-85eb-4561-b384-304cae132849",
+      "inputTokens": 22025,
+      "model": "deepseek-flash",
+      "outputTokens": 65,
+      "reservedTokens": 20000,
+      "result": {
+        "content": null,
+        "phase": "commentary",
+        "phaseSource": "compatibility",
+        "reasoning": null,
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "function": {
+              "arguments": "{\"jobId\": \"6761dbcf-76e9-45cf-8610-af84a4b79b4d\"}",
+              "name": "artifacts_inspect"
+            },
+            "id": "call_00_ET_DOa6FWOWCXzerwqK0hjd6455",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "cachedInputTokens": 21888,
+          "reasoningTokens": 0
+        }
+      },
+      "state": "settled",
+      "updatedAt": "2026-10-02T05:50:56.495Z",
+      "upstreamRequestId": "709ae80e-7367-46b2-acc5-bae4177fb78a"
+    },
+    {
+      "conversationId": "fde66c15-913a-4bb5-b01b-f9ff0e16c843",
+      "createdAt": "2026-10-02T05:50:56.616Z",
+      "errorCode": null,
+      "generationId": "a778703a-6855-4e65-a5ae-5cea09e539c6",
+      "inputTokens": 22498,
+      "model": "deepseek-flash",
+      "outputTokens": 132,
+      "reservedTokens": 20000,
+      "result": {
+        "content": "成果已就绪（147×190 GeoTIFF，无缺瓦），加载到当前地图。",
+        "phase": "commentary",
+        "phaseSource": "compatibility",
+        "reasoning": null,
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "function": {
+              "arguments": "{\"connectorId\": \"builtin-openlayers-mcp\", \"toolName\": \"loadArtifact\", \"arguments\": {\"jobId\": \"6761dbcf-76e9-45cf-8610-af84a4b79b4d\"}}",
+              "name": "mcp_call"
+            },
+            "id": "call_00_ET_smz6iKexwADG0Vb0w1VI0092",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "cachedInputTokens": 22016,
+          "reasoningTokens": 0
+        }
+      },
+      "state": "settled",
+      "updatedAt": "2026-10-02T05:50:57.720Z",
+      "upstreamRequestId": "58a3d765-a146-4c9a-848c-39accedde4a0"
+    },
+    {
+      "conversationId": "fde66c15-913a-4bb5-b01b-f9ff0e16c843",
+      "createdAt": "2026-10-02T05:50:59.082Z",
+      "errorCode": null,
+      "generationId": "91aabd7b-adb3-41b1-8cff-b8ff198414de",
+      "inputTokens": 22810,
+      "model": "deepseek-flash",
+      "outputTokens": 166,
+      "reservedTokens": 20000,
+      "result": {
+        "content": null,
+        "phase": "commentary",
+        "phaseSource": "compatibility",
+        "reasoning": "Done. Also maybe fit the layer. Optional: call fitLayer to display. Let me fit.\n\nAlso should confirm we didn't use previous admin boundaries — correct, we used the gpkg polygon.\n\nLet me fit the layer for good UX.",
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "function": {
+              "arguments": "{\"arguments\": {\"layerId\": \"artifact-6761dbcf-76e9-45cf-8610-af84a4b79b4d-imagery-z10\"}, \"connectorId\": \"builtin-openlayers-mcp\", \"toolName\": \"fitLayer\"}",
+              "name": "mcp_call"
+            },
+            "id": "call_00_aXbXAmJqjtKsWYmmlaFK5024",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "cachedInputTokens": 22528,
+          "reasoningTokens": 49
+        }
+      },
+      "state": "settled",
+      "updatedAt": "2026-10-02T05:51:00.518Z",
+      "upstreamRequestId": "fb2877e5-07ea-4854-a039-e8a0984335e0"
+    },
+    {
+      "conversationId": "fde66c15-913a-4bb5-b01b-f9ff0e16c843",
+      "createdAt": "2026-10-02T05:51:00.625Z",
+      "errorCode": null,
+      "generationId": "8bb3a58c-1df3-417b-a471-38eada7fd506",
+      "inputTokens": 23103,
+      "model": "deepseek-flash",
+      "outputTokens": 116,
+      "reservedTokens": 20000,
+      "result": {
+        "content": null,
+        "phase": "commentary",
+        "phaseSource": "compatibility",
+        "reasoning": null,
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "function": {
+              "arguments": "{\"arguments\": {\"id\": \"artifact-6761dbcf-76e9-45cf-8610-af84a4b79b4d-imagery-z10\"}, \"connectorId\": \"builtin-openlayers-mcp\", \"toolName\": \"fitLayer\"}",
+              "name": "mcp_call"
+            },
+            "id": "call_00_ET_QSJmeMxIpnfsxZcp6FYv1317",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "cachedInputTokens": 22912,
+          "reasoningTokens": 0
+        }
+      },
+      "state": "settled",
+      "updatedAt": "2026-10-02T05:51:01.849Z",
+      "upstreamRequestId": "972fc0b6-911b-4578-8b0f-b8dea9bc9c6e"
+    },
+    {
+      "conversationId": "fde66c15-913a-4bb5-b01b-f9ff0e16c843",
+      "createdAt": "2026-10-02T05:51:02.346Z",
+      "errorCode": null,
+      "generationId": "10f029ec-816d-45ef-8183-3ca035a00954",
+      "inputTokens": 23329,
+      "model": "deepseek-flash",
+      "outputTokens": 219,
+      "reservedTokens": 20000,
+      "result": {
+        "content": "完成，全程用的是 `multi.gpkg` 内的真实面边界（未使用先前行政区范围）。\n\n- 图层发现：`multi.gpkg` 含 `polygons`(面, EPSG:4326) 与 `points`(点)，已按要求选用面图层 `polygons`，挂载为范围 `range-b118f85c…`（116.1–116.3E / 39.6–39.8N，单面）。\n- 下载：Esri World Imagery、Z10、GeoTIFF，2 瓦片，透明裁剪到该面；任务 `6761dbcf-76e9-45cf-8610-af84a4b79b4d` 已完成，缺瓦 0，成品 147×190。\n- 地图加载：已通过 `loadArtifact` 加载图层 `artifact-6761dbcf-…-imagery-z10`（EPSG:3857，可见），并已缩放到该影像。",
+        "phase": "final_answer",
+        "phaseSource": "compatibility",
+        "reasoning": null,
+        "role": "assistant",
+        "toolCalls": [],
+        "usage": {
+          "cachedInputTokens": 23168,
+          "reasoningTokens": 0
+        }
+      },
+      "state": "settled",
+      "updatedAt": "2026-10-02T05:51:03.962Z",
+      "upstreamRequestId": "71fdc492-fe78-4f28-99aa-f87be6e545d1"
+    }
+  ],
+  "result": {
+    "completedAt": 1790920263,
+    "durationMs": 33142,
+    "error": null,
+    "id": "01a0fb2a-07ab-7030-b0a3-3afc45b82d11",
+    "items": [
+      {
+        "delivery": null,
+        "id": "msg_geod_98e6e90f-0719-418d-ab27-225906587b8f",
+        "memoryCitation": null,
+        "phase": "final_answer",
+        "questions": null,
+        "text": "完成，全程用的是 `multi.gpkg` 内的真实面边界（未使用先前行政区范围）。\n\n- 图层发现：`multi.gpkg` 含 `polygons`(面, EPSG:4326) 与 `points`(点)，已按要求选用面图层 `polygons`，挂载为范围 `range-b118f85c…`（116.1–116.3E / 39.6–39.8N，单面）。\n- 下载：Esri World Imagery、Z10、GeoTIFF，2 瓦片，透明裁剪到该面；任务 `6761dbcf-76e9-45cf-8610-af84a4b79b4d` 已完成，缺瓦 0，成品 147×190。\n- 地图加载：已通过 `loadArtifact` 加载图层 `artifact-6761dbcf-…-imagery-z10`（EPSG:3857，可见），并已缩放到该影像。",
+        "type": "agentMessage"
+      }
+    ],
+    "itemsView": "summary",
+    "startedAt": 1790920230,
+    "status": "completed",
+    "text": "完成，全程用的是 `multi.gpkg` 内的真实面边界（未使用先前行政区范围）。\n\n- 图层发现：`multi.gpkg` 含 `polygons`(面, EPSG:4326) 与 `points`(点)，已按要求选用面图层 `polygons`，挂载为范围 `range-b118f85c…`（116.1–116.3E / 39.6–39.8N，单面）。\n- 下载：Esri World Imagery、Z10、GeoTIFF，2 瓦片，透明裁剪到该面；任务 `6761dbcf-76e9-45cf-8610-af84a4b79b4d` 已完成，缺瓦 0，成品 147×190。\n- 地图加载：已通过 `loadArtifact` 加载图层 `artifact-6761dbcf-…-imagery-z10`（EPSG:3857，可见），并已缩放到该影像。",
+    "threadId": "01a0fb29-ea77-7771-bf18-7b23d4878737"
+  },
+  "trace": [
+    {
+      "name": "workspace_gis_files_list",
+      "args": {},
+      "output": {
+        "error": "Error: Command not allowed"
+      }
+    },
+    {
+      "name": "extensions_list",
+      "args": {
+        "query": "OpenLayers"
+      },
+      "output": {
+        "skills": [],
+        "connectors": [
+          {
+            "connectorId": "builtin-openlayers-mcp",
+            "name": "OpenLayers MCP",
+            "toolCount": 40,
+            "matchedToolCount": 40,
+            "availableTools": [
+              "getCapabilities",
+              "flyTo",
+              "setView",
+              "getView",
+              "fitExtent",
+              "zoomIn",
+              "zoomOut",
+              "addTileLayer",
+              "addVectorLayer",
+              "addVectorTileLayer",
+              "getLayer",
+              "fitLayer",
+              "removeLayer",
+              "listLayers",
+              "setLayerVisibility",
+              "setLayerOpacity",
+              "setLayerZIndex",
+              "addGeoTIFFLayer",
+              "addImageLayer",
+              "addFeature",
+              "addGeoJSON",
+              "removeFeature",
+              "updateFeature",
+              "listFeatures",
+              "exportFeatures",
+              "clearFeatures",
+              "getFeaturesInExtent",
+              "screenshot",
+              "getFeatureAtPixel",
+              "addOverlay",
+              "removeOverlay",
+              "updateOverlay",
+              "listOverlays",
+              "setFeatureStyle",
+              "setLayerStyle",
+              "enableDraw",
+              "disableDraw",
+              "getDrawnFeatures",
+              "loadSource",
+              "loadArtifact"
+            ],
+            "tools": [
+              {
+                "name": "getCapabilities",
+                "description": "Get the connected map projection, actual commands, source formats and loading constraints.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {},
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "flyTo",
+                "description": "Animate to WGS84 longitude/latitude; returns the view after animation finishes.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "longitude": {
+                      "type": "number",
+                      "minimum": -180,
+                      "maximum": 180
+                    },
+                    "latitude": {
+                      "type": "number",
+                      "minimum": -90,
+                      "maximum": 90
+                    },
+                    "zoom": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 30
+                    },
+                    "duration": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 20000
+                    },
+                    "rotation": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "longitude",
+                    "latitude"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "setView",
+                "description": "Set view instantly using WGS84 longitude/latitude.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "longitude": {
+                      "type": "number",
+                      "minimum": -180,
+                      "maximum": 180
+                    },
+                    "latitude": {
+                      "type": "number",
+                      "minimum": -90,
+                      "maximum": 90
+                    },
+                    "zoom": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 30
+                    },
+                    "rotation": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "longitude",
+                    "latitude"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "getView",
+                "description": "Get the actual view in WGS84 and its projection.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {},
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "fitExtent",
+                "description": "Fit a WGS84 bounding box; west must be below east and south below north.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "west": {
+                      "type": "number",
+                      "minimum": -180,
+                      "maximum": 180
+                    },
+                    "south": {
+                      "type": "number",
+                      "minimum": -90,
+                      "maximum": 90
+                    },
+                    "east": {
+                      "$ref": "#/properties/west"
+                    },
+                    "north": {
+                      "$ref": "#/properties/south"
+                    },
+                    "duration": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 20000
+                    },
+                    "maxZoom": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 30
+                    },
+                    "padding": {
+                      "type": "array",
+                      "minItems": 4,
+                      "maxItems": 4,
+                      "items": [
+                        {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "number",
+                          "minimum": 0
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "west",
+                    "south",
+                    "east",
+                    "north"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "zoomIn",
+                "description": "Animate one zoom level in and return the resulting view.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {},
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "zoomOut",
+                "description": "Animate one zoom level out and return the resulting view.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {},
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "addTileLayer",
+                "description": "Add OSM, XYZ/TMS, WMS, or WMTS. WMTS requires a GetCapabilities URL and a layer name. Invalid sources fail rather than falling back to OSM. 已在 GeoD 配置的图源优先使用 loadSource。",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "opacity": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "visible": {
+                      "type": "boolean"
+                    },
+                    "zIndex": {
+                      "type": "number"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "osm",
+                        "xyz",
+                        "wms",
+                        "wmts"
+                      ]
+                    },
+                    "url": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Browser-readable URL. The host supplies local file URLs; raw filesystem paths are not supported."
+                    },
+                    "layers": {
+                      "type": "string"
+                    },
+                    "matrixSet": {
+                      "type": "string"
+                    },
+                    "projection": {
+                      "type": "string"
+                    },
+                    "tileUrl": {
+                      "$ref": "#/properties/url",
+                      "description": "Optional WMTS REST tile template override, e.g. a working mirror from GetCapabilities."
+                    },
+                    "format": {
+                      "type": "string"
+                    },
+                    "params": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "$ref": "#/properties/zIndex"
+                          },
+                          {
+                            "type": "boolean"
+                          }
+                        ]
+                      }
+                    },
+                    "minZoom": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 30
+                    },
+                    "maxZoom": {
+                      "$ref": "#/properties/minZoom"
+                    },
+                    "tileSize": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0
+                    },
+                    "crossOrigin": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "attribution": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "addVectorLayer",
+                "description": "Read inline data or a URL as GeoJSON, KML, GPX, TopoJSON or WKT. A WFS GetFeature URL with GeoJSON output can be used. Returns actual feature count.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "opacity": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "visible": {
+                      "type": "boolean"
+                    },
+                    "zIndex": {
+                      "type": "number"
+                    },
+                    "data": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": {}
+                        }
+                      ]
+                    },
+                    "url": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Browser-readable URL. The host supplies local file URLs; raw filesystem paths are not supported."
+                    },
+                    "format": {
+                      "type": "string",
+                      "enum": [
+                        "geojson",
+                        "kml",
+                        "gpx",
+                        "topojson",
+                        "wkt"
+                      ]
+                    },
+                    "dataProjection": {
+                      "type": "string"
+                    },
+                    "style": {
+                      "type": "object",
+                      "properties": {
+                        "fillColor": {
+                          "type": "string"
+                        },
+                        "fillOpacity": {
+                          "$ref": "#/properties/opacity"
+                        },
+                        "strokeColor": {
+                          "type": "string"
+                        },
+                        "strokeWidth": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "strokeDash": {
+                          "type": "array",
+                          "items": {
+                            "type": "number",
+                            "minimum": 0
+                          }
+                        },
+                        "pointRadius": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "pointColor": {
+                          "type": "string"
+                        },
+                        "iconUrl": {
+                          "type": "string"
+                        },
+                        "iconScale": {
+                          "type": "number",
+                          "exclusiveMinimum": 0
+                        },
+                        "text": {
+                          "type": "string"
+                        },
+                        "textFont": {
+                          "type": "string"
+                        },
+                        "textFillColor": {
+                          "type": "string"
+                        },
+                        "textStrokeColor": {
+                          "type": "string"
+                        },
+                        "textStrokeWidth": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "textOffsetY": {
+                          "$ref": "#/properties/zIndex"
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "fit": {
+                      "type": "boolean"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "addVectorTileLayer",
+                "description": "Add an MVT vector tile layer from a {z}/{x}/{y} URL template.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "opacity": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "visible": {
+                      "type": "boolean"
+                    },
+                    "zIndex": {
+                      "type": "number"
+                    },
+                    "url": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Browser-readable URL. The host supplies local file URLs; raw filesystem paths are not supported."
+                    },
+                    "minZoom": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 30
+                    },
+                    "maxZoom": {
+                      "$ref": "#/properties/minZoom"
+                    },
+                    "style": {
+                      "type": "object",
+                      "properties": {
+                        "fillColor": {
+                          "type": "string"
+                        },
+                        "fillOpacity": {
+                          "$ref": "#/properties/opacity"
+                        },
+                        "strokeColor": {
+                          "type": "string"
+                        },
+                        "strokeWidth": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "strokeDash": {
+                          "type": "array",
+                          "items": {
+                            "type": "number",
+                            "minimum": 0
+                          }
+                        },
+                        "pointRadius": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "pointColor": {
+                          "type": "string"
+                        },
+                        "iconUrl": {
+                          "type": "string"
+                        },
+                        "iconScale": {
+                          "type": "number",
+                          "exclusiveMinimum": 0
+                        },
+                        "text": {
+                          "type": "string"
+                        },
+                        "textFont": {
+                          "type": "string"
+                        },
+                        "textFillColor": {
+                          "type": "string"
+                        },
+                        "textStrokeColor": {
+                          "type": "string"
+                        },
+                        "textStrokeWidth": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "textOffsetY": {
+                          "$ref": "#/properties/zIndex"
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "url"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "getLayer",
+                "description": "Inspect layer type, source type, state, extent and feature count.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "fitLayer",
+                "description": "Fit the actual vector or raster extent of a layer.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "duration": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 20000
+                    },
+                    "maxZoom": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 30
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "removeLayer",
+                "description": "Remove a layer and dispose resources owned by the bridge.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "listLayers",
+                "description": "List stable layer IDs, source types, loading states and properties.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {},
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "setLayerVisibility",
+                "description": "Show or hide a layer.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "visible": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "visible"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "setLayerOpacity",
+                "description": "Set layer opacity from 0 to 1.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "opacity": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "opacity"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "setLayerZIndex",
+                "description": "Set layer stacking order.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "zIndex": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "zIndex"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "addGeoTIFFLayer",
+                "description": "Load GeoTIFF/COG via a browser-readable URL, using actual raster pixels. Supports selected bands and nodata. Returns metadata readiness separately from rendered tile state. Host must expose local files via an HTTP Range or custom protocol URL.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "opacity": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "visible": {
+                      "type": "boolean"
+                    },
+                    "zIndex": {
+                      "type": "number"
+                    },
+                    "url": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Browser-readable URL. The host supplies local file URLs; raw filesystem paths are not supported."
+                    },
+                    "bands": {
+                      "type": "array",
+                      "items": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0
+                      },
+                      "minItems": 1,
+                      "maxItems": 4
+                    },
+                    "min": {
+                      "$ref": "#/properties/zIndex"
+                    },
+                    "max": {
+                      "$ref": "#/properties/zIndex"
+                    },
+                    "nodata": {
+                      "$ref": "#/properties/zIndex"
+                    },
+                    "normalize": {
+                      "type": "boolean"
+                    },
+                    "interpolate": {
+                      "type": "boolean"
+                    },
+                    "convertToRGB": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "string",
+                          "const": "auto"
+                        }
+                      ]
+                    },
+                    "projection": {
+                      "type": "string"
+                    },
+                    "fit": {
+                      "type": "boolean"
+                    },
+                    "cacheSize": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 8192,
+                      "description": "64KB LRU blocks; default 2048 (~128MB maximum)."
+                    }
+                  },
+                  "required": [
+                    "url"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "addImageLayer",
+                "description": "Add a static georeferenced image, image WMS, or ArcGIS MapServer/ImageServer export image.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "opacity": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "visible": {
+                      "type": "boolean"
+                    },
+                    "zIndex": {
+                      "type": "number"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "static",
+                        "wms",
+                        "arcgis"
+                      ]
+                    },
+                    "url": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Browser-readable URL. The host supplies local file URLs; raw filesystem paths are not supported."
+                    },
+                    "projection": {
+                      "type": "string"
+                    },
+                    "extent": {
+                      "type": "array",
+                      "minItems": 4,
+                      "maxItems": 4,
+                      "items": [
+                        {
+                          "$ref": "#/properties/zIndex"
+                        },
+                        {
+                          "$ref": "#/properties/zIndex"
+                        },
+                        {
+                          "$ref": "#/properties/zIndex"
+                        },
+                        {
+                          "$ref": "#/properties/zIndex"
+                        }
+                      ],
+                      "description": "Static image extent in the specified projection, default EPSG:4326."
+                    },
+                    "layers": {
+                      "type": "string"
+                    },
+                    "params": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "$ref": "#/properties/zIndex"
+                          },
+                          {
+                            "type": "boolean"
+                          }
+                        ]
+                      }
+                    },
+                    "fit": {
+                      "type": "boolean"
+                    },
+                    "crossOrigin": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "url"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "addFeature",
+                "description": "Add geometry in the supplied data projection (default WGS84). Circle radius uses map projection units.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "layerId": {
+                      "$ref": "#/properties/id"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "Point",
+                        "LineString",
+                        "Polygon",
+                        "Circle",
+                        "MultiPoint",
+                        "MultiLineString",
+                        "MultiPolygon"
+                      ]
+                    },
+                    "coordinates": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "minItems": 2,
+                          "maxItems": 2,
+                          "items": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "$ref": "#/properties/coordinates/anyOf/0/items/0"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/properties/coordinates/anyOf/0"
+                          }
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/properties/coordinates/anyOf/0"
+                            }
+                          }
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "array",
+                            "items": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/properties/coordinates/anyOf/0"
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "radius": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    "dataProjection": {
+                      "type": "string"
+                    },
+                    "properties": {
+                      "type": "object",
+                      "additionalProperties": {}
+                    },
+                    "style": {
+                      "type": "object",
+                      "properties": {
+                        "fillColor": {
+                          "type": "string"
+                        },
+                        "fillOpacity": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "strokeColor": {
+                          "type": "string"
+                        },
+                        "strokeWidth": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "strokeDash": {
+                          "type": "array",
+                          "items": {
+                            "type": "number",
+                            "minimum": 0
+                          }
+                        },
+                        "pointRadius": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "pointColor": {
+                          "type": "string"
+                        },
+                        "iconUrl": {
+                          "type": "string"
+                        },
+                        "iconScale": {
+                          "type": "number",
+                          "exclusiveMinimum": 0
+                        },
+                        "text": {
+                          "type": "string"
+                        },
+                        "textFont": {
+                          "type": "string"
+                        },
+                        "textFillColor": {
+                          "type": "string"
+                        },
+                        "textStrokeColor": {
+                          "type": "string"
+                        },
+                        "textStrokeWidth": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "textOffsetY": {
+                          "$ref": "#/properties/coordinates/anyOf/0/items/0"
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "coordinates"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "addGeoJSON",
+                "description": "Add inline or URL GeoJSON to an existing or default vector layer.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "layerId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": {}
+                        }
+                      ]
+                    },
+                    "url": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Browser-readable URL. The host supplies local file URLs; raw filesystem paths are not supported."
+                    },
+                    "dataProjection": {
+                      "type": "string"
+                    },
+                    "style": {
+                      "type": "object",
+                      "properties": {
+                        "fillColor": {
+                          "type": "string"
+                        },
+                        "fillOpacity": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "strokeColor": {
+                          "type": "string"
+                        },
+                        "strokeWidth": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "strokeDash": {
+                          "type": "array",
+                          "items": {
+                            "type": "number",
+                            "minimum": 0
+                          }
+                        },
+                        "pointRadius": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "pointColor": {
+                          "type": "string"
+                        },
+                        "iconUrl": {
+                          "type": "string"
+                        },
+                        "iconScale": {
+                          "type": "number",
+                          "exclusiveMinimum": 0
+                        },
+                        "text": {
+                          "type": "string"
+                        },
+                        "textFont": {
+                          "type": "string"
+                        },
+                        "textFillColor": {
+                          "type": "string"
+                        },
+                        "textStrokeColor": {
+                          "type": "string"
+                        },
+                        "textStrokeWidth": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "textOffsetY": {
+                          "type": "number"
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "fit": {
+                      "type": "boolean"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "removeFeature",
+                "description": "Remove a feature by ID.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "featureId": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        {
+                          "type": "number"
+                        }
+                      ]
+                    },
+                    "layerId": {
+                      "$ref": "#/properties/featureId/anyOf/0"
+                    }
+                  },
+                  "required": [
+                    "featureId"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "updateFeature",
+                "description": "Update feature coordinates, properties or style. Coordinates use dataProjection, default WGS84.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "featureId": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        {
+                          "type": "number"
+                        }
+                      ]
+                    },
+                    "layerId": {
+                      "$ref": "#/properties/featureId/anyOf/0"
+                    },
+                    "coordinates": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "minItems": 2,
+                          "maxItems": 2,
+                          "items": [
+                            {
+                              "$ref": "#/properties/featureId/anyOf/1"
+                            },
+                            {
+                              "$ref": "#/properties/featureId/anyOf/1"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/properties/coordinates/anyOf/0"
+                          }
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/properties/coordinates/anyOf/0"
+                            }
+                          }
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "array",
+                            "items": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/properties/coordinates/anyOf/0"
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "radius": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    "dataProjection": {
+                      "type": "string"
+                    },
+                    "properties": {
+                      "type": "object",
+                      "additionalProperties": {}
+                    },
+                    "style": {
+                      "type": "object",
+                      "properties": {
+                        "fillColor": {
+                          "type": "string"
+                        },
+                        "fillOpacity": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "strokeColor": {
+                          "type": "string"
+                        },
+                        "strokeWidth": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "strokeDash": {
+                          "type": "array",
+                          "items": {
+                            "type": "number",
+                            "minimum": 0
+                          }
+                        },
+                        "pointRadius": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "pointColor": {
+                          "type": "string"
+                        },
+                        "iconUrl": {
+                          "type": "string"
+                        },
+                        "iconScale": {
+                          "type": "number",
+                          "exclusiveMinimum": 0
+                        },
+                        "text": {
+                          "type": "string"
+                        },
+                        "textFont": {
+                          "type": "string"
+                        },
+                        "textFillColor": {
+                          "type": "string"
+                        },
+                        "textStrokeColor": {
+                          "type": "string"
+                        },
+                        "textStrokeWidth": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "textOffsetY": {
+                          "$ref": "#/properties/featureId/anyOf/1"
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "featureId"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "listFeatures",
+                "description": "List JSON-safe feature information with offset/limit pagination, without OpenLayers geometry objects.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "layerId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "offset": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "limit": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 1000
+                    }
+                  },
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "exportFeatures",
+                "description": "Export loaded vector features as GeoJSON in a target projection, default WGS84. Circles are converted to polygons.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "layerId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "dataProjection": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "clearFeatures",
+                "description": "Clear all features from a vector layer.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "layerId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  },
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "getFeaturesInExtent",
+                "description": "Query loaded vector features whose geometries intersect a WGS84 box.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "west": {
+                      "type": "number",
+                      "minimum": -180,
+                      "maximum": 180
+                    },
+                    "south": {
+                      "type": "number",
+                      "minimum": -90,
+                      "maximum": 90
+                    },
+                    "east": {
+                      "$ref": "#/properties/west"
+                    },
+                    "north": {
+                      "$ref": "#/properties/south"
+                    },
+                    "layerId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "limit": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 1000
+                    }
+                  },
+                  "required": [
+                    "west",
+                    "south",
+                    "east",
+                    "north"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "screenshot",
+                "description": "Composite all visible map canvases into a PNG. CORS-tainted tiles cause an explicit error. HTML controls/overlays are not included.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {},
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "getFeatureAtPixel",
+                "description": "Pick a rendered feature at CSS pixel coordinates with optional layer filter.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "y": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "layerId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "addOverlay",
+                "description": "Add a sanitized HTML overlay at WGS84 coordinates.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "longitude": {
+                      "type": "number",
+                      "minimum": -180,
+                      "maximum": 180
+                    },
+                    "latitude": {
+                      "type": "number",
+                      "minimum": -90,
+                      "maximum": 90
+                    },
+                    "html": {
+                      "type": "string"
+                    },
+                    "offset": {
+                      "type": "array",
+                      "minItems": 2,
+                      "maxItems": 2,
+                      "items": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "$ref": "#/properties/offset/items/0"
+                        }
+                      ]
+                    },
+                    "positioning": {
+                      "type": "string",
+                      "enum": [
+                        "bottom-left",
+                        "bottom-center",
+                        "bottom-right",
+                        "center-left",
+                        "center-center",
+                        "center-right",
+                        "top-left",
+                        "top-center",
+                        "top-right"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "longitude",
+                    "latitude",
+                    "html"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "removeOverlay",
+                "description": "Remove an overlay.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              },
+              {
+                "name": "updateOverlay",
+                "description": "Update sanitized overlay content or position.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "longitude": {
+                      "type": "number",
+                      "minimum": -180,
+                      "maximum": 180
+                    },
+                    "latitude": {
+                      "type": "number",
+                      "minimum": -90,
+                      "maximum": 90
+                    },
+                    "html": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "execution": {
+                  "taskSupport": "forbidden"
+                }
+              }
+            ],
+            "omittedToolCount": 8,
+            "next": "Use extensions_list with a specific tool name or capability to obtain its complete schema"
+          }
+        ]
+      }
+    },
+    {
+      "name": "sources_list",
+      "args": {},
+      "output": {
+        "sources": [
+          {
+            "schemaVersion": "0.1",
+            "id": "esri-world-imagery",
+            "displayName": "Esri World Imagery",
+            "attribution": "Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community",
+            "license": "",
+            "bulkDownloadAllowed": true,
+            "scheme": "XYZ",
+            "tileSize": 256,
+            "minZoom": 0,
+            "maxZoom": 22,
+            "configRevision": "b5d9ccab40f83a688f0580499f5a037c0f76b1adbebb70abb6c02eb50ccef2d1",
+            "credentialRefVersion": null
+          },
+          {
+            "schemaVersion": "0.1",
+            "id": "usgs-naip-plus-conus",
+            "displayName": "USGS NAIP Plus · 美国本土",
+            "attribution": "USGS, USDA, The National Map: Orthoimagery",
+            "license": "USGS The National Map 公共领域影像；仅用于美国本土已确认覆盖范围",
+            "bulkDownloadAllowed": true,
+            "scheme": "XYZ",
+            "tileSize": 256,
+            "minZoom": 10,
+            "maxZoom": 18,
+            "configRevision": "4f3d31417c9374032d2fb96a4bf84f7fdc5131476bd7ed35ccd6eaf35983d489",
+            "credentialRefVersion": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "extensions_list",
+      "args": {
+        "query": "builtin-data-input"
+      },
+      "output": {
+        "skills": [],
+        "connectors": [
+          {
+            "connectorId": "builtin-data-input",
+            "name": "数据范围 · 文件 / 在线 / PostGIS",
+            "toolCount": 4,
+            "matchedToolCount": 4,
+            "availableTools": [
+              "data_connections_list",
+              "data_connection_connect",
+              "data_layer_inspect",
+              "data_input_read"
+            ],
+            "tools": [
+              {
+                "name": "data_connections_list",
+                "description": "List saved PostgreSQL/PostGIS connections by ID and name; no credentials. Use data_connection_connect to create a connection from the conversation.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": false
+                }
+              },
+              {
+                "name": "data_connection_connect",
+                "description": "Connect to PostgreSQL/PostGIS, test access, save a connection and discover actual tables and spatial layers. Supply a user-provided workspace-relative credentialFile (JSON with host, port, database, user, password, sslMode, optional name), or host/database/user with optional name/port/sslMode. A required password opens native authentication and the tool waits for completion; never ask for passwords in chat or read the credential file through shell tools. Returns a stable connection ID and actual tables and layers. Reuse existing connections when appropriate.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "credentialFile": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "host": {
+                      "type": "string"
+                    },
+                    "port": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 65535
+                    },
+                    "database": {
+                      "type": "string"
+                    },
+                    "user": {
+                      "type": "string"
+                    },
+                    "sslMode": {
+                      "type": "string",
+                      "enum": [
+                        "disable",
+                        "prefer",
+                        "require",
+                        "verify-ca",
+                        "verify-full"
+                      ]
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              {
+                "name": "data_layer_inspect",
+                "description": "Read a PostgreSQL table or PostGIS layer's actual field names/types, feature count and sample attribute records. Use a returned table ID (schema.table) or spatial layer ID (schema.table.geometry_column). Works for points, lines and polygons; does not attach a clipping boundary. Geometry remains native. Count over 10,000 is explicitly a lower bound; sample records are not the full dataset. Use data_input_read to attach a polygon layer as the planning range.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "connectionId": {
+                      "type": "string"
+                    },
+                    "layer": {
+                      "type": "string"
+                    },
+                    "limit": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 10
+                    }
+                  },
+                  "required": [
+                    "connectionId",
+                    "layer"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              {
+                "name": "data_input_read",
+                "description": "Read and attach polygon boundaries from one source: supplied HTTP(S) vector data / WFS GetFeature / ArcGIS query / OGC API items URL, a workspace relative vector file, saved PostGIS connectionId, or returned handle. Supports GeoJSON, Shapefile / ZIP, GPKG/SQLite, KML/KMZ, GML, FGB, WKT, CSV WKT. Returns layers to choose with layer + handle/connectionId. Missing CRS needs known sourceCrs, never guess. Geometry stays on desktop. Success attaches boundary to plan_imagery.",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "url": {
+                      "type": "string"
+                    },
+                    "relativePath": {
+                      "type": "string"
+                    },
+                    "connectionId": {
+                      "type": "string"
+                    },
+                    "handle": {
+                      "type": "string"
+                    },
+                    "layer": {
+                      "type": "string"
+                    },
+                    "sourceCrs": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "workspace_status",
+      "args": {},
+      "output": {
+        "directory": "\\\\?\\C:\\Users\\Administrator\\AppData\\Local\\Temp\\geod-batch-1df95e80-8767-47c4-a766-2e62e39f3cf8",
+        "permission": "fullAccess",
+        "canStartWithoutPlanConfirmation": true
+      }
+    },
+    {
+      "name": "data_input_read",
+      "args": {
+        "relativePath": "multi.gpkg"
+      },
+      "output": {
+        "handle": "27423315-100f-43cb-8124-fc69976fedf1",
+        "layers": [
+          {
+            "crs": "EPSG:4326",
+            "featureCount": 1,
+            "geometryType": "Polygon",
+            "name": "polygons"
+          },
+          {
+            "crs": "EPSG:4326",
+            "featureCount": 1,
+            "geometryType": "Point",
+            "name": "points"
+          }
+        ],
+        "selectionRequired": true
+      }
+    },
+    {
+      "name": "data_input_read",
+      "args": {
+        "handle": "27423315-100f-43cb-8124-fc69976fedf1",
+        "layer": "polygons"
+      },
+      "output": {
+        "boundary": {
+          "boundaryId": "range-b118f85c8e8f5c8dfaa68544247db8d8ed9f3ec428b49fe6f7d8b03e2d8bf4b8",
+          "name": "polygons.geojson",
+          "bounds": [
+            116.1,
+            39.6,
+            116.3,
+            39.8
+          ],
+          "polygonCount": 1,
+          "attachedToDesktopPlan": true
+        },
+        "handle": "27423315-100f-43cb-8124-fc69976fedf1",
+        "layers": [
+          {
+            "crs": "EPSG:4326",
+            "featureCount": 1,
+            "geometryType": "Polygon",
+            "name": "polygons"
+          },
+          {
+            "crs": "EPSG:4326",
+            "featureCount": 1,
+            "geometryType": "Point",
+            "name": "points"
+          }
+        ],
+        "selectedLayer": "polygons",
+        "sourceCrs": "EPSG:4326"
+      }
+    },
+    {
+      "name": "plan_imagery",
+      "args": {
+        "boundaryId": "range-b118f85c8e8f5c8dfaa68544247db8d8ed9f3ec428b49fe6f7d8b03e2d8bf4b8",
+        "outputFormats": [
+          "geotiff"
+        ],
+        "sourceId": "esri-world-imagery",
+        "zoom": 10
+      },
+      "output": {
+        "permission": "fullAccess",
+        "requiresPlanConfirmation": false,
+        "canStartWithoutPlanConfirmation": true,
+        "planId": "tool-c824114d9de6008945d1a877b34eda75aeb217a516f993671140b094dd423291",
+        "planHash": "1f532503b682f72e0af76ca7be5c80ccb4702ed01e364b3a63ee24cf63c68aca",
+        "source": "Esri World Imagery",
+        "bounds": [
+          116.1,
+          39.6,
+          116.3,
+          39.8
+        ],
+        "boundary": "1 个面；GeoTIFF 按边界透明裁剪，MBTiles 保留整瓦片",
+        "zoomLevels": [
+          10
+        ],
+        "outputFormats": [
+          "geotiff"
+        ],
+        "outputLocation": "当前本机工作区中的新文件夹，模型不可读取路径",
+        "totalTiles": 2,
+        "decodedRgbaBytes": 524288,
+        "requiredFreeDiskBytes": 18939904,
+        "license": "",
+        "attribution": "Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community",
+        "expiresAt": "2026-10-02T06:20:46.714774600Z",
+        "execution": "可调用 jobs_start；本机将验证工作区完全访问授权及计划路径"
+      }
+    },
+    {
+      "name": "jobs_start",
+      "args": {
+        "planId": "tool-c824114d9de6008945d1a877b34eda75aeb217a516f993671140b094dd423291"
+      },
+      "output": {
+        "jobId": "6761dbcf-76e9-45cf-8610-af84a4b79b4d",
+        "planId": "tool-c824114d9de6008945d1a877b34eda75aeb217a516f993671140b094dd423291",
+        "state": "downloading",
+        "ledgerState": "downloading",
+        "workerActive": true,
+        "version": 2,
+        "completedTiles": null,
+        "totalTiles": 2,
+        "percent": null,
+        "checkingCache": false,
+        "checkedTiles": null,
+        "progressRecordedAt": null,
+        "checkedAt": "2026-10-02T05:50:47.977Z",
+        "latestError": null,
+        "monitoring": "desktop-background",
+        "operation": "started",
+        "reused": false,
+        "resumed": false
+      }
+    },
+    {
+      "name": "artifacts_inspect",
+      "args": {
+        "jobId": "6761dbcf-76e9-45cf-8610-af84a4b79b4d"
+      },
+      "output": {
+        "jobId": "6761dbcf-76e9-45cf-8610-af84a4b79b4d",
+        "quality": {
+          "status": "complete",
+          "missingTiles": 0,
+          "warnings": []
+        },
+        "assets": [
+          {
+            "id": "boundary",
+            "kind": "vector",
+            "role": "input",
+            "bytes": 631,
+            "sha256": "f6b2fe6ed901d02674770361dbb7f17a2e3b17f67ac26eaff22581517688128f",
+            "bounds": [
+              116.1,
+              39.6,
+              116.3,
+              39.8
+            ]
+          },
+          {
+            "id": "imagery-z10",
+            "kind": "raster",
+            "role": "analysis",
+            "bytes": 112074,
+            "sha256": "4bb123855f4729c4cde32256983afe51c41cd2c7a75621d20f2f6f6c62de051d",
+            "bounds": [
+              116.09939575195312,
+              39.5993395752953,
+              116.30126953125,
+              39.80009595634839
+            ],
+            "width": 147,
+            "height": 190
+          },
+          {
+            "id": "imagery-preview",
+            "kind": "raster",
+            "role": "preview",
+            "bytes": 86792,
+            "sha256": "6ec3c2f2cc2519e6115ec60854c77f2d9bdc2238ded04dfb1a813cde82ec8826",
+            "bounds": [
+              116.09939575195312,
+              39.5993395752953,
+              116.30126953125,
+              39.80009595634839
+            ],
+            "width": 147,
+            "height": 190
+          }
+        ],
+        "provenance": [
+          {
+            "source": "Esri World Imagery",
+            "attribution": "Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community",
+            "retrievedAt": "2026-10-02T05:50:47.981248500+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "name": "mcp_call",
+      "args": {
+        "arguments": {
+          "jobId": "6761dbcf-76e9-45cf-8610-af84a4b79b4d"
+        },
+        "connectorId": "builtin-openlayers-mcp",
+        "toolName": "loadArtifact"
+      },
+      "output": {
+        "connectorId": "builtin-openlayers-mcp",
+        "toolName": "loadArtifact",
+        "result": {
+          "layerId": "artifact-6761dbcf-76e9-45cf-8610-af84a4b79b4d-imagery-z10",
+          "jobId": "6761dbcf-76e9-45cf-8610-af84a4b79b4d",
+          "assetId": "imagery-z10",
+          "name": "Esri World Imagery",
+          "state": "ready",
+          "visible": true,
+          "kind": "downloaded-geotiff",
+          "bounds": [
+            116.09939575195312,
+            39.5993395752953,
+            116.30126953125,
+            39.80009595634839
+          ],
+          "crs": "EPSG:3857",
+          "width": 147,
+          "height": 190
+        }
+      }
+    },
+    {
+      "name": "mcp_call",
+      "args": {
+        "arguments": {
+          "layerId": "artifact-6761dbcf-76e9-45cf-8610-af84a4b79b4d-imagery-z10"
+        },
+        "connectorId": "builtin-openlayers-mcp",
+        "toolName": "fitLayer"
+      },
+      "output": {
+        "connectorId": "builtin-openlayers-mcp",
+        "toolName": "fitLayer",
+        "result": {
+          "error": "MAP_TOOL_FAILED",
+          "message": "MCP error -32602: Input validation error: Invalid arguments for tool fitLayer: [\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"string\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"id\"\n    ],\n    \"message\": \"Required\"\n  }\n]"
+        }
+      }
+    },
+    {
+      "name": "mcp_call",
+      "args": {
+        "arguments": {
+          "id": "artifact-6761dbcf-76e9-45cf-8610-af84a4b79b4d-imagery-z10"
+        },
+        "connectorId": "builtin-openlayers-mcp",
+        "toolName": "fitLayer"
+      },
+      "output": {
+        "connectorId": "builtin-openlayers-mcp",
+        "toolName": "fitLayer",
+        "result": {
+          "center": [
+            116.20033264160155,
+            39.699790764269665
+          ],
+          "zoom": 11.82246181444761,
+          "rotation": 0,
+          "extent": [
+            116.02172306605745,
+            39.59215890629588,
+            116.37894221714566,
+            39.80725502379366
+          ],
+          "projection": "EPSG:3857"
+        }
+      }
+    }
+  ],
+  "layers": [
+    {
+      "id": "osm",
+      "name": "OpenStreetMap",
+      "type": "tile",
+      "sourceType": "XYZ",
+      "state": "ready",
+      "visible": true,
+      "opacity": 1,
+      "zIndex": 0,
+      "extent": null,
+      "sourceId": null,
+      "jobId": null,
+      "kind": null
+    },
+    {
+      "id": "artifact-6761dbcf-76e9-45cf-8610-af84a4b79b4d-imagery-z10",
+      "name": "Esri World Imagery",
+      "type": "raster",
+      "sourceType": "geotiff",
+      "state": "ready",
+      "visible": true,
+      "opacity": 1,
+      "zIndex": 750,
+      "extent": [
+        116.09939575195312,
+        39.59933957529529,
+        116.30126953125,
+        39.8000959563484
+      ],
+      "sourceId": null,
+      "jobId": "6761dbcf-76e9-45cf-8610-af84a4b79b4d",
+      "kind": "downloaded-geotiff"
+    }
+  ],
+  "jobs": [
+    {
+      "jobId": "6761dbcf-76e9-45cf-8610-af84a4b79b4d",
+      "planId": "tool-c824114d9de6008945d1a877b34eda75aeb217a516f993671140b094dd423291",
+      "approvalId": "00a2fef2-3d45-44cf-abfc-6e566142061d",
+      "planHash": "1f532503b682f72e0af76ca7be5c80ccb4702ed01e364b3a63ee24cf63c68aca",
+      "idempotencyKey": "codex:fde66c15-913a-4bb5-b01b-f9ff0e16c843:call_00_ET_9rkW8FE7kkEffuJ2zLcr2494",
+      "state": "completed",
+      "version": 6,
+      "createdAt": "2026-10-02T05:50:47.964518900Z"
+    }
+  ],
+  "pass": true
+}

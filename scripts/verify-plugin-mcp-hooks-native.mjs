@@ -1,0 +1,43 @@
+/** Real desktop import, review, language, resource and connector binding checks. */
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import {randomUUID} from 'node:crypto';
+import {pathToFileURL} from 'node:url';
+const root=path.resolve('artifacts/product-gaps-20261004/plugin-mcp-hooks'),fixture=path.join(root,'native package with spaces'),stateFile=path.join(root,'restart-state.json'),file=path.join(root,'native-result.json');
+fs.mkdirSync(path.join(fixture,'.codex-plugin'),{recursive:true});fs.mkdirSync(path.join(fixture,'hooks'),{recursive:true});
+const marker='MCP_HOOK_NATIVE_'+randomUUID().replaceAll('-',''),controlFile=path.join(root,'control.json'),auditFile=path.join(root,'native-events.jsonl');
+assert(!fs.existsSync(stateFile),'An existing acceptance run must be recovered before creating another');
+fs.writeFileSync(controlFile,JSON.stringify({marker,mode:'normal'}));
+fs.copyFileSync(path.resolve('scripts/fixtures/mcp-hook-fixture.mjs'),path.join(fixture,'server.mjs'));
+fs.writeFileSync(path.join(fixture,'.codex-plugin','plugin.json'),JSON.stringify({name:'geod-mcp-hooks-qa',version:'1.0.0',description:'Local lifecycle MCP acceptance fixture',interface:{displayName:'MCP lifecycle acceptance'}}));
+fs.writeFileSync(path.join(fixture,'.mcp.json'),JSON.stringify({mcpServers:{notes:{command:'node',args:['${PLUGIN_ROOT}/server.mjs'],env:{QA_MCP_LOG:auditFile,QA_MCP_CONTROL:controlFile},startup_timeout_sec:5,tool_timeout_sec:10}}}));
+const variable=name=>'$'+'{'+name+'}';
+const hooks=Object.fromEntries(['SessionStart','UserPromptSubmit','PreToolUse','PostToolUse','Stop'].map(event=>[event,[{hooks:[{type:'mcp_tool',server:'notes',tool:'record_hook',input:{event:variable('hook_event_name'),cwd:variable('cwd'),nested:{count:3,enabled:true},...(event==='UserPromptSubmit'?{prompt:variable('prompt')}:{}),...(['PreToolUse','PostToolUse'].includes(event)?{toolInput:variable('tool_input')}:{})},timeout:10}]}]]));
+fs.writeFileSync(path.join(fixture,'hooks','hooks.json'),JSON.stringify({hooks}));
+const {chromium}=await import(pathToFileURL('C:/Users/Administrator/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs').href);
+const browser=await chromium.connectOverCDP('http://127.0.0.1:9233');let page;const until=Date.now()+20000;while(!page&&Date.now()<until){page=browser.contexts().flatMap(c=>c.pages()).find(p=>p.url().includes(':1420'));if(!page)await new Promise(resolve=>setTimeout(resolve,200));}assert(page);
+const rpc=async(command,args={})=>{const result=await page.evaluate(async({command,args})=>{try{return{ok:true,value:await window.__TAURI_INTERNALS__.invoke(command,args)};}catch(error){return{ok:false,error};}},{command,args});if(!result.ok)throw result.error;return result.value;};
+const report={passed:false,cases:[]},pass=(name,details={})=>{report.cases.push({name,passed:true,...details});fs.writeFileSync(file,JSON.stringify(report,null,2));console.log(JSON.stringify({name,passed:true}));};let original;
+try{
+ await page.locator('.conversation-account-trigger').waitFor();
+ original=await page.evaluate(async()=>{const {api}=await import('/src/api.ts'),{localStateStore,flushLocalState}=await import('/src/local-state.ts'),{accountChatStore,CHAT_LIST_KEY}=await import('/src/pending-generations.ts');await flushLocalState();const auth=await api.authStatus(),store=accountChatStore(localStateStore,auth.userId);return{userId:auth.userId,active:store.getItem('geod-agent-active-conversation-0.1'),chatIds:JSON.parse(store.getItem(CHAT_LIST_KEY)||'[]').map(c=>c.conversationId),language:localStorage.getItem('geod-agent-language-v1'),theme:document.documentElement.dataset.theme,width:innerWidth,height:innerHeight};});
+ const baseline=(await rpc('plugins_list')).plugins;assert(!baseline.some(p=>p.name==='geod-mcp-hooks-qa'));
+ const preview=await rpc('plugin_preview',{path:fixture});assert.equal(preview.hooks.length,5);assert.equal(preview.connectors.length,1);
+ const installed=await rpc('plugin_import',{path:fixture,expectedSha256:preview.sha256,enabled:true});assert.equal(installed.hooksCount,5);assert.equal(installed.enabledHooks,0);assert.equal(installed.hooksReviewed,false);
+ const installedRoot=path.join(process.env.APPDATA,'dev.geod-agent.desktop','plugin-packages',installed.id),saved={installedId:installed.id,sha256:preview.sha256,fixture,installedRoot,controlFile,auditFile,marker,original,baselineIds:baseline.map(p=>p.id),qaConversationIds:[]};fs.writeFileSync(stateFile,JSON.stringify(saved,null,2));
+ pass('Actual MCP lifecycle package imports with its owned connector; automation remains off',{pluginId:installed.id});
+ const script=path.join(installedRoot,'server.mjs'),before=fs.readFileSync(script);fs.appendFileSync(script,'\n// changed after review');
+ try{await rpc('plugin_hooks_preview',{id:installed.id});assert.fail('Changed resources were accepted');}catch(error){assert.equal(error.code,'PLUGIN_CHANGED');}finally{fs.writeFileSync(script,before);}
+ pass('Actual resource change prevents reusing an old review');
+ await page.evaluate(async()=>{const {setLanguagePreferences}=await import('/src/i18n.ts');setLanguagePreferences({language:'zh-CN'});document.documentElement.dataset.theme='dark';document.documentElement.style.colorScheme='dark';});await page.setViewportSize({width:1000,height:720});
+ await page.getByRole('button',{name:'技能与连接器',exact:true}).click();await page.getByRole('button',{name:'插件',exact:true}).click();const row=page.locator('.memory-row').filter({hasText:'MCP lifecycle acceptance'});await row.getByRole('button',{name:'自动化 0/5',exact:true}).click();
+ const dialog=page.getByRole('dialog');await dialog.waitFor();assert.equal(await dialog.locator('.plugin-hook-row').count(),5);assert.equal(await dialog.getByRole('button',{name:'启用自动化',exact:true}).isEnabled(),false);assert.equal(await dialog.locator('.plugin-hook-command').first().innerText(),'notes · record_hook');
+ await dialog.locator('.plugin-hook-input summary').first().click();assert((await dialog.locator('.plugin-hook-input pre').first().innerText()).includes(variable('hook_event_name')));const bounds=await dialog.boundingBox();assert(bounds&&bounds.y>=0&&bounds.y+bounds.height<=720);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+ await page.screenshot({path:path.join(root,'actual-review-dark-1000.png')});await dialog.getByRole('checkbox').check();await dialog.getByRole('button',{name:'启用自动化',exact:true}).click();await dialog.waitFor({state:'hidden'});assert.equal((await rpc('plugins_list')).plugins.find(p=>p.id===installed.id).enabledHooks,5);assert(!fs.existsSync(auditFile),'Enabling should not run the tool');
+ pass('Actual dark review shows MCP target and folded templates; consent is required and enabling does not call tools');
+ await page.evaluate(async()=>{const {setLanguagePreferences}=await import('/src/i18n.ts');setLanguagePreferences({language:'en'});document.documentElement.dataset.theme='light';document.documentElement.style.colorScheme='light';});await row.getByRole('button',{name:'Automation 5/5',exact:true}).click();await dialog.waitFor();await page.screenshot({path:path.join(root,'actual-review-light-en-1000.png')});await dialog.getByRole('button',{name:'Disable automation',exact:true}).click();await dialog.waitFor({state:'hidden'});assert.equal((await rpc('plugins_list')).plugins.find(p=>p.id===installed.id).enabledHooks,0);
+ await row.getByRole('button',{name:'Automation 0/5',exact:true}).click();await dialog.waitFor();assert.equal(await dialog.getByRole('button',{name:'Enable automation',exact:true}).isEnabled(),false);await dialog.getByRole('checkbox').check();await dialog.getByRole('button',{name:'Enable automation',exact:true}).click();await dialog.waitFor({state:'hidden'});
+ pass('Actual English controls disable MCP automation and require renewed review');report.passed=true;fs.writeFileSync(file,JSON.stringify(report,null,2));
+}catch(error){report.error={message:error.message||JSON.stringify(error),code:error.code,stack:error.stack};fs.writeFileSync(file,JSON.stringify(report,null,2));await page.screenshot({path:path.join(root,'native-failure.png')}).catch(()=>{});throw error;}
+finally{if(original){await page.evaluate(async original=>{const {setLanguagePreferences}=await import('/src/i18n.ts');if(original.language)setLanguagePreferences(JSON.parse(original.language));document.documentElement.dataset.theme=original.theme;document.documentElement.style.colorScheme=original.theme;},original);await page.setViewportSize({width:original.width,height:original.height});}await browser.close();}

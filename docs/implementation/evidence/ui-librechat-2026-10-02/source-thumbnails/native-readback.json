@@ -1,0 +1,62 @@
+{
+  "count": 2,
+  "configurationUnchanged": true,
+  "results": [
+    {
+      "id": "esri-world-imagery",
+      "image": {
+        "tile": {
+          "z": 5,
+          "x": 25,
+          "y": 12,
+          "longitude": 108,
+          "latitude": 35,
+          "fromExtent": true
+        }
+      },
+      "bytes": 19458
+    },
+    {
+      "id": "unsaved-preview-esri-world-imagery",
+      "image": {
+        "tile": {
+          "z": 5,
+          "x": 25,
+          "y": 12,
+          "longitude": 108,
+          "latitude": 35,
+          "fromExtent": true
+        }
+      },
+      "bytes": 19458
+    },
+    {
+      "id": "usgs-naip-plus-conus",
+      "image": {
+        "tile": {
+          "z": 12,
+          "x": 1275,
+          "y": 1838,
+          "longitude": -67.89692831272546,
+          "latitude": 18.107961892349095,
+          "fromExtent": true
+        }
+      },
+      "bytes": 96864
+    },
+    {
+      "id": "unsaved-preview-usgs-naip-plus-conus",
+      "image": {
+        "tile": {
+          "z": 12,
+          "x": 1275,
+          "y": 1838,
+          "longitude": -67.89692831272546,
+          "latitude": 18.107961892349095,
+          "fromExtent": true
+        }
+      },
+      "bytes": 96864
+    }
+  ]
+}

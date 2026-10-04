@@ -1,0 +1,209 @@
+{
+  "changes": {
+    "after": [
+      {
+        "captureDate": "2026-01-26",
+        "geometry": {
+          "coordinates": [
+            [
+              [
+                [
+                  116.395,
+                  39.905
+                ],
+                [
+                  116.395,
+                  39.895
+                ],
+                [
+                  116.405,
+                  39.895
+                ],
+                [
+                  116.405,
+                  39.905
+                ],
+                [
+                  116.395,
+                  39.905
+                ]
+              ]
+            ]
+          ],
+          "type": "MultiPolygon"
+        },
+        "provider": "Vivid Advanced",
+        "resolutionMeters": 0.34
+      }
+    ],
+    "before": [],
+    "boundary": {
+      "bounds": [
+        116.395,
+        39.895,
+        116.405,
+        39.905
+      ],
+      "geometry": {
+        "polygons": [
+          [
+            [
+              [
+                116.395,
+                39.905
+              ],
+              [
+                116.395,
+                39.895
+              ],
+              [
+                116.405,
+                39.895
+              ],
+              [
+                116.405,
+                39.905
+              ],
+              [
+                116.395,
+                39.905
+              ]
+            ]
+          ]
+        ]
+      },
+      "name": "Wayback-2014-02-20-至-2026-08-05-更新范围.geojson",
+      "polygonCount": 1
+    },
+    "bounds": [
+      116.395,
+      39.895,
+      116.405,
+      39.905
+    ],
+    "catalogFetchedAt": "2026-10-02T12:55:32.168174100Z",
+    "changedFraction": 0.9999999989519495,
+    "comparison": "capture metadata footprint difference",
+    "dateMeaning": "比较拍摄日期、提供方、分辨率与覆盖几何；未知元数据范围保留在增量范围中",
+    "found": true,
+    "fromRelease": {
+      "metadataUrl": "https://metadata.maptiles.arcgis.com/arcgis/rest/services/World_Imagery_Metadata_2014_r01/MapServer",
+      "releaseDate": "2014-02-20",
+      "releaseId": "10",
+      "source": {
+        "attribution": "Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+        "id": "wayback-10",
+        "license": "",
+        "maxZoom": 22,
+        "minIntervalMs": 0,
+        "minZoom": 0,
+        "name": "Esri 历史影像 2014-02-20",
+        "scheme": "XYZ",
+        "tileSize": 256,
+        "urlTemplate": "https://wayback-a.maptiles.arcgis.com/arcgis/rest/services/world_imagery/mapserver/tile/10/{z}/{y}/{x}"
+      }
+    },
+    "source": {
+      "attribution": "Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+      "id": "wayback-26334",
+      "license": "",
+      "maxZoom": 22,
+      "minIntervalMs": 0,
+      "minZoom": 0,
+      "name": "Esri 历史影像 2026-08-05",
+      "scheme": "XYZ",
+      "tileSize": 256,
+      "urlTemplate": "https://wayback-a.maptiles.arcgis.com/arcgis/rest/services/world_imagery/mapserver/tile/26334/{z}/{y}/{x}"
+    },
+    "staleCatalog": false,
+    "toRelease": {
+      "metadataUrl": "https://metadata.maptiles.arcgis.com/arcgis/rest/services/World_Imagery_Metadata_2026_r07/MapServer",
+      "releaseDate": "2026-08-05",
+      "releaseId": "26334",
+      "source": {
+        "attribution": "Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+        "id": "wayback-26334",
+        "license": "",
+        "maxZoom": 22,
+        "minIntervalMs": 0,
+        "minZoom": 0,
+        "name": "Esri 历史影像 2026-08-05",
+        "scheme": "XYZ",
+        "tileSize": 256,
+        "urlTemplate": "https://wayback-a.maptiles.arcgis.com/arcgis/rest/services/world_imagery/mapserver/tile/26334/{z}/{y}/{x}"
+      }
+    },
+    "unknownMetadataFraction": 0.9999999989519495,
+    "zoom": 16
+  },
+  "checkedAt": "2026-10-02T12:55:37.642182700Z",
+  "metadata": {
+    "bounds": [
+      116.395,
+      39.895,
+      116.405,
+      39.905
+    ],
+    "catalogFetchedAt": "2026-10-02T12:55:32.168174100Z",
+    "dateMeaning": "captureDate 是该覆盖面的拍摄日期；缺失值表示服务没有提供。releaseDate 是版本发布日期。",
+    "footprints": [
+      {
+        "captureDate": "2026-01-26",
+        "geometry": {
+          "coordinates": [
+            [
+              [
+                [
+                  116.395,
+                  39.905
+                ],
+                [
+                  116.395,
+                  39.895
+                ],
+                [
+                  116.405,
+                  39.895
+                ],
+                [
+                  116.405,
+                  39.905
+                ],
+                [
+                  116.395,
+                  39.905
+                ]
+              ]
+            ]
+          ],
+          "type": "MultiPolygon"
+        },
+        "provider": "Vivid Advanced",
+        "resolutionMeters": 0.34
+      }
+    ],
+    "metadataCoverageFraction": 1.0,
+    "metadataLayer": 5,
+    "release": {
+      "metadataUrl": "https://metadata.maptiles.arcgis.com/arcgis/rest/services/World_Imagery_Metadata_2026_r07/MapServer",
+      "releaseDate": "2026-08-05",
+      "releaseId": "26334",
+      "source": {
+        "attribution": "Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+        "id": "wayback-26334",
+        "license": "",
+        "maxZoom": 22,
+        "minIntervalMs": 0,
+        "minZoom": 0,
+        "name": "Esri 历史影像 2026-08-05",
+        "scheme": "XYZ",
+        "tileSize": 256,
+        "urlTemplate": "https://wayback-a.maptiles.arcgis.com/arcgis/rest/services/world_imagery/mapserver/tile/26334/{z}/{y}/{x}"
+      }
+    },
+    "staleCatalog": false,
+    "zoom": 16
+  },
+  "pass": true,
+  "versions": 196
+}

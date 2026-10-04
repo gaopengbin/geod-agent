@@ -1,0 +1,22 @@
+{
+  "version": "1.0",
+  "presets": [
+    {"id":"esri-world-imagery","name":"Esri World Imagery","urlTemplate":"https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}","attribution":"Esri and contributors","minZoom":0,"maxZoom":22},
+    {"id":"esri-topographic","name":"Esri 地形","urlTemplate":"https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}","attribution":"Esri and contributors","minZoom":0,"maxZoom":19},
+    {"id":"esri-street","name":"Esri 街道","urlTemplate":"https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}","attribution":"Esri and contributors","minZoom":0,"maxZoom":19},
+    {"id":"osm","name":"OpenStreetMap","urlTemplate":"https://tile.openstreetmap.org/{z}/{x}/{y}.png","attribution":"OpenStreetMap contributors","minZoom":0,"maxZoom":19},
+    {"id":"carto-light","name":"CARTO 浅色","urlTemplate":"https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png","subdomains":["a","b","c","d"],"attribution":"CARTO, OpenStreetMap contributors","minZoom":0,"maxZoom":19},
+    {"id":"carto-dark","name":"CARTO 深色","urlTemplate":"https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png","subdomains":["a","b","c","d"],"attribution":"CARTO, OpenStreetMap contributors","minZoom":0,"maxZoom":19},
+    {"id":"open-topo-map","name":"OpenTopoMap","urlTemplate":"https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png","subdomains":["a","b","c"],"attribution":"OpenTopoMap, OpenStreetMap contributors","minZoom":0,"maxZoom":17},
+    {"id":"google-satellite","name":"Google 卫星","urlTemplate":"https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}","subdomains":["0","1","2","3"],"attribution":"Google","minZoom":0,"maxZoom":20},
+    {"id":"google-map","name":"Google 地图","urlTemplate":"https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}","subdomains":["0","1","2","3"],"coordinateSystem":"gcj02","attribution":"Google","minZoom":0,"maxZoom":20},
+    {"id":"google-hybrid","name":"Google 混合","urlTemplate":"https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}","subdomains":["0","1","2","3"],"attribution":"Google","minZoom":0,"maxZoom":20},
+    {"id":"gaode-map","name":"高德 地图","urlTemplate":"https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}","subdomains":["1","2","3","4"],"coordinateSystem":"gcj02","attribution":"高德地图","minZoom":0,"maxZoom":18},
+    {"id":"gaode-satellite","name":"高德 卫星","urlTemplate":"https://webst0{s}.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}","subdomains":["1","2","3","4"],"coordinateSystem":"gcj02","attribution":"高德地图","minZoom":0,"maxZoom":18},
+    {"id":"terrarium-dem","name":"Terrarium 高程","urlTemplate":"https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png","attribution":"Mapzen / AWS Terrain Tiles","minZoom":0,"maxZoom":15,"elevationEncoding":"terrarium"}
+  ],
+  "vectorPresets": [
+    {"id":"mvt-openfreemap","name":"OpenFreeMap · 全球矢量","kind":"mvt","tileJsonUrl":"https://tiles.openfreemap.org/planet","attribution":"OpenStreetMap / OpenMapTiles / OpenFreeMap","minZoom":0,"maxZoom":14},
+    {"id":"mvt-versatiles-osm","name":"VersaTiles · OSM 矢量","kind":"mvt","urlTemplate":"https://tiles.versatiles.org/tiles/osm/{z}/{x}/{y}","attribution":"OpenStreetMap / VersaTiles","minZoom":0,"maxZoom":14}
+  ]
+}

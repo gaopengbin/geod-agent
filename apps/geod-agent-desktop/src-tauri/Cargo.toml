@@ -1,6 +1,6 @@
 [package]
 name = "geod-agent-desktop"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
 description = "Independent GeoD Agent desktop application"
@@ -15,18 +15,39 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 chrono = { version = "0.4", features = ["serde"] }
 base64 = "0.22"
+async-trait = "0.1"
+http = "1"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif"] }
+flate2 = "1"
+fs2 = "0.4"
+tiny_http = "0.12"
+tempfile = "3"
 geod-core = { path = "../../../crates/geod-core" }
 geod-task-engine = { path = "../../../crates/geod-task-engine" }
+geod-vector = { path = "../../../crates/geod-vector" }
+geod-tiles3d = { path = "../../../crates/geod-tiles3d" }
+rusqlite = { version = "0.32", features = ["bundled"] }
 keyring = { version = "3.6", features = ["windows-native"] }
-reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls", "gzip"] }
+reqwest_mcp = { package = "reqwest", version = "0.13", default-features = false, features = ["json", "query", "rustls", "stream"] }
+rmcp = { version = "3.5", default-features = false, features = ["client", "transport-streamable-http-client-reqwest", "transport-async-rw", "reqwest", "auth"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+toml = "=1.1.6"
+serde_yaml = "0.9"
+roxmltree = "0.20"
 sha2 = "0.10"
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-updater = "2"
+tokio = { version = "1", features = ["process", "time", "io-util"] }
 uuid = { version = "1", features = ["v4"] }
+geo = "0.31"
+zeroize = "1"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55"
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_Security", "Win32_Security_Cryptography", "Win32_Security_Authorization", "Win32_Storage_FileSystem"] }
 tauri-plugin-single-instance = "2"

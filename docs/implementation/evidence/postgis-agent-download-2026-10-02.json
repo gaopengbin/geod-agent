@@ -1,0 +1,866 @@
+{
+  "conversation": "fde66c15-913a-4bb5-b01b-f9ff0e16c843",
+  "input": "连接 PostgreSQL/PostGIS，当前工作区中 connection.json 是专供这次本机 Docker 测试的配置，用原生连接工具读取凭据，不通过 shell 读取或在聊天显示。新建连接，发现真实图层，读取 demo.boundaries_3857.geom 的字段和两条属性样例，再把该面图层作为范围按已注册 Esri World Imagery / Z10 / GeoTIFF 下载裁剪并将成果加载到当前地图。不要使用之前的行政区范围。请实际操作，简短中文回答。",
+  "engine": "bundled Codex app-server",
+  "events": [
+    {
+      "capabilities": {
+        "contextWindow": 128000,
+        "contextWindowSource": "gatewayConfigured",
+        "engine": "Codex",
+        "inputModalities": [
+          "text"
+        ],
+        "maxOutputTokens": 8192,
+        "model": "deepseek-flash",
+        "protocol": "geod-codex-v1",
+        "provider": "DeepSeek",
+        "reasoning": true,
+        "requestMaxBytes": 4000000,
+        "version": "0.159.2"
+      },
+      "runId": "2f260116-7b43-464a-b486-0bc6f0ea9025",
+      "type": "capabilities"
+    }
+  ],
+  "generations": [
+    {
+      "conversationId": "fde66c15-913a-4bb5-b01b-f9ff0e16c843",
+      "createdAt": "2026-10-02T05:51:34.771Z",
+      "errorCode": null,
+      "generationId": "3238306d-b250-4da8-99d3-c00693797b43",
+      "inputTokens": 23664,
+      "model": "deepseek-flash",
+      "outputTokens": 123,
+      "reservedTokens": 20000,
+      "result": {
+        "content": "我先用原生连接工具读取 `connection.json`（凭据不落到 shell）。",
+        "phase": "commentary",
+        "phaseSource": "compatibility",
+        "reasoning": "Use data_connection_connect with credentialFile \"connection.json\". Then data_layer_inspect layer \"demo.boundaries_3857.geom\". Then data_input_read with connectionId + layer to attach boundary. Then plan_imagery with boundaryId, jobs_start, loadArtifact.\n\nLet's start.",
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "function": {
+              "arguments": "{\"credentialFile\": \"connection.json\"}",
+              "name": "data_connection_connect"
+            },
+            "id": "call_00_stfTXWb3XzNSeBguf8Ht4223",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "cachedInputTokens": 23424,
+          "reasoningTokens": 63
+        }
+      },
+      "state": "settled",
+      "updatedAt": "2026-10-02T05:51:35.708Z",
+      "upstreamRequestId": "02b3b095-bc32-4e61-8738-e73601e7255f"
+    },
+    {
+      "conversationId": "fde66c15-913a-4bb5-b01b-f9ff0e16c843",
+      "createdAt": "2026-10-02T05:51:36.136Z",
+      "errorCode": null,
+      "generationId": "58d1233f-e565-4ad9-94a0-15b5a7c1ab18",
+      "inputTokens": 24494,
+      "model": "deepseek-flash",
+      "outputTokens": 120,
+      "reservedTokens": 20000,
+      "result": {
+        "content": "连接已建立。读取 `demo.boundaries_3857.geom` 的字段与样例。",
+        "phase": "commentary",
+        "phaseSource": "compatibility",
+        "reasoning": null,
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "function": {
+              "arguments": "{\"connectionId\": \"42717808-531e-457e-aeb9-126f81cb7605\", \"layer\": \"demo.boundaries_3857.geom\", \"limit\": 2}",
+              "name": "data_layer_inspect"
+            },
+            "id": "call_00_ET_sKo2I92EbSKDGBOFk8Sz9786",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "cachedInputTokens": 23680,
+          "reasoningTokens": 0
+        }
+      },
+      "state": "settled",
+      "updatedAt": "2026-10-02T05:51:37.186Z",
+      "upstreamRequestId": "2d3f8da4-7016-4eda-b0c5-4f23dcf0ab6c"
+    },
+    {
+      "conversationId": "fde66c15-913a-4bb5-b01b-f9ff0e16c843",
+      "createdAt": "2026-10-02T05:51:37.644Z",
+      "errorCode": null,
+      "generationId": "513ed614-821f-4c55-9e5a-cdebca49545e",
+      "inputTokens": 24807,
+      "model": "deepseek-flash",
+      "outputTokens": 191,
+      "reservedTokens": 20000,
+      "result": {
+        "content": "该图层仅 1 个要素，故样例只有 1 条。现将其作为范围挂载。",
+        "phase": "commentary",
+        "phaseSource": "compatibility",
+        "reasoning": "The layer has 1 feature (featureCount 1), fields id (integer), name (text), geom geometry(Polygon,3857). Sample record id=1, name=\"北京测试范围\".\n\nThe user said \"两条属性样例\" (two attribute samples) — only one feature exists, so only one sample returned. I should note that.\n\nNow attach as boundary: data_input_read with connectionId + layer.",
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "function": {
+              "arguments": "{\"connectionId\": \"42717808-531e-457e-aeb9-126f81cb7605\", \"layer\": \"demo.boundaries_3857.geom\"}",
+              "name": "data_input_read"
+            },
+            "id": "call_00_1SktH5ATiFhMVz4oIm183518",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "cachedInputTokens": 24576,
+          "reasoningTokens": 86
+        }
+      },
+      "state": "settled",
+      "updatedAt": "2026-10-02T05:51:38.887Z",
+      "upstreamRequestId": "bb933292-04b3-4fa4-a041-7493c1d246f9"
+    },
+    {
+      "conversationId": "fde66c15-913a-4bb5-b01b-f9ff0e16c843",
+      "createdAt": "2026-10-02T05:51:39.315Z",
+      "errorCode": null,
+      "generationId": "0aa3f273-9cda-4c74-9030-0b51b2f617d4",
+      "inputTokens": 25615,
+      "model": "deepseek-flash",
+      "outputTokens": 170,
+      "reservedTokens": 20000,
+      "result": {
+        "content": "PostGIS 面范围已挂载（`range-9af4e678…`）。按 Esri Z10 出计划并下载。",
+        "phase": "commentary",
+        "phaseSource": "compatibility",
+        "reasoning": null,
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "function": {
+              "arguments": "{\"boundaryId\": \"range-9af4e67851739a9aba7998e6bd3edbff0b010a44f816c17761d09577ebd44dae\", \"outputFormats\": [\"geotiff\"], \"sourceId\": \"esri-world-imagery\", \"zoom\": 10}",
+              "name": "plan_imagery"
+            },
+            "id": "call_00_ET_2HUzNNlra7YTMtdPknF38990",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "cachedInputTokens": 24960,
+          "reasoningTokens": 0
+        }
+      },
+      "state": "settled",
+      "updatedAt": "2026-10-02T05:51:40.309Z",
+      "upstreamRequestId": "b7da9aea-c9e3-456a-886a-7f113d17d70c"
+    },
+    {
+      "conversationId": "fde66c15-913a-4bb5-b01b-f9ff0e16c843",
+      "createdAt": "2026-10-02T05:51:40.436Z",
+      "errorCode": null,
+      "generationId": "81fd2b93-3ef9-4e9d-9d6d-802a228ed105",
+      "inputTokens": 26081,
+      "model": "deepseek-flash",
+      "outputTokens": 75,
+      "reservedTokens": 20000,
+      "result": {
+        "content": null,
+        "phase": "commentary",
+        "phaseSource": "compatibility",
+        "reasoning": null,
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "function": {
+              "arguments": "{\"planId\": \"tool-753a281e280952b1b81801bdbc4585b928738789d91e061d9e7dd66e74e9af68\"}",
+              "name": "jobs_start"
+            },
+            "id": "call_00_ET_0f473GKFZOyrqZYBjY4C8223",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "cachedInputTokens": 25728,
+          "reasoningTokens": 0
+        }
+      },
+      "state": "settled",
+      "updatedAt": "2026-10-02T05:51:41.500Z",
+      "upstreamRequestId": "247c225c-e997-4bca-80bf-be9cb8e051d1"
+    },
+    {
+      "conversationId": "fde66c15-913a-4bb5-b01b-f9ff0e16c843",
+      "createdAt": "2026-10-02T05:51:41.629Z",
+      "errorCode": null,
+      "generationId": "7fe8dec6-d9b9-4834-b237-6999b8255f71",
+      "inputTokens": 26338,
+      "model": "deepseek-flash",
+      "outputTokens": 115,
+      "reservedTokens": 20000,
+      "result": {
+        "content": null,
+        "phase": "commentary",
+        "phaseSource": "compatibility",
+        "reasoning": "Wait a bit then inspect the job. Actually the previous job was identical (same tile set) — it may reuse. Let me check job state after a short wait, then load artifact. Let me poll jobs_get once.\n\nActually better: check artifacts_inspect after short sleep. But if job not finished it errors. Let's use jobs_get first.",
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "function": {
+              "arguments": "{\"cmd\": \"Start-Sleep -Seconds 6\"}",
+              "name": "exec_command"
+            },
+            "id": "call_00_v9N8I45MTtQ8rtS5vgdX7575",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "cachedInputTokens": 26112,
+          "reasoningTokens": 71
+        }
+      },
+      "state": "settled",
+      "updatedAt": "2026-10-02T05:51:43.165Z",
+      "upstreamRequestId": "987b0fd1-c9fd-470b-ae5b-48ff771bb77a"
+    },
+    {
+      "conversationId": "fde66c15-913a-4bb5-b01b-f9ff0e16c843",
+      "createdAt": "2026-10-02T05:51:49.628Z",
+      "errorCode": null,
+      "generationId": "81a85700-e149-490e-9202-afd9aacd2cc6",
+      "inputTokens": 26502,
+      "model": "deepseek-flash",
+      "outputTokens": 60,
+      "reservedTokens": 20000,
+      "result": {
+        "content": null,
+        "phase": "commentary",
+        "phaseSource": "compatibility",
+        "reasoning": null,
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "function": {
+              "arguments": "{\"jobId\": \"a2e5ea13-c444-4657-b535-fc7aa9a71d11\"}",
+              "name": "jobs_get"
+            },
+            "id": "call_00_ET_f4L5pXvYxjvBqjx5AOUO4574",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "cachedInputTokens": 14208,
+          "reasoningTokens": 0
+        }
+      },
+      "state": "settled",
+      "updatedAt": "2026-10-02T05:51:50.272Z",
+      "upstreamRequestId": "7de2c01c-d9cd-45b7-a665-4acc57c43f4d"
+    },
+    {
+      "conversationId": "fde66c15-913a-4bb5-b01b-f9ff0e16c843",
+      "createdAt": "2026-10-02T05:51:50.438Z",
+      "errorCode": null,
+      "generationId": "0276fa94-fb9d-42cf-8d4b-3880ce3e089b",
+      "inputTokens": 26742,
+      "model": "deepseek-flash",
+      "outputTokens": 109,
+      "reservedTokens": 20000,
+      "result": {
+        "content": null,
+        "phase": "commentary",
+        "phaseSource": "compatibility",
+        "reasoning": null,
+        "role": "assistant",
+        "toolCalls": [
+          {
+            "function": {
+              "arguments": "{\"arguments\": {\"jobId\": \"a2e5ea13-c444-4657-b535-fc7aa9a71d11\"}, \"connectorId\": \"builtin-openlayers-mcp\", \"toolName\": \"loadArtifact\"}",
+              "name": "mcp_call"
+            },
+            "id": "call_00_ET_GlPrHpWWqRBc4mj31bes8582",
+            "type": "function"
+          }
+        ],
+        "usage": {
+          "cachedInputTokens": 26368,
+          "reasoningTokens": 0
+        }
+      },
+      "state": "settled",
+      "updatedAt": "2026-10-02T05:51:51.421Z",
+      "upstreamRequestId": "fbfc4794-fa8b-4d65-953f-0396e945b18c"
+    },
+    {
+      "conversationId": "fde66c15-913a-4bb5-b01b-f9ff0e16c843",
+      "createdAt": "2026-10-02T05:51:51.603Z",
+      "errorCode": null,
+      "generationId": "13b4ed79-f603-4da4-9b59-91dccd03379a",
+      "inputTokens": 27026,
+      "model": "deepseek-flash",
+      "outputTokens": 279,
+      "reservedTokens": 20000,
+      "result": {
+        "content": "完成，全部使用 PostGIS 图层范围，未复用先前行政区范围。\n\n- 连接：原生凭据读取建立 `Docker PostGIS 测试库`（只读，连接 `42717808-…`），发现 12 张表/视图、13 个空间图层（含 3857/4326、视图、空/非法/未知 CRS 等测试图层）。\n- 目标图层 `demo.boundaries_3857.geom`：字段 `id`(integer)、`name`(text)、`geom`(geometry(Polygon,3857))；共 1 个要素，故样例仅 1 条：`id=1, name=北京测试范围`（两条样例不可得，因表内只有一条记录）。\n- 范围与下载：该面挂载为 `range-9af4e678…`（116.1–116.3E / 39.6–39.8N），Esri World Imagery / Z10 / GeoTIFF，2 瓦片，任务 `a2e5ea13-…` 完成（100%）。\n- 地图加载：已加载 `artifact-a2e5ea13-…-imagery-z10`（147×190，EPSG:3857，可见）。",
+        "phase": "final_answer",
+        "phaseSource": "compatibility",
+        "reasoning": null,
+        "role": "assistant",
+        "toolCalls": [],
+        "usage": {
+          "cachedInputTokens": 26752,
+          "reasoningTokens": 0
+        }
+      },
+      "state": "settled",
+      "updatedAt": "2026-10-02T05:51:52.990Z",
+      "upstreamRequestId": "a74908d3-1178-4102-a60e-9836264f1dbc"
+    }
+  ],
+  "result": {
+    "completedAt": 1790920313,
+    "durationMs": 18366,
+    "error": null,
+    "id": "01a0fb2b-00e6-7101-a1d0-d7fc3fa4945e",
+    "items": [
+      {
+        "delivery": null,
+        "id": "msg_geod_af9a6402-af27-48b3-8aed-7f7860fc0303",
+        "memoryCitation": null,
+        "phase": "final_answer",
+        "questions": null,
+        "text": "完成，全部使用 PostGIS 图层范围，未复用先前行政区范围。\n\n- 连接：原生凭据读取建立 `Docker PostGIS 测试库`（只读，连接 `42717808-…`），发现 12 张表/视图、13 个空间图层（含 3857/4326、视图、空/非法/未知 CRS 等测试图层）。\n- 目标图层 `demo.boundaries_3857.geom`：字段 `id`(integer)、`name`(text)、`geom`(geometry(Polygon,3857))；共 1 个要素，故样例仅 1 条：`id=1, name=北京测试范围`（两条样例不可得，因表内只有一条记录）。\n- 范围与下载：该面挂载为 `range-9af4e678…`（116.1–116.3E / 39.6–39.8N），Esri World Imagery / Z10 / GeoTIFF，2 瓦片，任务 `a2e5ea13-…` 完成（100%）。\n- 地图加载：已加载 `artifact-a2e5ea13-…-imagery-z10`（147×190，EPSG:3857，可见）。",
+        "type": "agentMessage"
+      }
+    ],
+    "itemsView": "summary",
+    "startedAt": 1790920294,
+    "status": "completed",
+    "text": "完成，全部使用 PostGIS 图层范围，未复用先前行政区范围。\n\n- 连接：原生凭据读取建立 `Docker PostGIS 测试库`（只读，连接 `42717808-…`），发现 12 张表/视图、13 个空间图层（含 3857/4326、视图、空/非法/未知 CRS 等测试图层）。\n- 目标图层 `demo.boundaries_3857.geom`：字段 `id`(integer)、`name`(text)、`geom`(geometry(Polygon,3857))；共 1 个要素，故样例仅 1 条：`id=1, name=北京测试范围`（两条样例不可得，因表内只有一条记录）。\n- 范围与下载：该面挂载为 `range-9af4e678…`（116.1–116.3E / 39.6–39.8N），Esri World Imagery / Z10 / GeoTIFF，2 瓦片，任务 `a2e5ea13-…` 完成（100%）。\n- 地图加载：已加载 `artifact-a2e5ea13-…-imagery-z10`（147×190，EPSG:3857，可见）。",
+    "threadId": "01a0fb29-ea77-7771-bf18-7b23d4878737"
+  },
+  "trace": [
+    {
+      "name": "data_connection_connect",
+      "args": {
+        "credentialFile": "connection.json"
+      },
+      "output": {
+        "connection": {
+          "id": "42717808-531e-457e-aeb9-126f81cb7605",
+          "name": "Docker PostGIS 测试库",
+          "readOnly": true,
+          "type": "PostGIS"
+        },
+        "error": null,
+        "layers": [
+          {
+            "crs": "EPSG:4326",
+            "featureCount": null,
+            "geometryType": "POLYGON",
+            "name": "demo.big_area.geom"
+          },
+          {
+            "crs": "EPSG:3857",
+            "featureCount": null,
+            "geometryType": "POLYGON",
+            "name": "demo.boundaries_3857.geom"
+          },
+          {
+            "crs": "EPSG:4326",
+            "featureCount": null,
+            "geometryType": "POLYGON",
+            "name": "demo.boundaries_4326.geom"
+          },
+          {
+            "crs": "EPSG:4326",
+            "featureCount": null,
+            "geometryType": "POLYGON",
+            "name": "demo.empty_area.geom"
+          },
+          {
+            "crs": "EPSG:4326",
+            "featureCount": null,
+            "geometryType": "POLYGON",
+            "name": "demo.invalid_area.geom"
+          },
+          {
+            "crs": "EPSG:4326",
+            "featureCount": null,
+            "geometryType": "MULTIPOLYGON",
+            "name": "demo.multiple_regions.geom"
+          },
+          {
+            "crs": "EPSG:3857",
+            "featureCount": null,
+            "geometryType": "POLYGON",
+            "name": "demo.nullable_area.backup_geom"
+          },
+          {
+            "crs": "EPSG:4326",
+            "featureCount": null,
+            "geometryType": "POLYGON",
+            "name": "demo.nullable_area.geom"
+          },
+          {
+            "crs": "EPSG:4326",
+            "featureCount": null,
+            "geometryType": "POINT",
+            "name": "demo.points.geom"
+          },
+          {
+            "crs": "EPSG:4326",
+            "featureCount": null,
+            "geometryType": "POLYGON",
+            "name": "demo.projected_view.geom"
+          },
+          {
+            "crs": "EPSG:4326",
+            "featureCount": null,
+            "geometryType": "POLYGON",
+            "name": "demo.scoped_regions.geom"
+          },
+          {
+            "crs": null,
+            "featureCount": null,
+            "geometryType": "POLYGON",
+            "name": "demo.unknown_crs.geom"
+          },
+          {
+            "crs": "EPSG:4326",
+            "featureCount": null,
+            "geometryType": "POLYGON",
+            "name": "demo.区划 odd\" table.边界 odd"
+          }
+        ],
+        "mcp": {
+          "protocolVersion": "2025-11-25",
+          "server": "pgedge-postgres-mcp",
+          "toolCalls": 2,
+          "tools": [
+            "count_rows",
+            "get_schema_info",
+            "query_database",
+            "read_resource"
+          ],
+          "transport": "stdio",
+          "version": "1.1.0"
+        },
+        "readOnly": true,
+        "tables": [
+          {
+            "name": "demo.big_area",
+            "type": "TABLE"
+          },
+          {
+            "name": "demo.boundaries_3857",
+            "type": "TABLE"
+          },
+          {
+            "name": "demo.boundaries_4326",
+            "type": "TABLE"
+          },
+          {
+            "name": "demo.empty_area",
+            "type": "TABLE"
+          },
+          {
+            "name": "demo.invalid_area",
+            "type": "TABLE"
+          },
+          {
+            "name": "demo.multiple_regions",
+            "type": "TABLE"
+          },
+          {
+            "name": "demo.nullable_area",
+            "type": "TABLE"
+          },
+          {
+            "name": "demo.points",
+            "type": "TABLE"
+          },
+          {
+            "name": "demo.projected_view",
+            "type": "VIEW"
+          },
+          {
+            "name": "demo.scoped_regions",
+            "type": "TABLE"
+          },
+          {
+            "name": "demo.unknown_crs",
+            "type": "TABLE"
+          },
+          {
+            "name": "demo.区划 odd\" table",
+            "type": "TABLE"
+          }
+        ]
+      }
+    },
+    {
+      "name": "data_layer_inspect",
+      "args": {
+        "connectionId": "42717808-531e-457e-aeb9-126f81cb7605",
+        "layer": "demo.boundaries_3857.geom",
+        "limit": 2
+      },
+      "output": {
+        "columns": [
+          {
+            "name": "id",
+            "spatial": false,
+            "type": "integer"
+          },
+          {
+            "name": "name",
+            "spatial": false,
+            "type": "text"
+          },
+          {
+            "name": "geom",
+            "spatial": true,
+            "type": "geometry(Polygon,3857)"
+          }
+        ],
+        "featureCount": 1,
+        "featureCountLowerBound": null,
+        "geometryType": "POLYGON",
+        "mcp": {
+          "protocolVersion": "2025-11-25",
+          "server": "pgedge-postgres-mcp",
+          "toolCalls": 5,
+          "tools": [
+            "count_rows",
+            "get_schema_info",
+            "query_database",
+            "read_resource"
+          ],
+          "transport": "stdio",
+          "version": "1.1.0"
+        },
+        "readOnly": true,
+        "sampleLimit": 2,
+        "sampleRecords": [
+          {
+            "id": 1,
+            "name": "北京测试范围"
+          }
+        ],
+        "selectedLayer": "demo.boundaries_3857.geom",
+        "sourceCrs": "EPSG:3857"
+      }
+    },
+    {
+      "name": "data_input_read",
+      "args": {
+        "connectionId": "42717808-531e-457e-aeb9-126f81cb7605",
+        "layer": "demo.boundaries_3857.geom"
+      },
+      "output": {
+        "boundary": {
+          "boundaryId": "range-9af4e67851739a9aba7998e6bd3edbff0b010a44f816c17761d09577ebd44dae",
+          "name": "demo.boundaries_3857.geom.geojson",
+          "bounds": [
+            116.1,
+            39.6,
+            116.3,
+            39.8
+          ],
+          "polygonCount": 1,
+          "attachedToDesktopPlan": true
+        },
+        "layers": [
+          {
+            "crs": "EPSG:4326",
+            "featureCount": null,
+            "geometryType": "POLYGON",
+            "name": "demo.big_area.geom"
+          },
+          {
+            "crs": "EPSG:3857",
+            "featureCount": null,
+            "geometryType": "POLYGON",
+            "name": "demo.boundaries_3857.geom"
+          },
+          {
+            "crs": "EPSG:4326",
+            "featureCount": null,
+            "geometryType": "POLYGON",
+            "name": "demo.boundaries_4326.geom"
+          },
+          {
+            "crs": "EPSG:4326",
+            "featureCount": null,
+            "geometryType": "POLYGON",
+            "name": "demo.empty_area.geom"
+          },
+          {
+            "crs": "EPSG:4326",
+            "featureCount": null,
+            "geometryType": "POLYGON",
+            "name": "demo.invalid_area.geom"
+          },
+          {
+            "crs": "EPSG:4326",
+            "featureCount": null,
+            "geometryType": "MULTIPOLYGON",
+            "name": "demo.multiple_regions.geom"
+          },
+          {
+            "crs": "EPSG:3857",
+            "featureCount": null,
+            "geometryType": "POLYGON",
+            "name": "demo.nullable_area.backup_geom"
+          },
+          {
+            "crs": "EPSG:4326",
+            "featureCount": null,
+            "geometryType": "POLYGON",
+            "name": "demo.nullable_area.geom"
+          },
+          {
+            "crs": "EPSG:4326",
+            "featureCount": null,
+            "geometryType": "POINT",
+            "name": "demo.points.geom"
+          },
+          {
+            "crs": "EPSG:4326",
+            "featureCount": null,
+            "geometryType": "POLYGON",
+            "name": "demo.projected_view.geom"
+          },
+          {
+            "crs": "EPSG:4326",
+            "featureCount": null,
+            "geometryType": "POLYGON",
+            "name": "demo.scoped_regions.geom"
+          },
+          {
+            "crs": null,
+            "featureCount": null,
+            "geometryType": "POLYGON",
+            "name": "demo.unknown_crs.geom"
+          },
+          {
+            "crs": "EPSG:4326",
+            "featureCount": null,
+            "geometryType": "POLYGON",
+            "name": "demo.区划 odd\" table.边界 odd"
+          }
+        ],
+        "mcp": {
+          "protocolVersion": "2025-11-25",
+          "server": "pgedge-postgres-mcp",
+          "toolCalls": 4,
+          "tools": [
+            "count_rows",
+            "get_schema_info",
+            "query_database",
+            "read_resource"
+          ],
+          "transport": "stdio",
+          "version": "1.1.0"
+        },
+        "readOnly": true,
+        "selectedLayer": "demo.boundaries_3857.geom",
+        "sourceCrs": "EPSG:3857"
+      }
+    },
+    {
+      "name": "plan_imagery",
+      "args": {
+        "boundaryId": "range-9af4e67851739a9aba7998e6bd3edbff0b010a44f816c17761d09577ebd44dae",
+        "outputFormats": [
+          "geotiff"
+        ],
+        "sourceId": "esri-world-imagery",
+        "zoom": 10
+      },
+      "output": {
+        "permission": "fullAccess",
+        "requiresPlanConfirmation": false,
+        "canStartWithoutPlanConfirmation": true,
+        "planId": "tool-753a281e280952b1b81801bdbc4585b928738789d91e061d9e7dd66e74e9af68",
+        "planHash": "b6fc31f6bb895284f7ab35e1970f2ebae984958190b61430dfd1a4b7980eef46",
+        "source": "Esri World Imagery",
+        "bounds": [
+          116.1,
+          39.6,
+          116.3,
+          39.8
+        ],
+        "boundary": "1 个面；GeoTIFF 按边界透明裁剪，MBTiles 保留整瓦片",
+        "zoomLevels": [
+          10
+        ],
+        "outputFormats": [
+          "geotiff"
+        ],
+        "outputLocation": "当前本机工作区中的新文件夹，模型不可读取路径",
+        "totalTiles": 2,
+        "decodedRgbaBytes": 524288,
+        "requiredFreeDiskBytes": 18939904,
+        "license": "",
+        "attribution": "Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community",
+        "expiresAt": "2026-10-02T06:21:40.379076500Z",
+        "execution": "可调用 jobs_start；本机将验证工作区完全访问授权及计划路径"
+      }
+    },
+    {
+      "name": "jobs_start",
+      "args": {
+        "planId": "tool-753a281e280952b1b81801bdbc4585b928738789d91e061d9e7dd66e74e9af68"
+      },
+      "output": {
+        "jobId": "a2e5ea13-c444-4657-b535-fc7aa9a71d11",
+        "planId": "tool-753a281e280952b1b81801bdbc4585b928738789d91e061d9e7dd66e74e9af68",
+        "state": "downloading",
+        "ledgerState": "downloading",
+        "workerActive": true,
+        "version": 2,
+        "completedTiles": null,
+        "totalTiles": 2,
+        "percent": null,
+        "checkingCache": false,
+        "checkedTiles": null,
+        "progressRecordedAt": null,
+        "checkedAt": "2026-10-02T05:51:41.568Z",
+        "latestError": null,
+        "monitoring": "desktop-background",
+        "operation": "started",
+        "reused": false,
+        "resumed": false
+      }
+    },
+    {
+      "name": "jobs_get",
+      "args": {
+        "jobId": "a2e5ea13-c444-4657-b535-fc7aa9a71d11"
+      },
+      "output": {
+        "jobId": "a2e5ea13-c444-4657-b535-fc7aa9a71d11",
+        "planId": "tool-753a281e280952b1b81801bdbc4585b928738789d91e061d9e7dd66e74e9af68",
+        "state": "completed",
+        "ledgerState": "completed",
+        "workerActive": false,
+        "version": 6,
+        "completedTiles": 2,
+        "totalTiles": 2,
+        "percent": 100,
+        "checkingCache": false,
+        "checkedTiles": null,
+        "progressRecordedAt": "2026-10-02T05:51:42.369532200Z",
+        "checkedAt": "2026-10-02T05:51:50.327Z",
+        "latestError": null,
+        "monitoring": "desktop-background"
+      }
+    },
+    {
+      "name": "mcp_call",
+      "args": {
+        "arguments": {
+          "jobId": "a2e5ea13-c444-4657-b535-fc7aa9a71d11"
+        },
+        "connectorId": "builtin-openlayers-mcp",
+        "toolName": "loadArtifact"
+      },
+      "output": {
+        "connectorId": "builtin-openlayers-mcp",
+        "toolName": "loadArtifact",
+        "result": {
+          "layerId": "artifact-a2e5ea13-c444-4657-b535-fc7aa9a71d11-imagery-z10",
+          "jobId": "a2e5ea13-c444-4657-b535-fc7aa9a71d11",
+          "assetId": "imagery-z10",
+          "name": "Esri World Imagery",
+          "state": "ready",
+          "visible": true,
+          "kind": "downloaded-geotiff",
+          "bounds": [
+            116.09939575195312,
+            39.5993395752953,
+            116.30126953125,
+            39.80009595634839
+          ],
+          "crs": "EPSG:3857",
+          "width": 147,
+          "height": 190
+        }
+      }
+    }
+  ],
+  "layers": [
+    {
+      "id": "osm",
+      "name": "OpenStreetMap",
+      "type": "tile",
+      "sourceType": "XYZ",
+      "state": "ready",
+      "visible": true,
+      "opacity": 1,
+      "zIndex": 0,
+      "extent": null,
+      "sourceId": null,
+      "jobId": null,
+      "kind": null
+    },
+    {
+      "id": "artifact-6761dbcf-76e9-45cf-8610-af84a4b79b4d-imagery-z10",
+      "name": "Esri World Imagery",
+      "type": "raster",
+      "sourceType": "geotiff",
+      "state": "ready",
+      "visible": true,
+      "opacity": 1,
+      "zIndex": 750,
+      "extent": [
+        116.09939575195312,
+        39.59933957529529,
+        116.30126953125,
+        39.8000959563484
+      ],
+      "sourceId": null,
+      "jobId": "6761dbcf-76e9-45cf-8610-af84a4b79b4d",
+      "kind": "downloaded-geotiff"
+    },
+    {
+      "id": "artifact-a2e5ea13-c444-4657-b535-fc7aa9a71d11-imagery-z10",
+      "name": "Esri World Imagery",
+      "type": "raster",
+      "sourceType": "geotiff",
+      "state": "ready",
+      "visible": true,
+      "opacity": 1,
+      "zIndex": 750,
+      "extent": [
+        116.09939575195312,
+        39.59933957529529,
+        116.30126953125,
+        39.8000959563484
+      ],
+      "sourceId": null,
+      "jobId": "a2e5ea13-c444-4657-b535-fc7aa9a71d11",
+      "kind": "downloaded-geotiff"
+    }
+  ],
+  "jobs": [
+    {
+      "jobId": "a2e5ea13-c444-4657-b535-fc7aa9a71d11",
+      "planId": "tool-753a281e280952b1b81801bdbc4585b928738789d91e061d9e7dd66e74e9af68",
+      "approvalId": "e33b084b-8541-4dda-bac3-86f128c6509c",
+      "planHash": "b6fc31f6bb895284f7ab35e1970f2ebae984958190b61430dfd1a4b7980eef46",
+      "idempotencyKey": "codex:fde66c15-913a-4bb5-b01b-f9ff0e16c843:call_00_ET_0f473GKFZOyrqZYBjY4C8223",
+      "state": "completed",
+      "version": 6,
+      "createdAt": "2026-10-02T05:51:41.552323200Z"
+    }
+  ],
+  "pass": true
+}

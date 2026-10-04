@@ -1,0 +1,85 @@
+{
+  "date": "2026-10-01",
+  "model": "deepseek-flash",
+  "usageSource": "Local gateway SQLite settled requests; provider cache counters, not character estimates",
+  "priceSource": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+  "unit": "CNY per 1M tokens",
+  "rates": {
+    "offPeak": {
+      "cachedInput": 0.02,
+      "uncachedInput": 1,
+      "output": 4
+    },
+    "peak": {
+      "cachedInput": 0.04,
+      "uncachedInput": 2,
+      "output": 8
+    }
+  },
+  "scenarios": [
+    {
+      "scenario": "sources",
+      "passed": true,
+      "modelRequests": 2,
+      "inputTokens": 29801,
+      "cachedInputTokens": 22144,
+      "outputTokens": 130,
+      "cacheRate": 0.7431,
+      "seconds": 10.4,
+      "estimatedOffPeakCny": 0.00862,
+      "estimatedPeakCny": 0.01724,
+      "allCacheMissPeakStressCny": 0.060642
+    },
+    {
+      "scenario": "gpkg",
+      "passed": true,
+      "modelRequests": 4,
+      "inputTokens": 61167,
+      "cachedInputTokens": 60032,
+      "outputTokens": 601,
+      "cacheRate": 0.9814,
+      "seconds": 14.2,
+      "estimatedOffPeakCny": 0.00474,
+      "estimatedPeakCny": 0.009479,
+      "allCacheMissPeakStressCny": 0.127142
+    },
+    {
+      "scenario": "online",
+      "passed": true,
+      "modelRequests": 3,
+      "inputTokens": 45635,
+      "cachedInputTokens": 44672,
+      "outputTokens": 488,
+      "cacheRate": 0.9789,
+      "seconds": 12.9,
+      "estimatedOffPeakCny": 0.003808,
+      "estimatedPeakCny": 0.007617,
+      "allCacheMissPeakStressCny": 0.095174
+    },
+    {
+      "scenario": "postgis",
+      "passed": true,
+      "modelRequests": 6,
+      "inputTokens": 92407,
+      "cachedInputTokens": 90880,
+      "outputTokens": 657,
+      "cacheRate": 0.9835,
+      "seconds": 18.2,
+      "estimatedOffPeakCny": 0.005973,
+      "estimatedPeakCny": 0.011945,
+      "allCacheMissPeakStressCny": 0.19007
+    }
+  ],
+  "historicalWithoutCacheDetails": {
+    "requests": 119,
+    "inputTokens": 1984678,
+    "outputTokens": 33313,
+    "cannotPriceExactly": true
+  },
+  "limits": [
+    "4 short scenarios, one account, warm shared prefix; not production concurrency or long-context p95",
+    "Cost is a rate-based estimate, not a provider invoice",
+    "GIS conversion and tiles execute locally; no model cost while native job monitoring idles",
+    "No subscription, payment or quota policy changed"
+  ]
+}

@@ -81,8 +81,7 @@ async fn approved_job_downloads_and_only_then_completes() {
         }
     });
 
-    let endpoint = HttpSource {
-        id: "synthetic".into(),
+    let endpoint = HttpSource { subdomains: Vec::new(), coordinate_system: None, elevation_encoding: None, id: "synthetic".into(),
         name: "Synthetic".into(),
         attribution: "Generated test pixels".into(),
         license: "Synthetic test data".into(),
@@ -90,10 +89,9 @@ async fn approved_job_downloads_and_only_then_completes() {
         scheme: HttpTileScheme::XYZ,
         tile_size: 256,
         network_policy: NetworkPolicy::UserTrustedHttp,
-        min_interval_ms: 0,
+        min_interval_ms: 0, authentication: None, runtime_token: None,
     };
-    let descriptor = SourceDescriptor {
-        schema_version: SchemaVersion::V0_1,
+    let descriptor = SourceDescriptor { elevation_encoding: None, schema_version: SchemaVersion::V0_1,
         id: endpoint.id.clone(),
         display_name: endpoint.name.clone(),
         attribution: endpoint.attribution.clone(),
@@ -116,6 +114,7 @@ async fn approved_job_downloads_and_only_then_completes() {
         boundary: None,
         zoom_levels: vec![1],
         output_formats: vec![OutputFormat::GeoTiff, OutputFormat::Mbtiles],
+        export_options: None,
         output_directory: output.to_string_lossy().into_owned(),
         limits: ResourceLimits {
             max_tiles: 2,
@@ -284,7 +283,7 @@ async fn approved_job_downloads_and_only_then_completes() {
         )
         .await
         .unwrap();
-    assert_eq!(requests.load(Ordering::Relaxed), 4);
+    assert_eq!(requests.load(Ordering::Relaxed), 2, "resume reuses the earlier job's validated shared tiles");
     assert_eq!(
         store.get_job(&paused_job.job_id).unwrap().unwrap().state,
         JobState::Completed
@@ -301,6 +300,11 @@ async fn approved_job_downloads_and_only_then_completes() {
     assert!(alpha.contains(&0) && alpha.contains(&255));
     assert!(paused_output.join("boundary.geojson").exists());
 
+    // A new source revision bypasses tiles cached by the successful jobs.
+    let mut endpoint = endpoint.clone();
+    endpoint.min_interval_ms = 1;
+    let mut descriptor = descriptor.clone();
+    descriptor.config_revision = endpoint.configuration_revision();
     let partial_output = directory.path().join("partial-result");
     let mut partial_spec = planned.plan.spec.clone();
     partial_spec.output_directory = partial_output.to_string_lossy().into_owned();
@@ -337,7 +341,7 @@ async fn approved_job_downloads_and_only_then_completes() {
         JobState::Partial
     );
     assert!(store.inspect_job_artifact(&partial_job.job_id).is_ok());
-    assert_eq!(requests.load(Ordering::Relaxed), 6);
+    assert_eq!(requests.load(Ordering::Relaxed), 4);
 
     // Emulate a process crash after publication but before the final ledger
     // transition. Startup recovery must verify all bundles without HTTP.
@@ -353,7 +357,7 @@ async fn approved_job_downloads_and_only_then_completes() {
     let mut restarted = TaskStore::open(&directory.path().join("jobs.sqlite")).unwrap();
     assert_eq!(restarted.recover_verifying_jobs().unwrap(), 2);
     assert_eq!(restarted.recover_verifying_jobs().unwrap(), 0);
-    assert_eq!(requests.load(Ordering::Relaxed), 6);
+    assert_eq!(requests.load(Ordering::Relaxed), 4);
     assert_eq!(
         restarted.get_job(&queued.job_id).unwrap().unwrap().state,
         JobState::Completed

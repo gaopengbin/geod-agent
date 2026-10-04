@@ -1,0 +1,149 @@
+{
+  "engine": "Codex app-server 0.159.2",
+  "model": "existing GeoD hosted DeepSeek Flash",
+  "realModel": true,
+  "threadId": "01a0f311-5361-77d1-8219-1ea3e53dca9a",
+  "resumedSameThread": true,
+  "states": [
+    "completed",
+    "completed"
+  ],
+  "streamDeltas": 30,
+  "generations": [
+    {
+      "state": "settled",
+      "errorCode": null,
+      "inputTokens": 8689
+    },
+    {
+      "state": "settled",
+      "errorCode": null,
+      "inputTokens": 9068
+    },
+    {
+      "state": "settled",
+      "errorCode": null,
+      "inputTokens": 9138
+    },
+    {
+      "state": "settled",
+      "errorCode": null,
+      "inputTokens": 12188
+    },
+    {
+      "state": "settled",
+      "errorCode": null,
+      "inputTokens": 12293
+    },
+    {
+      "state": "settled",
+      "errorCode": null,
+      "inputTokens": 12348
+    },
+    {
+      "state": "settled",
+      "errorCode": null,
+      "inputTokens": 12756
+    },
+    {
+      "state": "settled",
+      "errorCode": null,
+      "inputTokens": 13081
+    },
+    {
+      "state": "settled",
+      "errorCode": null,
+      "inputTokens": 13614
+    }
+  ],
+  "tools": [
+    {
+      "name": "workspace_status",
+      "args": {}
+    },
+    {
+      "name": "sources_list",
+      "args": {}
+    },
+    {
+      "name": "gdal_connect",
+      "args": {}
+    },
+    {
+      "name": "extensions_list",
+      "args": {
+        "query": "gdal vector convert info"
+      }
+    },
+    {
+      "name": "workspace_gis_files_list",
+      "args": {}
+    },
+    {
+      "name": "workspace_boundaries_list",
+      "args": {}
+    },
+    {
+      "name": "mcp_call",
+      "args": {
+        "arguments": {
+          "encoding": "UTF-8",
+          "output": "points.gpkg",
+          "uri": "points.geojson"
+        },
+        "connectorId": "0ec1d367-963a-47d0-a9e0-0e68518bc72b",
+        "toolName": "vector_convert"
+      }
+    },
+    {
+      "name": "mcp_call",
+      "args": {
+        "arguments": {
+          "uri": "points.gpkg"
+        },
+        "connectorId": "0ec1d367-963a-47d0-a9e0-0e68518bc72b",
+        "toolName": "vector_info"
+      }
+    }
+  ],
+  "followup": "刚才 `vector_convert` 把 `points.geojson` 转成了 GPKG（GeoPackage）格式的 `points.gpkg`，`vector_info` 校验确认驱动为 GPKG。",
+  "usage": {
+    "last": {
+      "cacheWriteInputTokens": 0,
+      "cachedInputTokens": 0,
+      "inputTokens": 13614,
+      "outputTokens": 44,
+      "reasoningOutputTokens": 0,
+      "totalTokens": 13658
+    },
+    "modelContextWindow": 258400,
+    "total": {
+      "cacheWriteInputTokens": 0,
+      "cachedInputTokens": 0,
+      "inputTokens": 103175,
+      "outputTokens": 1032,
+      "reasoningOutputTokens": 0,
+      "totalTokens": 104207
+    }
+  },
+  "artifact": {
+    "bytes": 98304,
+    "contents": [
+      [
+        "points",
+        "features",
+        4326
+      ]
+    ],
+    "rows": [
+      [
+        1,
+        "native-probe"
+      ]
+    ],
+    "integrity": [
+      "ok"
+    ]
+  },
+  "backgroundHandoffVerification": "real Codex with controlled model fixture; no new real download"
+}

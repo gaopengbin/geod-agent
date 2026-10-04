@@ -1,0 +1,16 @@
+{
+  "version": "0.2.0",
+  "baseRevision": "13459a5a9fcbb488871f4b189288019e36b96533",
+  "candidateDate": "2026-10-01",
+  "published": false,
+  "artifacts": [
+    {
+      "file": "openlayers-mcp-bridge-0.2.0.tgz",
+      "sha256": "f0646d70331f7f84f737726adc77b459f7496f9a571ea6cb39591796e8d7f0d2"
+    },
+    {
+      "file": "openlayers-mcp-protocol-0.2.0.tgz",
+      "sha256": "dfde1f223be8203d659c790d7fde662e210cd6bb9ee9fa67b8f46accc0d2ddbb"
+    }
+  ]
+}

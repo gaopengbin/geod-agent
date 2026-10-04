@@ -1,0 +1,141 @@
+{
+  "checkedAt": "2026-10-02T14:03:56.997232+00:00",
+  "samples": [
+    {
+      "id": "google-satellite",
+      "sample": {
+        "z": 3,
+        "x": 6,
+        "y": 3
+      },
+      "coordinateSystem": "wgs84",
+      "subdomains": [
+        "0",
+        "1",
+        "2",
+        "3"
+      ],
+      "httpStatus": 200,
+      "bytes": 10742,
+      "dimensions": [
+        256,
+        256
+      ],
+      "format": "JPEG",
+      "decoded": true,
+      "sha256": "35b7f0ef70daf2a74124c2ac69017bad1dff23aa270af070119973c3268406d9",
+      "artifact": "G:\\code\\geod-agent\\artifacts\\desktop-parity\\source-preset-probes\\google-satellite.jpeg"
+    },
+    {
+      "id": "google-map",
+      "sample": {
+        "z": 3,
+        "x": 6,
+        "y": 3
+      },
+      "coordinateSystem": "gcj02",
+      "subdomains": [
+        "0",
+        "1",
+        "2",
+        "3"
+      ],
+      "httpStatus": 200,
+      "bytes": 19546,
+      "dimensions": [
+        256,
+        256
+      ],
+      "format": "PNG",
+      "decoded": true,
+      "sha256": "be165d214eb8e327508c1f55d9d06a25e4845606e938f341034c143c7816acaf",
+      "artifact": "G:\\code\\geod-agent\\artifacts\\desktop-parity\\source-preset-probes\\google-map.png"
+    },
+    {
+      "id": "google-hybrid",
+      "sample": {
+        "z": 3,
+        "x": 6,
+        "y": 3
+      },
+      "coordinateSystem": "wgs84",
+      "subdomains": [
+        "0",
+        "1",
+        "2",
+        "3"
+      ],
+      "httpStatus": 200,
+      "bytes": 19484,
+      "dimensions": [
+        256,
+        256
+      ],
+      "format": "JPEG",
+      "decoded": true,
+      "sha256": "90bc6d444aa4f0c9f4efc9c8fbab50d868236a43024a451851d84007a9b7f884",
+      "artifact": "G:\\code\\geod-agent\\artifacts\\desktop-parity\\source-preset-probes\\google-hybrid.jpeg"
+    },
+    {
+      "id": "gaode-map",
+      "sample": {
+        "z": 3,
+        "x": 6,
+        "y": 3
+      },
+      "coordinateSystem": "gcj02",
+      "subdomains": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "httpStatus": 200,
+      "bytes": 8314,
+      "dimensions": [
+        256,
+        256
+      ],
+      "format": "PNG",
+      "decoded": true,
+      "sha256": "023b244206ca42ef800bcc88ac849ab4fcd2227f9eb827cab592bb4b8a85e211",
+      "artifact": "G:\\code\\geod-agent\\artifacts\\desktop-parity\\source-preset-probes\\gaode-map.png"
+    },
+    {
+      "id": "gaode-satellite",
+      "sample": {
+        "z": 3,
+        "x": 6,
+        "y": 3
+      },
+      "coordinateSystem": "gcj02",
+      "subdomains": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "httpStatus": 200,
+      "bytes": 8641,
+      "dimensions": [
+        256,
+        256
+      ],
+      "format": "JPEG",
+      "decoded": true,
+      "sha256": "c6bac667cad29a6fe3d857844c514477cf26147a436bbe6866c50b7af21d116b",
+      "artifact": "G:\\code\\geod-agent\\artifacts\\desktop-parity\\source-preset-probes\\gaode-satellite.jpeg"
+    }
+  ],
+  "openFreeMap": {
+    "httpStatus": 200,
+    "tiles": [
+      "https://tiles.openfreemap.org/planet/20260927_080001_pt/{z}/{x}/{y}.pbf"
+    ],
+    "minZoom": 0,
+    "maxZoom": 14,
+    "resolved": true
+  },
+  "tiandituLiveVerified": false,
+  "publicSamplesPassed": true
+}

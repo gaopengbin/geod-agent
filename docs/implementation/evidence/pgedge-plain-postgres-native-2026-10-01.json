@@ -1,0 +1,119 @@
+{
+  "postgisInstalled": false,
+  "cases": [
+    {
+      "case": "connect and discover tables without PostGIS",
+      "pass": true,
+      "result": {
+        "connection": {
+          "database": "geod_mcp_plain_1c511de9b8a94c2e81246c4efc696611",
+          "databaseType": "PostgreSQL",
+          "host": "127.0.0.1",
+          "id": "7304a3bf-278f-41cd-a386-7f217925dadf",
+          "name": "普通 PostgreSQL MCP 实测",
+          "port": 55438,
+          "sslMode": "disable",
+          "user": "geod_reader"
+        },
+        "databaseType": "PostgreSQL",
+        "layers": [],
+        "mcp": {
+          "protocolVersion": "2025-11-25",
+          "server": "pgedge-postgres-mcp",
+          "toolCalls": 1,
+          "tools": [
+            "count_rows",
+            "get_schema_info",
+            "query_database",
+            "read_resource"
+          ],
+          "transport": "stdio",
+          "version": "1.1.0"
+        },
+        "readOnly": true,
+        "tables": [
+          {
+            "name": "public.测试 odd\" table",
+            "type": "TABLE"
+          }
+        ]
+      }
+    },
+    {
+      "case": "read fields, Unicode, tabs, newlines and nested JSON through MCP",
+      "pass": true,
+      "result": {
+        "columns": [
+          {
+            "name": "id",
+            "spatial": false,
+            "type": "integer"
+          },
+          {
+            "name": "name",
+            "spatial": false,
+            "type": "text"
+          },
+          {
+            "name": "notes",
+            "spatial": false,
+            "type": "text"
+          },
+          {
+            "name": "details",
+            "spatial": false,
+            "type": "jsonb"
+          }
+        ],
+        "featureCount": 1,
+        "featureCountLowerBound": null,
+        "geometryType": "TABLE",
+        "mcp": {
+          "protocolVersion": "2025-11-25",
+          "server": "pgedge-postgres-mcp",
+          "toolCalls": 4,
+          "tools": [
+            "count_rows",
+            "get_schema_info",
+            "query_database",
+            "read_resource"
+          ],
+          "transport": "stdio",
+          "version": "1.1.0"
+        },
+        "readOnly": true,
+        "sampleLimit": 2,
+        "sampleRecords": [
+          {
+            "details": {
+              "nested": "属性"
+            },
+            "id": 1,
+            "name": "中文名称",
+            "notes": "tab\t换行\n'引号\""
+          }
+        ],
+        "selectedLayer": "public.测试 odd\" table",
+        "sourceCrs": null
+      }
+    },
+    {
+      "case": "ordinary records cannot become a clipping boundary",
+      "pass": true,
+      "result": {
+        "error": {
+          "code": "INPUT_NOT_POLYGON",
+          "message": "该表没有选定的面几何列，请先选择本连接返回的空间图层。"
+        }
+      }
+    },
+    {
+      "case": "persist database type without credentials",
+      "pass": true,
+      "result": {
+        "name": "普通 PostgreSQL MCP 实测",
+        "databaseType": "PostgreSQL"
+      }
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+[
+  {
+    "input": {
+      "jobId": "missing-test-job"
+    },
+    "error": {
+      "code": "JOB_NOT_FOUND",
+      "message": "Job was not found"
+    }
+  },
+  {
+    "input": {
+      "jobId": "519a34f9-c709-4ac8-a382-b77c55882be0",
+      "assetId": "../outside.tif"
+    },
+    "error": {
+      "code": "RASTER_NOT_FOUND",
+      "message": "这个任务没有可加载的 GeoTIFF 成果"
+    }
+  }
+]

@@ -1,0 +1,255 @@
+{
+  "conversationId": "vector-native-6094a42a-e3ce-4e14-a2c0-f22e3a98dea4",
+  "workspace": "G:\\code\\geod-agent\\artifacts\\desktop-parity\\vector-native-6094a42a-e3ce-4e14-a2c0-f22e3a98dea4",
+  "records": [
+    {
+      "task": {
+        "id": "bb36e06e-af91-48da-9d00-c23fe8ba620d",
+        "conversationId": "vector-native-6094a42a-e3ce-4e14-a2c0-f22e3a98dea4",
+        "kind": "vector",
+        "title": "柏林范围国家矢量",
+        "status": "completed",
+        "planHash": "612fd37c27683902d732050cf658f782b6f4a1d15fec0c3d420da235f4565f69",
+        "request": {
+          "kind": "vector",
+          "spec": {
+            "source": {
+              "type": "mvt",
+              "id": "maplibre-demo-countries",
+              "name": "MapLibre 国家矢量",
+              "urlTemplate": "https://demotiles.maplibre.org/tiles/{z}/{x}/{y}.pbf",
+              "scheme": "xyz",
+              "layers": [],
+              "attribution": "MapLibre / Natural Earth"
+            },
+            "bounds": [
+              13.404,
+              52.52,
+              13.406,
+              52.522
+            ],
+            "zoomLevels": [
+              2
+            ],
+            "outputs": [
+              "pbf",
+              "mbtiles",
+              "geojson",
+              "gpkg"
+            ],
+            "allowPartial": false
+          }
+        },
+        "outputDir": "\\\\?\\G:\\code\\geod-agent\\artifacts\\desktop-parity\\vector-native-6094a42a-e3ce-4e14-a2c0-f22e3a98dea4\\vector-20261002-133656-bb36e06e",
+        "progress": {
+          "phase": "completed",
+          "completed": 1,
+          "total": 1,
+          "bytes": 69624,
+          "cacheHits": 0,
+          "failures": 0
+        },
+        "manifest": {
+          "assets": [
+            {
+              "kind": "mbtiles",
+              "path": "vectors.mbtiles",
+              "sha256": "e450cad25baa26ee8da0cf62a27cb347b1f8c83a7cc441bba8399ab1c7257b35",
+              "size": 57344
+            },
+            {
+              "kind": "pbf-index",
+              "path": "tiles-index.sqlite",
+              "sha256": "8ea390de96a11f883b29723a08fbf0e5fcfe0b2310ce0c1c6d387187297e4ec0",
+              "size": 16384
+            },
+            {
+              "kind": "tilejson",
+              "path": "tilejson.json",
+              "sha256": "bb013440deb486870a453a19b219167bdd123f56c5251740780c27679cf127ba",
+              "size": 718
+            },
+            {
+              "kind": "geojson",
+              "path": "features.geojson",
+              "sha256": "3238ec046a825df8e0163fb8b8d0b3cc066a8c005fd0a0dfc2abd20a51d6754a",
+              "size": 1035059
+            },
+            {
+              "kind": "gpkg",
+              "path": "features.gpkg",
+              "sha256": "4b642c9cc50631ea2ce55d37c7fae19e0489f1b75030f328b0dbb09b3d96d07d",
+              "size": 622592
+            },
+            {
+              "kind": "preview",
+              "path": "preview.geojson",
+              "sha256": "f338adb3917853470cef960a49768b3868e047fcee7ad50f39d56d4c85143951",
+              "size": 1035059
+            }
+          ],
+          "bounds": [
+            13.404,
+            52.52,
+            13.406,
+            52.522
+          ],
+          "createdAt": "2026-10-02T13:36:56.320827300+00:00",
+          "dataTimestamp": null,
+          "failures": [],
+          "featureCount": 221,
+          "planHash": "072dc3e322da09779a479c48db0d510d989754cffd52fff64908275194f192f8",
+          "previewFeatureCount": 221,
+          "previewTruncated": false,
+          "schemaVersion": 1,
+          "sourceName": "MapLibre 国家矢量",
+          "tileCount": 1,
+          "warnings": [
+            "Vector tile exports preserve tile boundaries and buffered features; features split across tiles or zoom levels are not merged."
+          ]
+        },
+        "error": null,
+        "createdAt": "2026-10-02T13:36:56.190521100+00:00",
+        "updatedAt": "2026-10-02T13:36:58.136253600+00:00"
+      },
+      "preview": {
+        "kind": "vector",
+        "resourcePath": "4048ddd8-7bdd-4b8f-b1b7-bba61d7d1864/preview.geojson",
+        "token": "4048ddd8-7bdd-4b8f-b1b7-bba61d7d1864",
+        "bounds": [
+          13.404,
+          52.52,
+          13.406,
+          52.522
+        ],
+        "featureCount": 221,
+        "truncated": false
+      }
+    },
+    {
+      "task": {
+        "id": "10809a5f-a58b-4d66-8011-d836eeb78af6",
+        "conversationId": "vector-native-6094a42a-e3ce-4e14-a2c0-f22e3a98dea4",
+        "kind": "vector",
+        "title": "柏林建筑矢量",
+        "status": "completed",
+        "planHash": "839a8ec619e5076bdd4e4797e11dc533b080e70001828a8ab905fdfbb3f83f01",
+        "request": {
+          "kind": "vector",
+          "spec": {
+            "source": {
+              "type": "osm",
+              "id": "osm-berlin",
+              "name": "OpenStreetMap 柏林建筑",
+              "endpoint": "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+              "tags": [
+                {
+                  "key": "building",
+                  "value": null
+                }
+              ]
+            },
+            "bounds": [
+              13.404,
+              52.52,
+              13.406,
+              52.522
+            ],
+            "zoomLevels": [],
+            "outputs": [
+              "geojson",
+              "gpkg"
+            ],
+            "allowPartial": false
+          }
+        },
+        "outputDir": "\\\\?\\G:\\code\\geod-agent\\artifacts\\desktop-parity\\vector-native-6094a42a-e3ce-4e14-a2c0-f22e3a98dea4\\vector-20261002-133658-10809a5f",
+        "progress": {
+          "phase": "completed",
+          "completed": 1,
+          "total": 1,
+          "bytes": 21584,
+          "cacheHits": 0,
+          "failures": 0
+        },
+        "manifest": {
+          "assets": [
+            {
+              "kind": "osm-source",
+              "path": "osm-response.json",
+              "sha256": "d9a2d69a8b06231efca36026351af0e6d0cf5e69e013961c447c0727e20b9e22",
+              "size": 21584
+            },
+            {
+              "kind": "geojson",
+              "path": "features.geojson",
+              "sha256": "181cb60d4d0156582a0b13cf1a9a7e33172946b64516d06691ccf577c34104c1",
+              "size": 10438
+            },
+            {
+              "kind": "gpkg",
+              "path": "features.gpkg",
+              "sha256": "9f25860e5c17178ea6644fe6a77d6511e1aa41dbb6da4a54dbdbf2619eeeccaf",
+              "size": 61440
+            },
+            {
+              "kind": "preview",
+              "path": "preview.geojson",
+              "sha256": "589f1189826c540776d1d6cc5fe190ecb255a7ea68367e3b15341454b0af4431",
+              "size": 10438
+            }
+          ],
+          "bounds": [
+            13.404,
+            52.52,
+            13.406,
+            52.522
+          ],
+          "createdAt": "2026-10-02T13:36:58.708889600+00:00",
+          "dataTimestamp": "2026-10-02T13:36:31Z",
+          "failures": [],
+          "featureCount": 13,
+          "planHash": "a481bc1a439b36133d0918ddb523a2c3f86fc5357dd59727124a2bc12488eb4e",
+          "previewFeatureCount": 13,
+          "previewTruncated": false,
+          "schemaVersion": 1,
+          "sourceName": "OpenStreetMap 柏林建筑",
+          "tileCount": 0,
+          "warnings": [
+            "OSM features keep complete geometry and may extend beyond the requested bounds."
+          ]
+        },
+        "error": null,
+        "createdAt": "2026-10-02T13:36:58.612275100+00:00",
+        "updatedAt": "2026-10-02T13:37:21.711766100+00:00"
+      },
+      "preview": {
+        "kind": "vector",
+        "resourcePath": "16880622-ad31-4aca-9ef6-1a0178a698cc/preview.geojson",
+        "token": "[REDACTED FOR RELEASE]",
+        "bounds": [
+          13.404,
+          52.52,
+          13.406,
+          52.522
+        ],
+        "featureCount": 13,
+        "truncated": false
+      }
+    }
+  ],
+  "checks": [
+    "plan idempotency",
+    "confirmation gate",
+    "plan hash",
+    "conversation ownership",
+    "background start",
+    "real MVT and all four exports",
+    "full access auto start",
+    "real OSM GeoJSON and GPKG",
+    "cancel pending",
+    "discard without deleting artifacts",
+    "cancel running network work"
+  ],
+  "pass": true
+}
