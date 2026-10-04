@@ -93,5 +93,16 @@
 .payment-charge-rates { font-size:11px; line-height:1.6; color:var(--app-soft-text); }
 .payment-charge-version { display:flex; align-items:baseline; gap:8px; font-size:11px; color:var(--app-soft-text); margin-top:8px; }
 .payment-charge-version code { flex:1; min-width:0; overflow-wrap:anywhere; font-size:10px; }
+.credit-history-toolbar { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto; align-items:center; gap:8px; }
+.credit-history-toolbar .select-trigger { width:100%; min-width:0; height:32px; font-size:12px; padding:0 10px; border-radius:7px; }
+.credit-history-toolbar > button { height:32px; padding:0 10px; font-size:12px; white-space:nowrap; }
+.payment-dialog .credit-history-scope { margin:10px 0 8px; }
+.credit-history-navigation { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:4px 0 9px; border-bottom:1px solid var(--app-line); color:var(--app-soft-text); font-size:12px; font-variant-numeric:tabular-nums; }
+.credit-history-navigation > div { display:flex; flex:none; gap:4px; }
+.credit-history-navigation button { width:28px; height:28px; border-radius:7px; }
+.credit-history-loading { display:flex; align-items:center; justify-content:center; gap:8px; min-height:130px; color:var(--app-soft-text); font-size:13px; }
+.credit-history-error { padding:12px 0; display:flex; flex-direction:column; align-items:flex-start; gap:10px; }
+.credit-history-rows .payment-usage-row { padding:11px 0; }
+@media(max-width:440px) { .credit-history-toolbar { grid-template-columns:minmax(0,1fr) minmax(0,1fr); }.credit-history-toolbar > .credit-history-export { grid-column:1/-1; justify-self:end; } }
 @media(prefers-reduced-motion:reduce) { .payment-usage-details > summary::before { transition:none; } }
 @media(max-width:440px) { .permission-dialog.payment-dialog { padding:16px; }.payment-product { gap:8px; padding:10px; }.payment-product > b { font-size:13px; }.payment-balances { grid-template-columns:1fr; gap:12px; }.payment-balances strong { font-size:22px; } }

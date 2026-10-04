@@ -16,6 +16,7 @@ use std::{
 use tauri::{ipc::Channel, AppHandle, State};
 use tauri_plugin_opener::OpenerExt;
 use uuid::Uuid;
+pub mod credit_history;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -659,6 +660,8 @@ mod tests {
         for (path,status,body,expected) in [
             ("/v1/payments/status","404 Not Found","<html>Not found</html>","PAYMENT_UNAVAILABLE"),
             ("/v1/payments/status","200 OK","<html>Not JSON</html>","GATEWAY_RESPONSE"),
+            ("/v1/payments/history/usage?limit=20","404 Not Found","<html>Not found</html>","PAYMENT_HISTORY_UNAVAILABLE"),
+            ("/v1/payments/history/usage","401 Unauthorized",r#"{"error":"UNAUTHORIZED"}"#,"AUTH_REQUIRED"),
             ("/v1/payments/orders/GDA000","404 Not Found","<html>Not found</html>","GATEWAY_RESPONSE"),
             ("/v1/payments/status","401 Unauthorized",r#"{"error":"UNAUTHORIZED"}"#,"AUTH_REQUIRED"),
         ] {
@@ -912,6 +915,12 @@ mod tests {
 
 fn gateway_status_error(status: reqwest::StatusCode, path: &str, code: &str) -> ServiceError {
     if path.starts_with("/v1/payments") {
+        if path.starts_with("/v1/payments/history/") {
+            if status==reqwest::StatusCode::NOT_FOUND || code=="PAYMENT_HISTORY_UNAVAILABLE" {return error("PAYMENT_HISTORY_UNAVAILABLE","当前服务尚未开放完整用量记录，可查看最近记录");}
+            if code=="PAYMENT_HISTORY_INVALID" {return error("PAYMENT_HISTORY_INVALID","用量筛选无效，请重新查询");}
+            if code=="PAYMENT_STATEMENT_TOO_LARGE" {return error("PAYMENT_STATEMENT_TOO_LARGE","导出过大，请缩小时间范围后重试");}
+            if !["AUTH_REQUIRED","UNAUTHORIZED"].contains(&code) {return error("PAYMENT_HISTORY_ERROR","用量查询未完成，请重试");}
+        }
         if status==reqwest::StatusCode::NOT_FOUND&&code=="NOT_FOUND" {return error("PAYMENT_UNAVAILABLE","当前服务尚未开放支付，现有测试模式不受影响");}
         return match code {
             "UNAUTHORIZED"|"AUTH_REQUIRED"=>error("AUTH_REQUIRED","GeoD 登录已失效，请重新登录"),
@@ -991,7 +1000,7 @@ fn gateway_json_response(response:reqwest::blocking::Response,path:&str)->Result
     let status=response.status();
     // Optional status routes may be absent at the reverse proxy itself, which
     // returns HTML rather than the gateway's JSON. Other responses stay strict.
-    if status==reqwest::StatusCode::NOT_FOUND&&path=="/v1/payments/status"{
+    if status==reqwest::StatusCode::NOT_FOUND&&(path=="/v1/payments/status"||path.starts_with("/v1/payments/history/")){
         return Err(gateway_status_error(status,path,"NOT_FOUND"));
     }
     let value:Value=response.json().map_err(|_|error("GATEWAY_RESPONSE","模型服务响应无效"))?;

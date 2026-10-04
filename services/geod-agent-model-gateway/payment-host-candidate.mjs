@@ -7,6 +7,7 @@ import {createAlipayPaymentCandidate,PaymentError} from './alipay-payment-candid
 import {createPaymentLedgerCandidate,paymentProductsCandidate} from './payment-ledger-candidate.mjs';
 import {createPaymentCandidateHandler} from './payment-http-candidate.mjs';
 import {pricingCandidate} from './pricing-candidate.mjs';
+import {handleCreditHistory} from './credit-history.mjs';
 
 export function paymentCatalogueDigest(products=paymentProductsCandidate){
   if(!Array.isArray(products)||!products.length)throw new PaymentError('PAYMENT_CONFIG_INVALID','Server catalogue required');
@@ -61,7 +62,7 @@ export function createPaymentHostCandidate(config,modelLedger,authenticate){
     billingMode:enforced?'prepaid':config.quotaEnforced===false?'unlimited-test':'token-quota',
     pricingVersion:pricingCandidate.version,pricesApproved:options?.catalogueApproved===true,
     catalogueSha256:ledger&&!provider?null:paymentCatalogueDigest(ledger?.products()??paymentProductsCandidate),
-    welcomeCreditEnabled:!!welcomeCredit,products:ledger?.products()??paymentProductsCandidate});
+    welcomeCreditEnabled:!!welcomeCredit,creditHistoryEnabled:!!ledger,products:ledger?.products()??paymentProductsCandidate});
   const onSignIn=account=>ledger?.grantWelcome(account);
   const paymentHandler=provider?createPaymentCandidateHandler({ledger,authenticate:async request=>{
     const account=await authenticate(request);onSignIn(account);return account;
@@ -74,6 +75,7 @@ export function createPaymentHostCandidate(config,modelLedger,authenticate){
       const account=await authenticate(req);
       if(typeof account!=='string'||!account)throw new PaymentError('AUTH_REQUIRED','GeoD sign-in required',401);
       onSignIn(account);
+      if(await handleCreditHistory(req,res,url,ledger,account))return true;
       if(req.method==='GET'&&url.pathname==='/v1/payments/status'){json(res,200,status());return true;}
       if(!provider&&req.method==='GET'&&url.pathname==='/v1/payments/products'){json(res,200,status());return true;}
       if(!provider&&req.method==='GET'&&url.pathname==='/v1/payments/wallet'){
@@ -81,7 +83,7 @@ export function createPaymentHostCandidate(config,modelLedger,authenticate){
         json(res,200,{...status(),currency:'CNY',balanceNanoCny:null,reservedNanoCny:null,frozenNanoCny:null,availableNanoCny:null,subscription:null,orders:[],refunds:[],charges:[],chargeCount:0,reservations:[],reservationCount:0});return true;
       }
       throw new PaymentError('PAYMENT_DISABLED','Payments have not been enabled',409);
-    }catch(cause){json(res,cause instanceof PaymentError?cause.status:500,{error:{code:cause instanceof PaymentError?cause.code:'PAYMENT_INTERNAL_ERROR',message:cause instanceof PaymentError?cause.message:'Payment operation unavailable'}});return true;}
+    }catch(cause){if(res.headersSent){res.destroy();return true;}json(res,cause instanceof PaymentError?cause.status:500,{error:{code:cause instanceof PaymentError?cause.code:'PAYMENT_INTERNAL_ERROR',message:cause instanceof PaymentError?cause.message:'Payment operation unavailable'}});return true;}
   }
   async function reserve(account,generationId,{sponsored=false,codex=false}={}){
     if(!ledger||!enforced||sponsored)return;

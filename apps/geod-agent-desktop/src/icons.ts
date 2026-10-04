@@ -12,6 +12,7 @@ export {
   Bot,
   ChartNoAxesColumn,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Check,
   CircleCheck as CheckCircle2,

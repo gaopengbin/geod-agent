@@ -140,7 +140,10 @@ export interface PaymentRefund {refundId:string;orderId:string;amountFen:number;
 export interface PaymentCharge {generationId:string;chargeNanoCny:string;createdAt:number;model:string|null;inputTokens:number;cachedInputTokens:number;outputTokens:number;reasoningTokens:number|null;pricingVersion:string;pricingDigest:string|null;ratesNanoPerToken:{cachedInput:string;uncachedInput:string;output:string}|null}
 export interface PaymentReservation {generationId:string;maximumNanoCny:string;createdAt:number;pricingVersion:string|null;model:string|null}
 export interface PaymentCreditGrant {kind:'welcome';policyId:string;creditNanoCny:string;remainingNanoCny:string;createdAt:number}
-export interface PaymentSnapshot {status:{candidate:boolean;available?:boolean;checkoutEnabled:boolean;environment:string;fixture:boolean;billingMode:'prepaid'|'unlimited-test'|'token-quota';pricingVersion?:string;pricesApproved?:boolean;welcomeCreditEnabled?:boolean;products:PaymentProduct[]};wallet:{balanceNanoCny:string|null;reservedNanoCny:string|null;frozenNanoCny?:string|null;availableNanoCny:string|null;subscription:{expiresAt:number}|null;orders:PaymentOrder[];refunds:PaymentRefund[];charges?:PaymentCharge[];chargeCount?:number;reservations?:PaymentReservation[];reservationCount?:number;grants?:PaymentCreditGrant[]}|null}
+export type CreditHistoryKind='usage'|'reservations';
+export interface CreditHistoryQuery {kind:CreditHistoryKind;from?:number|null;to?:number|null;cursor?:string|null;limit?:number}
+export interface CreditHistoryPage {kind:CreditHistoryKind;from:number|null;to:number|null;asOf:number;totalCount:number;items:(PaymentCharge|PaymentReservation)[];nextCursor:string|null}
+export interface PaymentSnapshot {status:{candidate:boolean;available?:boolean;checkoutEnabled:boolean;environment:string;fixture:boolean;billingMode:'prepaid'|'unlimited-test'|'token-quota';pricingVersion?:string;pricesApproved?:boolean;welcomeCreditEnabled?:boolean;creditHistoryEnabled?:boolean;products:PaymentProduct[]};wallet:{balanceNanoCny:string|null;reservedNanoCny:string|null;frozenNanoCny?:string|null;availableNanoCny:string|null;subscription:{expiresAt:number}|null;orders:PaymentOrder[];refunds:PaymentRefund[];charges?:PaymentCharge[];chargeCount?:number;reservations?:PaymentReservation[];reservationCount?:number;grants?:PaymentCreditGrant[]}|null}
 export interface SkillSummary { id: string; name: string; description: string; enabled: boolean; sourceUrl?: string | null; contentSha256?: string | null }
 export interface OnlineSkillCandidate { id: string; name: string; source: string; installs?: number | null }
 export interface SkillSourceCandidate { id: string; name: string; source: string }
@@ -258,6 +261,8 @@ export const api = {
   },
   agentUsage: () => invoke<ModelUsage>("agent_usage"),
   agentPaymentSnapshot:()=>invoke<PaymentSnapshot>('agent_payment_snapshot'),
+  agentCreditHistory:(query:CreditHistoryQuery)=>invoke<CreditHistoryPage>('agent_credit_history',{query}),
+  agentCreditHistoryExport:(query:CreditHistoryQuery,path:string)=>invoke<{records:number;bytes:number;asOf:number;sha256:string}>('agent_credit_history_export',{query,path}),
   agentPaymentAction:(action:'create'|'checkout'|'refresh'|'cancel'|'refund',options:{orderId?:string;productId?:string;requestKey?:string}={})=>invoke<{order?:PaymentOrder;orderId?:string;opened?:boolean;fixture?:boolean;unconfirmed?:boolean;status?:string}>('agent_payment_action',{action,...options}),
   agentEvents: (accountId: string, events: unknown[]) => invoke<{ accepted: number; duplicates: number }>("agent_events", { accountId, events }),
   agentGenerationGet: (generationId: string) => invoke<Generation>("agent_generation_get", { generationId }),

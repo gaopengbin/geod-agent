@@ -1,4 +1,5 @@
 import {PaymentError} from './alipay-payment-candidate.mjs';
+import {handleCreditHistory} from './credit-history.mjs';
 
 const json=(res,status,value)=>res.writeHead(status,{'content-type':'application/json;charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'}).end(JSON.stringify(value));
 async function body(req,limit=32768){
@@ -27,6 +28,7 @@ export function createPaymentCandidateHandler({ledger,authenticate}){
       }
       const account=await authenticate(req);
       if(typeof account!=='string'||!account)throw new PaymentError('AUTH_REQUIRED','GeoD sign-in required',401);
+      if(await handleCreditHistory(req,res,url,ledger,account))return true;
       if(req.method==='GET'&&url.pathname==='/v1/payments/products'){json(res,200,{candidate:true,environment:ledger.environment,fixture:ledger.fixture,products:ledger.products()});return true;}
       if(req.method==='GET'&&url.pathname==='/v1/payments/wallet'){json(res,200,{candidate:true,...ledger.summary(account)});return true;}
       if(req.method==='POST'&&url.pathname==='/v1/payments/orders'){
@@ -47,6 +49,7 @@ export function createPaymentCandidateHandler({ledger,authenticate}){
       }
       throw new PaymentError('PAYMENT_NOT_FOUND','Payment route not found',404);
     }catch(cause){
+      if(res.headersSent){res.destroy();return true;}
       if(url.pathname==='/v1/payments/alipay/notify'){res.writeHead(cause instanceof PaymentError?cause.status:500,{'content-type':'text/plain'}).end('failure');}
       else json(res,cause instanceof PaymentError?cause.status:500,{error:{code:cause instanceof PaymentError?cause.code:'PAYMENT_INTERNAL_ERROR',message:cause instanceof PaymentError?cause.message:'Payment operation could not be completed'}});
       return true;

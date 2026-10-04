@@ -1577,6 +1577,8 @@ pub fn run() {
             services::agent_generate_stream,
             services::agent_usage,
             services::agent_payment_snapshot,
+            services::credit_history::agent_credit_history,
+            services::credit_history::agent_credit_history_export,
             services::agent_payment_action,
             services::agent_events,
             services::agent_generation_get,

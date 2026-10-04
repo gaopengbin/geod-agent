@@ -9,6 +9,7 @@ import {SPONSORED_CHANNELS_VISIBLE} from './ai-channels';
 import {CREDITS_CHANGED,formatCredits,formatCreditRate} from './credits';
 import {ExternalLink,Loader2,RefreshCw,Wallet,X} from './icons';
 import './payment-dialog.css';
+import {CreditUsageHistory} from './credit-usage-history';
 
 export const PAYMENT_OPEN='geod:payment-open';
 const currency=(value:number)=>new Intl.NumberFormat(getLocale(),{style:'currency',currency:'CNY',maximumFractionDigits:2}).format(value);
@@ -23,13 +24,15 @@ const productName=(product:PaymentProduct)=>product.kind==='topup'?credit(produc
 export function PaymentDialog({accountId,onClose}:{accountId:string|null;onClose:()=>void}){
   const [snapshot,setSnapshot]=useState<PaymentSnapshot|null>(null),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true);
   const [error,setError]=useState(''),[notice,setNotice]=useState(''),[tab,setTab]=useState('balance');
+  const [historyUnavailable,setHistoryUnavailable]=useState(false);
+  const recentHistory=useCallback(()=>setHistoryUnavailable(true),[]);
   const [refundConfirm,setRefundConfirm]=useState<PaymentOrder|null>(null),[watchedOrder,setWatchedOrder]=useState<string|null>(null);
   const live=useRef(true),lock=useRef(false),refreshSerial=useRef(0),attempts=useRef(0);
   useEffect(()=>{live.current=true;return()=>{live.current=false;++refreshSerial.current;};},[]);
   const load=useCallback(async()=>{
     const serial=++refreshSerial.current;
     const current=await api.agentPaymentSnapshot();
-    if(live.current&&serial===refreshSerial.current){setSnapshot(current);window.dispatchEvent(new CustomEvent(CREDITS_CHANGED,{detail:{accountId,snapshot:current}}));}
+    if(live.current&&serial===refreshSerial.current){setSnapshot(current);setHistoryUnavailable(false);window.dispatchEvent(new CustomEvent(CREDITS_CHANGED,{detail:{accountId,snapshot:current}}));}
     return current;
   },[accountId]);
   useEffect(()=>{void load().catch(cause=>{if(live.current)setError(errorMessage(cause));}).finally(()=>{if(live.current)setLoading(false);});},[load]);
@@ -129,10 +132,13 @@ export function PaymentDialog({accountId,onClose}:{accountId:string|null;onClose
             </section>)}</div>}
           </section>
           <section role="tabpanel" aria-label={t('AI 用量')} hidden={tab!=='usage'} className="payment-content">
+            {snapshot.status.creditHistoryEnabled===true&&!historyUnavailable?tab==='usage'&&<CreditUsageHistory refreshKey={snapshot} onUnavailable={recentHistory}/>:<>
+            {historyUnavailable&&<p className="payment-caption" role="status">{t('当前服务尚未开放完整用量记录，可查看最近记录')}</p>}
             {mode==='unlimited-test'&&<p className="payment-caption">{t('当前测试不限额度，尚无钱包扣费记录。')}</p>}
             {!!wallet?.reservations?.length&&<div className="payment-usage-group"><h3>{t('费用预留')}<span>{wallet.reservationCount??wallet.reservations.length}</span></h3><p className="payment-caption">{t('预留金额会在用量核验后结算，未确认用量不会直接扣费。')}</p>{wallet.reservations.map(reservation=><section className="payment-usage-row" key={reservation.generationId} data-reservation-id={reservation.generationId}><div className="payment-order-heading"><strong>{reservation.model??t('模型待核对')}</strong><b>{preciseCredit(reservation.maximumNanoCny)}</b></div><div className="payment-order-meta"><span>{date(reservation.createdAt)}</span><span>{t('待结算')}</span></div><code title={reservation.generationId}>{reservation.generationId}</code></section>)}</div>}
             <div className="payment-usage-group"><h3>{t('已结算用量')}<span>{wallet?.chargeCount??wallet?.charges?.length??0}</span></h3>{!wallet?.charges?.length?<p className="payment-empty">{t('暂无 AI 扣费记录')}</p>:<>{(wallet.chargeCount??0)>wallet.charges.length&&<p className="payment-caption">{t('显示最近 {0} 次扣费，共 {1} 次。',{'0':wallet.charges.length,'1':wallet.chargeCount??wallet.charges.length})}</p>}{wallet.charges.map(charge=><section className="payment-usage-row" key={charge.generationId} data-charge-id={charge.generationId}><div className="payment-order-heading"><strong>{charge.model??t('模型待核对')}</strong><b>{preciseCredit(charge.chargeNanoCny)}</b></div><div className="payment-order-meta"><span>{date(charge.createdAt)}</span><span>{t('已结算')}</span></div><details className="payment-usage-details"><summary>{t('计费明细')}</summary><dl><div><dt>{t('输入 token')}</dt><dd>{tokens(charge.inputTokens)}</dd></div><div><dt>{t('其中缓存')}</dt><dd>{tokens(charge.cachedInputTokens)}</dd></div><div><dt>{t('输出 token')}</dt><dd>{tokens(charge.outputTokens)}</dd></div>{charge.reasoningTokens!=null&&<div><dt>{t('其中推理')}</dt><dd>{tokens(charge.reasoningTokens)}</dd></div>}</dl>{charge.ratesNanoPerToken&&<div className="payment-charge-rates"><span>{t('每百万 token：未缓存输入 {0} · 缓存输入 {1} · 输出 {2}',{'0':formatCreditRate(charge.ratesNanoPerToken.uncachedInput),'1':formatCreditRate(charge.ratesNanoPerToken.cachedInput),'2':formatCreditRate(charge.ratesNanoPerToken.output)})}</span></div>}<div className="payment-charge-version"><span>{t('费率版本')}</span><code title={charge.pricingVersion}>{charge.pricingVersion}</code></div><code className="payment-generation-id" title={charge.generationId}>{charge.generationId}</code></details></section>)}</> }</div>
             <p className="payment-caption">{t(SPONSORED_CHANNELS_VISIBLE?'仅列出此钱包的模型费用，不包含自带 Key 或赞助渠道。':'仅列出此钱包的模型费用，不包含自带 Key。')}</p>
+            </>}
           </section>
           </ScrollArea>
         </div>

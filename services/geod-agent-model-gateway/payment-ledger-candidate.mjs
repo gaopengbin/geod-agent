@@ -3,6 +3,7 @@
 // explicit payment or welcome-credit configuration. Credit-only wallets do
 // not need merchant keys and cannot create cash orders or refunds.
 import Database from 'better-sqlite3';
+import {createCreditHistory} from './credit-history.mjs';
 import {randomUUID,createHash} from 'node:crypto';
 import {PaymentError,parseAlipayNotify} from './alipay-payment-candidate.mjs';
 import {pricingCandidate,capturePricingSnapshot,quoteFromPricingSnapshot} from './pricing-candidate.mjs';
@@ -249,6 +250,7 @@ export function createPaymentLedgerCandidate(path,{gateway=null,loadGeneration,p
     return {generationId:reservation.generation_id,maximumNanoCny:String(reservation.maximum_nano),createdAt:reservation.created_at,
       pricingVersion:price?.version??null,model:price?.model??null};
   };
+  const history=createCreditHistory(path,db,{safeCharge,safeReservation,now});
   const summary=db.transaction(account=>({environment:gateway?.environment??'credits-only',fixture:gateway?.fixture??false,currency:'CNY',
     balanceNanoCny:String(balance(account)),reservedNanoCny:String(reserved(account)),frozenNanoCny:String(frozen(account)),availableNanoCny:String(balance(account)-reserved(account)),
     subscription:db.prepare('SELECT expires_at AS expiresAt FROM geod_payment_subscriptions WHERE account=?').get(account)??null,
@@ -259,5 +261,5 @@ export function createPaymentLedgerCandidate(path,{gateway=null,loadGeneration,p
     reservations:db.prepare('SELECT * FROM geod_credit_reservations WHERE account=? AND state=\'reserved\' ORDER BY created_at DESC,generation_id DESC LIMIT 100').all(account).map(safeReservation),
     reservationCount:db.prepare('SELECT COUNT(*) AS count FROM geod_credit_reservations WHERE account=? AND state=\'reserved\'').get(account).count,
     grants:db.prepare('SELECT g.kind,g.policy_id,g.amount_nano,g.created_at,l.remaining_nano FROM geod_credit_grants g JOIN geod_credit_lots l ON l.id=g.lot_id WHERE g.account=? ORDER BY g.created_at').all(account).map(g=>({kind:g.kind,policyId:g.policy_id,creditNanoCny:String(g.amount_nano),remainingNanoCny:String(g.remaining_nano),createdAt:g.created_at}))}));
-  return {fixture:gateway?.fixture??false,environment:gateway?.environment??'credits-only',products:()=>[...catalog.values()],grantWelcome,createOrder,checkout,handleNotify,refreshOrder,cancelOrder,reserveGeneration,settleGeneration,refundOrder,requestFailedRunReview,summary,order:(account,id)=>safeOrder(owned(account,id)),close:()=>db.close()};
+  return {fixture:gateway?.fixture??false,environment:gateway?.environment??'credits-only',products:()=>[...catalog.values()],grantWelcome,createOrder,checkout,handleNotify,refreshOrder,cancelOrder,reserveGeneration,settleGeneration,refundOrder,requestFailedRunReview,summary,history:history.page,statement:history.statement,order:(account,id)=>safeOrder(owned(account,id)),close:()=>db.close()};
 }
