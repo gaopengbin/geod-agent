@@ -15,19 +15,20 @@ args = parser.parse_args()
 output = Path(args.output).resolve()
 assert output.is_relative_to(REPO / "artifacts") and output.name.startswith("release-candidate-")
 assert not output.exists(), "Keep previous candidate outputs intact."
-evidence = REPO / "artifacts" / ("release-closeout-20261004" if args.installer_compression == "lzma" else "release-closeout-20261004-final")
-evidence.mkdir(parents=True, exist_ok=True)
+evidence = output.with_name(output.name + "-build-evidence")
+assert not evidence.exists(), "Keep the build evidence for previous candidates intact."
+evidence.mkdir(parents=True)
 
 
 def snapshot():
     names = subprocess.check_output(
         ["git", "ls-files", "-co", "--exclude-standard", "-z"], cwd=REPO
     ).decode("utf-8").split("\0")
-    prefixes = ("apps/geod-agent-desktop/", "crates/", "packages/", "services/geod-agent-model-gateway/", "vendor/")
+    prefixes = ("apps/geod-agent-desktop/", "crates/", "packages/", "services/geod-agent-model-gateway/", "vendor/", "scripts/", ".github/")
     files = {}
     for name in sorted(set(names)):
         file = REPO / name
-        if name and name.startswith(prefixes) and file.is_file():
+        if name and (name.startswith(prefixes) or name in {"Cargo.toml", "Cargo.lock", "LICENSE"}) and file.is_file():
             assert file.resolve().is_relative_to(REPO)
             files[name] = hashlib.sha256(file.read_bytes()).hexdigest()
     assert files and "apps/geod-agent-desktop/src-tauri/src/lib.rs" in files
@@ -36,6 +37,7 @@ def snapshot():
 
 frozen = snapshot()
 record = {"at": datetime.now(timezone.utc).isoformat(), "candidate": str(output),
+          "gitHead": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO).decode().strip(),
           "files": frozen, "installed": False, "published": False, "chargingEnabled": False}
 (evidence / "source-freeze.json").write_text(json.dumps(record, indent=2), encoding="utf-8")
 print(json.dumps({"sourceFrozen": True, "files": len(frozen), "candidate": output.name}), flush=True)

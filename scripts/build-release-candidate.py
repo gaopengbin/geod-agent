@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import tempfile
 from release_inventory import inventory
+from release_build_identity import release_environment, source_config, write_stamp
 
 ROOT = Path(__file__).resolve().parents[1]
 DESKTOP = ROOT / 'apps/geod-agent-desktop'
@@ -45,7 +46,8 @@ def main():
     target = Path(args.output).resolve()
     if not target.is_relative_to(ROOT / 'artifacts') or not target.name.startswith('release-candidate-'):
         raise ValueError('Use a fresh release-candidate directory under artifacts.')
-    environment, trust = trust_environment(os.environ, args.signed_update)
+    source_config(DESKTOP / 'src-tauri')
+    environment, trust = trust_environment(release_environment(os.environ), args.signed_update)
     if args.dry_run:
         record = inventory(ROOT)
         record.update(updateChannel=trust, installed=False, published=False, dryRun=True)
@@ -63,9 +65,10 @@ def main():
         config = Path(temporary) / 'build.json'
         config.write_text(json.dumps({'bundle': {'createUpdaterArtifacts': args.signed_update, 'windows': {'nsis': {'compression': args.installer_compression}}}}), encoding='utf-8')
         subprocess.run([node, str(cli), 'build', '--ci', '--bundles', 'nsis', '--config', str(config)], cwd=DESKTOP, env=environment, check=True)
+    identity = write_stamp(DESKTOP / 'src-tauri', DESKTOP / 'src-tauri/target/release')
     record = inventory(ROOT)
     subprocess.run([shutil.which('python') or 'python', '-X', 'utf8', str(ROOT / 'scripts/package-release-candidate.py'), str(target)], cwd=ROOT, env=environment, check=True)
-    record.update(updateChannel=trust, installerCompression=args.installer_compression, installed=False, published=False)
+    record.update(updateChannel=trust, installerCompression=args.installer_compression, buildIdentity=identity, installed=False, published=False)
     (target / 'build-receipt.json').write_text(json.dumps(record, indent=2), encoding='utf-8')
     if args.signed_update:
         installer = DESKTOP / 'src-tauri/target/release/bundle/nsis' / f"GeoD Agent_{record['version']}_x64-setup.exe"

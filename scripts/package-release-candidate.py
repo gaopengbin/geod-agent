@@ -6,6 +6,7 @@ from pathlib import Path
 import shutil
 import subprocess
 from release_inventory import runtime_directories, verify_runtime
+from release_build_identity import verify_stamp
 
 ROOT = Path(__file__).resolve().parents[1]
 RELEASE = ROOT / "apps/geod-agent-desktop/src-tauri/target/release"
@@ -26,6 +27,7 @@ if not output.is_relative_to(ROOT / "artifacts") or not output.name.startswith("
 installer = RELEASE / "bundle/nsis" / f"GeoD Agent_{VERSION}_x64-setup.exe"
 if not installer.is_file():
     raise SystemExit("Build the candidate installer before packaging")
+identity = verify_stamp(ROOT / "apps/geod-agent-desktop/src-tauri", RELEASE)
 output.mkdir(parents=True, exist_ok=True)
 bundle = output / f"GeoD-Agent-{VERSION}-windows-x64"
 if bundle.exists():
@@ -70,6 +72,7 @@ subprocess.run([sevenzip, "a", "-tzip", "-mx=5", "-bso0", "-bsp0", str(archive),
                cwd=output, check=True, creationflags=subprocess.CREATE_NO_WINDOW)
 subprocess.run([sevenzip, "t", "-bso0", "-bsp0", str(archive)], check=True, creationflags=subprocess.CREATE_NO_WINDOW)
 manifest = {"version": VERSION, "platform": "windows-x64", "published": False, "installed": False,
+            "buildIdentity": identity,
             "bundleBytes": sum(file["bytes"] for file in files.values()), "bundleFiles": len(files),
             "runtimeVerification": checks,
             "artifacts": {file.name: {"bytes": file.stat().st_size, "sha256": digest(file)}
