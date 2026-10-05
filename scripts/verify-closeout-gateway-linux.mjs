@@ -5,6 +5,7 @@ import {join} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {createHash} from 'node:crypto';
 const requireCreditHistory=process.argv.includes('--credit-history');
+const requirePaymentHistory=process.argv.includes('--payment-history');
 const {readConfig,createGatewayServer}=await import(pathToFileURL('/tmp/gateway-rc/services/geod-agent-model-gateway/server.mjs'));
 const config=readConfig({GEOD_AGENT_GATEWAY_SECRET:'release-archive-test-secret-long-enough',DEEPSEEK_API_KEY:'fixture-never-sent',GEOD_IDENTITY_ORIGIN:'http://127.0.0.1:1',GEOD_AGENT_DB_PATH:join(mkdtempSync(join(tmpdir(),'gateway-archive-')),'model.sqlite'),GEOD_AGENT_QUOTA_MODE:'unlimited'});
 assert.equal(config.quotaEnforced,false);assert.equal(config.payment,null);
@@ -41,7 +42,16 @@ for(let attempt=0;attempt<2;attempt++){
   assert.equal(wallet.availableNanoCny,requireCreditHistory?'18660960000':'20000000000');assert.equal(wallet.grants.length,1);assert.equal(wallet.checkoutEnabled,false);
   if(requireCreditHistory){
    const request=path=>fetch('http://127.0.0.1:'+active.address().port+path,{headers:{authorization:'Bearer '+token}});
-   assert.equal((await (await request('/v1/payments/status')).json()).creditHistoryEnabled,true);
+   const status=await (await request('/v1/payments/status')).json();
+   assert.equal(status.creditHistoryEnabled,true);
+   if(requirePaymentHistory){
+    assert.equal(status.paymentHistoryEnabled,true);assert.equal(status.checkoutEnabled,false);
+    for(const kind of ['orders','refunds']){
+     const empty=await (await request('/v1/payments/history/'+kind)).json();assert.equal(empty.totalCount,0);assert.deepEqual(empty.items,[]);
+     const csv=await request('/v1/payments/history/'+kind+'/export.csv');assert.equal(csv.status,200);assert.equal(csv.headers.get('x-geod-record-count'),'0');
+    }
+    assert.equal((await fetch('http://127.0.0.1:'+active.address().port+'/v1/payments/orders',{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},body:JSON.stringify({requestKey:'disabled',productId:'ai-credit-10'})})).status,409);
+   }
    const unauthenticated=await fetch('http://127.0.0.1:'+active.address().port+'/v1/payments/history/usage');assert.equal(unauthenticated.status,401);
    const page=await (await request('/v1/payments/history/usage?limit=20'+(attempt?'&cursor='+encodeURIComponent(cursor):''))).json();
    assert.equal(page.totalCount,121);assert.equal(page.items.length,20);
@@ -59,5 +69,6 @@ for(let attempt=0;attempt<2;attempt++){
   }
  }finally{active.closeIdleConnections();await new Promise(resolve=>active.close(resolve));}
 }
-console.log(JSON.stringify({passed:true,actualArchiveStarted:true,nativeSqliteLoaded:true,paidCheckout:false,quotaEnforced:false,welcomeCreditsVerified:true,welcomeRestartVerified:true,publicNetworkUsed:false,identityFixture:true,
- creditHistoryVerified:requireCreditHistory,creditHistoryRestartVerified:requireCreditHistory,readOnlyHistoryRoutesVerified:requireCreditHistory?4:0,historyRecords:requireCreditHistory?121:0}));
+const paymentHistory=requirePaymentHistory?await (await import('/verify-payment-history.mjs')).verifyPaymentHistory():undefined;
+console.log(JSON.stringify({passed:true,actualArchiveStarted:true,nativeSqliteLoaded:true,paidCheckout:false,quotaEnforced:false,welcomeCreditsVerified:true,welcomeRestartVerified:true,publicNetworkUsed:false,identityFixture:true,paymentHistory,
+ creditHistoryVerified:requireCreditHistory,creditHistoryRestartVerified:requireCreditHistory,readOnlyHistoryRoutesVerified:(requireCreditHistory?4:0)+(paymentHistory?.readOnlyHistoryRoutesVerified??0),historyRecords:requireCreditHistory?121:0}));

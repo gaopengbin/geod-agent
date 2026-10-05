@@ -35,6 +35,11 @@ def sha(file):
         return hashlib.file_digest(stream, 'sha256').hexdigest()
 
 source = {}
+verification = {}
+for file in [ROOT/'scripts/build-closeout-gateway.py', ROOT/'scripts/package-closeout-gateway-linux.py',
+             *sorted((ROOT/'services/geod-agent-model-gateway/test').rglob('*'))]:
+    if file.is_file() and 'node_modules' not in file.parts and 'live' not in file.name:
+        verification[file.relative_to(ROOT).as_posix()] = sha(file)
 for directory in [ROOT/'services/geod-agent-model-gateway', ROOT/'packages/codex-protocol']:
     for file in sorted(directory.glob('*.mjs')):
         if file.name.endswith('.test.mjs'):
@@ -78,11 +83,15 @@ if not args.package_only:
         '--test-reporter=spec',*[f'test/{name}' for name in tests]])
 assert all(sha(ROOT/name) == digest for name,digest in source.items()), 'Source changed during Linux build'
 assert all(sha(stage/name) == digest for name,digest in source.items())
+assert all(sha(ROOT/name) == digest for name,digest in verification.items()), 'Verification source changed during Linux build'
+assert all(sha(stage/name) == digest for name,digest in verification.items() if name.startswith('services/'))
 assert not (service/'payment-history-candidate.mjs').exists()
 archive = output/f'geod-agent-gateway-{VERSION}-linux-x64.tar.gz'
 run('linux-package.log',common + ['--network','none','--mount',
     f'type=bind,source={ROOT / "scripts/package-closeout-gateway-linux.py"},target=/package.py,readonly',
     image_id,'python3','/package.py'])
+assert all(sha(ROOT/name) == digest for name,digest in source.items()), 'Source changed during packaging'
+assert all(sha(ROOT/name) == digest for name,digest in verification.items()), 'Verification source changed during packaging'
 shutil.move(stage/'gateway-linux-x64.tar.gz',archive)
 inventory = json.loads((stage/'linux-files.json').read_text(encoding='utf-8'))
 files = inventory['files']
@@ -92,5 +101,6 @@ receipt = dict(version=VERSION,platform='linux-x64',node='22.23.2',imageId=image
     archiveSha256=sha(archive),archiveBytes=archive.stat().st_size,files=files,symlinks=inventory['symlinks'],
     tests=tests,published=False,uploaded=False,productionModified=False,
     paymentEnabled=False,welcomeCreditIncluded=True,configurationIncluded=False,databaseIncluded=False)
+receipt['verificationInputs'] = verification
 (output/'candidate.json').write_text(json.dumps(receipt,indent=2),encoding='utf-8')
-print(json.dumps({key:value for key,value in receipt.items() if key not in {'files','sourceFiles'}}),flush=True)
+print(json.dumps({key:value for key,value in receipt.items() if key not in {'files','sourceFiles','verificationInputs'}}),flush=True)

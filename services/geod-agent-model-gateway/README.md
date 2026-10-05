@@ -122,3 +122,25 @@ merchant coverage, shared merchant budgets, final policy, external sandbox and
 authorized real-money acceptance remain release gates.
 
 See [native UI, protocol and restart acceptance](../../docs/implementation/2026-10-04-payment-service-candidate.md).
+
+### Complete account records
+
+Authenticated `GET /v1/payments/history/{usage,reservations,orders,refunds}`
+returns account-owned history beyond the wallet's recent 100 rows. Each kind
+also supports `/export.csv` for the entire selected date range. The server
+advertises `creditHistoryEnabled` and `paymentHistoryEnabled` separately;
+credit-only hosts expose empty cash history while keeping cash mutations off.
+
+Queries accept inclusive `from`, exclusive `to`, `limit` (1–200) and a signed
+`cursor`. CSV accepts dates only. Cursors bind the authenticated account, kind
+and dates, survive service restart and exclude later inserts. Row status is
+current when read; CSV holds one independent SQLite WAL read snapshot.
+Client-supplied account identifiers and mutable status filters are rejected.
+
+Exports include exact integer amounts and decimal CNY, UTC dates and original
+price metadata. They exclude provider identifiers, credentials and prompts.
+Desktop writes verify bytes and SHA-256 before replacing a selected file.
+Keep `credit-history.mjs` in the frozen service package. These read-only routes
+do not enable checkout or replace merchant cash reconciliation.
+
+See [order/refund desktop and native acceptance](../../docs/implementation/2026-10-05-payment-history.md).
