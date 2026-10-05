@@ -10,10 +10,16 @@ import tempfile
 
 parser = argparse.ArgumentParser()
 parser.add_argument('backup', type=Path)
-parser.add_argument('--marker-key', required=True)
-parser.add_argument('--marker-value', required=True)
-parser.add_argument('--command-id', required=True)
+parser.add_argument('--marker-key')
+parser.add_argument('--marker-value')
+parser.add_argument('--command-id')
+parser.add_argument('--expected-state', type=Path,
+                    help='Verify retained raw conversation and pending hashes instead of creating a fixture marker')
 args = parser.parse_args()
+if args.expected_state:
+    assert not any([args.marker_key, args.marker_value, args.command_id])
+else:
+    assert all([args.marker_key, args.marker_value, args.command_id]), 'Fixture verification requires its marker and command'
 backup = args.backup.resolve(strict=True)
 manifest = json.loads((backup / 'manifest.json').read_text(encoding='utf-8'))
 assert manifest['schemaVersion'] == 1
@@ -40,14 +46,26 @@ try:
     ui_file = backup / ui['file']
     assert hashlib.sha256(ui_file.read_bytes()).hexdigest() == ui['sha256']
     entries = dict(json.loads(ui_file.read_text(encoding='utf-8'))['entries'])
-    assert entries[args.marker_key] == args.marker_value
+    if args.expected_state:
+        expected = json.loads(args.expected_state.read_text(encoding='utf-8'))['application']
+        key = next(key for key, value in entries.items()
+                   if key.startswith('geod-agent-conversations-0.1:account:')
+                   and hashlib.sha256(value.encode('utf-8')).hexdigest() == expected['sha256'])
+        assert len(json.loads(entries[key])) == expected['count']
+        assert entries['geod-agent-active-conversation-0.1:account:' + key.split(':account:')[1]] == expected['active']
+        pending = {key: hashlib.sha256(value.encode('utf-8')).hexdigest()
+                   for key, value in entries.items() if 'pending' in key}
+        assert pending == expected['pending']
+        assert entries.get('geod-agent-language-v1') == expected['language']
+    else:
+        assert entries[args.marker_key] == args.marker_value
     conversations = []
     for key, value in entries.items():
         if key.startswith('geod-agent-conversations-0.1'):
             conversations.extend(json.loads(value))
     assert len(conversations) >= 30, 'Existing chat records missing'
     command_found = False
-    for record in manifest['records']:
+    for record in manifest['records'] if args.command_id else []:
         if record['kind'] != 'sqlite':
             continue
         restored = clone / record['path']
@@ -60,13 +78,15 @@ try:
                 for row in db.execute('SELECT * FROM ' + quoted):
                     if args.command_id in row:
                         command_found = True
-    assert command_found, 'Actual command ledger record missing'
+    if args.command_id:
+        assert command_found, 'Actual command ledger record missing'
     assert sqlite_count > 0 and history_count > 0
     shutil.copyfile(ui_file, clone / 'ui-state.json')
     print(json.dumps({'passed': True, 'isolatedRestore': True, 'nativeRecords': len(manifest['records']),
         'sqliteIntegrityChecks': sqlite_count, 'engineHistoryFiles': history_count,
         'uiEntries': len(entries), 'retainedConversations': len(conversations),
-        'actualCommandRetained': command_found, 'workspaceFilesCopied': False,
+        'actualCommandRetained': command_found if args.command_id else None,
+        'retainedRawStateVerified': bool(args.expected_state), 'workspaceFilesCopied': False,
         'liveDataOverwritten': False}, ensure_ascii=False))
 finally:
     assert clone.resolve().parent == Path(tempfile.gettempdir()).resolve()

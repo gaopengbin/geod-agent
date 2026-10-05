@@ -52,3 +52,5 @@
 - 源码关系：候选目录 `artifacts/schedule-release-review-20261005/source-comparison.json`。
 - 整合保留：候选目录 `artifacts/main-integration-20261005/before.json`、`after.json`，只保存摘要，不复制用户聊天正文或凭据。
 - 发行清单：`scripts/prepare-closeout-review.py --schedule-run <长测证据目录> --output <新的 artifacts 子目录>`；仅本地读取、核验和输出清单，没有安装或发布操作。
+
+随后补齐了 [当前 31 会话完整备份及隔离恢复](2026-10-05-current-profile-backup.md)：维护机制恢复了用户后台，前台与网关保持。整合源码的新独立 QA 的 585 项产品输入与本候选一致（仅行尾差异），26 个半小时周期的 [跨日测试](2026-10-05-schedule-stability.md) 已启动，尚未结束；没有替换固定发行文件或改变待授权范围。
