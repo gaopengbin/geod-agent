@@ -26,6 +26,7 @@
 | 实际界面导入、全文搜索、重命名、置顶、归档、恢复、重载及删除；原有 30 个会话保留 | `artifacts/product-gaps-20261004/history-ui/result.json` |
 | 原生保存 JSON/Markdown、中文内容字节核验、导入新身份、无原生任务授权、拒绝错误扩展名 | `artifacts/product-gaps-20261004/history-ui/native-export.json` |
 | 两个真实 DeepSeek 会话重叠执行 8.3 秒，离开后的排队消息完成，38 个测试会话跨重载保留，原有 30 个会话保留，没有串会话或页面异常 | `artifacts/product-gaps-20261004/concurrency/result.json` |
+| 两个真实原生会话运行中单独停止 A，163 毫秒内中断，B 成功命令输出保持；从 B 创建独立原生分支并读回真实历史；原 31 会话全字段及恢复记录保持，两个实际命令身份无残留 | `artifacts/conversation-stop-fork-20261005/fixture-1791185676193/result.json`、`final-preservation.json` |
 | 真实 Codex 原生分支获得独立线程编号，模型读回源会话的实际命令输出；关闭并重启原生程序后，同一分支线程再次读回该输出 | `artifacts/product-gaps-20261004/concurrency/native-fork.json`、`native-restart-resume.json` |
 | 实际切换界面和 AI 回复语言、重载保存偏好、跟随系统中文；1000×720 窄窗口无横向溢出，已保存的用户/AI 原文保持一致 | `artifacts/product-gaps-20261004/locale-ui/language-verification.json` |
 | 中文/英文对话、图源、扩展、语言设置原生截图 | `artifacts/product-gaps-20261004/locale-ui/` |
@@ -36,7 +37,7 @@
 
 ## 待补验收与边界
 
-- 单独停止的原生记录显示：A 的轮次状态为 `interrupted`，并行 B 正常 `completed` 且读回实际命令输出。该次整轮脚本在后续等待时超时，`stop-fork-attempt.json` 保留失败；未找到脚本预期的 `stop-one.json` 完整通过回执，因此不把整轮停止/分支验收记为通过。分支继承及重启读回另有上表中的独立通过记录。
+- 旧单独停止/分支脚本的超时保持失败。2026-10-05 的全新完整验收已通过运行、原数据保留和清理，详见 [单会话停止与原生分支](2026-10-05-conversation-stop-fork.md)。「停止回复」不表示已终止 Codex 的背景终端；验收用长等待命令自然结束后再核对无残留。分支继承及重启读回也有上表中的独立通过记录。
 - 当前历史索引仍整体从 IndexedDB 载入；分段显示不是后端游标分页。大量历史的启动性能需要进一步测量。
 - 以前已被界面索引截断的记录不会凭空恢复；原生 Codex 线程及磁盘成果并未因此删除，可另行做有来源的历史恢复。
 - 界面英文覆盖不表示所有供应商返回的错误或外部 MCP 内容都会翻译；这些原始内容保持可核对。
