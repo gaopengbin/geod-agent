@@ -1,0 +1,54 @@
+# GeoD Agent 0.2.2 发布审阅
+
+2026-10-05。目标是收尾一个预发行版本。当前候选已完成本机核验，尚未上传 GitHub 或切换正式服务；实际安装升级、回滚、跨日运行和真实系统重启仍待验收，全新 Windows 按用户要求暂缓。
+
+## 本版变化
+
+- 完整用量、预留、订单和退款记录，支持时间筛选、分页与全量 CSV；旧服务不支持时明确提示不可用。
+- Windows 安装向导加入简体中文和英文。欢迎页与取消已实际检查；初始语言选择框保留 NSIS 英文提示。
+- 保持新账号一次 20,000 Credits 赠送、现有模型费率及隐藏的赞助入口；现金充值和退款仍关闭。
+
+## 已完成的验证
+
+| 范围 | 结果 |
+| --- | --- |
+| 网关与记录 | 84 项 Windows/Linux 检查、实际浏览器及原生记录操作通过；实际 Linux 归档的八条只读路由、重启与完整 CSV 通过。 |
+| 正式账本副本 | 两个实际归档完成隔离升级、回退及再升级；185 次请求、553 条用量、赠送和余额保持，正式服务未修改。 |
+| 新 Windows 候选 | 991 项构建输入保持；更新签名、9 项实际更新库检查、24,944 个资源逐文件核对及六项向导界面观察通过。更新签名不等于 Windows 代码签名。 |
+| 后台定时 | 独立原生 QA 持续约 3 小时 36 分钟；八个半小时周期、三次续期、197 秒实际停机、异常恢复、明确重试和重开界面通过，完整清理完成。 |
+| 开发目录整合 | 提交 `4258f57` 已快进合入 `G:\code\geod-agent`。合入前后原 31 个会话的原始 JSON 摘要、当前会话、一个待恢复记录的摘要、语言、两项桌面进程、网关 PID/创建时间和启动项保持。没有重装或重启这些进程。 |
+
+长测使用独立 QA 程序；与普通候选的调度和授权实现关系已核对，二进制不同。开发目录本轮仅整合源码和前端热更新，运行中的原生进程未重新编译/替换；新原生记录能力另由独立 QA 验收。欢迎页检查也不代表安装升级已完成。
+
+## 固定发行文件
+
+文件及完整 SHA-256 见 [完整候选](2026-10-05-payment-history-release-candidate.md)。本机可审阅产物位于独立候选目录：
+
+- [Windows 安装包](<G:/code/geod-agent-payment-history-candidate/artifacts/release-candidate-0.2.2-bilingual-installer-20261005/GeoD Agent_0.2.2_x64-setup.exe>)，510,426,111 字节。
+- [Windows 免安装 ZIP](G:/code/geod-agent-payment-history-candidate/artifacts/release-candidate-0.2.2-bilingual-installer-20261005/GeoD-Agent-0.2.2-windows-x64.zip)，687,928,470 字节。
+- [Linux 网关归档](G:/code/geod-agent-payment-history-candidate/artifacts/gateway-release-0.2.2-payment-history-20261005/geod-agent-gateway-0.2.2-linux-x64.tar.gz)，5,612,350 字节。
+- [固定摘要清单](G:/code/geod-agent-payment-history-candidate/artifacts/release-review-0.2.2-20261005/SHA256SUMS.txt)及 [审阅清单](G:/code/geod-agent-payment-history-candidate/artifacts/release-review-0.2.2-20261005/release-review.json)。清单已重新读取三份归档及更新签名的实际字节，并核对 585 项冻结产品输入和对应回执。后续文档/审阅脚本提交不会追改已构建包。
+
+发行说明为 [中文/英文审阅稿](../releases/0.2.2.md)。该路径尚不是 GitHub 下载链接。
+
+## 下一步待授权范围
+
+建议将本次文件发布为现有私有仓库的 **0.2.2 预发行版本**，并更新正式网关的以下八条已认证、只读路由。正式切换仍需新的备份、隔离端口验证及切换后核验，不用旧备份覆盖新记录。
+
+| 记录 | 分页 | 全量导出 |
+| --- | --- | --- |
+| 用量 | `GET /v1/payments/history/usage` | `GET /v1/payments/history/usage/export.csv` |
+| 预留 | `GET /v1/payments/history/reservations` | `GET /v1/payments/history/reservations/export.csv` |
+| 订单 | `GET /v1/payments/history/orders` | `GET /v1/payments/history/orders/export.csv` |
+| 退款 | `GET /v1/payments/history/refunds` | `GET /v1/payments/history/refunds/export.csv` |
+
+现金开关、赠送数量和模型费率保持；本次建议不启用正式自动更新、不覆盖本机已有安装。安装升级、Windows 代码签名、真实收费及供应商/企业数据库/OAuth 账号验证各自保留后续验收。
+
+目标约定要求完整候选可审阅后取得正式发布授权。此前仅四条用量路由的待答复问题没有覆盖本次新增的订单、退款及导出范围，不能代替这次授权。
+
+## 复查证据
+
+- 长测：主目录 `artifacts/schedule-stability-native-20261005/fixture-6b042703fa08885c/`，终态与 15 阶段清理均通过。
+- 源码关系：候选目录 `artifacts/schedule-release-review-20261005/source-comparison.json`。
+- 整合保留：候选目录 `artifacts/main-integration-20261005/before.json`、`after.json`，只保存摘要，不复制用户聊天正文或凭据。
+- 发行清单：`scripts/prepare-closeout-review.py --schedule-run <长测证据目录> --output <新的 artifacts 子目录>`；仅本地读取、核验和输出清单，没有安装或发布操作。
