@@ -197,13 +197,29 @@ def child_process_audit(value):
         try:
             observed = known.get(found.pid) == found.info["create_time"]
             scoped = False
-            if found.info["name"] in ["node.exe", "codex.exe", "conhost.exe", "geod-agent-desktop.exe"]:
+            if found.info["name"] in ["node.exe", "codex.exe", "geod-agent-desktop.exe"]:
                 scoped = Path(found.cwd()).resolve().is_relative_to(QA_PROFILE.resolve())
             if observed or scoped:
                 remaining.append({"pid": found.pid, "name": found.info["name"], "created": found.info["create_time"]})
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
+        except psutil.NoSuchProcess:
             continue
-    return {"passed": not remaining, "observedChildIdentities": len(known), "remainingOwnedProcesses": remaining}
+    return {"passed": not remaining, "observedChildIdentities": len(known), "remainingOwnedProcesses": remaining,
+            "unrecordedConsoleHostsInspected": False}
+
+
+def profile_audit(_):
+    owner = "credit-history-native-fixture"
+    schedules = sqlite3.connect((QA_PROFILE / "agent-ai-schedules.sqlite").as_uri() + "?mode=ro", uri=True)
+    integrity = schedules.execute("PRAGMA integrity_check").fetchone()[0]
+    rows = [json.loads(row[0]) for row in schedules.execute("SELECT body FROM ai_schedules WHERE owner=?", (owner,))]
+    schedules.close()
+    channels = sqlite3.connect((QA_PROFILE / "ai-channels/channels.sqlite").as_uri() + "?mode=ro", uri=True)
+    channel_integrity = channels.execute("PRAGMA integrity_check").fetchone()[0]
+    references = channels.execute("SELECT COUNT(*) FROM credential_versions WHERE owner=?", (owner,)).fetchone()[0]
+    channels.close()
+    return {"owner": owner, "schedulesIntegrity": integrity, "channelsIntegrity": channel_integrity,
+            "scheduleCount": len(rows), "enabledScheduleIds": [row["scheduleId"] for row in rows if row["enabled"]],
+            "channelCredentialReferences": references}
 
 
 action = sys.argv[1]
@@ -211,5 +227,6 @@ value = json.loads(sys.stdin.read() or "{}")
 operations = {"snapshot": lambda _: snapshot(), "sample": sample, "terminate": terminate,
               "rpc": rpc, "start-background": start_background, "channel-credentials": channel_credentials,
               "run-ledger": run_ledger, "dialogs": dialogs, "select-folder": select_folder,
-              "usage-ledger": usage_ledger, "child-process-audit": child_process_audit}
+              "usage-ledger": usage_ledger, "child-process-audit": child_process_audit,
+              "profile-audit": profile_audit}
 print(json.dumps(operations[action](value)))

@@ -1,6 +1,6 @@
 # 会话与多语言推进记录
 
-2026-10-04。目标模式下的开发版变更；未重新安装或线上发布。
+2026-10-04，2026-10-05 核对后续原生验收记录。目标模式下的开发版变更；本轮未重新安装或线上发布。
 
 ## 已实现
 
@@ -26,6 +26,8 @@
 | 实际界面导入、全文搜索、重命名、置顶、归档、恢复、重载及删除；原有 30 个会话保留 | `artifacts/product-gaps-20261004/history-ui/result.json` |
 | 原生保存 JSON/Markdown、中文内容字节核验、导入新身份、无原生任务授权、拒绝错误扩展名 | `artifacts/product-gaps-20261004/history-ui/native-export.json` |
 | 两个真实 DeepSeek 会话重叠执行 8.3 秒，离开后的排队消息完成，38 个测试会话跨重载保留，原有 30 个会话保留，没有串会话或页面异常 | `artifacts/product-gaps-20261004/concurrency/result.json` |
+| 真实 Codex 原生分支获得独立线程编号，模型读回源会话的实际命令输出；关闭并重启原生程序后，同一分支线程再次读回该输出 | `artifacts/product-gaps-20261004/concurrency/native-fork.json`、`native-restart-resume.json` |
+| 实际切换界面和 AI 回复语言、重载保存偏好、跟随系统中文；1000×720 窄窗口无横向溢出，已保存的用户/AI 原文保持一致 | `artifacts/product-gaps-20261004/locale-ui/language-verification.json` |
 | 中文/英文对话、图源、扩展、语言设置原生截图 | `artifacts/product-gaps-20261004/locale-ui/` |
 | 英文翻译实际模型生成记录 | `artifacts/product-gaps-20261004/catalogue-generation.json` |
 | 真实 SQLite 数据迁移、流式 500 片段、跨账号状态、历史导入权限边界及恢复逻辑 | `test/codex-history-storage.test.mjs`、`test/conversation-sessions.test.mjs`、`test/conversation-history.test.mjs`、`test/pending-generations.test.mjs` |
@@ -34,7 +36,7 @@
 
 ## 待补验收与边界
 
-- 单独停止并行会话和原生分支继承历史正在验证；语言设置实际交互、语言偏好重载及窄窗口仍在补验收。
+- 单独停止的原生记录显示：A 的轮次状态为 `interrupted`，并行 B 正常 `completed` 且读回实际命令输出。该次整轮脚本在后续等待时超时，`stop-fork-attempt.json` 保留失败；未找到脚本预期的 `stop-one.json` 完整通过回执，因此不把整轮停止/分支验收记为通过。分支继承及重启读回另有上表中的独立通过记录。
 - 当前历史索引仍整体从 IndexedDB 载入；分段显示不是后端游标分页。大量历史的启动性能需要进一步测量。
 - 以前已被界面索引截断的记录不会凭空恢复；原生 Codex 线程及磁盘成果并未因此删除，可另行做有来源的历史恢复。
 - 界面英文覆盖不表示所有供应商返回的错误或外部 MCP 内容都会翻译；这些原始内容保持可核对。

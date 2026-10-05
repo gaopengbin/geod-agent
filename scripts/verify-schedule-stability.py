@@ -13,9 +13,9 @@ import shutil
 import subprocess
 import sys
 import time
+from schedule_qa_identity import read_build, digest
 
 REPO = Path(__file__).resolve().parents[1]
-QA_SHA256 = "4b5f8ca2b213090da27785d7fc17d01e67532742126273bb7c56b880c79bd885"
 QA_IDENTIFIER = b"dev.geod-agent.credit-history-qa"
 
 
@@ -71,14 +71,23 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--existing-geod-config", action="store_true")
     parser.add_argument("--cycles", type=int, default=8)
+    parser.add_argument("--repeat-seconds", type=int, default=60)
+    parser.add_argument("--access-token-seconds", type=int, default=3600)
     parser.add_argument("--offline-seconds", type=int, default=195)
     parser.add_argument("--audit-only", type=Path)
+    parser.add_argument("--qa-build", type=Path)
     args = parser.parse_args()
     if args.audit_only:
         print(json.dumps(audit_receipts(args.audit_only)))
         return 0
     assert 8 <= args.cycles <= 30, "Endurance must cover at least eight real intervals"
+    assert 60 <= args.repeat_seconds <= 1800, "Use actual intervals between one and thirty minutes"
+    assert 180 <= args.access_token_seconds <= 3600, "Exercise native renewal with a real future expiry"
     assert 185 <= args.offline_seconds <= 600, "Actual downtime must miss at least three periods"
+    if not args.qa_build:
+        raise SystemExit("Build a current-source QA with scripts/build-schedule-current-qa.py, then pass --qa-build; old cached binaries are not reused")
+    qa_build = args.qa_build.resolve()
+    qa_receipt = read_build(qa_build)
     key = provider_key(args.existing_geod_config)
     if not key:
         raise SystemExit("An existing authorized process-only test credential is required")
@@ -88,9 +97,9 @@ def main():
                                cwd=REPO / "services/geod-agent-model-gateway", capture_output=True, encoding="utf-8", check=True)
     controller_metadata = json.loads(preflight.stdout)
 
-    saved = REPO / "artifacts/credit-history-native-20261004/geod-agent-credit-history-QA.exe"
+    saved = qa_build / "target/release/geod-agent-desktop.exe"
     data = saved.read_bytes()
-    assert hashlib.sha256(data).hexdigest() == QA_SHA256
+    assert hashlib.sha256(data).hexdigest() == qa_receipt["qaExecutableSha256"]
     assert QA_IDENTIFIER in data, "Never launch an ordinary application identity for this test"
     output = REPO / "artifacts/schedule-stability-native-20261005"
     root = output / ("fixture-" + secrets.token_hex(8))
@@ -98,7 +107,7 @@ def main():
     release.mkdir(parents=True, exist_ok=False)
     executable = release / "geod-agent-desktop.exe"
     executable.write_bytes(data)
-    runtime_source = REPO / "artifacts/release-candidate-0.2.2-credits-20261004/GeoD-Agent-0.2.2-windows-x64/codex-runtime"
+    runtime_source = qa_build / "target/release/codex-runtime"
     runtime = release / "codex-runtime"
     shutil.copytree(runtime_source, runtime)
     manifest = json.loads((runtime / "manifest.json").read_text(encoding="utf-8"))
@@ -109,15 +118,28 @@ def main():
         assert hashlib.sha256(file.read_bytes()).hexdigest() == item["sha256"]
         verified += 1
     (root / "payload.json").write_text(json.dumps({
-        "qaExecutableSha256": QA_SHA256, "identifier": QA_IDENTIFIER.decode(),
+        "qaExecutableSha256": qa_receipt["qaExecutableSha256"], "identifier": QA_IDENTIFIER.decode(),
+        "qaBinaryVersion": qa_receipt["version"], "currentSourceQaBuild": str(qa_build),
+        "currentSourceQaBuildSha256": digest(qa_build / "current-source-qa-build.json"),
         "runtimeFilesVerified": verified, "shippingCandidateModified": False,
         "profile": "dev.geod-agent.credit-history-qa", "cycles": args.cycles,
+        "repeatSeconds": args.repeat_seconds, "accessTokenSeconds": args.access_token_seconds,
         "offlineSeconds": args.offline_seconds, "systemClockModified": False,
         "controller": controller_metadata, "nativeEngineNodeVersion": manifest["nodeVersion"],
     }, indent=2), encoding="utf-8")
     env = dict(os.environ, GEOD_QA_DEEPSEEK_KEY=key,
                GEOD_QA_STABILITY_ROOT=str(root), GEOD_QA_STABILITY_CYCLES=str(args.cycles),
+               GEOD_QA_STABILITY_REPEAT_SECONDS=str(args.repeat_seconds),
+               GEOD_QA_STABILITY_ACCESS_TOKEN_SECONDS=str(args.access_token_seconds),
                GEOD_QA_STABILITY_OFFLINE_SECONDS=str(args.offline_seconds))
+    scripts = ["verify-schedule-stability.py", "verify-schedule-stability.mjs",
+               "schedule-stability-support.py", "schedule-identity-fixture.mjs",
+                "schedule-acceptance-receipts.mjs", "schedule-rpc-process.mjs", "schedule_qa_identity.py",
+                "schedule-fixture-credential-observer.py", "schedule-fixture-credential.py"]
+    provenance = {"capturedAt": time.time(), "capturedBeforeControllerLaunch": True,
+                  "scripts": {name: hashlib.sha256((REPO / "scripts" / name).read_bytes()).hexdigest()
+                              for name in scripts}}
+    (root / "controller-provenance.json").write_text(json.dumps(provenance, indent=2), encoding="utf-8")
     started = time.time()
     child = subprocess.Popen([controller, "scripts/verify-schedule-stability.mjs"], cwd=REPO, env=env,
                              creationflags=subprocess.CREATE_NO_WINDOW, stdout=subprocess.PIPE,
