@@ -32,12 +32,22 @@ def source_snapshot():
     names = subprocess.check_output(["git", "ls-files", "-co", "--exclude-standard", "-z"], cwd=ROOT, env=public_environment()).decode("utf-8").split("\0")
     prefixes = ("apps/geod-agent-desktop/", "crates/", "packages/", "services/geod-agent-model-gateway/", "vendor/", "scripts/", ".github/")
     return {name: sha(ROOT / name) for name in sorted(set(names)) if name and
-            (name.startswith(prefixes) or name in {"Cargo.toml", "Cargo.lock", "LICENSE"}) and (ROOT / name).is_file()}
+            (name.startswith(prefixes) or name in {"Cargo.toml", "Cargo.lock", "LICENSE", ".gitattributes"}) and (ROOT / name).is_file()}
+
+
+def prepare_generated_inputs():
+    # Windows checkout may initially use CRLF. The ordinary beforeBuild step
+    # regenerates this tool schema as LF; generate it before freezing hashes.
+    node = shutil.which('node')
+    if not node:
+        raise ValueError('Node is required before freezing generated build inputs')
+    subprocess.run([node, str(ROOT/'scripts/sync-codex-tools.mjs')], cwd=ROOT,
+                   env=public_environment(), check=True, creationflags=subprocess.CREATE_NO_WINDOW)
 
 
 def build_input(name):
     return (name.startswith(("apps/geod-agent-desktop/", "crates/", "packages/", "vendor/", "scripts/prepare-"))
-            or name in {"Cargo.toml", "Cargo.lock", "LICENSE", "scripts/build-signed-update-candidate.py",
+            or name in {"Cargo.toml", "Cargo.lock", "LICENSE", ".gitattributes", "scripts/build-signed-update-candidate.py",
                         "scripts/build-release-candidate.py", "scripts/release_inventory.py", "scripts/release_build_identity.py",
                         "scripts/package-release-candidate.py", "scripts/update_signing_vault.py", "scripts/update-candidate.mjs",
                         "scripts/sync-codex-tools.mjs", "scripts/build_release_candidate_for_tests.py",
@@ -225,6 +235,7 @@ def main():
     config = json.loads(public_file.read_text(encoding="utf-8"))
     if set(config) != PUBLIC_FIELDS:
         raise ValueError("The build configuration must contain only the three public channel fields")
+    prepare_generated_inputs()
     native = ROOT / "apps/geod-agent-desktop/src-tauri"
     app = source_config(native)
     resources = inventory(ROOT)

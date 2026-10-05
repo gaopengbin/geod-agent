@@ -6,6 +6,7 @@ import json
 import subprocess
 import sys
 from datetime import datetime, timezone
+from update_signing_vault import public_environment
 
 REPO = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
@@ -28,13 +29,14 @@ def snapshot():
     files = {}
     for name in sorted(set(names)):
         file = REPO / name
-        if name and (name.startswith(prefixes) or name in {"Cargo.toml", "Cargo.lock", "LICENSE"}) and file.is_file():
+        if name and (name.startswith(prefixes) or name in {"Cargo.toml", "Cargo.lock", "LICENSE", ".gitattributes"}) and file.is_file():
             assert file.resolve().is_relative_to(REPO)
             files[name] = hashlib.sha256(file.read_bytes()).hexdigest()
     assert files and "apps/geod-agent-desktop/src-tauri/src/lib.rs" in files
     return files
 
 
+subprocess.run(['node', str(REPO/'scripts/sync-codex-tools.mjs')], cwd=REPO, env=public_environment(), check=True)
 frozen = snapshot()
 record = {"at": datetime.now(timezone.utc).isoformat(), "candidate": str(output),
           "gitHead": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO).decode().strip(),

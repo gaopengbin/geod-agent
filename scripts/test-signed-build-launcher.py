@@ -8,6 +8,7 @@ import unittest
 from unittest.mock import patch, Mock
 import sys
 import json
+import os
 
 spec = importlib.util.spec_from_file_location("signed_build_launcher", Path(__file__).with_name("build-signed-update-candidate.py"))
 launcher = importlib.util.module_from_spec(spec)
@@ -34,6 +35,13 @@ class SignedBuildLauncher(unittest.TestCase):
             with self.subTest(script=name):
                 self.assertTrue(launcher.build_input(name))
         self.assertFalse(launcher.build_input("scripts/test-signed-build-launcher.py"))
+
+    def test_generated_inputs_do_not_inherit_signing_secrets(self):
+        with patch.dict(os.environ, {"TAURI_SIGNING_PRIVATE_KEY":"synthetic-only","TAURI_SIGNING_PRIVATE_KEY_PASSWORD":"synthetic-password"}), patch.object(launcher.shutil,"which",return_value="node"), patch.object(launcher.subprocess,"run") as run:
+            launcher.prepare_generated_inputs()
+        environment=run.call_args.kwargs['env']
+        self.assertFalse(any(name.startswith('TAURI_SIGNING_PRIVATE_KEY') for name in environment))
+        self.assertTrue(run.call_args.kwargs['check'])
 
     def test_public_and_failure_details_survive_redaction(self):
         text = "Windows refused build-script-build.exe (os error 5); public channel https://example.test/latest.json"
@@ -101,7 +109,8 @@ class SignedBuildLauncher(unittest.TestCase):
                         file.write_bytes(launcher.redact(text, self.values).encode(encoding))
                         self.assertFalse(launcher.contains_private(file, self.values))
 
-    def test_candidate_structure_failure_persists_failed_receipt(self):
+    @patch.object(launcher, "prepare_generated_inputs")
+    def test_candidate_structure_failure_persists_failed_receipt(self, generated):
         with tempfile.TemporaryDirectory(prefix="geod-signing-receipt-test-") as folder:
             root = Path(folder).resolve()
             artifacts = root / "artifacts"
@@ -123,6 +132,7 @@ class SignedBuildLauncher(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     launcher.main()
             receipt = json.loads((logs / "result.json").read_text())
+            generated.assert_called_once()
             self.assertEqual(receipt["phase"], "failed")
             self.assertFalse(receipt["passed"])
             self.assertIn("missingCandidateField", receipt["failure"])
