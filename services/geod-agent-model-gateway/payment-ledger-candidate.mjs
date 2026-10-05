@@ -76,7 +76,7 @@ export function createPaymentLedgerCandidate(path,{gateway=null,loadGeneration,p
   });
   const row=id=>db.prepare('SELECT * FROM geod_payment_orders WHERE id=?').get(id);
   function owned(account,id){const order=row(id);if(!order||order.account!==account)fail('PAYMENT_ORDER_NOT_FOUND','Order not found',404);return order;}
-  const safeOrder=order=>({orderId:order.id,product:JSON.parse(order.product),priceFen:order.amount_fen,creditNanoCny:String(order.credit_nano),currency:'CNY',status:order.status,createdAt:order.created_at,expiresAt:order.expires_at,paidAt:order.paid_at,environment:gateway.environment,fixture:gateway.fixture});
+  const safeOrder=order=>({orderId:order.id,product:JSON.parse(order.product),priceFen:order.amount_fen,creditNanoCny:String(order.credit_nano),currency:'CNY',status:order.status,createdAt:order.created_at,expiresAt:order.expires_at,paidAt:order.paid_at,environment:gateway?.environment??'credits-only',fixture:gateway?.fixture??false});
   const providerOrder=order=>({id:order.id,amountFen:order.amount_fen,subject:JSON.parse(order.product).name,expiresAt:order.expires_at,tradeId:order.trade_id});
   const balance=account=>BigInt(db.prepare('SELECT COALESCE(SUM(remaining_nano),0) AS amount FROM geod_credit_lots WHERE account=? AND frozen=0').get(account).amount);
   const frozen=account=>BigInt(db.prepare('SELECT COALESCE(SUM(remaining_nano),0) AS amount FROM geod_credit_lots WHERE account=? AND frozen=1').get(account).amount);
@@ -206,7 +206,7 @@ export function createPaymentLedgerCandidate(path,{gateway=null,loadGeneration,p
     db.prepare('INSERT INTO geod_cash_refunds VALUES (?,?,?,?,\'pending\',?,?)').run(refundId,orderId,account,order.amount_fen,now(),now());
     return db.prepare('SELECT * FROM geod_cash_refunds WHERE id=?').get(refundId);
   });
-  const safeRefund=r=>({refundId:r.id,orderId:r.order_id,amountFen:r.amount_fen,status:r.status,fixture:gateway.fixture});
+  const safeRefund=r=>({refundId:r.id,orderId:r.order_id,amountFen:r.amount_fen,status:r.status,createdAt:r.created_at,updatedAt:r.updated_at,fixture:gateway?.fixture??false});
   const confirmRefund=atomic((refundId,evidence)=>{
     const refund=db.prepare('SELECT * FROM geod_cash_refunds WHERE id=?').get(refundId),order=row(refund.order_id);
     if(refund.status==='refunded')return {...safeRefund(refund),replayed:true};
@@ -250,12 +250,14 @@ export function createPaymentLedgerCandidate(path,{gateway=null,loadGeneration,p
     return {generationId:reservation.generation_id,maximumNanoCny:String(reservation.maximum_nano),createdAt:reservation.created_at,
       pricingVersion:price?.version??null,model:price?.model??null};
   };
-  const history=createCreditHistory(path,db,{safeCharge,safeReservation,now});
+  const history=createCreditHistory(path,db,{safeCharge,safeReservation,safeOrder,safeRefund,now});
   const summary=db.transaction(account=>({environment:gateway?.environment??'credits-only',fixture:gateway?.fixture??false,currency:'CNY',
     balanceNanoCny:String(balance(account)),reservedNanoCny:String(reserved(account)),frozenNanoCny:String(frozen(account)),availableNanoCny:String(balance(account)-reserved(account)),
     subscription:db.prepare('SELECT expires_at AS expiresAt FROM geod_payment_subscriptions WHERE account=?').get(account)??null,
     orders:db.prepare('SELECT * FROM geod_payment_orders WHERE account=? ORDER BY created_at DESC,id LIMIT 100').all(account).map(safeOrder),
-    refunds:db.prepare('SELECT * FROM geod_cash_refunds WHERE account=? ORDER BY created_at DESC LIMIT 100').all(account).map(safeRefund),
+    orderCount:db.prepare('SELECT COUNT(*) AS count FROM geod_payment_orders WHERE account=?').get(account).count,
+    refunds:db.prepare('SELECT * FROM geod_cash_refunds WHERE account=? ORDER BY created_at DESC,id DESC LIMIT 100').all(account).map(safeRefund),
+    refundCount:db.prepare('SELECT COUNT(*) AS count FROM geod_cash_refunds WHERE account=?').get(account).count,
     charges:db.prepare('SELECT * FROM geod_credit_charges WHERE account=? ORDER BY created_at DESC,generation_id DESC LIMIT 100').all(account).map(safeCharge),
     chargeCount:db.prepare('SELECT COUNT(*) AS count FROM geod_credit_charges WHERE account=?').get(account).count,
     reservations:db.prepare('SELECT * FROM geod_credit_reservations WHERE account=? AND state=\'reserved\' ORDER BY created_at DESC,generation_id DESC LIMIT 100').all(account).map(safeReservation),

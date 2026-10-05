@@ -13,12 +13,12 @@ pub struct CreditHistoryQuery {
 }
 fn history_path(query: &CreditHistoryQuery, export: bool) -> Result<String, ServiceError> {
     let valid_time = |value: Option<i64>| value.is_none_or(|at| (0..=8_640_000_000_000_000).contains(&at));
-    if !["usage", "reservations"].contains(&query.kind.as_str()) || !valid_time(query.from) || !valid_time(query.to)
+    if !["usage", "reservations", "orders", "refunds"].contains(&query.kind.as_str()) || !valid_time(query.from) || !valid_time(query.to)
         || query.from.zip(query.to).is_some_and(|(from, to)| from >= to)
         || query.limit.is_some_and(|limit| !(1..=200).contains(&limit))
         || query.cursor.as_ref().is_some_and(|cursor| cursor.is_empty() || cursor.len() > 2048)
         || export && (query.cursor.is_some() || query.limit.is_some()) {
-        return Err(error("PAYMENT_HISTORY_INVALID", "用量筛选无效，请重新查询"));
+        return Err(error("PAYMENT_HISTORY_INVALID", "记录筛选无效，请重新查询"));
     }
     let mut url = Url::parse(&format!("http://127.0.0.1/v1/payments/history/{}{}", query.kind, if export { "/export.csv" } else { "" })).unwrap();
     {
@@ -40,34 +40,34 @@ fn validate_target(target: &Path) -> Result<(), ServiceError> {
 fn save_statement(mut response: reqwest::blocking::Response, target: &Path) -> Result<Value, ServiceError> {
     validate_target(target)?;
     if !response.headers().get(reqwest::header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).is_some_and(|v| v.split(';').next() == Some("text/csv")) {
-        return Err(error("PAYMENT_STATEMENT_INVALID", "用量导出内容无效，原文件未修改"));
+        return Err(error("PAYMENT_STATEMENT_INVALID", "记录导出内容无效，原文件未修改"));
     }
     let read_header = |name| response.headers().get(name).and_then(|v| v.to_str().ok()).map(str::to_owned);
     let digest = read_header("x-geod-statement-sha256").filter(|v| v.len() == 64 && v.bytes().all(|c| c.is_ascii_hexdigit()))
-        .ok_or_else(|| error("PAYMENT_STATEMENT_INVALID", "用量导出内容无效，原文件未修改"))?;
+        .ok_or_else(|| error("PAYMENT_STATEMENT_INVALID", "记录导出内容无效，原文件未修改"))?;
     let count = read_header("x-geod-record-count").and_then(|v| v.parse::<u64>().ok()).filter(|count| *count <= 100_000)
-        .ok_or_else(|| error("PAYMENT_STATEMENT_INVALID", "用量导出内容无效，原文件未修改"))?;
+        .ok_or_else(|| error("PAYMENT_STATEMENT_INVALID", "记录导出内容无效，原文件未修改"))?;
     let as_of = read_header("x-geod-statement-as-of").and_then(|v| v.parse::<u64>().ok())
-        .ok_or_else(|| error("PAYMENT_STATEMENT_INVALID", "用量导出内容无效，原文件未修改"))?;
+        .ok_or_else(|| error("PAYMENT_STATEMENT_INVALID", "记录导出内容无效，原文件未修改"))?;
     let length = response.content_length().filter(|bytes| *bytes <= MAX_EXPORT_BYTES)
         .ok_or_else(|| error("PAYMENT_STATEMENT_TOO_LARGE", "导出过大，请缩小时间范围后重试"))?;
-    let mut file = tempfile::NamedTempFile::new_in(target.parent().unwrap()).map_err(|_| error("PAYMENT_STATEMENT_SAVE", "无法保存用量记录，请检查目录和磁盘空间"))?;
+    let mut file = tempfile::NamedTempFile::new_in(target.parent().unwrap()).map_err(|_| error("PAYMENT_STATEMENT_SAVE", "无法保存记录，请检查目录和磁盘空间"))?;
     let mut buffer = [0_u8; 32 * 1024];
     let mut hash = Sha256::new();
     let mut bytes = 0_u64;
     loop {
-        let n = response.read(&mut buffer).map_err(|_| error("PAYMENT_STATEMENT_INTERRUPTED", "用量导出中断，原文件未修改，请重试"))?;
+        let n = response.read(&mut buffer).map_err(|_| error("PAYMENT_STATEMENT_INTERRUPTED", "记录导出中断，原文件未修改，请重试"))?;
         if n == 0 { break; }
         bytes += n as u64;
         if bytes > MAX_EXPORT_BYTES { return Err(error("PAYMENT_STATEMENT_TOO_LARGE", "导出过大，请缩小时间范围后重试")); }
         hash.update(&buffer[..n]);
-        file.write_all(&buffer[..n]).map_err(|_| error("PAYMENT_STATEMENT_SAVE", "无法保存用量记录，请检查目录和磁盘空间"))?;
+        file.write_all(&buffer[..n]).map_err(|_| error("PAYMENT_STATEMENT_SAVE", "无法保存记录，请检查目录和磁盘空间"))?;
     }
     if bytes != length || format!("{:x}", hash.finalize()) != digest.to_lowercase() {
-        return Err(error("PAYMENT_STATEMENT_INVALID", "用量导出核验失败，原文件未修改，请重试"));
+        return Err(error("PAYMENT_STATEMENT_INVALID", "记录导出核验失败，原文件未修改，请重试"));
     }
-    file.as_file().sync_all().map_err(|_| error("PAYMENT_STATEMENT_SAVE", "无法保存用量记录，请检查目录和磁盘空间"))?;
-    file.persist(target).map_err(|_| error("PAYMENT_STATEMENT_SAVE", "无法保存用量记录，请检查目录和磁盘空间"))?;
+    file.as_file().sync_all().map_err(|_| error("PAYMENT_STATEMENT_SAVE", "无法保存记录，请检查目录和磁盘空间"))?;
+    file.persist(target).map_err(|_| error("PAYMENT_STATEMENT_SAVE", "无法保存记录，请检查目录和磁盘空间"))?;
     Ok(json!({"records":count,"bytes":bytes,"asOf":as_of,"sha256":digest}))
 }
 #[tauri::command]
@@ -75,7 +75,7 @@ pub async fn agent_credit_history(state: State<'_, ServiceState>, query: CreditH
     let state = state.inner().clone();
     let path = history_path(&query, false)?;
     tauri::async_runtime::spawn_blocking(move || gateway_call(&state, &path, None)).await
-        .map_err(|_| error("PAYMENT_HISTORY_ERROR", "用量查询中断，请重试"))?
+        .map_err(|_| error("PAYMENT_HISTORY_ERROR", "记录查询中断，请重试"))?
 }
 #[tauri::command]
 pub async fn agent_credit_history_export(state: State<'_, ServiceState>, query: CreditHistoryQuery, path: String) -> Result<Value, ServiceError> {
@@ -89,10 +89,10 @@ pub async fn agent_credit_history_export(state: State<'_, ServiceState>, query: 
             .map_err(|_| error("GATEWAY_UNAVAILABLE", "GeoD Agent 模型服务暂时不可达"))?;
         if !response.status().is_success() {
             gateway_json_response(response, &route)?;
-            return Err(error("PAYMENT_STATEMENT_INVALID", "用量导出内容无效，原文件未修改"));
+            return Err(error("PAYMENT_STATEMENT_INVALID", "记录导出内容无效，原文件未修改"));
         }
         save_statement(response, &target)
-    }).await.map_err(|_| error("PAYMENT_STATEMENT_INTERRUPTED", "用量导出中断，原文件未修改，请重试"))?
+    }).await.map_err(|_| error("PAYMENT_STATEMENT_INTERRUPTED", "记录导出中断，原文件未修改，请重试"))?
 }
 
 #[cfg(test)]
@@ -106,6 +106,12 @@ mod tests {
         assert!(history_path(&q, true).is_err()); q.cursor = None; q.limit = None; q.from = Some(5); q.to = Some(5);
         assert!(history_path(&q, false).is_err()); q.to = Some(6); assert!(history_path(&q, false).is_ok());
         q.kind = "../orders".into(); assert!(history_path(&q, false).is_err());
+        for kind in ["orders", "refunds"] {
+            let mut cash = query(); cash.kind = kind.into();
+            assert_eq!(history_path(&cash, true).unwrap(), format!("/v1/payments/history/{kind}/export.csv"));
+            cash.limit = Some(20);
+            assert_eq!(history_path(&cash, false).unwrap(), format!("/v1/payments/history/{kind}?limit=20"));
+        }
         assert!(serde_json::from_value::<CreditHistoryQuery>(json!({"kind":"usage","account":"other"})).is_err());
     }
     #[test]

@@ -10,6 +10,7 @@ import {CREDITS_CHANGED,formatCredits,formatCreditRate} from './credits';
 import {ExternalLink,Loader2,RefreshCw,Wallet,X} from './icons';
 import './payment-dialog.css';
 import {CreditUsageHistory} from './credit-usage-history';
+import {PaymentHistory,PaymentRefundRow} from './payment-history';
 
 export const PAYMENT_OPEN='geod:payment-open';
 const currency=(value:number)=>new Intl.NumberFormat(getLocale(),{style:'currency',currency:'CNY',maximumFractionDigits:2}).format(value);
@@ -24,6 +25,8 @@ const productName=(product:PaymentProduct)=>product.kind==='topup'?credit(produc
 export function PaymentDialog({accountId,onClose}:{accountId:string|null;onClose:()=>void}){
   const [snapshot,setSnapshot]=useState<PaymentSnapshot|null>(null),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true);
   const [error,setError]=useState(''),[notice,setNotice]=useState(''),[tab,setTab]=useState('balance');
+  const [paymentHistoryUnavailable,setPaymentHistoryUnavailable]=useState(false);
+  const recentPayments=useCallback(()=>setPaymentHistoryUnavailable(true),[]);
   const [historyUnavailable,setHistoryUnavailable]=useState(false);
   const recentHistory=useCallback(()=>setHistoryUnavailable(true),[]);
   const [refundConfirm,setRefundConfirm]=useState<PaymentOrder|null>(null),[watchedOrder,setWatchedOrder]=useState<string|null>(null);
@@ -32,7 +35,7 @@ export function PaymentDialog({accountId,onClose}:{accountId:string|null;onClose
   const load=useCallback(async()=>{
     const serial=++refreshSerial.current;
     const current=await api.agentPaymentSnapshot();
-    if(live.current&&serial===refreshSerial.current){setSnapshot(current);setHistoryUnavailable(false);window.dispatchEvent(new CustomEvent(CREDITS_CHANGED,{detail:{accountId,snapshot:current}}));}
+    if(live.current&&serial===refreshSerial.current){setSnapshot(current);setHistoryUnavailable(false);setPaymentHistoryUnavailable(false);window.dispatchEvent(new CustomEvent(CREDITS_CHANGED,{detail:{accountId,snapshot:current}}));}
     return current;
   },[accountId]);
   useEffect(()=>{void load().catch(cause=>{if(live.current)setError(errorMessage(cause));}).finally(()=>{if(live.current)setLoading(false);});},[load]);
@@ -96,6 +99,19 @@ export function PaymentDialog({accountId,onClose}:{accountId:string|null;onClose
     timer=setTimeout(check,3000);return()=>{disposed=true;clearTimeout(timer);};
   },[watchedOrder,load]);
   const wallet=snapshot?.wallet,mode=snapshot?.status.billingMode;
+  const renderOrder=(order:PaymentOrder)=><section className="payment-order" key={order.orderId} data-order-id={order.orderId}><div className="payment-order-heading"><strong>{productName(order.product)}</strong><span className={order.status==='paid'||order.status==='refunded'?'payment-order-success':''}>{t(names[order.status]??'状态待核对')}</span></div><div className="payment-order-meta"><span>{new Date(order.createdAt).toLocaleString(getLocale(),{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</span><b>{currency(order.priceFen/100)}</b></div><code title={order.orderId}>{order.orderId}</code>
+              <div className="payment-order-actions">
+                {order.status==='pending'&&<Button size="sm" disabled={busy||!snapshot?.status.checkoutEnabled||order.expiresAt<=Date.now()} onClick={()=>void run(()=>checkout(order.orderId))}><ExternalLink size={13}/>{t('继续支付')}</Button>}
+                {['pending','cancel-requested','payment-review'].includes(order.status)&&<Button variant="outline" size="sm" disabled={busy||!snapshot?.status.checkoutEnabled} onClick={()=>void action(order,'refresh')}>{t('查询付款')}</Button>}
+                {order.status==='pending'&&<Button variant="ghost" size="sm" disabled={busy||!snapshot?.status.checkoutEnabled} onClick={()=>void action(order,'cancel')}>{t('取消订单')}</Button>}
+                {order.status==='cancel-requested'&&<Button variant="ghost" size="sm" disabled={busy||!snapshot?.status.checkoutEnabled} onClick={()=>void action(order,'cancel')}>{t('核对取消')}</Button>}
+                {order.status==='paid'&&order.product.kind==='topup'&&<Button variant="ghost" size="sm" disabled={busy||!snapshot?.status.checkoutEnabled} onClick={()=>setRefundConfirm(order)}>{t('申请退款')}</Button>}
+                {order.status==='refunding'&&<Button variant="outline" size="sm" disabled={busy||!snapshot?.status.checkoutEnabled} onClick={()=>void action(order,'refund')}>{t('核对退款')}</Button>}
+              </div>
+              {order.status==='payment-review'&&<p className="payment-caption">{t('已保存付款凭证，需复核后处理余额。')}</p>}
+              {refundConfirm?.orderId===order.orderId&&<div className="payment-refund-confirm"><p>{t('将申请退回这笔尚未使用的余额 {0}。请求中会冻结此笔余额，结果以原订单核验为准。',{'0':currency(order.priceFen/100)})}</p><div><Button variant="outline" size="sm" disabled={busy||!snapshot?.status.checkoutEnabled} onClick={()=>setRefundConfirm(null)}>{t('返回')}</Button><Button size="sm" disabled={busy||!snapshot?.status.checkoutEnabled} onClick={()=>void action(order,'refund')}>{snapshot?.status.fixture?t('演练退款'):t('确认申请退款')}</Button></div></div>}
+            </section>;
+
   return <Dialog.Root open onOpenChange={open=>{if(!open)onClose();}}><Dialog.Portal><Dialog.Overlay className="permission-dialog-overlay"/>
     <Dialog.Content className="permission-dialog payment-dialog" onCloseAutoFocus={event=>{event.preventDefault();document.querySelector<HTMLButtonElement>('.conversation-account-trigger')?.focus();}}>
       <div className="dialog-heading"><Dialog.Title><Wallet size={18}/>{t('余额与订阅')}</Dialog.Title><Dialog.Close asChild><Button variant="ghost" size="icon" aria-label={t('关闭')}><X size={17}/></Button></Dialog.Close></div>
@@ -105,7 +121,7 @@ export function PaymentDialog({accountId,onClose}:{accountId:string|null;onClose
         {mode==='unlimited-test'&&<div className="payment-free-state"><strong>∞ Credits</strong><span>{t('测试模式 · 不限额度')}</span></div>}
         {!snapshot.status.checkoutEnabled&&mode!=='unlimited-test'&&<p className="payment-caption">{t(mode==='prepaid'?'充值尚未开放，可使用已有 Credits 调用托管模型。':'支付尚未开放，当前模型使用方式保持不变。')}</p>}
         <div className="payment-tabs">
-          <div className="payment-tabs-heading"><PanelTabs label={t('余额与支付记录')} value={tab} onChange={setTab} items={[{value:'balance',label:t(snapshot.status.environment==='credits-only'?'余额':'余额与方案')},{value:'orders',label:t('支付记录')+((wallet?.orders.length??0)>0?` · ${wallet!.orders.length}`:'')},{value:'usage',label:t('AI 用量')}]}/><Button size="icon" variant="ghost" disabled={busy} aria-label={t('刷新支付状态')} onClick={()=>void run(async()=>{await load();})}><RefreshCw size={15}/></Button></div>
+          <div className="payment-tabs-heading"><PanelTabs label={t('余额与支付记录')} value={tab} onChange={setTab} items={[{value:'balance',label:t(snapshot.status.environment==='credits-only'?'余额':'余额与方案')},{value:'orders',label:t('支付记录')+((wallet?.orderCount??wallet?.orders.length??0)>0?` · ${wallet!.orderCount??wallet!.orders.length}`:'')},{value:'usage',label:t('AI 用量')}]}/><Button size="icon" variant="ghost" disabled={busy} aria-label={t('刷新支付状态')} onClick={()=>void run(async()=>{await load();})}><RefreshCw size={15}/></Button></div>
           <ScrollArea className="payment-scroll">
           <section role="tabpanel" aria-label={t('余额与方案')} hidden={tab!=='balance'} className="payment-content">
             {wallet&&<section className="payment-balances"><div><span>{t('可用 Credits')}</span><strong title={wallet.availableNanoCny!=null?preciseCredit(wallet.availableNanoCny):undefined}>{credit(wallet.availableNanoCny)}</strong></div><div><span>{t('请求预留')}</span><strong title={wallet.reservedNanoCny!=null?preciseCredit(wallet.reservedNanoCny):undefined}>{credit(wallet.reservedNanoCny)}</strong></div></section>}
@@ -118,18 +134,11 @@ export function PaymentDialog({accountId,onClose}:{accountId:string|null;onClose
             <p className="payment-caption">{t(SPONSORED_CHANNELS_VISIBLE?'自带 Key 与赞助渠道不扣此余额；本机数据处理与下载不按模型用量计费。':'自带 Key 不扣此余额；本机数据处理与下载不按模型用量计费。')}</p>
           </section>
           <section role="tabpanel" aria-label={t('支付记录')} hidden={tab!=='orders'} className="payment-content">
-            {!wallet?.orders.length?<p className="payment-empty">{t('暂无支付记录')}</p>:<div className="payment-orders">{wallet.orders.map(order=><section className="payment-order" key={order.orderId} data-order-id={order.orderId}><div className="payment-order-heading"><strong>{productName(order.product)}</strong><span className={order.status==='paid'||order.status==='refunded'?'payment-order-success':''}>{t(names[order.status]??'状态待核对')}</span></div><div className="payment-order-meta"><span>{new Date(order.createdAt).toLocaleString(getLocale(),{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</span><b>{currency(order.priceFen/100)}</b></div><code title={order.orderId}>{order.orderId}</code>
-              <div className="payment-order-actions">
-                {order.status==='pending'&&<Button size="sm" disabled={busy||order.expiresAt<=Date.now()} onClick={()=>void run(()=>checkout(order.orderId))}><ExternalLink size={13}/>{t('继续支付')}</Button>}
-                {['pending','cancel-requested','payment-review'].includes(order.status)&&<Button variant="outline" size="sm" disabled={busy} onClick={()=>void action(order,'refresh')}>{t('查询付款')}</Button>}
-                {order.status==='pending'&&<Button variant="ghost" size="sm" disabled={busy} onClick={()=>void action(order,'cancel')}>{t('取消订单')}</Button>}
-                {order.status==='cancel-requested'&&<Button variant="ghost" size="sm" disabled={busy} onClick={()=>void action(order,'cancel')}>{t('核对取消')}</Button>}
-                {order.status==='paid'&&order.product.kind==='topup'&&<Button variant="ghost" size="sm" disabled={busy} onClick={()=>setRefundConfirm(order)}>{t('申请退款')}</Button>}
-                {order.status==='refunding'&&<Button variant="outline" size="sm" disabled={busy} onClick={()=>void action(order,'refund')}>{t('核对退款')}</Button>}
-              </div>
-              {order.status==='payment-review'&&<p className="payment-caption">{t('已保存付款凭证，需复核后处理余额。')}</p>}
-              {refundConfirm?.orderId===order.orderId&&<div className="payment-refund-confirm"><p>{t('将申请退回这笔尚未使用的余额 {0}。请求中会冻结此笔余额，结果以原订单核验为准。',{'0':currency(order.priceFen/100)})}</p><div><Button variant="outline" size="sm" disabled={busy} onClick={()=>setRefundConfirm(null)}>{t('返回')}</Button><Button size="sm" disabled={busy} onClick={()=>void action(order,'refund')}>{snapshot.status.fixture?t('演练退款'):t('确认申请退款')}</Button></div></div>}
-            </section>)}</div>}
+            {snapshot.status.paymentHistoryEnabled===true&&!paymentHistoryUnavailable?tab==='orders'&&<PaymentHistory refreshKey={snapshot} onUnavailable={recentPayments} renderOrder={renderOrder}/>:<>
+              <p className="payment-caption" role="status">{t('当前服务尚未开放完整支付记录，仅显示最近记录')}</p>
+              {!wallet?.orders.length?<p className="payment-empty">{t('暂无支付记录')}</p>:<div className="payment-orders">{wallet.orders.map(renderOrder)}</div>}
+              {!!wallet?.refunds.length&&<div className="payment-usage-group"><h3>{t('退款')}</h3>{wallet.refunds.map(refund=><PaymentRefundRow refund={refund} key={refund.refundId}/>)}</div>}
+            </>}
           </section>
           <section role="tabpanel" aria-label={t('AI 用量')} hidden={tab!=='usage'} className="payment-content">
             {snapshot.status.creditHistoryEnabled===true&&!historyUnavailable?tab==='usage'&&<CreditUsageHistory refreshKey={snapshot} onUnavailable={recentHistory}/>:<>

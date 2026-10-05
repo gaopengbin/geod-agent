@@ -62,7 +62,7 @@ export function createPaymentHostCandidate(config,modelLedger,authenticate){
     billingMode:enforced?'prepaid':config.quotaEnforced===false?'unlimited-test':'token-quota',
     pricingVersion:pricingCandidate.version,pricesApproved:options?.catalogueApproved===true,
     catalogueSha256:ledger&&!provider?null:paymentCatalogueDigest(ledger?.products()??paymentProductsCandidate),
-    welcomeCreditEnabled:!!welcomeCredit,creditHistoryEnabled:!!ledger,products:ledger?.products()??paymentProductsCandidate});
+    welcomeCreditEnabled:!!welcomeCredit,creditHistoryEnabled:!!ledger,paymentHistoryEnabled:!!ledger,products:ledger?.products()??paymentProductsCandidate});
   const onSignIn=account=>ledger?.grantWelcome(account);
   const paymentHandler=provider?createPaymentCandidateHandler({ledger,authenticate:async request=>{
     const account=await authenticate(request);onSignIn(account);return account;

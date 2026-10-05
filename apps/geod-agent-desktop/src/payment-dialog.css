@@ -11,7 +11,7 @@
 .payment-fixture-note { margin-top:12px; padding:9px 12px; border-radius:8px; background:var(--app-warning-soft); color:var(--app-warning); font-size:12px; }
 .payment-tabs { display:flex; flex-direction:column; min-height:0; margin-top:15px; }
 .payment-tabs-heading { display:flex; align-items:center; gap:4px; border-bottom:1px solid var(--app-line); padding-bottom:8px; flex:none; }
-.payment-tabs-heading .panel-tabs { border:0; padding:0; }
+.payment-tabs-heading .panel-tabs { border:0; padding:0; flex:1; min-width:0; flex-wrap:wrap; }
 .payment-tabs [role=tab] { display:inline-flex; align-items:center; gap:6px; padding:7px 10px; font-size:13px; color:var(--app-soft-text); border:0; border-radius:8px; background:transparent; cursor:pointer; }
 .payment-tabs [role=tab]:hover { background:var(--app-hover); }
 .payment-tabs [role=tab][aria-selected=true] { background:var(--app-selected); color:var(--app-text); }
@@ -103,6 +103,8 @@
 .credit-history-loading { display:flex; align-items:center; justify-content:center; gap:8px; min-height:130px; color:var(--app-soft-text); font-size:13px; }
 .credit-history-error { padding:12px 0; display:flex; flex-direction:column; align-items:flex-start; gap:10px; }
 .credit-history-rows .payment-usage-row { padding:11px 0; }
+.payment-refund-reference { display:grid; grid-template-columns:auto minmax(0,1fr); gap:8px 12px; margin-top:8px; color:var(--app-soft-text); font-size:11px; }
+.payment-refund-reference code { overflow-wrap:anywhere; font-size:10px; }
 @media(max-width:440px) { .credit-history-toolbar { grid-template-columns:minmax(0,1fr) minmax(0,1fr); }.credit-history-toolbar > .credit-history-export { grid-column:1/-1; justify-self:end; } }
 @media(prefers-reduced-motion:reduce) { .payment-usage-details > summary::before { transition:none; } }
 @media(max-width:440px) { .permission-dialog.payment-dialog { padding:16px; }.payment-product { gap:8px; padding:10px; }.payment-product > b { font-size:13px; }.payment-balances { grid-template-columns:1fr; gap:12px; }.payment-balances strong { font-size:22px; } }

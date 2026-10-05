@@ -916,10 +916,11 @@ mod tests {
 fn gateway_status_error(status: reqwest::StatusCode, path: &str, code: &str) -> ServiceError {
     if path.starts_with("/v1/payments") {
         if path.starts_with("/v1/payments/history/") {
-            if status==reqwest::StatusCode::NOT_FOUND || code=="PAYMENT_HISTORY_UNAVAILABLE" {return error("PAYMENT_HISTORY_UNAVAILABLE","当前服务尚未开放完整用量记录，可查看最近记录");}
-            if code=="PAYMENT_HISTORY_INVALID" {return error("PAYMENT_HISTORY_INVALID","用量筛选无效，请重新查询");}
+            let cash = path.starts_with("/v1/payments/history/orders") || path.starts_with("/v1/payments/history/refunds");
+            if status==reqwest::StatusCode::NOT_FOUND || code=="PAYMENT_HISTORY_UNAVAILABLE" {return error("PAYMENT_HISTORY_UNAVAILABLE",if cash {"当前服务尚未开放完整支付记录，仅显示最近记录"} else {"当前服务尚未开放完整用量记录，可查看最近记录"});}
+            if code=="PAYMENT_HISTORY_INVALID" {return error("PAYMENT_HISTORY_INVALID",if cash {"支付记录筛选无效，请重新查询"} else {"用量筛选无效，请重新查询"});}
             if code=="PAYMENT_STATEMENT_TOO_LARGE" {return error("PAYMENT_STATEMENT_TOO_LARGE","导出过大，请缩小时间范围后重试");}
-            if !["AUTH_REQUIRED","UNAUTHORIZED"].contains(&code) {return error("PAYMENT_HISTORY_ERROR","用量查询未完成，请重试");}
+            if !["AUTH_REQUIRED","UNAUTHORIZED"].contains(&code) {return error("PAYMENT_HISTORY_ERROR",if cash {"支付记录查询未完成，请重试"} else {"用量查询未完成，请重试"});}
         }
         if status==reqwest::StatusCode::NOT_FOUND&&code=="NOT_FOUND" {return error("PAYMENT_UNAVAILABLE","当前服务尚未开放支付，现有测试模式不受影响");}
         return match code {
