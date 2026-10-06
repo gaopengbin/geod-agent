@@ -1,6 +1,6 @@
 """Local, read-only document extraction. Never execute macros, links or formulas."""
 from pathlib import Path
-import contextlib, io, json, logging, math, posixpath, re, sys, zipfile
+import codecs, contextlib, io, json, logging, math, posixpath, re, sys, zipfile
 import xml.etree.ElementTree as ET
 sys.dont_write_bytecode = True
 
@@ -279,17 +279,48 @@ def parse_office(file, extension, modules, password=None):
         except exceptions.DecryptionError: fail('ATTACHMENT_PASSWORD_UNSUPPORTED')
         except Exception: fail('ATTACHMENT_DOCUMENT_INVALID')
 
+def decode_text(data, extension):
+    # UTF-32 LE begins with the UTF-16 LE marker: inspect the longer BOM first.
+    if data.startswith((codecs.BOM_UTF32_LE, codecs.BOM_UTF32_BE)):
+        encodings = ['utf-32']
+    elif data.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
+        encodings = ['utf-16']
+    elif data.startswith(codecs.BOM_UTF8):
+        encodings = ['utf-8-sig']
+    else:
+        encoding = None
+        if extension == 'xml':
+            # XML's opening markup also identifies Unicode byte order without a BOM.
+            signatures = [(b'\x00\x00\x00<', 'utf-32-be'), (b'<\x00\x00\x00', 'utf-32-le'),
+                          (b'\x00<\x00?', 'utf-16-be'), (b'<\x00?\x00', 'utf-16-le')]
+            encoding = next((name for marker, name in signatures if data.startswith(marker)), None)
+            if encoding is None:
+                declaration = re.match(br'<\?xml\s+[^>]*?\bencoding\s*=\s*([\'"])([^\'"]{1,80})\1', data[:512])
+                if declaration:
+                    try: encoding = codecs.lookup(declaration[2].decode('ascii')).name
+                    except (LookupError, UnicodeDecodeError): fail('ATTACHMENT_TEXT_ENCODING')
+                    # Only character codecs; never interpret transform/escape codecs as text.
+                    allowed = {'utf-8', 'utf-16', 'utf-16-le', 'utf-16-be', 'utf-32', 'utf-32-le', 'utf-32-be',
+                               'ascii', 'gb18030', 'gbk', 'gb2312', 'big5', 'big5hkscs', 'cp950',
+                               'shift_jis', 'cp932', 'euc_jp', 'iso2022_jp', 'euc_kr', 'cp949',
+                               'cp1252', 'iso8859-1', 'iso8859-15'}
+                    if encoding not in allowed: fail('ATTACHMENT_TEXT_ENCODING')
+        encodings = [encoding] if encoding else ['utf-8-sig', 'gb18030']
+    for encoding in encodings:
+        try:
+            text = data.decode(encoding)
+            if '\x00' in text: fail('ATTACHMENT_DOCUMENT_INVALID')
+            return text
+        except UnicodeDecodeError: pass
+    fail('ATTACHMENT_DOCUMENT_INVALID')
+
+
 def parse(file, extension, modules, runtime=None, password=None):
     if extension == 'pdf': return parse_pdf(file, modules, runtime, password)
     if extension in ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'tif', 'tiff']: return parse_scan_image(file, modules, runtime)
     if extension in ['docx','xlsx','pptx']: return parse_office(file, extension, modules, password)
     if extension not in ['txt', 'md', 'csv', 'json', 'xml', 'log']: fail('ATTACHMENT_FORMAT')
-    data = Path(file).read_bytes(); text = None
-    for encoding in (['utf-16'] if data.startswith((b'\xff\xfe', b'\xfe\xff')) else ['utf-8-sig', 'gb18030']):
-        try: text = data.decode(encoding); break
-        except UnicodeDecodeError: pass
-    if text is None or '\x00' in text: fail('ATTACHMENT_DOCUMENT_INVALID')
-    text = clean(text)
+    text = clean(decode_text(Path(file).read_bytes(), extension))
     return {'text': text[:MAX_CHARS], 'truncated': len(text) > MAX_CHARS, 'kind': 'text', 'units': 1, 'unitLabel': 'files', 'warnings': []}
 if __name__ == '__main__':
     try:

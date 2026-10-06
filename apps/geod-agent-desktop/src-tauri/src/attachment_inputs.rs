@@ -98,6 +98,7 @@ pub(crate) fn parser_root(app: &AppHandle) -> Result<PathBuf, AppError> {
 fn parse_error(code: &str) -> AppError {
     match code {
         "ATTACHMENT_FORMAT"=>err("ATTACHMENT_FORMAT", "支持 PDF、Office、文本和扫描图片"),
+        "ATTACHMENT_TEXT_ENCODING"=>err("ATTACHMENT_TEXT_ENCODING", "不支持文档声明的文本编码，请另存为 UTF-8 后添加"),
         "ATTACHMENT_OFFICE_RUNTIME"=>err("ATTACHMENT_OFFICE_RUNTIME", "内置 Office 解析环境缺失，请修复应用"),
         "ATTACHMENT_OCR_RUNTIME"=>err("ATTACHMENT_OCR_RUNTIME", "内置扫描识别环境缺失，请修复应用"),
         "ATTACHMENT_PASSWORD_REQUIRED"=>err("ATTACHMENT_PASSWORD_REQUIRED", "请输入文档密码以继续读取"),

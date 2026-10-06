@@ -6,7 +6,7 @@
 
 - 对话输入可添加 PDF、DOCX、XLSX、PPTX、TXT、Markdown、CSV、JSON、XML 和日志。原始文件、提取文本和会话归属保存在本机。
 - PDF 按页读取；Word 包含正文、表格及相关文本；Excel 按工作表和单元格读取；PowerPoint 按实际幻灯片顺序读取并包含备注。
-- 文本支持 UTF-8、带 BOM 的 UTF-16 和 GB18030。长文通过 `attachment_read` 分页读取，返回是否完整和下一偏移。
+- 文本支持 UTF-8、带 BOM 的 UTF-16 和 GB18030。2026-10-06 开发代码增加带 BOM 的 UTF-32，XML 按开头的 Unicode 字节序或明确编码声明读取，支持 Shift_JIS、Big5、Windows-1252 等字符编码；不猜测普通文本的日文/西文编码。长文通过 `attachment_read` 分页读取，返回是否完整和下一偏移。
 - 附件在发送前是草稿，正在执行的回复不能读取草稿。执行中添加附件会进入下一条队列；跨会话读取被拒绝。
 - 原生会话分支复制附件；后台 Agent 可以读取已发送附件；完整记录备份包含原文件、提取文本及归属记录。
 - 解析使用应用打包的 Python 和锁定版本 pypdf，不依赖用户安装 Python。Office 文档使用只读 OpenXML 解析，不执行宏或公式。
@@ -33,4 +33,6 @@
 
 单文件上限 32 MB，每条消息最多 8 个、合计 64 MB；提取文本最多 200 万字符，超出时明确标记截断。文件内容作为参考数据，不能替代用户指令。
 
-扫描 PDF 的本机 OCR 已完成，见 [扫描文档识别](2026-10-04-document-ocr.md)；八种音频格式已完成，见 [本机音频输入](2026-10-04-audio-inputs.md)；常见旧版 `.doc/.xls/.ppt` 已完成，见 [旧版 Office](2026-10-04-legacy-office-inputs.md)。加密 PDF 没有密码输入入口。表格公式只读取保存的值和公式文本，不重新计算。对话文本导出只包含附件名称提示；迁移原始附件应使用完整记录备份。
+扫描 PDF 的本机 OCR 已完成，见 [扫描文档识别](2026-10-04-document-ocr.md)；八种音频格式已完成，见 [本机音频输入](2026-10-04-audio-inputs.md)；常见旧版 `.doc/.xls/.ppt` 已完成，见 [旧版 Office](2026-10-04-legacy-office-inputs.md)。文档打开密码已接入，见 [加密文档](2026-10-04-encrypted-documents.md)。表格公式只读取保存的值和公式文本，不重新计算。对话文本导出只包含附件名称提示；迁移原始附件应使用完整记录备份。
+
+2026-10-06 编码扩展的必要验证只覆盖变更风险：UTF-32/UTF-16 标记前缀重叠、XML 声明的字符编码和失败提示。`artifacts/document-attachments-20261004/encoding-9477d854bb59/result.json` 的 11 个定向用例通过，包括两种 UTF-32 字节序、日文/繁体中文/西文 XML、无 BOM 的 Unicode XML、少量同分支兼容检查，以及未知编码、转换编码、损坏字节拒绝。一次原生构建完成，实际开发 WebView 的三个原生检查通过：UTF-32 和 Shift_JIS 附件提取内容准确，未知声明返回明确编码提示。测试草稿已移除，31 会话及恢复记录不变；回执为 `artifacts/development-native-current-20261006/build-187d4fb7c2eff9cc/encoding-native.json`。更新的开发程序已运行，旧程序留有备份；通过后停止，不重复原有 Office/OCR/数据库/模型全量测试。本次开发扩展不追改已冻结的 0.2.2 发行包。XML 编码选择参照 [W3C XML 附录 F](https://www.w3.org/TR/xml/#sec-guessing-no-ext-info) 和 [Python 字符编解码器](https://docs.python.org/3/library/codecs.html#standard-encodings)，仅提取本机文本，不解析外部实体。

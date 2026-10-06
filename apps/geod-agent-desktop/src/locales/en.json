@@ -66,6 +66,7 @@
   "此文档已加密，请先解锁后添加": "This document is encrypted; unlock it before attaching",
   "文档内容超过本机解析容量，请拆分后添加": "Document content exceeds local parser capacity; split it before attaching",
   "文档内容已损坏或无法识别": "Document content is damaged or unrecognized",
+  "不支持文档声明的文本编码，请另存为 UTF-8 后添加": "This document declares an unsupported text encoding. Save it as UTF-8 and add it again",
   "文档附件数据无效": "Invalid document attachment data",
   "文档为空或超过 32 MB": "Document is empty or exceeds 32 MB",
   "无法保存文档附件": "Unable to save document attachment",

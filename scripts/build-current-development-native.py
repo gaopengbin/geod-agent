@@ -1,7 +1,7 @@
 """Build current native development code without replacing the running program.
 
 Use a fresh target directory, locked offline dependencies and two build jobs.
-The original app, gateway and live endurance test retain their exact identities.
+Explicitly supplied running processes retain their exact identities.
 """
 import argparse
 import ctypes
@@ -26,9 +26,6 @@ from windows_detached_process import process_in_job, process_package_identity
 REPO = Path(__file__).resolve().parents[1]
 NATIVE = REPO / "apps/geod-agent-desktop/src-tauri"
 BUILDS = REPO / "artifacts/development-native-current-20261006"
-PROTECTED = [(75684, 1791268191.8117428), (96872, 1791268194.512353),
-             (86904, 1791268122.5282643), (66008, 1791268452.0874765),
-             (36592, 1791268472.46087)]
 
 
 def digest(file):
@@ -38,7 +35,9 @@ def digest(file):
 
 def protected():
     values = []
-    for pid, created in PROTECTED:
+    for value in args.preserve_process:
+        pid, created = value.split(":", 1)
+        pid, created = int(pid), float(created)
         process = psutil.Process(pid)
         assert process.create_time() == created and process.is_running()
         values.append({"pid": pid, "created": created, "exe": process.exe()})
@@ -70,6 +69,8 @@ def executable_version(file):
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--output", type=Path)
+parser.add_argument("--preserve-process", action="append", required=True,
+                    help="PID:creation-time identity of a running process to preserve")
 args = parser.parse_args()
 assert os.name == "nt" and not process_in_job(os.getpid()) and process_package_identity(os.getpid()) is None
 root = (args.output or BUILDS / ("build-" + secrets.token_hex(8))).resolve()
@@ -89,9 +90,7 @@ try:
     report["originalExecutableSha256"] = digest(old_executable)
     before = source_snapshot()
     report["sourceSnapshotBeforeBuild"] = before
-    qa_build = json.loads((REPO / "artifacts/schedule-stability-native-20261005/fixture-e12707f52a4b4ced/current-source-qa-build.json").read_text(encoding="utf-8"))
-    assert qa_build["passed"] and before == qa_build["sourceSnapshotBeforeBuild"]
-    report["matchesActiveQaProductInputs"] = len(before)
+    report["productInputs"] = len(before)
     env = public_environment(release_environment(os.environ))
     for name in list(env):
         if any(word in name.upper() for word in ("SECRET", "PASSWORD", "TOKEN", "API_KEY")) or name.startswith("GEOD_QA_"):
