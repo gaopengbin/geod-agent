@@ -36,7 +36,7 @@ pub struct DatabaseConnection {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct DatabaseDraft { name: String, host: String, port: u16, database: String, user: String, password: String, ssl_mode: String, ssl_root_cert: Option<String>, ssl_client_cert: Option<String>, ssl_client_key: Option<String>,ssl_client_key_password:Option<String> }
+pub struct DatabaseDraft { name: String, host: String, port: u16, database: String, user: String, password: String, ssl_mode: String, ssl_root_cert: Option<String>, ssl_client_cert: Option<String>, ssl_client_key: Option<String>,ssl_client_key_password:Option<String>,ssl_client_bundle:Option<String> }
 
 fn input_root(app: &AppHandle, services: &services::ServiceState) -> Result<std::path::PathBuf, AppError> {
     let user = services::current_user_id(services).map_err(|_| workspace_error("AUTH_REQUIRED", "请先登录 GeoD"))?;
@@ -108,7 +108,7 @@ pub async fn data_connection_save(app: AppHandle, mut draft: DatabaseDraft) -> R
     if draft.name.is_empty() || draft.name.len() > 80 || draft.host.is_empty() || draft.host.len() > 255 || draft.database.is_empty() || draft.user.is_empty() || draft.port == 0 || !["disable", "prefer", "require", "verify-ca", "verify-full"].contains(&draft.ssl_mode.as_str()) {
         return Err(workspace_error("INPUT_INVALID", "请填写完整的 PostgreSQL 连接信息"));
     }
-    draft.ssl_client_key=crate::database_tls::unlock(&app,draft.ssl_client_cert.as_deref(),draft.ssl_client_key.take(),draft.ssl_client_key_password.take()).await?;
+    (draft.ssl_client_cert,draft.ssl_client_key)=crate::database_tls::normalize(&app,draft.ssl_client_cert.take(),draft.ssl_client_key.take(),draft.ssl_client_bundle.take(),draft.ssl_client_key_password.take()).await?;
     let client_certificate = crate::database_tls::validate(draft.ssl_client_cert.as_deref(), draft.ssl_client_key.as_deref(), &draft.ssl_mode)?;
     // Authentication may refresh a token with the synchronous HTTP client.
     // Keep it off the async runtime so expiry cannot panic or poison its lock.
@@ -163,6 +163,7 @@ pub async fn data_connection_connect(app: AppHandle, conversation_id: String, re
             value["sslClientCert"] = Value::Null;
             value["sslClientKey"] = Value::Null;
             value["sslClientKeyPassword"] = Value::Null;
+            value["sslClientBundle"] = Value::Null;
             value
         };
         if !value.is_object() { return Err(workspace_error("INPUT_INVALID", "连接配置需要 JSON 对象")); }
@@ -172,7 +173,7 @@ pub async fn data_connection_connect(app: AppHandle, conversation_id: String, re
         if value.get("name").is_none() { value["name"] = value["database"].clone(); }
         serde_json::from_value::<DatabaseDraft>(value).map_err(|_| workspace_error("INPUT_INVALID", "请提供主机、数据库和用户名等连接信息"))
     }).await?;
-    let authentication = json!({"name": draft.name, "host": draft.host, "port": draft.port, "database": draft.database, "user": draft.user, "sslMode": draft.ssl_mode,"sslRootCert":draft.ssl_root_cert,"clientCertificate":draft.ssl_client_cert.is_some()});
+    let authentication = json!({"name": draft.name, "host": draft.host, "port": draft.port, "database": draft.database, "user": draft.user, "sslMode": draft.ssl_mode,"sslRootCert":draft.ssl_root_cert,"clientCertificate":draft.ssl_client_cert.is_some()||draft.ssl_client_bundle.is_some()});
     let result = match data_connection_save(app, draft).await{
         Ok(value)=>value,
         Err(error)if crate::database_tls::requires_local_input(&error)=>return Ok(json!({"error":error,"authentication":authentication,"readOnly":true})),

@@ -22,13 +22,13 @@ export interface DataTable { name: string; type: "TABLE" | "VIEW" }
 export interface DataInputResult { handle?: string; layers?: DataLayer[]; tables?: DataTable[]; selectedLayer?: string; sourceCrs?: string; selectionRequired?: boolean; boundary?: BoundaryImport; mcp?: DatabaseMcpInfo; error?: { code: string; message: string } }
 export interface DataConnection { id: string; name: string; host: string; port: number; database: string; user: string; sslMode: string; databaseType?: "PostGIS" | "PostgreSQL" | null; clientCertificate?: boolean }
 export type SqlDatabaseKind = "sqlite" | "mysql" | "sqlserver" | "oracle";
-export interface SqlConnectionDraft { name:string;kind:SqlDatabaseKind;host?:string|null;port?:number|null;database?:string|null;user?:string|null;relativePath?:string|null;sslMode?:string|null;password?:string;sslRootCert?:string;sslClientCert?:string;sslClientKey?:string;sslClientKeyPassword?:string;clientCertificate?:boolean;authMode?:'password'|'windowsDomain';domain?:string|null }
+export interface SqlConnectionDraft { name:string;kind:SqlDatabaseKind;host?:string|null;port?:number|null;database?:string|null;user?:string|null;relativePath?:string|null;sslMode?:string|null;password?:string;sslRootCert?:string;sslClientCert?:string;sslClientKey?:string;sslClientKeyPassword?:string;sslClientBundle?:string;clientCertificate?:boolean;authMode?:'password'|'windowsDomain';domain?:string|null }
 export interface SqlConnection extends SqlConnectionDraft {id:string;readOnly:true}
 export interface SqlConnectionResult {connection?:SqlConnection;catalog?:unknown;mcp?:unknown;readOnly?:boolean;error?:{code:string;message:string};authentication?:SqlConnectionDraft}
 /** Sent only to the native credential adapter. Client private keys never enter tool results. */
-export interface DataConnectionDraft { name: string; host: string; port: number; database: string; user: string; password: string; sslMode: string; sslRootCert?: string; sslClientCert?: string; sslClientKey?: string;sslClientKeyPassword?:string }
-export type DataConnectionRequest = Partial<Omit<DataConnectionDraft, "password" | "sslClientCert" | "sslClientKey" | "sslClientKeyPassword">> & { credentialFile?: string };
-export type DataConnectionAuthentication = Omit<DataConnectionDraft, "password" | "sslClientCert" | "sslClientKey" | "sslClientKeyPassword"> & { clientCertificate?: boolean };
+export interface DataConnectionDraft { name: string; host: string; port: number; database: string; user: string; password: string; sslMode: string; sslRootCert?: string; sslClientCert?: string; sslClientKey?: string;sslClientKeyPassword?:string;sslClientBundle?:string }
+export type DataConnectionRequest = Partial<Omit<DataConnectionDraft, "password" | "sslClientCert" | "sslClientKey" | "sslClientKeyPassword" | "sslClientBundle">> & { credentialFile?: string };
+export type DataConnectionAuthentication = Omit<DataConnectionDraft, "password" | "sslClientCert" | "sslClientKey" | "sslClientKeyPassword" | "sslClientBundle"> & { clientCertificate?: boolean };
 export interface DataConnectionResult { connection?: Pick<DataConnection, "id" | "name"> | null; layers?: DataLayer[]; tables?: DataTable[]; error?: { code: string; message: string } | null; authentication?: DataConnectionAuthentication | null; readOnly?: boolean; mcp?: DatabaseMcpInfo | null }
 
 export interface SourceDescriptor {

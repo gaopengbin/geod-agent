@@ -23,10 +23,14 @@ fn key_error(code:&str)->AppError{
         "INPUT_TLS_KEY_PASSWORD_INPUT"=>workspace_error("INPUT_TLS_KEY_PASSWORD_INPUT","客户端私钥密码格式无效"),
         "INPUT_TLS_KEY_UNSUPPORTED"=>workspace_error("INPUT_TLS_KEY_UNSUPPORTED","此客户端私钥的加密方式暂不支持"),
         "INPUT_TLS_KEY_RUNTIME"=>workspace_error("INPUT_TLS_KEY_RUNTIME","内置私钥解析环境无法启动，请修复应用"),
+        "INPUT_TLS_BUNDLE_PASSWORD_REQUIRED"=>workspace_error("INPUT_TLS_BUNDLE_PASSWORD_REQUIRED","请填写证书包密码，或重新选择有效的 PFX/P12 文件"),
+        "INPUT_TLS_BUNDLE_OPEN_FAILED"=>workspace_error("INPUT_TLS_BUNDLE_OPEN_FAILED","无法打开证书包，请核对密码与文件"),
+        "INPUT_TLS_BUNDLE_INVALID"=>workspace_error("INPUT_TLS_BUNDLE_INVALID","请选择同时包含客户端证书和私钥的 PFX/P12 文件"),
+        "INPUT_TLS_BUNDLE_UNSUPPORTED"=>workspace_error("INPUT_TLS_BUNDLE_UNSUPPORTED","此证书包的加密方式暂不支持"),
         _=>workspace_error("INPUT_TLS_INVALID","请选择匹配的客户端证书和 PEM 私钥"),
     }
 }
-pub(crate) fn requires_local_input(error:&AppError)->bool{matches!(error.code,"INPUT_TLS_KEY_PASSWORD_REQUIRED"|"INPUT_TLS_KEY_PASSWORD_INCORRECT"|"INPUT_TLS_INVALID")}
+pub(crate) fn requires_local_input(error:&AppError)->bool{matches!(error.code,"INPUT_TLS_KEY_PASSWORD_REQUIRED"|"INPUT_TLS_KEY_PASSWORD_INCORRECT"|"INPUT_TLS_INVALID"|"INPUT_TLS_BUNDLE_PASSWORD_REQUIRED"|"INPUT_TLS_BUNDLE_OPEN_FAILED"|"INPUT_TLS_BUNDLE_INVALID")}
 pub(crate) async fn unlock(app:&AppHandle,certificate:Option<&str>,key:Option<String>,password:Option<String>)->Result<Option<String>,AppError>{
     let key=key.map(zeroize::Zeroizing::new);
     let password=password.map(zeroize::Zeroizing::new);
@@ -35,23 +39,37 @@ pub(crate) async fn unlock(app:&AppHandle,certificate:Option<&str>,key:Option<St
     if key.len()>64*1024{return Err(key_error("INPUT_TLS_INVALID"));}
     if !key.contains("ENCRYPTED"){return Ok(Some(key.to_string()));}
     let certificate=certificate.filter(|value|!value.trim().is_empty()&&value.len()<=256*1024).ok_or_else(||key_error("INPUT_TLS_INVALID"))?;
+    let mut response=parse_identity(app,serde_json::json!({"certificate":certificate,"key":key.as_str(),"password":password.as_ref().map(|value|value.as_str())})).await?;
+    let Value::String(plain)=response["key"].take()else{return Err(key_error("INPUT_TLS_INVALID"));};
+    Ok(Some(plain))
+}
+pub(crate) async fn normalize(app:&AppHandle,certificate:Option<String>,key:Option<String>,bundle:Option<String>,password:Option<String>)->Result<(Option<String>,Option<String>),AppError>{
+    let bundle=bundle.map(zeroize::Zeroizing::new).filter(|value|!value.is_empty());
+    let Some(bundle)=bundle else{let key=unlock(app,certificate.as_deref(),key,password).await?;return Ok((certificate,key));};
+    let key=key.map(zeroize::Zeroizing::new);let password=password.map(zeroize::Zeroizing::new);
+    if bundle.len()>350*1024||certificate.as_ref().is_some_and(|value|!value.trim().is_empty())||key.as_ref().is_some_and(|value|!value.trim().is_empty()){return Err(key_error("INPUT_TLS_BUNDLE_INVALID"));}
+    if password.as_ref().is_some_and(|value|value.len()>4096){return Err(key_error("INPUT_TLS_KEY_PASSWORD_INPUT"));}
+    let mut response=parse_identity(app,serde_json::json!({"bundle":bundle.as_str(),"password":password.as_ref().map(|value|value.as_str())})).await?;
+    let Value::String(certificate)=response["certificate"].take()else{return Err(key_error("INPUT_TLS_BUNDLE_INVALID"));};
+    let Value::String(key)=response["key"].take()else{return Err(key_error("INPUT_TLS_BUNDLE_INVALID"));};
+    Ok((Some(certificate),Some(key)))
+}
+async fn parse_identity(app:&AppHandle,mut request:Value)->Result<Value,AppError>{
     let root=crate::attachment_inputs::parser_root(app).map_err(|_|key_error("INPUT_TLS_KEY_RUNTIME"))?;
     let mut command=crate::python_runtime::command(include_str!("private_key_worker.py"))?;
     command.arg(root).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).kill_on_drop(true);
-    let mut request=serde_json::json!({"certificate":certificate,"key":key.as_str(),"password":password.as_ref().map(|value|value.as_str())});
     let bytes=zeroize::Zeroizing::new(serde_json::to_vec(&request).map_err(|_|key_error("INPUT_TLS_INVALID"))?);
-    for field in ["key","password"]{if let Some(Value::String(value))=request.get_mut(field){value.zeroize();}}
+    for field in ["key","password","bundle"]{if let Some(Value::String(value))=request.get_mut(field){value.zeroize();}}
     let output=tokio::time::timeout(Duration::from_secs(20),async{
         let mut child=command.spawn()?;
         if let Some(mut input)=child.stdin.take(){input.write_all(&bytes).await?;}
         child.wait_with_output().await
     }).await.map_err(|_|key_error("INPUT_TLS_KEY_RUNTIME"))?.map_err(|_|key_error("INPUT_TLS_KEY_RUNTIME"))?;
     let stdout=zeroize::Zeroizing::new(output.stdout);
-    if stdout.len()>128*1024{return Err(key_error("INPUT_TLS_INVALID"));}
-    let mut response:Value=serde_json::from_slice(&stdout).map_err(|_|key_error("INPUT_TLS_INVALID"))?;
+    if stdout.len()>512*1024{return Err(key_error("INPUT_TLS_INVALID"));}
+    let response:Value=serde_json::from_slice(&stdout).map_err(|_|key_error("INPUT_TLS_INVALID"))?;
     if !output.status.success()||response["ok"]!=true{return Err(key_error(response["error"].as_str().unwrap_or("")));}
-    let Value::String(plain)=response["key"].take()else{return Err(key_error("INPUT_TLS_INVALID"));};
-    Ok(Some(plain))
+    Ok(response)
 }
 fn path(root: &Path, id: &str) -> Result<PathBuf, AppError> {
     Uuid::parse_str(id).map_err(|_| failed())?;

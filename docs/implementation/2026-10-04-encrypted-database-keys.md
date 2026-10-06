@@ -25,7 +25,7 @@
 | 原数据与资源 | 五个本轮连接、一个本轮侧栏会话及四个精确标识的 Docker 实例已清理。原 30 个会话逐项一致，四个原连接编号、活动会话、默认模型、语言与主题恢复；真实测试记录保留。 |
 | 保存检查 | 16 个非空密码、32 份已知私钥表示，在 30,483 个可变记录/证据/备份文件和八个实际进程参数/环境中没有明文残留，无不可读文件。检查包含 UTF-8、UTF-16 和 JSON 转义；依赖、模型及临时插件源码等无关目录不重复扫描，范围见回执。 |
 
-原生数据库实际握手本轮使用 RSA 客户端密钥；EC/Ed25519 是解析器覆盖，不能据此声称每种数据库及驱动都已完成其握手验收。其他私钥封装、硬件密钥、外部生产实例与企业证书轮换仍待核对。
+原生数据库实际握手本轮使用 RSA 客户端密钥；EC/Ed25519 是解析器覆盖，不能据此声称每种数据库及驱动都已完成其握手验收。其他未经核验的私钥封装、硬件密钥、外部生产实例与企业证书轮换仍待核对。
 
 ## 同时修复
 
@@ -39,3 +39,17 @@
 证据目录：`artifacts/product-gaps-20261004/database-keys`。有效回执包括 `parser-result.json`、四份 `*-native-result.json`、`model-check-result.json`、`ui-resume-result.json`、`ui-visual-result.json`、`headless-result.json`、`recovery-backup-result.json`、`restart-result.json`、`cleanup-result.json`、`credential-audit.json` 和 `final-environment.json`。真实会话、后台事件、截图、精确进程及备份摘要均保留。
 
 实现主要位于 `src/database-tls-fields.tsx`、`src/data-input-panel.tsx`、`src/sql-connections.tsx`、`src-tauri/src/private_key_worker.py`、`database_tls.rs`、`headless_tools.rs`、`ai_schedules.rs` 与 `desktop_backups.rs`，相对 `apps/geod-agent-desktop`。前端构建、最新原生构建和两项备份测试通过。日常本机网关 PID 与创建时间始终保持不变，开发前台与后台环境均未携带供应商 Key。
+
+## 2026-10-06：PFX/P12 客户端证书包
+
+开发版的 PostgreSQL/PostGIS 和通用 SQL 本机表单新增 PFX/P12 文件选择，单个文件上限 256 KiB。证书包需要包含匹配的客户端证书和私钥；解包时保留附带的证书链，规范化后复用既有系统加密存储。服务端 CA 信任仍单独配置。打开密码不保存，密码错误后清空并聚焦输入框，保留所选文件。SQL Server/SQLite 不支持客户端证书身份，原生入口在解包前明确拒绝。
+
+Agent 可以引用用户工作区内的连接 JSON：`sslClientBundle` 为证书包 Base64，`sslClientKeyPassword` 为可选的打开密码。原生适配器读取文件，工具参数不能直接传入证书包或私钥；工具结果没有这些秘密字段。缺少密码返回本机输入请求，后台使用既有需要输入状态。连接 JSON 本身由用户管理。
+
+本轮最小验证：
+
+- 内置 Python/cryptography 的九项解析检查通过：加密包缺少/错误密码、中文正确密码与证书链、旧式 Windows SHA1/3DES 包、未加密 EC 包、缺少私钥、非法 Base64、超限输入及既有加密 PEM 兼容。
+- 五组实际原生/界面检查通过：错误密码清空和焦点恢复；表单保存后重新加载身份并通过双向 TLS 读取 PostGIS；工作区文件缺少密码时返回不含秘密的认证请求；同一文件补充密码后连接和读取；通用 SQL 密码门禁和 SQL Server 不支持身份的门禁。两条成功读取路径均由 `pgedge-postgres-mcp` 1.1.0 返回两行真实随机标记记录。
+- TypeScript 检查、锁定依赖的离线原生构建及开发程序切换通过。两个临时连接、一个工作区配置文件、专用 Docker 实例和九个私有样本文件已清理；原 31 个会话记录、四个数据库连接、活动会话和工作区设置保持一致。
+
+证据位于 `artifacts/development-native-current-20261006/build-fdc52746a4141434/` 的 `pfx-parser.json`、`pfx-native-accepted.json` 和 `pfx-ui-password-recovery.png`。初次界面检查的异步等待失败回执保留，后续直接读取已保存的实际连接，没有重跑已通过检查。工作区样本文件由独立宿主创建并清理，避免 Codex 包身份的路径重定向。PFX 的实际数据库握手本轮只验证 PostgreSQL/PostGIS；通用 SQL 复用同一转换器，不能据此声称 MySQL/MariaDB/Oracle 的 PFX 外部实例已验收。无新增模型调用或收费；现有固定 0.2.2 发行候选未替换。

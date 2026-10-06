@@ -42,7 +42,7 @@ export function DataInputPanel({ open, initialRequest, initialConnection, onConn
   const active = useRef(true);
   const initialRead = useRef<DataInputRequest | null>(null);
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
-  useEffect(() => { if (!open) setDraft(current => ({ ...current, password: "", sslClientCert: undefined, sslClientKey: undefined,sslClientKeyPassword:undefined })); }, [open]);
+  useEffect(() => { if (!open) setDraft(current => ({ ...current, password: "", sslClientCert: undefined, sslClientKey: undefined,sslClientKeyPassword:undefined,sslClientBundle:undefined })); }, [open]);
   useEffect(() => { if (open) void api.dataConnectionsList().then(setConnections).catch(cause => setMessage(errorMessage(cause))); }, [open]);
   useEffect(() => { if (open) void api.onlineConnectionsList().then(setOnlineConnections).catch(cause => setMessage(errorMessage(cause))); }, [open]);
   useEffect(() => {
@@ -95,11 +95,11 @@ export function DataInputPanel({ open, initialRequest, initialConnection, onConn
     try {
       const value = await api.dataConnectionSave(draft);
       if (value.error) throw value.error;
-      setDraft(current => ({ ...current, password: "", sslClientCert: undefined, sslClientKey: undefined,sslClientKeyPassword:undefined }));
+      setDraft(current => ({ ...current, password: "", sslClientCert: undefined, sslClientKey: undefined,sslClientKeyPassword:undefined,sslClientBundle:undefined }));
       setConnections(await api.dataConnectionsList()); setAdding(false);
       if (value.connection) { setRequest({ connectionId: value.connection.id }); setResult({ layers: value.layers, selectionRequired: true }); }
       if (value.connection && onConnection) onConnection({ ...value, connection: value.connection, readOnly: true });
-    } catch (cause) { setMessage(errorMessage(cause));if(['INPUT_TLS_KEY_PASSWORD_REQUIRED','INPUT_TLS_KEY_PASSWORD_INCORRECT'].includes((cause as {code?:string})?.code??''))setPasswordReset(value=>value+1); }
+    } catch (cause) { setMessage(errorMessage(cause));if(['INPUT_TLS_KEY_PASSWORD_REQUIRED','INPUT_TLS_KEY_PASSWORD_INCORRECT','INPUT_TLS_BUNDLE_PASSWORD_REQUIRED','INPUT_TLS_BUNDLE_OPEN_FAILED'].includes((cause as {code?:string})?.code??''))setPasswordReset(value=>value+1); }
     finally { setBusy(false); }
   }
   return <Dialog.Root open={open} onOpenChange={value => { if (!busy) onOpenChange(value); }}><Dialog.Portal>

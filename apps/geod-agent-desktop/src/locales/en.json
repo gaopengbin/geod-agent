@@ -2161,5 +2161,16 @@
   "填写客户端密钥时，请同时提供客户端 ID": "Enter the client ID together with the client secret",
   "本机回调端口必须为 1 到 65535": "The local callback port must be between 1 and 65535",
   "无法准备本机授权回调，请检查端口是否被占用": "Cannot prepare the local callback. Check whether the port is already in use.",
-  "MCP 授权身份与客户端配置不一致，请重新授权": "The OAuth identity does not match the client configuration. Authorize again."
+  "MCP 授权身份与客户端配置不一致，请重新授权": "The OAuth identity does not match the client configuration. Authorize again.",
+  "客户端证书包": "Client certificate bundle",
+  "已选择证书包": "Bundle selected",
+  "移除证书包": "Remove certificate bundle",
+  "选择 PFX/P12 证书包": "Choose PFX/P12 bundle",
+  "证书包密码": "Certificate bundle password",
+  "支持 PEM 证书和私钥，或 PFX/P12 证书包。解锁在本机完成，保存后使用系统加密存储；密码不保存，AI 不会读取私钥。": "Use a PEM certificate and key, or a PFX/P12 bundle. Unlocking is local; the saved identity is system encrypted. Passwords are not saved and AI cannot read private keys.",
+  "请填写证书包密码，或重新选择有效的 PFX/P12 文件": "Enter the bundle password, or choose a valid PFX/P12 file",
+  "无法打开证书包，请核对密码与文件": "Cannot open the certificate bundle. Check the password and file",
+  "请选择同时包含客户端证书和私钥的 PFX/P12 文件": "Choose a PFX/P12 file containing both a client certificate and private key",
+  "此证书包的加密方式暂不支持": "This certificate bundle encryption is not supported yet",
+  "所选数据库不支持客户端证书": "This database does not support client certificates"
 }

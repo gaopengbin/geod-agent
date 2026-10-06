@@ -195,7 +195,7 @@ pub(crate) async fn execute(
         "data_connection_connect" => {
             let mut value=data_inputs::data_connection_connect(app.clone(), conversation.into(), a).await?;
             value.as_object_mut().unwrap().remove("authentication");
-            if matches!(value["error"]["code"].as_str(),Some("INPUT_AUTH_REQUIRED"|"INPUT_TLS_FAILED"|"INPUT_TLS_KEY_PASSWORD_REQUIRED"|"INPUT_TLS_KEY_PASSWORD_INCORRECT"|"INPUT_TLS_INVALID")){
+            if matches!(value["error"]["code"].as_str(),Some("INPUT_AUTH_REQUIRED"|"INPUT_TLS_FAILED"|"INPUT_TLS_KEY_PASSWORD_REQUIRED"|"INPUT_TLS_KEY_PASSWORD_INCORRECT"|"INPUT_TLS_BUNDLE_PASSWORD_REQUIRED"|"INPUT_TLS_BUNDLE_OPEN_FAILED"|"INPUT_TLS_BUNDLE_INVALID"|"INPUT_TLS_INVALID")){
                 value["error"]=json!({"code":"USER_INPUT_REQUIRED","message":"请在应用的数据库连接中配置认证信息和证书后重试后台任务"});
             }
             Ok(value)
@@ -208,7 +208,7 @@ pub(crate) async fn execute(
             let mut value=crate::sql_connections::sql_connection_connect(app.clone(),conversation.into(),a).await?;
             // Background tasks cannot prompt for new credentials.
             value.as_object_mut().unwrap().remove("authentication");
-            if matches!(value["error"]["code"].as_str(),Some("INPUT_AUTH_REQUIRED"|"INPUT_AUTH_CONFIG"|"INPUT_TLS_FAILED"|"INPUT_TLS_KEY_PASSWORD_REQUIRED"|"INPUT_TLS_KEY_PASSWORD_INCORRECT"|"INPUT_TLS_INVALID")){value["error"]=json!({"code":"USER_INPUT_REQUIRED","message":"请在应用的数据库连接中配置认证信息和证书后重试后台任务"});}
+            if matches!(value["error"]["code"].as_str(),Some("INPUT_AUTH_REQUIRED"|"INPUT_AUTH_CONFIG"|"INPUT_TLS_FAILED"|"INPUT_TLS_KEY_PASSWORD_REQUIRED"|"INPUT_TLS_KEY_PASSWORD_INCORRECT"|"INPUT_TLS_BUNDLE_PASSWORD_REQUIRED"|"INPUT_TLS_BUNDLE_OPEN_FAILED"|"INPUT_TLS_BUNDLE_INVALID"|"INPUT_TLS_INVALID")){value["error"]=json!({"code":"USER_INPUT_REQUIRED","message":"请在应用的数据库连接中配置认证信息和证书后重试后台任务"});}
             if !value["connection"].is_null(){let connection=value["connection"].clone();value["connection"]=json!({"id":connection["id"],"name":connection["name"],"kind":connection["kind"],"readOnly":true});}
             Ok(value)
         }

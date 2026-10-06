@@ -12,7 +12,7 @@ use tauri::{AppHandle, Manager};
 pub(crate) struct Draft {
     pub name:String,pub kind:String,pub host:Option<String>,pub port:Option<u16>,pub database:Option<String>,pub user:Option<String>,
     pub relative_path:Option<String>, pub ssl_mode:Option<String>,#[serde(default)]pub password:String,
-    pub ssl_root_cert:Option<String>,pub ssl_client_cert:Option<String>,pub ssl_client_key:Option<String>,pub ssl_client_key_password:Option<String>,#[serde(default)]pub client_certificate:bool,
+    pub ssl_root_cert:Option<String>,pub ssl_client_cert:Option<String>,pub ssl_client_key:Option<String>,pub ssl_client_key_password:Option<String>,pub ssl_client_bundle:Option<String>,#[serde(default)]pub client_certificate:bool,
     #[serde(default="password_auth")]pub auth_mode:String,pub domain:Option<String>,
 }
 #[derive(Clone,Serialize,Deserialize)]
@@ -85,7 +85,8 @@ pub(crate) fn sql_connection_remove(app:AppHandle,connection_id:String)->Result<
 }
 #[tauri::command]
 pub(crate) async fn sql_connection_save(app:AppHandle,conversation_id:String,mut draft:Draft)->Result<Value,AppError>{
-    draft.ssl_client_key=crate::database_tls::unlock(&app,draft.ssl_client_cert.as_deref(),draft.ssl_client_key.take(),draft.ssl_client_key_password.take()).await?;
+    if ["sqlite","sqlserver"].contains(&draft.kind.as_str())&&(draft.client_certificate||draft.ssl_client_cert.as_ref().is_some_and(|value|!value.trim().is_empty())||draft.ssl_client_key.as_ref().is_some_and(|value|!value.trim().is_empty())||draft.ssl_client_bundle.as_ref().is_some_and(|value|!value.is_empty())){return Err(workspace_error("INPUT_TLS_UNSUPPORTED_IDENTITY","所选数据库不支持客户端证书"));}
+    (draft.ssl_client_cert,draft.ssl_client_key)=crate::database_tls::normalize(&app,draft.ssl_client_cert.take(),draft.ssl_client_key.take(),draft.ssl_client_bundle.take(),draft.ssl_client_key_password.take()).await?;
     let app_setup=app.clone();
     let (path,runtime,connection,password,connection_dsn,tls,mut pending)=setup(move||{
         if draft.name.trim().is_empty()||draft.name.chars().count()>80||!["sqlite","mysql","sqlserver","oracle"].contains(&draft.kind.as_str()){return Err(workspace_error("INPUT_INVALID","请填写连接名称和数据库类型"));}
@@ -134,12 +135,12 @@ pub(crate) async fn sql_connection_connect(app:AppHandle,conversation_id:String,
             let directory=fs::canonicalize(workspace.directory).map_err(|_|workspace_error("WORKSPACE_READ_FAILED","工作区不可用"))?;let file=fs::canonicalize(directory.join(relative)).map_err(|_|workspace_error("INPUT_NOT_FOUND","连接配置不存在"))?;
             if !file.starts_with(&directory)||fs::metadata(&file).map(|metadata|metadata.len()>1024*1024).unwrap_or(true){return Err(workspace_error("WORKSPACE_DENIED","连接配置超出工作区或过大"));}
             serde_json::from_slice::<Value>(&fs::read(file).map_err(|_|workspace_error("INPUT_READ_FAILED","连接配置不可读"))?).map_err(|_|workspace_error("INPUT_INVALID","连接配置需要有效 JSON"))?
-        }else{let mut value=request;value["password"]=json!("");value["sslClientCert"]=Value::Null;value["sslClientKey"]=Value::Null;value["sslClientKeyPassword"]=Value::Null;value};
+        }else{let mut value=request;value["password"]=json!("");value["sslClientCert"]=Value::Null;value["sslClientKey"]=Value::Null;value["sslClientKeyPassword"]=Value::Null;value["sslClientBundle"]=Value::Null;value};
         if !value.is_object(){return Err(workspace_error("INPUT_INVALID","连接参数需要 JSON 对象"));}
         if value.get("name").is_none(){value["name"]=value.get("database").or_else(||value.get("relativePath")).cloned().unwrap_or(json!("数据库"));}
         serde_json::from_value::<Draft>(value).map_err(|_|workspace_error("INPUT_INVALID","请提供数据库类型及连接信息"))
     }).await?;
-    let authentication=json!({"name":draft.name,"kind":draft.kind,"host":draft.host,"port":draft.port,"database":draft.database,"user":draft.user,"relativePath":draft.relative_path,"sslMode":draft.ssl_mode,"sslRootCert":draft.ssl_root_cert,"clientCertificate":draft.ssl_client_cert.is_some()||draft.client_certificate,"authMode":draft.auth_mode,"domain":draft.domain});
+    let authentication=json!({"name":draft.name,"kind":draft.kind,"host":draft.host,"port":draft.port,"database":draft.database,"user":draft.user,"relativePath":draft.relative_path,"sslMode":draft.ssl_mode,"sslRootCert":draft.ssl_root_cert,"clientCertificate":draft.ssl_client_cert.is_some()||draft.ssl_client_bundle.is_some()||draft.client_certificate,"authMode":draft.auth_mode,"domain":draft.domain});
     match sql_connection_save(app,conversation_id,draft).await{
         Ok(value)=>Ok(value),
         Err(error)if crate::database_tls::requires_local_input(&error)||error.code=="INPUT_AUTH_CONFIG"=>Ok(json!({"error":error,"authentication":authentication,"readOnly":true})),
