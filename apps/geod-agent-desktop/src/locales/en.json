@@ -2172,5 +2172,12 @@
   "无法打开证书包，请核对密码与文件": "Cannot open the certificate bundle. Check the password and file",
   "请选择同时包含客户端证书和私钥的 PFX/P12 文件": "Choose a PFX/P12 file containing both a client certificate and private key",
   "此证书包的加密方式暂不支持": "This certificate bundle encryption is not supported yet",
-  "所选数据库不支持客户端证书": "This database does not support client certificates"
+  "所选数据库不支持客户端证书": "This database does not support client certificates",
+  "断开授权": "Disconnect authorization",
+  "断开时移除本机令牌，并在提供方支持时请求撤销服务端令牌。": "Disconnecting removes local tokens and requests server token revocation when supported.",
+  "已断开本机授权，服务端令牌撤销请求已确认": "Local authorization disconnected; server token revocation requests confirmed",
+  "已断开本机授权，部分服务端令牌撤销未获确认；可在提供方账号设置中核对": "Local authorization disconnected. Some server token revocations were not confirmed; check the provider account settings.",
+  "已断开本机授权；提供方未提供可用的撤权接口，可在其账号设置中撤销": "Local authorization disconnected. The provider has no supported revocation endpoint; revoke access in its account settings.",
+  "已断开本机授权；服务端撤权未获确认，可在提供方账号设置中撤销": "Local authorization disconnected. Server revocation was not confirmed; revoke access in the provider account settings.",
+  "本机授权已移除": "Local authorization removed"
 }

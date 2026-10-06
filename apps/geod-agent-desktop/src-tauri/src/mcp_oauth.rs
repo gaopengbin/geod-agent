@@ -6,6 +6,8 @@ use fs2::FileExt;
 use rmcp::transport::auth::{AuthError,AuthorizationManager,AuthorizationRequest,AuthorizationSession,CredentialRefreshGuard,CredentialStore,InMemoryCredentialStore,OAuthClientConfig,OAuthHttpClient,OAuthHttpClientFuture,OAuthHttpRequest,StoredCredentials};
 use serde::{Deserialize,Serialize};
 use serde_json::{json,Value};
+use oauth2::TokenResponse;
+use base64::Engine;
 use sha2::{Digest,Sha256};
 use std::{collections::BTreeMap,fs::OpenOptions,io::Write,path::PathBuf,sync::{Arc,Mutex,atomic::{AtomicBool,Ordering}},time::{Duration,Instant}};
 use tauri::{AppHandle,Manager,State};
@@ -123,6 +125,76 @@ pub(crate) async fn manager(path:PathBuf,id:String,url:&str)->Result<Authorizati
     if !manager.initialize_from_store().await.map_err(auth_error)?{return Err(error("MCP_AUTH_REQUIRED","此 MCP 需要浏览器授权"));}
     if let Some(client)=store.configured_client().await.map_err(auth_error)?{manager.configure_client(client).map_err(auth_error)?;}
     Ok(manager)
+}
+
+#[derive(Clone,Copy,Serialize)]
+#[serde(rename_all="camelCase")]
+enum Revocation {Revoked,Partial,Unsupported,Unavailable,NoCredentials}
+impl Revocation {
+    fn message(self)->&'static str{match self{
+        Self::Revoked=>"已断开本机授权，服务端令牌撤销请求已确认",
+        Self::Partial=>"已断开本机授权，部分服务端令牌撤销未获确认；可在提供方账号设置中核对",
+        Self::Unsupported=>"已断开本机授权；提供方未提供可用的撤权接口，可在其账号设置中撤销",
+        Self::Unavailable=>"已断开本机授权；服务端撤权未获确认，可在提供方账号设置中撤销",
+        Self::NoCredentials=>"本机授权已移除",
+    }}
+}
+async fn revoke_saved(url:&str,saved:Option<&SavedAuthorization>)->Revocation{
+    let (credentials,secret)=match saved{
+        Some(SavedAuthorization::Configured{credentials,client}) if client.matches(credentials)=>(credentials,Some(client.client_secret.as_str())),
+        Some(SavedAuthorization::Configured{..})=>return Revocation::Unavailable,
+        Some(SavedAuthorization::Legacy(credentials))=>(credentials,None),
+        None=>return Revocation::NoCredentials,
+    };
+    let Some(tokens)=credentials.token_response.as_ref()else{return Revocation::NoCredentials;};
+    // Bind rediscovery to the issuer that issued the stored tokens. Never
+    // synthesize an endpoint or send them to a newly substituted issuer.
+    let Some(issuer)=credentials.issuer.as_ref()else{return Revocation::Unavailable;};
+    let Ok(manager)=AuthorizationManager::new_with_oauth_http_client(url,Arc::new(NativeHttp)).await else{return Revocation::Unavailable;};
+    let Ok(resolution)=manager.resolve_metadata().await else{return Revocation::Unavailable;};
+    if !resolution.source.is_discovered()||resolution.metadata.issuer.as_ref()!=Some(issuer){return Revocation::Unavailable;}
+    let fields=&resolution.metadata.additional_fields;
+    let Some(endpoint)=fields.get("revocation_endpoint").and_then(Value::as_str)else{return Revocation::Unsupported;};
+    let Ok(endpoint_url)=reqwest_mcp::Url::parse(endpoint)else{return Revocation::Unavailable;};
+    let loopback_http=endpoint_url.scheme()=="http"&&matches!(endpoint_url.host_str(),Some("localhost"|"127.0.0.1"|"::1"|"[::1]"))&&reqwest_mcp::Url::parse(issuer).is_ok_and(|url|url.origin()==endpoint_url.origin());
+    if !endpoint_url.username().is_empty()||endpoint_url.password().is_some()||endpoint_url.fragment().is_some()||!(endpoint_url.scheme()=="https"||loopback_http){return Revocation::Unavailable;}
+    let methods=fields.get("revocation_endpoint_auth_methods_supported").and_then(Value::as_array);
+    let has=|method:&str|methods.is_some_and(|values|values.iter().any(|value|value.as_str()==Some(method)));
+    let basic_auth=if secret.is_some(){
+        if methods.is_none()||has("client_secret_basic"){true}
+        else if has("client_secret_post"){false}
+        else{return Revocation::Unsupported;}
+    }else{
+        if methods.is_some()&&!has("none")&&!has("client_secret_basic")&&!has("client_secret_post"){return Revocation::Unsupported;}
+        false
+    };
+    let Ok(network)=crate::extensions::http_client(endpoint)else{return Revocation::Unavailable;};
+    let mut requests=Vec::new();
+    if let Some(token)=tokens.refresh_token(){requests.push((token.secret().as_str(),"refresh_token"));}
+    requests.push((tokens.access_token().secret().as_str(),"access_token"));
+    let total=requests.len();let mut confirmed=0;
+    for (token,hint) in requests{
+        let request={
+        let mut form=url::form_urlencoded::Serializer::new(String::new());
+        form.append_pair("token",token).append_pair("token_type_hint",hint);
+        let mut request=network.post(endpoint).header("content-type","application/x-www-form-urlencoded");
+        if basic_auth{
+            // RFC 6749 encodes each component before joining it for HTTP Basic.
+            let encode=|text:&str|url::form_urlencoded::byte_serialize(text.as_bytes()).collect::<String>();
+            let identity=zeroize::Zeroizing::new(format!("{}:{}",encode(&credentials.client_id),encode(secret.unwrap())));
+            request=request.header("authorization",format!("Basic {}",base64::engine::general_purpose::STANDARD.encode(identity.as_bytes())));
+        }else{
+            form.append_pair("client_id",&credentials.client_id);
+            if let Some(secret)=secret{form.append_pair("client_secret",secret);}
+        }
+        let body=zeroize::Zeroizing::new(form.finish());
+        request.body(body.to_string())
+        };
+        // RFC 7009 success is conveyed by HTTP 200; ignore provider bodies.
+        // The shared native client never follows redirects.
+        if request.send().await.is_ok_and(|response|response.status().as_u16()==200){confirmed+=1;}
+    }
+    if confirmed==total{Revocation::Revoked}else if confirmed>0{Revocation::Partial}else{Revocation::Unavailable}
 }
 
 struct Pending {owner:String,connector_id:String,state:&'static str,message:String,authorization_url:String,cancelled:Arc<AtomicBool>,created:Instant}
@@ -264,11 +336,16 @@ pub(crate) fn mcp_oauth_cancel(app:AppHandle,state:State<'_,OAuthState>,authoriz
 #[tauri::command]
 pub(crate) async fn mcp_oauth_disconnect(app:AppHandle,id:String)->Result<Value,AppError>{
     let owner=services::current_user_id(&app.state::<services::ServiceState>()).map_err(|e|error(e.code,&e.message))?;
-    let (path,_)=app.state::<ExtensionState>().oauth_target(&id,&owner)?;
+    let (path,url)=app.state::<ExtensionState>().oauth_target(&id,&owner)?;
     app.state::<OAuthState>().abort_connector(&id,&owner)?;
     let store=VaultStore{path,id:id.clone()};
     let _guard=store.acquire_refresh_guard().await.map_err(auth_error)?;
+    let saved=store.snapshot().await;
     store.clear().await.map_err(auth_error)?;
     app.state::<ExtensionState>().activate_oauth(&id,&owner,false)?;
-    Ok(json!({"disconnected":true}))
+    let revocation=match saved{
+        Ok(saved)=>tokio::time::timeout(Duration::from_secs(10),revoke_saved(&url,saved.as_ref())).await.unwrap_or(Revocation::Unavailable),
+        Err(_)=>Revocation::Unavailable,
+    };
+    Ok(json!({"disconnected":true,"revocation":revocation,"message":revocation.message()}))
 }

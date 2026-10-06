@@ -309,7 +309,7 @@ export const api = {
   mcpOauthPending: (id:string) => invoke<McpAuthorization|null>("mcp_oauth_pending",{id}),
   mcpOauthOpen: (authorizationId:string) => invoke<void>("mcp_oauth_open",{authorizationId}),
   mcpOauthCancel: (authorizationId:string) => invoke<McpAuthorization>("mcp_oauth_cancel",{authorizationId}),
-  mcpOauthDisconnect: (id:string) => invoke<{disconnected:boolean}>("mcp_oauth_disconnect",{id}),
+  mcpOauthDisconnect: (id:string) => invoke<{disconnected:boolean;revocation:"revoked"|"partial"|"unsupported"|"unavailable"|"noCredentials";message:string}>("mcp_oauth_disconnect",{id}),
   mcpAddGdal: async () => { await invoke<ExtensionOverview>("mcp_add_gdal"); return api.extensionsList(); },
   mcpSetEnabled: async (id: string, enabled: boolean): Promise<ExtensionOverview> => { if (id === OPENLAYERS_ID) setOpenLayersEnabled(enabled); else if (id === CESIUM_ID) setCesiumEnabled(enabled); else await invoke<ExtensionOverview>("mcp_set_enabled", { id, enabled }); return api.extensionsList(); },
   mcpTools: (id: string, conversationId?: string) => id === OPENLAYERS_ID ? openLayersTools(conversationId ?? "") : id === CESIUM_ID ? cesiumTools(conversationId ?? "") : invoke<McpToolList>("mcp_tools", { id, conversationId }),
