@@ -4,6 +4,10 @@ import argparse
 import os
 import shutil
 import subprocess
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts"))
+from windows_detached_process import spawn_hidden_detached
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--existing-config", action="store_true", help="Read the current GeoD provider config over pinned SSH; no server changes.")
@@ -35,8 +39,7 @@ if not node:
 folder = Path(os.environ["LOCALAPPDATA"]) / "GeoD Agent/dev-logs"
 folder.mkdir(parents=True, exist_ok=True)
 with (folder / "local-gateway.log").open("ab") as log:
-    process = subprocess.Popen([node, str(Path(__file__).with_name("local-desktop-gateway.mjs"))],
-        env=environment, stdin=subprocess.DEVNULL, stdout=log, stderr=log, close_fds=True,
-        creationflags=subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP)
+    process = spawn_hidden_detached([node, str(Path(__file__).with_name("local-desktop-gateway.mjs"))],
+        env=environment, stdout=log, stderr=log)
 (folder / "local-gateway.pid").write_text(str(process.pid), encoding="ascii")
 print(f"Local test gateway started (PID {process.pid}); log: {folder / 'local-gateway.log'}")

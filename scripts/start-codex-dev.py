@@ -6,6 +6,7 @@ import subprocess
 import time
 import urllib.request
 import argparse
+from windows_detached_process import spawn_hidden_detached
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--local-gateway", action="store_true")
@@ -28,7 +29,6 @@ if args.local_gateway:
 if args.update_fixture:
     fixture = args.update_fixture.resolve(strict=True)
     env["GEOD_AGENT_DEV_UPDATE_CONFIG"] = str(fixture)
-flags = subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
 subprocess.run([shutil.which("python"), "-X", "utf8", str(desktop.parents[1] / "scripts/prepare-pgedge-runtime.py")], check=True, creationflags=subprocess.CREATE_NO_WINDOW)
 subprocess.run([shutil.which("python"), "-X", "utf8", str(desktop.parents[1] / "scripts/prepare-gdal-runtime.py")], check=True, creationflags=subprocess.CREATE_NO_WINDOW)
 def healthy():
@@ -39,7 +39,7 @@ def healthy():
         return False
 if not healthy():
     with (logs / "vite.log").open("ab") as output:
-        subprocess.Popen([node, str(desktop / "node_modules/vite/bin/vite.js"), "--host", "127.0.0.1", "--port", "1420", "--strictPort"], cwd=desktop, env=env, stdin=subprocess.DEVNULL, stdout=output, stderr=output, creationflags=flags, close_fds=True)
+        spawn_hidden_detached([node, str(desktop / "node_modules/vite/bin/vite.js"), "--host", "127.0.0.1", "--port", "1420", "--strictPort"], cwd=desktop, env=env, stdout=output, stderr=output)
     for _ in range(50):
         if healthy():
             break
@@ -51,5 +51,5 @@ if not executable.is_file():
     raise SystemExit("Build the desktop first: cargo build in apps/geod-agent-desktop/src-tauri")
 env["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = "--remote-debugging-port=9233"
 with (logs / "desktop.log").open("ab") as output:
-    subprocess.Popen([str(executable)], cwd=desktop, env=env, stdin=subprocess.DEVNULL, stdout=output, stderr=output, creationflags=flags, close_fds=True)
+    spawn_hidden_detached([str(executable)], cwd=desktop, env=env, stdout=output, stderr=output)
 print("GeoD development desktop started; frontend HMR: http://127.0.0.1:1420")
