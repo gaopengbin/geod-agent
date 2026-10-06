@@ -2144,5 +2144,12 @@
   "记录导出中断，原文件未修改，请重试": "Record export was interrupted. The original file was preserved. Try again.",
   "记录导出核验失败，原文件未修改，请重试": "Export verification failed. The original file was preserved. Try again.",
   "无法保存记录，请检查目录和磁盘空间": "Cannot save records. Check the folder and available disk space.",
-  "记录查询中断，请重试": "Record query was interrupted. Try again."
+  "记录查询中断，请重试": "Record query was interrupted. Try again.",
+  "数据库账号": "Database account",
+  "Windows 域账号（NTLM）": "Windows domain account (NTLM)",
+  "域名": "Domain",
+  "填写域名、域用户名和密码。": "Enter the domain, domain username and password.",
+  "所选数据库不支持此认证方式": "This database does not support this authentication method",
+  "请填写有效的 Windows 域名": "Enter a valid Windows domain",
+  "请在本机填写域账号密码": "Enter the domain account password locally"
 }

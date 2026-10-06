@@ -22,7 +22,7 @@ export interface DataTable { name: string; type: "TABLE" | "VIEW" }
 export interface DataInputResult { handle?: string; layers?: DataLayer[]; tables?: DataTable[]; selectedLayer?: string; sourceCrs?: string; selectionRequired?: boolean; boundary?: BoundaryImport; mcp?: DatabaseMcpInfo; error?: { code: string; message: string } }
 export interface DataConnection { id: string; name: string; host: string; port: number; database: string; user: string; sslMode: string; databaseType?: "PostGIS" | "PostgreSQL" | null; clientCertificate?: boolean }
 export type SqlDatabaseKind = "sqlite" | "mysql" | "sqlserver" | "oracle";
-export interface SqlConnectionDraft { name:string;kind:SqlDatabaseKind;host?:string|null;port?:number|null;database?:string|null;user?:string|null;relativePath?:string|null;sslMode?:string|null;password?:string;sslRootCert?:string;sslClientCert?:string;sslClientKey?:string;sslClientKeyPassword?:string;clientCertificate?:boolean }
+export interface SqlConnectionDraft { name:string;kind:SqlDatabaseKind;host?:string|null;port?:number|null;database?:string|null;user?:string|null;relativePath?:string|null;sslMode?:string|null;password?:string;sslRootCert?:string;sslClientCert?:string;sslClientKey?:string;sslClientKeyPassword?:string;clientCertificate?:boolean;authMode?:'password'|'windowsDomain';domain?:string|null }
 export interface SqlConnection extends SqlConnectionDraft {id:string;readOnly:true}
 export interface SqlConnectionResult {connection?:SqlConnection;catalog?:unknown;mcp?:unknown;readOnly?:boolean;error?:{code:string;message:string};authentication?:SqlConnectionDraft}
 /** Sent only to the native credential adapter. Client private keys never enter tool results. */

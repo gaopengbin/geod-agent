@@ -24,7 +24,7 @@ export async function executeDataInputTool(conversationId: string, tool: string,
   if(tool === "sql_connections_list")return {connections:(await api.sqlConnectionsList()).connections.map(({id,name,kind})=>({id,name,kind,readOnly:true}))};
   if(tool === "sql_connection_connect"){
     let value=await api.sqlConnectionConnect(conversationId,args);
-    if(["INPUT_AUTH_REQUIRED","INPUT_TLS_FAILED","INPUT_TLS_KEY_PASSWORD_REQUIRED","INPUT_TLS_KEY_PASSWORD_INCORRECT","INPUT_TLS_INVALID"].includes(value.error?.code??"") && value.authentication && handlers.authenticateSql)value=await handlers.authenticateSql(value.authentication);
+    if(["INPUT_AUTH_REQUIRED","INPUT_AUTH_CONFIG","INPUT_TLS_FAILED","INPUT_TLS_KEY_PASSWORD_REQUIRED","INPUT_TLS_KEY_PASSWORD_INCORRECT","INPUT_TLS_INVALID"].includes(value.error?.code??"") && value.authentication && handlers.authenticateSql)value=await handlers.authenticateSql(value.authentication);
     const {authentication:_,...result}=value;
     return {...result,connection:value.connection?{id:value.connection.id,name:value.connection.name,kind:value.connection.kind,readOnly:true}:undefined};
   }

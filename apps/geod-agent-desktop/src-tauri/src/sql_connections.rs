@@ -13,11 +13,20 @@ pub(crate) struct Draft {
     pub name:String,pub kind:String,pub host:Option<String>,pub port:Option<u16>,pub database:Option<String>,pub user:Option<String>,
     pub relative_path:Option<String>, pub ssl_mode:Option<String>,#[serde(default)]pub password:String,
     pub ssl_root_cert:Option<String>,pub ssl_client_cert:Option<String>,pub ssl_client_key:Option<String>,pub ssl_client_key_password:Option<String>,#[serde(default)]pub client_certificate:bool,
+    #[serde(default="password_auth")]pub auth_mode:String,pub domain:Option<String>,
 }
 #[derive(Clone,Serialize,Deserialize)]
 #[serde(rename_all="camelCase")]
-struct Connection {id:String,name:String,kind:String,host:Option<String>,port:Option<u16>,database:String,user:Option<String>,relative_path:Option<String>,file_root:Option<PathBuf>,ssl_mode:String,#[serde(default)]ssl_root_cert:Option<String>,#[serde(default)]client_certificate:bool}
-impl Connection {fn public(&self)->Value {json!({"id":self.id,"name":self.name,"kind":self.kind,"host":self.host,"port":self.port,"database":self.database,"user":self.user,"relativePath":self.relative_path,"sslMode":self.ssl_mode,"customCa":self.ssl_root_cert.is_some(),"clientCertificate":self.client_certificate,"readOnly":true})}}
+struct Connection {id:String,name:String,kind:String,host:Option<String>,port:Option<u16>,database:String,user:Option<String>,relative_path:Option<String>,file_root:Option<PathBuf>,ssl_mode:String,#[serde(default)]ssl_root_cert:Option<String>,#[serde(default)]client_certificate:bool,#[serde(default="password_auth")]auth_mode:String,domain:Option<String>}
+fn password_auth()->String{"password".into()}
+fn validated_domain(kind:&str,mode:&str,domain:Option<&str>)->Result<Option<String>,AppError>{
+    if mode=="password" && domain.is_none_or(|value|value.trim().is_empty()){return Ok(None);}
+    if kind!="sqlserver" || mode!="windowsDomain"{return Err(workspace_error("INPUT_AUTH_MODE","所选数据库不支持此认证方式"));}
+    let domain=domain.unwrap_or("").trim();
+    if domain.is_empty()||domain.len()>255||!domain.chars().all(|c|c.is_alphanumeric()||matches!(c,'.'|'-'|'_'))||!domain.chars().any(char::is_alphanumeric){return Err(workspace_error("INPUT_AUTH_CONFIG","请填写有效的 Windows 域名"));}
+    Ok(Some(domain.into()))
+}
+impl Connection {fn public(&self)->Value {json!({"id":self.id,"name":self.name,"kind":self.kind,"host":self.host,"port":self.port,"database":self.database,"user":self.user,"relativePath":self.relative_path,"sslMode":self.ssl_mode,"customCa":self.ssl_root_cert.is_some(),"clientCertificate":self.client_certificate,"authMode":self.auth_mode,"domain":self.domain,"readOnly":true})}}
 struct Pending {root:PathBuf,id:String,committed:bool}
 impl Drop for Pending {fn drop(&mut self){if !self.committed{crate::database_tls::remove(&self.root,&self.id);if let Ok(entry)=credential(&self.root,&self.id){let _=entry.delete_credential();}}}}
 fn root(app:&AppHandle)->Result<PathBuf,AppError>{
@@ -62,7 +71,8 @@ async fn session(app:&AppHandle,id:&str)->Result<crate::sql_mcp::Session,AppErro
     let (runtime,dsn,tls)=setup(move||{
         let path=root(&app_setup)?;let connection=crate::connection_registry::load::<Connection>(&path)?.into_iter().find(|item|item.id==id).ok_or_else(||workspace_error("INPUT_CONNECTION_NOT_FOUND","数据库连接不存在"))?;
         let password=zeroize::Zeroizing::new(if connection.kind=="sqlite"{String::new()}else{credential(&path,&id)?.get_password().map_err(|_|workspace_error("INPUT_CREDENTIAL_FAILED","请重新保存数据库密码"))?});
-        let tls=if connection.kind=="sqlite"{None}else{Some(crate::sql_tls::prepare(&path,&id,&connection.ssl_mode,connection.ssl_root_cert.as_deref(),connection.client_certificate)?)};
+        let domain=validated_domain(&connection.kind,&connection.auth_mode,connection.domain.as_deref())?;
+        let tls=if connection.kind=="sqlite"{None}else{Some(crate::sql_tls::prepare_authenticated(&path,&id,&connection.ssl_mode,connection.ssl_root_cert.as_deref(),connection.client_certificate,domain.as_deref())?)};
         Ok((crate::sql_mcp::runtime(&app_setup)?,zeroize::Zeroizing::new(dsn(&connection,&password)?),tls))
     }).await?;
     crate::sql_mcp::Session::start(app,&runtime,&dsn,tls).await
@@ -79,6 +89,7 @@ pub(crate) async fn sql_connection_save(app:AppHandle,conversation_id:String,mut
     let app_setup=app.clone();
     let (path,runtime,connection,password,connection_dsn,tls,mut pending)=setup(move||{
         if draft.name.trim().is_empty()||draft.name.chars().count()>80||!["sqlite","mysql","sqlserver","oracle"].contains(&draft.kind.as_str()){return Err(workspace_error("INPUT_INVALID","请填写连接名称和数据库类型"));}
+        let domain=validated_domain(&draft.kind,&draft.auth_mode,draft.domain.as_deref())?;
         let workspace=read_workspace(&app_setup,&app_setup.state::<AppState>(),&app_setup.state::<services::ServiceState>(),&conversation_id)?;
         let file_root=if draft.kind=="sqlite" {let directory=fs::canonicalize(workspace.directory).map_err(|_|workspace_error("WORKSPACE_READ_FAILED","工作区不可用"))?;relative_file(&directory,draft.relative_path.as_deref().unwrap_or(""))?;Some(directory)}else{None};
         let ssl_mode=draft.ssl_mode.unwrap_or_else(||"require".into());
@@ -90,19 +101,20 @@ pub(crate) async fn sql_connection_save(app:AppHandle,conversation_id:String,mut
         let database=if draft.kind=="sqlite"{draft.relative_path.clone().unwrap_or_default()}else{draft.database.unwrap_or_default()};
         if draft.kind!="sqlite"&&(draft.host.as_deref().unwrap_or("").is_empty()||draft.user.as_deref().unwrap_or("").is_empty()||database.is_empty()||port==0){return Err(workspace_error("INPUT_INVALID","请填写主机、数据库和用户名"));}
         if database.len()>4096||draft.password.len()>8192||draft.user.as_ref().is_some_and(|value|value.len()>512)||draft.host.as_ref().is_some_and(|value|value.len()>255){return Err(workspace_error("INPUT_INVALID","数据库连接参数过长"));}
-        let connection=Connection{id:uuid::Uuid::new_v4().to_string(),name:draft.name.trim().into(),kind:draft.kind,host:draft.host,port:Some(port),database,user:draft.user,relative_path:draft.relative_path,file_root,ssl_mode,ssl_root_cert,client_certificate};
+        let connection=Connection{id:uuid::Uuid::new_v4().to_string(),name:draft.name.trim().into(),kind:draft.kind,host:draft.host,port:Some(port),database,user:draft.user,relative_path:draft.relative_path,file_root,ssl_mode,ssl_root_cert,client_certificate,auth_mode:draft.auth_mode,domain};
         let password=zeroize::Zeroizing::new(draft.password);let connection_dsn=zeroize::Zeroizing::new(dsn(&connection,&password)?);
         let path=root(&app_setup)?;let pending=Pending{root:path.clone(),id:connection.id.clone(),committed:false};
         if client_certificate{crate::database_tls::save(&path,&connection.id,draft.ssl_client_cert.unwrap(),draft.ssl_client_key.unwrap())?;}
-        let tls=if connection.kind=="sqlite"{None}else{Some(crate::sql_tls::prepare(&path,&connection.id,&connection.ssl_mode,connection.ssl_root_cert.as_deref(),client_certificate)?)};
+        let tls=if connection.kind=="sqlite"{None}else{Some(crate::sql_tls::prepare_authenticated(&path,&connection.id,&connection.ssl_mode,connection.ssl_root_cert.as_deref(),client_certificate,connection.domain.as_deref())?)};
         Ok((path,crate::sql_mcp::runtime(&app_setup)?,connection,password,connection_dsn,tls,pending))
     }).await?;
     let tested=async {
+        if connection.auth_mode=="windowsDomain"&&password.is_empty(){return Err(workspace_error("INPUT_AUTH_REQUIRED","请在本机填写域账号密码"));}
         let mut process=crate::sql_mcp::Session::start(&app,&runtime,&connection_dsn,tls).await?;
         let tables=process.call("search_objects",json!({"object_type":"table","detail_level":"names","limit":100})).await?;
         Ok::<_,AppError>((tables,process.metadata()))
     }.await;
-    let (tables,mcp)=match tested{Ok(result)=>result,Err(error)=>return Ok(json!({"error":error,"authentication":if ["INPUT_AUTH_REQUIRED","INPUT_TLS_FAILED"].contains(&error.code) {Some(json!({"name":connection.name,"kind":connection.kind,"host":connection.host,"port":connection.port,"database":connection.database,"user":connection.user,"relativePath":connection.relative_path,"sslMode":connection.ssl_mode,"sslRootCert":connection.ssl_root_cert,"clientCertificate":connection.client_certificate}))}else{None}}))};
+    let (tables,mcp)=match tested{Ok(result)=>result,Err(error)=>return Ok(json!({"error":error,"authentication":if ["INPUT_AUTH_REQUIRED","INPUT_TLS_FAILED"].contains(&error.code) {Some(json!({"name":connection.name,"kind":connection.kind,"host":connection.host,"port":connection.port,"database":connection.database,"user":connection.user,"relativePath":connection.relative_path,"sslMode":connection.ssl_mode,"sslRootCert":connection.ssl_root_cert,"clientCertificate":connection.client_certificate,"authMode":connection.auth_mode,"domain":connection.domain}))}else{None}}))};
     let public=connection.public();
     pending=setup(move||{
         if connection.kind!="sqlite"{credential(&path,&connection.id)?.set_password(&password).map_err(|_|workspace_error("INPUT_CREDENTIAL_FAILED","数据库密码未能保存到系统凭据库"))?;}
@@ -127,10 +139,10 @@ pub(crate) async fn sql_connection_connect(app:AppHandle,conversation_id:String,
         if value.get("name").is_none(){value["name"]=value.get("database").or_else(||value.get("relativePath")).cloned().unwrap_or(json!("数据库"));}
         serde_json::from_value::<Draft>(value).map_err(|_|workspace_error("INPUT_INVALID","请提供数据库类型及连接信息"))
     }).await?;
-    let authentication=json!({"name":draft.name,"kind":draft.kind,"host":draft.host,"port":draft.port,"database":draft.database,"user":draft.user,"relativePath":draft.relative_path,"sslMode":draft.ssl_mode,"sslRootCert":draft.ssl_root_cert,"clientCertificate":draft.ssl_client_cert.is_some()||draft.client_certificate});
+    let authentication=json!({"name":draft.name,"kind":draft.kind,"host":draft.host,"port":draft.port,"database":draft.database,"user":draft.user,"relativePath":draft.relative_path,"sslMode":draft.ssl_mode,"sslRootCert":draft.ssl_root_cert,"clientCertificate":draft.ssl_client_cert.is_some()||draft.client_certificate,"authMode":draft.auth_mode,"domain":draft.domain});
     match sql_connection_save(app,conversation_id,draft).await{
         Ok(value)=>Ok(value),
-        Err(error)if crate::database_tls::requires_local_input(&error)=>Ok(json!({"error":error,"authentication":authentication,"readOnly":true})),
+        Err(error)if crate::database_tls::requires_local_input(&error)||error.code=="INPUT_AUTH_CONFIG"=>Ok(json!({"error":error,"authentication":authentication,"readOnly":true})),
         Err(error)=>Err(error),
     }
 }

@@ -1,6 +1,6 @@
 """Build current native development code without replacing the running program.
 
-Use a fresh target directory, locked offline dependencies and two build jobs.
+Use locked offline dependencies and two build jobs; optionally reuse a build cache.
 Explicitly supplied running processes retain their exact identities.
 """
 import argparse
@@ -69,6 +69,7 @@ def executable_version(file):
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--output", type=Path)
+parser.add_argument("--build-cache", type=Path, help="Reusable ignored Cargo cache; outputs are copied into the new build record")
 parser.add_argument("--preserve-process", action="append", required=True,
                     help="PID:creation-time identity of a running process to preserve")
 args = parser.parse_args()
@@ -78,6 +79,10 @@ assert root.is_relative_to(BUILDS.resolve()) and not root.exists()
 config = source_config(NATIVE)
 assert config["version"] == tomllib.loads((NATIVE / "Cargo.toml").read_text(encoding="utf-8"))["package"]["version"] == "0.2.2"
 root.mkdir(parents=True, exist_ok=False)
+target=(args.build_cache or root/"target").resolve()
+if args.build_cache:
+    assert target.is_relative_to((REPO/"artifacts/development-native-cache").resolve())
+    target.mkdir(parents=True,exist_ok=True)
 report = {"passed": False, "startedAt": datetime.now(timezone.utc).isoformat(), "pid": os.getpid(),
           "outsideWindowsJobs": True, "packageIdentity": None, "identifier": config["identifier"],
           "version": config["version"], "developmentBuild": True, "runtimeVerified": False,
@@ -98,11 +103,11 @@ try:
     for name in ("GEOD_UPDATE_ENDPOINT", "GEOD_UPDATE_PUBLIC_KEY", "GEOD_UPDATE_ARTIFACT_BASE"):
         env.pop(name, None)
     env["CARGO_BUILD_JOBS"] = "2"
-    env["CARGO_TARGET_DIR"] = str(root / "target")
+    env["CARGO_TARGET_DIR"] = str(target)
     receipt.write_text(json.dumps(report, indent=2), encoding="utf-8")
     with (root / "build.log").open("w", encoding="utf-8") as log:
         result = subprocess.run([shutil.which("cargo"), "build", "--locked", "--offline", "--jobs", "2",
-                                 "--manifest-path", str(NATIVE / "Cargo.toml"), "--target-dir", str(root / "target")],
+                                 "--manifest-path", str(NATIVE / "Cargo.toml"), "--target-dir", str(target)],
                                 cwd=NATIVE, env=env, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
                                 creationflags=subprocess.CREATE_NO_WINDOW)
     report["exitCode"] = result.returncode
@@ -112,7 +117,11 @@ try:
     assert not report["changedProductInputs"]
     assert digest(old_executable) == report["originalExecutableSha256"]
     assert protected() == report["protectedBefore"]
-    executable = root / "target/debug/geod-agent-desktop.exe"
+    executable = target / "debug/geod-agent-desktop.exe"
+    if args.build_cache:
+        frozen=root/"geod-agent-desktop.exe"
+        shutil.copy2(executable,frozen)
+        executable=frozen
     assert executable.is_file() and config["identifier"].encode() in executable.read_bytes()
     file_version = executable_version(executable)
     assert file_version == "0.2.2.0"

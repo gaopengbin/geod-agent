@@ -31,6 +31,9 @@ impl Drop for Material {
     }
 }
 pub(crate) fn prepare(root: &Path, id: &str, mode: &str, ca: Option<&str>, client: bool) -> Result<Material, AppError> {
+    prepare_authenticated(root,id,mode,ca,client,None)
+}
+pub(crate) fn prepare_authenticated(root: &Path, id: &str, mode: &str, ca: Option<&str>, client: bool, domain:Option<&str>) -> Result<Material, AppError> {
     let ca = validate_ca(ca, mode)?;
     let secret = if client { Some(crate::database_tls::load(root, id, mode)?) } else { None };
     let parent = root.join("tmp");
@@ -43,6 +46,7 @@ pub(crate) fn prepare(root: &Path, id: &str, mode: &str, ca: Option<&str>, clien
     lease.try_lock_exclusive().map_err(|_| failed())?;
     material.lease = Some(lease);
     let mut value = json!({"mode": mode});
+    if let Some(domain)=domain{value["ntlmDomain"]=json!(domain);}
     if let Some(ca) = &ca { value["ca"] = json!(ca); }
     if let Some(secret) = &secret { value["cert"] = json!(secret.certificate); value["key"] = json!(secret.key); }
     let bytes = zeroize::Zeroizing::new(serde_json::to_vec(&value).map_err(|_| failed())?);

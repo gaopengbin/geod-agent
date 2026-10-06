@@ -11,9 +11,12 @@ function nativeSettings() {
   if (statSync(file).size > 1024 * 1024) throw new Error('TLS session settings exceed limit');
   const value = JSON.parse(readFileSync(file, 'utf8'));
   if (!value || !['disable', 'require', 'verify-ca', 'verify-full'].includes(value.mode)
-      || Object.keys(value).some(key => !['mode', 'ca', 'cert', 'key'].includes(key))
+      || Object.keys(value).some(key => !['mode', 'ca', 'cert', 'key', 'ntlmDomain'].includes(key))
       || ['ca', 'cert', 'key'].some(key => value[key] !== undefined && typeof value[key] !== 'string')
       || Boolean(value.cert) !== Boolean(value.key)) throw new Error('Invalid TLS session settings');
+  if (value.ntlmDomain !== undefined && (typeof value.ntlmDomain !== 'string'
+      || !value.ntlmDomain.length || value.ntlmDomain.length > 255 || !/^[\p{L}\p{N}_.-]+$/u.test(value.ntlmDomain)
+      || !/[\p{L}\p{N}]/u.test(value.ntlmDomain))) throw new Error('Invalid SQL Server domain authentication settings');
   if (value.mode === 'disable' && (value.ca || value.cert)) throw new Error('TLS material requires encryption');
   return settings = value;
 }
@@ -21,6 +24,7 @@ function nativeSettings() {
 export function applyGeodTls(config, kind) {
   const value = nativeSettings();
   if (!value) return config; // Preserve the original standalone DBHub behavior.
+  if (value.ntlmDomain && kind !== 'sqlserver') throw new Error('Domain authentication requires SQL Server');
   if (kind === 'mysql' || kind === 'mariadb') {
     config.ssl = value.mode === 'disable' ? undefined : {
       rejectUnauthorized: value.mode !== 'require',
@@ -34,6 +38,7 @@ export function applyGeodTls(config, kind) {
     config.options.encrypt = value.mode !== 'disable';
     config.options.trustServerCertificate = value.mode === 'require';
     if (value.ca) config.options.cryptoCredentialsDetails = { ca: value.ca };
+    if (value.ntlmDomain) config.domain = value.ntlmDomain;
   } else if (kind === 'oracle') {
     config.sslServerDNMatch = value.mode === 'verify-full';
     config.sslAllowWeakDNMatch = false;
