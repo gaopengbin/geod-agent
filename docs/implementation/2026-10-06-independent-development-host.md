@@ -37,7 +37,7 @@ Windows 的 [AppData 虚拟化说明](https://learn.microsoft.com/en-us/windows/
 
 开发窗口已恢复。`development-restoration.json` 通过实际 WebView 和原生接口核对：31 会话原始 JSON、活动会话、待恢复条目和语言与原备份逐项一致；16 个图源和四个数据库连接一致；本地不限额、现金充值及历史路由开关保持。后台没有自动启动 AI、命令或下载。截图为 `development-restored.png`，已实际检查渲染。
 
-当前开发前台 75684、后台 96872、本地网关 86904 均不属于 Windows Job，也没有继承包身份，创建时间与可执行文件已记录。原生版本仍是 0.2.0，前端使用当前开发源码热更新，这不是 0.2.2 安装升级。`profiles-restored-c620fd19db338b89.json` 的独立只读观察确认普通用户的原生及 WebView 目录存在，Codex 私有来源保留。
+恢复时的开发前台 75684、后台 96872、本地网关 86904 均不属于 Windows Job，也没有继承包身份，创建时间与可执行文件已记录。该阶段原生版本是 0.2.0，前端使用当前开发源码热更新；后续 0.2.2 开发切换另记于本页收尾章节。`profiles-restored-c620fd19db338b89.json` 的独立只读观察确认普通用户的原生及 WebView 目录存在，Codex 私有来源保留。
 
 迁移后的原连接已实际读取：`restored-postgis-connections.json`。先确认 Docker 引擎处于停止状态，通过独立入口启动现有 Docker Desktop；启动回执为 `docker-start-d559a7fa52ad6970.json`。原 `geod-agent-postgis-test` 自动恢复为健康状态，仍使用固定镜像摘要和 `127.0.0.1:55438`，没有新建容器、修改连接配置或读取管理密码。
 
@@ -47,7 +47,7 @@ Windows 的 [AppData 虚拟化说明](https://learn.microsoft.com/en-us/windows/
 
 归属检查只复制 Job 查询句柄，未分配进程、修改限制、终止用户进程或读取进程内存。公开查询接口依据 [QueryInformationJobObject](https://learn.microsoft.com/en-us/windows/win32/api/jobapi2/nf-jobapi2-queryinformationjobobject) 和 [DuplicateHandle](https://learn.microsoft.com/en-us/windows/win32/api/handleapi/nf-handleapi-duplicatehandle)，私有句柄结构参考 [System Informer 的 phnt 源码](https://github.com/winsiderss/phnt/blob/master/ntexapi.h)。两项其他 Job 持有者查询权限不足已保留在回执，不将观察扩大为系统所有 Job 的完整验收。
 
-完整 26 次半小时测试已重新启动：`fixture-35e44abefd2f7567`，2026-10-06 06:34:18 UTC 开始，会经过北京时间午夜。独立控制器 66008（创建时间 1791268452.0874765）和专用后台 36592 均无宿主包身份、不属于 Windows Job；专用窗口已关闭，第一轮真实 DeepSeek/工作区工具完成。沿用 585 项当前源码逐项相符的 0.2.2 QA，不安装普通候选，不修改系统时间或到期时间。仍须全部周期、续期、停机、异常恢复、重开及清理完成后才能更新通过状态。
+新测试 `fixture-35e44abefd2f7567` 于 2026-10-06 06:34:18 UTC 启动，沿用 585 项当前源码逐项相符的 0.2.2 QA。用户随后收紧发布目标并要求停止重复测试，故在三次真实半小时周期和一次测试身份续期后提前结束，不把它记作完整 26 周期或跨日通过。`user-requested-early-stop.json` 记录范围调整；使用明确测试身份的原生接口禁用其计划并正常停止空闲后台，控制器随即执行原有清理流程。12 阶段清理全部通过，测试凭据/本轮计划/进程均已安全清理，原窗口、网关和历史保持。复用已有完整八周期、续期与异常恢复结果，不再追加整夜等待。
 
 旧 QA 的合成身份、个人渠道及本轮计划已清理，原始失败回执和运行历史保留。`finish-interrupted-schedule-qa.py` 先核对测试账户、60331 的明确本机身份来源及原拥有进程都不再存活；备份两个测试 SQLite 库后，按原生渠道移除合同删除明确拥有的系统凭据、渠道及默认选择，并禁用该测试计划，不改到期时间。删除后确认两个系统测试凭据不存在，没有读取真实登录或供应商凭据值，没有模型调用。
 
@@ -57,7 +57,7 @@ Windows 的 [AppData 虚拟化说明](https://learn.microsoft.com/en-us/windows/
 
 ## 当前源码的开发原生程序
 
-原恢复窗口运行 0.2.0 原生代码，前端热更新来自 0.2.2；因此另行构建当前源码的开发程序，待跨日测试终态后再切换，保留本轮保护基线。
+原恢复窗口运行 0.2.0 原生代码，前端热更新来自 0.2.2；因此另行构建当前源码的开发程序。按用户收紧要求，开发切换不再等待跨日测试，仅在实际确认用户程序空闲、保存旧程序后执行。
 
 `build-current-development-native.py` 已于 2026-10-06 07:10:01–07:16:14 UTC 完成一次独立构建。使用新的目标目录、锁定依赖、离线缓存和两个编译并行任务，没有运行安装器、替换运行中的程序或向编译器传入测试供应商凭据。
 
@@ -66,7 +66,7 @@ Windows 的 [AppData 虚拟化说明](https://learn.microsoft.com/en-us/windows/
 - 585 项产品源码与正在进行的完整 QA 相同，构建前后没有产品输入变化。
 - Windows 文件版本为 `0.2.2.0`，应用标识为 `dev.geod-agent.desktop`；独立开发程序 105,569,280 字节，SHA-256 为 `773853afb601321979283e6765e9346e814dc024c9efad2b302e813c067cc6d4`。
 - 原开发程序字节摘要不变；原前台、后台、网关、跨日顶层控制器及专用后台的 PID、创建时间和可执行路径保持。
-- 编译进程正常退出。新程序尚未启动，`runtimeVerified=false`；文件版本核验不代表新程序的实际登录、历史或模型流程已验收。
+- 编译进程正常退出。构建回执捕获时尚未启动，故其 `runtimeVerified=false` 保留；后续实际登录/历史与核心读取检查以 `development-switch-after.json` 为准，不追改构建时的事实。
 
 这份程序用于下一次开发原生验证，不改变固定的 0.2.2 安装包、免安装 ZIP 或 Linux 网关归档。新的用户资料恢复、原生用量历史及既有连接能力须在实际切换后再核对。
 
@@ -81,3 +81,13 @@ Windows 的 [AppData 虚拟化说明](https://learn.microsoft.com/en-us/windows/
 修补后的同范围检查 `profile-json-reference-audit-after-809403d0b35d1d72.json` 通过：510 份 JSON 中没有剩余的私有目录绝对引用，也没有不可读/无效 JSON。`workspace-rebase-user-state-preserved.json` 经真实 WebView 再次核对 31 会话原始内容、活动会话、待恢复记录、语言和后台 PID 不变。
 
 `restored-attachment-reads.json` 经当前原生程序实际读取同一账号保留的 51 个已发布文档/音频附件和七张图片，全部通过。原生文档读取校验全文摘要，返回的原文件/文本摘要和字符数与保存的元数据一致；图片读取校验原文件摘要并成功返回预览。检查没有重新解析、修改附件、发送模型请求或把正文/像素写进回执；这些附件也包括不在当前侧栏的原生历史记录，不能将数量当作 31 个会话中可见的附件数。
+
+## 本轮收尾与当前可体验版本
+
+2026-10-06 已完成开发原生切换，运行版本为 **0.2.2**，前端热更新继续保留，没有运行安装包。记录位于 `artifacts/development-native-current-20261006/build-b49aeaa1117d5bc3/`：`development-switch-before.json`、`development-binary-switch.json`、`development-switch-after.json`。前台 21560（创建时间 1791273163.762805）和后台 63532（1791273166.2586265）均无宿主包身份、不属于 Windows Job；原网关 86904 保持。
+
+一次必要的切换检查覆盖启动版本、登录、31 会话原始 JSON、待恢复条目、活动会话、语言、16 个图源、四个保存连接及空闲后台，全部保持。选取一个保存的 PostGIS 连接做一次原生/MCP 只读查询成功。完整记录原生命令已注册；本机旧网关未开放该功能时返回 `PAYMENT_HISTORY_UNAVAILABLE`，界面保留最近记录，不把未发布路由描述为已上线。没有新模型请求或追加全量回归。旧开发程序保存在同目录的 `previous-development-native-0.2.0.exe`；如需恢复，正常退出桌面及后台后将其复制回原 `src-tauri/target/debug/geod-agent-desktop.exe`，再用已有开发启动入口启动。
+
+迁移后的三份操作账本只读检查完成：17 个子任务、53 个计划、47 次运行和 33 个后台命令的当前配置没有旧私有目录引用。138 条历史事件含 935 个当时的路径值，作为历史保留，不改写日志或已确认命令的哈希。原始扫描回执 `sqlite-reference-audit-c24eb984601447b4.json` 的路径存在标记与后续 `classification.operationalPathCheckPassed` 分别表示历史路径存在和当前配置检查通过；不将两者混为全部路径都不存在。
+
+本轮交付范围按产品缺口页的“本轮必须完成 / 延后 / 已取消”执行。固定 0.2.2 发行候选未重建或改写；正式发布、八条只读记录路由上线仍待原有授权，真实收费和正式自动更新继续关闭。
