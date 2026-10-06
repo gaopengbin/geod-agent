@@ -30,7 +30,7 @@
 
 WFS 证据：`artifacts/wfs-inputs-20261003/acceptance.json` 19 项实际 native 验收通过；`ai-acceptance.json` 为真实模型经实际产品工具发现并读取、保存范围。详见 `2026-10-03-wfs-inputs.md`。
 
-OAuth 证据：`artifacts/mcp-oauth-20261003/acceptance.json`。通过实际 native 调用及本机协议服务验证发现、动态注册、PKCE、错误 state/issuer、过期及 401 刷新、取消重授权保留旧凭据、移除连接器取消回调。支持公共客户端自动注册或手工 client ID；未声称已完成外部提供方账号、机密客户端 secret 或服务端撤权。
+OAuth 证据：`artifacts/mcp-oauth-20261003/acceptance.json`。通过实际 native 调用及本机协议服务验证发现、动态注册、PKCE、错误 state/issuer、过期及 401 刷新、取消重授权保留旧凭据、移除连接器取消回调。公共客户端自动注册和手工 client ID 的原有结果继续有效。2026-10-06 开发版补充预注册客户端密钥和固定本机回调端口；本机协议已验收 Basic / POST 密钥交换、重连及刷新、同端口重复授权和旧授权记录兼容，详见 `2026-10-04-browser-elicitation.md`。外部提供方账号、服务端撤权仍未完成。
 
 双向 TLS 证据：`artifacts/postgis-mtls-20261003/acceptance.json` 16 项、`cancel-acceptance.json` 及 `ai-acceptance.json` 均通过。真实 pgEdge MCP 连接强制客户端证书的 Docker PostGIS；私钥以 Windows DPAPI 保存，真实模型复用连接读取属性并保存范围。详见 `2026-10-03-postgis-client-tls.md`。
 

@@ -2151,5 +2151,15 @@
   "填写域名、域用户名和密码。": "Enter the domain, domain username and password.",
   "所选数据库不支持此认证方式": "This database does not support this authentication method",
   "请填写有效的 Windows 域名": "Enter a valid Windows domain",
-  "请在本机填写域账号密码": "Enter the domain account password locally"
+  "请在本机填写域账号密码": "Enter the domain account password locally",
+  "客户端密钥": "Client secret",
+  "本机回调端口": "Local callback port",
+  "仅在提供方要求时填写": "Enter only when required by the provider",
+  "留空自动分配端口": "Leave blank for an automatic port",
+  "提供方要求固定回调地址时，登记 http://127.0.0.1:{0}/callback。": "When the provider requires a fixed callback, register http://127.0.0.1:{0}/callback.",
+  "客户端密钥格式无效": "Invalid client secret format",
+  "填写客户端密钥时，请同时提供客户端 ID": "Enter the client ID together with the client secret",
+  "本机回调端口必须为 1 到 65535": "The local callback port must be between 1 and 65535",
+  "无法准备本机授权回调，请检查端口是否被占用": "Cannot prepare the local callback. Check whether the port is already in use.",
+  "MCP 授权身份与客户端配置不一致，请重新授权": "The OAuth identity does not match the client configuration. Authorize again."
 }

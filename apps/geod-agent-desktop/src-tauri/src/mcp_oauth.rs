@@ -3,35 +3,75 @@
 use crate::{extensions::ExtensionState, services, AppError};
 use async_trait::async_trait;
 use fs2::FileExt;
-use rmcp::transport::auth::{AuthError,AuthorizationManager,AuthorizationRequest,AuthorizationSession,CredentialRefreshGuard,CredentialStore,InMemoryCredentialStore,OAuthHttpClient,OAuthHttpClientFuture,OAuthHttpRequest,StoredCredentials};
+use rmcp::transport::auth::{AuthError,AuthorizationManager,AuthorizationRequest,AuthorizationSession,CredentialRefreshGuard,CredentialStore,InMemoryCredentialStore,OAuthClientConfig,OAuthHttpClient,OAuthHttpClientFuture,OAuthHttpRequest,StoredCredentials};
+use serde::{Deserialize,Serialize};
 use serde_json::{json,Value};
 use sha2::{Digest,Sha256};
-use std::{collections::BTreeMap,fs::OpenOptions,path::PathBuf,sync::{Arc,Mutex,atomic::{AtomicBool,Ordering}},time::{Duration,Instant}};
+use std::{collections::BTreeMap,fs::OpenOptions,io::Write,path::PathBuf,sync::{Arc,Mutex,atomic::{AtomicBool,Ordering}},time::{Duration,Instant}};
 use tauri::{AppHandle,Manager,State};
-use tiny_http::{Header,Response,Server,StatusCode};
+use tiny_http::Server;
 use uuid::Uuid;
 
 fn error(code:&'static str,message:&str)->AppError{AppError{code,message:message.into()}}
 fn auth_error(_:AuthError)->AppError{error("MCP_AUTH_REQUIRED","MCP 授权未完成或已失效，请在连接器中重新授权")}
+fn callback_reply(request:tiny_http::Request,status:u16,text:&str){
+    // tiny_http ignores Connection headers on Response. A fixed callback port
+    // needs a closing response so browsers cannot reuse a finished listener.
+    let mut writer=request.into_writer();
+    let reason=if status==400{"Bad Request"}else{"OK"};
+    let _=write!(writer,"HTTP/1.1 {status} {reason}\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Length: {}\r\nConnection: close\r\nCache-Control: no-store\r\nContent-Security-Policy: default-src 'none'\r\n\r\n{text}",text.len());
+    let _=writer.flush();
+}
 
 #[derive(Clone)]
 pub(crate) struct VaultStore {pub path:PathBuf,pub id:String}
+#[derive(Serialize,Deserialize)]
+struct ClientIdentity {client_id:String,client_secret:String,redirect_uri:String,issuer:Option<String>}
+impl ClientIdentity {
+    fn matches(&self,credentials:&StoredCredentials)->bool{self.client_id==credentials.client_id&&self.issuer==credentials.issuer}
+}
+impl Drop for ClientIdentity {fn drop(&mut self){use zeroize::Zeroize;self.client_secret.zeroize();}}
+// The SDK stores tokens only. Keep configured client credentials in the same
+// vault entry so token rotation cannot discard them, and read legacy entries.
+#[derive(Serialize,Deserialize)]
+#[serde(untagged)]
+enum SavedAuthorization {Configured{credentials:StoredCredentials,client:ClientIdentity},Legacy(StoredCredentials)}
 impl VaultStore {
     fn entry(&self)->Result<keyring::Entry,AuthError>{keyring::Entry::new("GeoD-MCP-OAuth",&format!("{:x}:{}",Sha256::digest(self.path.to_string_lossy().as_bytes()),self.id)).map_err(|_|AuthError::CredentialStoreError("Vault unavailable".into()))}
+    fn read(&self)->Result<Option<SavedAuthorization>,AuthError>{match self.entry()?.get_password(){
+        Ok(value)=>{let value=zeroize::Zeroizing::new(value);serde_json::from_str(&value).map(Some).map_err(|_|AuthError::CredentialStoreError("Unreadable credential".into()))},
+        Err(keyring::Error::NoEntry)=>Ok(None),Err(_)=>Err(AuthError::CredentialStoreError("Vault read failed".into())),
+    }}
+    fn write(&self,saved:SavedAuthorization)->Result<(),AuthError>{
+        let value=zeroize::Zeroizing::new(serde_json::to_string(&saved).map_err(|_|AuthError::CredentialStoreError("Credential invalid".into()))?);
+        if value.len()>48*1024{return Err(AuthError::CredentialStoreError("Credential too large".into()));}
+        self.entry()?.set_password(&value).map_err(|_|AuthError::CredentialStoreError("Vault write failed".into()))
+    }
+    async fn snapshot(&self)->Result<Option<SavedAuthorization>,AuthError>{
+        let store=self.clone();tauri::async_runtime::spawn_blocking(move||store.read()).await.map_err(|_|AuthError::CredentialStoreError("Vault task failed".into()))?
+    }
+    async fn restore(&self,saved:SavedAuthorization)->Result<(),AuthError>{
+        let store=self.clone();tauri::async_runtime::spawn_blocking(move||store.write(saved)).await.map_err(|_|AuthError::CredentialStoreError("Vault task failed".into()))?
+    }
+    async fn configured_client(&self)->Result<Option<OAuthClientConfig>,AuthError>{
+        match self.snapshot().await? {
+            Some(SavedAuthorization::Configured{credentials,client})=>{
+                if !client.matches(&credentials){return Err(AuthError::CredentialStoreError("OAuth client binding changed".into()));}
+                Ok(Some(OAuthClientConfig::new(&client.client_id,&client.redirect_uri).with_client_secret(&client.client_secret).with_scopes(credentials.granted_scopes)))
+            },
+            _=>Ok(None),
+        }
+    }
 }
 #[async_trait]
 impl CredentialStore for VaultStore {
     async fn load(&self)->Result<Option<StoredCredentials>,AuthError>{
-        let store=self.clone();tauri::async_runtime::spawn_blocking(move||match store.entry()?.get_password(){
-            Ok(value)=>serde_json::from_str(&value).map(Some).map_err(|_|AuthError::CredentialStoreError("Unreadable credential".into())),
-            Err(keyring::Error::NoEntry)=>Ok(None),Err(_)=>Err(AuthError::CredentialStoreError("Vault read failed".into())),
-        }).await.map_err(|_|AuthError::CredentialStoreError("Vault task failed".into()))?
+        Ok(self.snapshot().await?.map(|saved|match saved{SavedAuthorization::Configured{credentials,..}|SavedAuthorization::Legacy(credentials)=>credentials}))
     }
     async fn save(&self,credentials:StoredCredentials)->Result<(),AuthError>{
         let store=self.clone();tauri::async_runtime::spawn_blocking(move||{
-            let value=serde_json::to_string(&credentials).map_err(|_|AuthError::CredentialStoreError("Credential invalid".into()))?;
-            if value.len()>48*1024{return Err(AuthError::CredentialStoreError("Credential too large".into()));}
-            store.entry()?.set_password(&value).map_err(|_|AuthError::CredentialStoreError("Vault write failed".into()))
+            let saved=match store.read()?{Some(SavedAuthorization::Configured{client,..}) if client.matches(&credentials)=>SavedAuthorization::Configured{credentials,client},_=>SavedAuthorization::Legacy(credentials)};
+            store.write(saved)
         }).await.map_err(|_|AuthError::CredentialStoreError("Vault task failed".into()))?
     }
     async fn clear(&self)->Result<(),AuthError>{
@@ -79,8 +119,9 @@ impl OAuthHttpClient for NativeHttp {
 }
 pub(crate) async fn manager(path:PathBuf,id:String,url:&str)->Result<AuthorizationManager,AppError>{
     let mut manager=AuthorizationManager::new_with_oauth_http_client(url,Arc::new(NativeHttp)).await.map_err(auth_error)?;
-    manager.set_credential_store(VaultStore{path,id});
+    let store=VaultStore{path,id};manager.set_credential_store(store.clone());
     if !manager.initialize_from_store().await.map_err(auth_error)?{return Err(error("MCP_AUTH_REQUIRED","此 MCP 需要浏览器授权"));}
+    if let Some(client)=store.configured_client().await.map_err(auth_error)?{manager.configure_client(client).map_err(auth_error)?;}
     Ok(manager)
 }
 
@@ -98,14 +139,18 @@ impl OAuthState {
 fn public(id:&str,pending:&Pending)->Value{json!({"authorizationId":id,"connectorId":pending.connector_id,"state":pending.state,"message":pending.message})}
 
 #[tauri::command]
-pub(crate) async fn mcp_oauth_start(app:AppHandle,state:State<'_,OAuthState>,id:String,client_id:Option<String>,scopes:Option<Vec<String>>)->Result<Value,AppError>{
+pub(crate) async fn mcp_oauth_start(app:AppHandle,state:State<'_,OAuthState>,id:String,client_id:Option<String>,scopes:Option<Vec<String>>,client_secret:Option<String>,callback_port:Option<u16>)->Result<Value,AppError>{
     let owner=services::current_user_id(&app.state::<services::ServiceState>()).map_err(|e|error(e.code,&e.message))?;
     let extensions=app.state::<ExtensionState>();
     let (path,url)=extensions.oauth_target(&id,&owner)?;
     let scopes=scopes.unwrap_or_default();
     if scopes.len()>20||scopes.iter().any(|v|v.is_empty()||v.len()>200||v.chars().any(char::is_whitespace)){return Err(error("MCP_AUTH_INVALID","授权范围格式无效"));}
     if client_id.as_ref().is_some_and(|v|v.is_empty()||v.len()>2048){return Err(error("MCP_AUTH_INVALID","客户端 ID 无效"));}
-    let server=Server::http("127.0.0.1:0").map_err(|_|error("MCP_AUTH_CALLBACK","无法准备本机授权回调"))?;
+    let client_secret=client_secret.filter(|value|!value.is_empty()).map(zeroize::Zeroizing::new);
+    if client_secret.as_ref().is_some_and(|value|value.len()>8192||value.contains('\0')){return Err(error("MCP_AUTH_INVALID","客户端密钥格式无效"));}
+    if client_secret.is_some()&&client_id.is_none(){return Err(error("MCP_AUTH_INVALID","填写客户端密钥时，请同时提供客户端 ID"));}
+    if callback_port==Some(0){return Err(error("MCP_AUTH_INVALID","本机回调端口必须为 1 到 65535"));}
+    let server=Server::http(("127.0.0.1",callback_port.unwrap_or(0))).map_err(|_|error("MCP_AUTH_CALLBACK","无法准备本机授权回调，请检查端口是否被占用"))?;
     let address=server.server_addr().to_ip().ok_or_else(||error("MCP_AUTH_CALLBACK","本机授权回调无效"))?;
     let redirect=format!("http://127.0.0.1:{}/callback",address.port());
     let memory=InMemoryCredentialStore::new();
@@ -115,8 +160,10 @@ pub(crate) async fn mcp_oauth_start(app:AppHandle,state:State<'_,OAuthState>,id:
     let expected_issuer=resolution.metadata.issuer.clone();
     let require_issuer=resolution.metadata.additional_fields.get("authorization_response_iss_parameter_supported").and_then(Value::as_bool)==Some(true);
     manager.set_metadata(resolution.metadata);
+    let configured_client=client_secret.as_ref().map(|secret|ClientIdentity{client_id:client_id.as_ref().unwrap().clone(),client_secret:secret.to_string(),redirect_uri:redirect.clone(),issuer:expected_issuer.clone()});
     let mut request=AuthorizationRequest::new(&redirect).with_client_name("GeoD Agent").with_scopes(scopes);
     if let Some(client_id)=client_id {request=request.with_preregistered_client(client_id);}
+    if let Some(secret)=client_secret {request=request.with_client_secret(secret.as_str());}
     let session=AuthorizationSession::new(manager,request).await.map_err(|(_,e)|auth_error(e))?;
     let authorization_url=session.get_authorization_url().to_owned();
     let expected_state=reqwest_mcp::Url::parse(&authorization_url).map_err(|_|error("MCP_AUTH_INVALID","授权地址无效"))?.query_pairs().find(|(key,_)|key=="state").map(|(_,value)|value.into_owned()).ok_or_else(||error("MCP_AUTH_INVALID","授权流程缺少校验值"))?;
@@ -145,7 +192,7 @@ pub(crate) async fn mcp_oauth_start(app:AppHandle,state:State<'_,OAuthState>,id:
                 && request.method()==&tiny_http::Method::Get
                 && !request.headers().iter().any(|h|h.field.equiv("Origin"))
                 && request.headers().iter().any(|h|h.field.equiv("Host")&&h.value.as_str()==address.to_string());
-            if !valid {let _=request.respond(Response::from_string("Invalid authorization callback").with_status_code(StatusCode(400)));continue;}
+            if !valid {callback_reply(request,400,"Invalid authorization callback");continue;}
             let callback=callback.unwrap();
             if callback.query_pairs().any(|(k,_)|k=="error") {
                 outcome=Err(error("MCP_AUTH_DENIED","浏览器授权未获批准"));
@@ -159,17 +206,18 @@ pub(crate) async fn mcp_oauth_start(app:AppHandle,state:State<'_,OAuthState>,id:
                     let current=services::current_user_id(&app.state::<services::ServiceState>()).map_err(|e|error(e.code,&e.message))?;
                     if current!=owner{return Err(error("MCP_AUTH_CANCELLED","账号已切换，授权未保存"));}
                     {let mut values=pending.lock().map_err(|_|error("MCP_AUTH_BUSY","授权状态暂时不可用"))?;if cancelled.load(Ordering::Acquire){return Err(error("MCP_AUTH_CANCELLED","授权已取消"));}values.get_mut(&aid).unwrap().state="saving";}
-                    let previous=store.load().await.map_err(auth_error)?;
-                    store.save(credentials).await.map_err(auth_error)?;
+                    let previous=store.snapshot().await.map_err(auth_error)?;
+                    let saved=if let Some(client)=configured_client{if !client.matches(&credentials){return Err(error("MCP_AUTH_REQUIRED","MCP 授权身份与客户端配置不一致，请重新授权"));}SavedAuthorization::Configured{credentials,client}}else{SavedAuthorization::Legacy(credentials)};
+                    store.restore(saved).await.map_err(auth_error)?;
                     if let Err(error)=app.state::<ExtensionState>().activate_oauth(&id,&owner,true){
-                        if error.code!="MCP_NOT_FOUND" {if let Some(previous)=previous {let _=store.save(previous).await;}else{let _=store.clear().await;}}else{let _=store.clear().await;}
+                        if error.code!="MCP_NOT_FOUND" {if let Some(previous)=previous {let _=store.restore(previous).await;}else{let _=store.clear().await;}}else{let _=store.clear().await;}
                         return Err(error);
                     }
                     Ok(())
                 });
             }
             let text=if outcome.is_ok(){"GeoD Agent authorization completed. You may close this page."}else{"GeoD Agent authorization was not saved. Return to the app and retry."};
-            let _=request.respond(Response::from_string(text).with_header(Header::from_bytes("Cache-Control","no-store").unwrap()).with_header(Header::from_bytes("Content-Security-Policy","default-src 'none'").unwrap()));
+            callback_reply(request,200,text);
             break;
         }
         if let Ok(mut values)=pending.lock(){if let Some(value)=values.get_mut(&aid){

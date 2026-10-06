@@ -304,7 +304,7 @@ export const api = {
   skillRemoteStage: (source: string) => invoke<RemoteSkillStage>("skill_remote_stage", { source }),
   mcpAdd: async (name: string, url: string, options: McpConnectionOptions = {}) => { await invoke<ExtensionOverview>("mcp_add", { name, url, ...options }); return api.extensionsList(); },
   mcpRemove: async (id: string) => { await invoke<ExtensionOverview>("mcp_remove", { id }); return api.extensionsList(); },
-  mcpOauthStart: (id:string,clientId?:string,scopes?:string[]) => invoke<McpAuthorization>("mcp_oauth_start",{id,clientId,scopes}),
+  mcpOauthStart: (id:string,clientId?:string,scopes?:string[],clientSecret?:string,callbackPort?:number) => invoke<McpAuthorization>("mcp_oauth_start",{id,clientId,scopes,clientSecret,callbackPort}),
   mcpOauthStatus: (authorizationId:string) => invoke<McpAuthorization>("mcp_oauth_status",{authorizationId}),
   mcpOauthPending: (id:string) => invoke<McpAuthorization|null>("mcp_oauth_pending",{id}),
   mcpOauthOpen: (authorizationId:string) => invoke<void>("mcp_oauth_open",{authorizationId}),
