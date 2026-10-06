@@ -39,6 +39,10 @@ Windows 的 [AppData 虚拟化说明](https://learn.microsoft.com/en-us/windows/
 
 当前开发前台 75684、后台 96872、本地网关 86904 均不属于 Windows Job，也没有继承包身份，创建时间与可执行文件已记录。原生版本仍是 0.2.0，前端使用当前开发源码热更新，这不是 0.2.2 安装升级。`profiles-restored-c620fd19db338b89.json` 的独立只读观察确认普通用户的原生及 WebView 目录存在，Codex 私有来源保留。
 
+迁移后的原连接已实际读取：`restored-postgis-connections.json`。先确认 Docker 引擎处于停止状态，通过独立入口启动现有 Docker Desktop；启动回执为 `docker-start-d559a7fa52ad6970.json`。原 `geod-agent-postgis-test` 自动恢复为健康状态，仍使用固定镜像摘要和 `127.0.0.1:55438`，没有新建容器、修改连接配置或读取管理密码。
+
+真实开发 WebView 经 Rust IPC 使用四个保存的连接，调用内置 pgEdge MCP 对 `demo.boundaries_3857.geom` 分别读取一条样例、字段及坐标系。四项均只读、返回 `EPSG:3857`，实际 MCP 工具调用成功，样例摘要相同；无需重新输入系统保存的连接密码。31 会话原始 JSON、待恢复记录、活动会话、语言、图源数、连接配置及后台 PID 前后保持。没有模型请求、边界导入或数据库写入；这四个原连接没有启用 TLS，不将本轮称为迁移后全部证书类型验收。
+
 前端开发服务器 26584 和测试 Node 控制进程 59040 在后续观察中各属于一个 Job。`node-job-owners-3218937baa209d9a.json` 进一步读取实际 Job 成员及持有者：两个已观察 Job 的成员均仅有各自 Node，句柄也由对应 Node 持有，限制标志为 15360；没有观察到 Codex 持有这两个 Job 的句柄。不能将 Node 称为所有 Job 之外，但这两个实际 Job 没有显示宿主归属。
 
 归属检查只复制 Job 查询句柄，未分配进程、修改限制、终止用户进程或读取进程内存。公开查询接口依据 [QueryInformationJobObject](https://learn.microsoft.com/en-us/windows/win32/api/jobapi2/nf-jobapi2-queryinformationjobobject) 和 [DuplicateHandle](https://learn.microsoft.com/en-us/windows/win32/api/handleapi/nf-handleapi-duplicatehandle)，私有句柄结构参考 [System Informer 的 phnt 源码](https://github.com/winsiderss/phnt/blob/master/ntexapi.h)。两项其他 Job 持有者查询权限不足已保留在回执，不将观察扩大为系统所有 Job 的完整验收。
