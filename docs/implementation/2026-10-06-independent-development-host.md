@@ -39,7 +39,9 @@ Windows 的 [AppData 虚拟化说明](https://learn.microsoft.com/en-us/windows/
 
 当前开发前台 75684、后台 96872、本地网关 86904 均不属于 Windows Job，也没有继承包身份，创建时间与可执行文件已记录。原生版本仍是 0.2.0，前端使用当前开发源码热更新，这不是 0.2.2 安装升级。`profiles-restored-c620fd19db338b89.json` 的独立只读观察确认普通用户的原生及 WebView 目录存在，Codex 私有来源保留。
 
-前端开发服务器 26584 在后续观察中属于一个 Job，未出现在当前 Codex 命令的 Job 列表中，包身份为空，原启动器已退出；这一观察不足以将它称为所有 Job 之外。具体回执为 `vite-job-observation.json`。不为取得更强结论终止用户正在使用的 Codex。
+前端开发服务器 26584 和测试 Node 控制进程 59040 在后续观察中各属于一个 Job。`node-job-owners-3218937baa209d9a.json` 进一步读取实际 Job 成员及持有者：两个已观察 Job 的成员均仅有各自 Node，句柄也由对应 Node 持有，限制标志为 15360；没有观察到 Codex 持有这两个 Job 的句柄。不能将 Node 称为所有 Job 之外，但这两个实际 Job 没有显示宿主归属。
+
+归属检查只复制 Job 查询句柄，未分配进程、修改限制、终止用户进程或读取进程内存。公开查询接口依据 [QueryInformationJobObject](https://learn.microsoft.com/en-us/windows/win32/api/jobapi2/nf-jobapi2-queryinformationjobobject) 和 [DuplicateHandle](https://learn.microsoft.com/en-us/windows/win32/api/handleapi/nf-handleapi-duplicatehandle)，私有句柄结构参考 [System Informer 的 phnt 源码](https://github.com/winsiderss/phnt/blob/master/ntexapi.h)。两项其他 Job 持有者查询权限不足已保留在回执，不将观察扩大为系统所有 Job 的完整验收。
 
 完整 26 次半小时测试已重新启动：`fixture-35e44abefd2f7567`，2026-10-06 06:34:18 UTC 开始，会经过北京时间午夜。独立控制器 66008（创建时间 1791268452.0874765）和专用后台 36592 均无宿主包身份、不属于 Windows Job；专用窗口已关闭，第一轮真实 DeepSeek/工作区工具完成。沿用 585 项当前源码逐项相符的 0.2.2 QA，不安装普通候选，不修改系统时间或到期时间。仍须全部周期、续期、停机、异常恢复、重开及清理完成后才能更新通过状态。
 
