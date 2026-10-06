@@ -1,0 +1,37 @@
+.app-message-trigger { position: relative; width: 30px; height: 28px; color: var(--app-soft-text); }
+.app-message-dot { position: absolute; top: 4px; right: 5px; width: 6px; height: 6px; border-radius: 50%; background: var(--app-blue); box-shadow: 0 0 0 2px var(--app-frame); }
+.permission-dialog.message-center-dialog { width: min(600px, calc(100vw - 32px)); padding: 22px; display: flex; flex-direction: column; max-height: calc(100dvh - 48px); }
+.message-center-dialog .dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.message-center-dialog .dialog-heading h2 { margin: 0; }
+.message-center-dialog .dialog-heading h2 { display: flex; align-items: center; gap: 9px; }
+.message-center-dialog > p { margin: 10px 0 0; color: var(--app-soft-text); font-size: 13px; line-height: 1.6; }
+.message-count { color: var(--app-soft-text); font-size: 12px; font-weight: 400; }
+.message-center-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 16px 0 10px; }
+.message-center-toolbar > div { display: flex; align-items: center; gap: 3px; }
+.message-center-toolbar [aria-pressed=true] { background: var(--app-hover); }
+.message-center-scroll { max-height: 55vh; min-height: 180px; flex-shrink: 1; border-top: 1px solid var(--app-line); }
+.message-center-item { border-bottom: 1px solid var(--app-line); }
+.message-center-summary { display: flex; width: 100%; align-items: center; gap: 10px; padding: 14px 6px; color: var(--app-text); background: transparent; border: 0; text-align: left; cursor: pointer; border-radius: 6px; }
+.message-center-summary:hover { background: var(--app-hover); }
+.message-center-summary:focus-visible { outline: 2px solid var(--app-blue); outline-offset: -2px; }
+.message-center-summary > span:nth-child(2) { flex: 1; min-width: 0; }
+.message-center-summary strong { display: block; font-size: 14px; line-height: 1.5; font-weight: 500; overflow-wrap: anywhere; }
+.message-center-item.is-unread strong { font-weight: 600; }
+.message-center-summary small { display: block; margin-top: 4px; color: var(--app-soft-text); font-size: 12px; }
+.message-center-summary svg { flex-shrink: 0; color: var(--app-soft-text); transition: transform 160ms ease; }
+.message-center-summary[aria-expanded=true] > svg { transform: rotate(180deg); }
+.message-read-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; background: transparent; }
+.is-unread .message-read-dot { background: var(--app-blue); }
+.message-center-body { padding: 0 20px 16px 22px; }
+.message-center-dialog .message-center-body p { margin: 0 0 14px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; line-height: 1.7; color: var(--app-soft-text); }
+.message-center-empty { display: flex; min-height: 210px; align-items: center; justify-content: center; flex-direction: column; gap: 10px; padding: 24px; color: var(--app-soft-text); text-align: center; font-size: 14px; }
+.message-center-empty strong { color: var(--app-text); font-size: 14px; font-weight: 500; }
+.message-center-empty p { margin: 0; font-size: 13px; line-height: 1.6; }
+.message-center-error { margin: 8px 0; color: var(--app-warning, #b45309); font-size: 13px; line-height: 1.5; }
+.app-message-toast { position: fixed; right: 18px; bottom: 18px; z-index: 80; width: min(360px, calc(100vw - 36px)); display: flex; align-items: flex-start; gap: 10px; padding: 14px; border: 1px solid var(--app-line); border-radius: 12px; background: var(--app-surface); color: var(--app-text); box-shadow: 0 8px 28px #0002; }
+.app-message-toast > svg { margin-top: 3px; flex-shrink: 0; color: var(--app-soft-text); }
+.app-message-toast > div { min-width: 0; flex: 1; }
+.app-message-toast strong { font-size: 14px; line-height: 1.5; font-weight: 600; }
+.app-message-toast p { font-size: 13px; line-height: 1.5; margin: 5px 0; color: var(--app-soft-text); overflow-wrap: anywhere; }
+@media(max-width:480px) { .permission-dialog.message-center-dialog { padding: 16px; } .message-center-toolbar { flex-wrap: wrap; } }
+@media(prefers-reduced-motion:reduce) { .message-center-summary svg { transition: none; } }

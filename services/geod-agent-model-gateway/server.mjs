@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import { openLedger } from "./ledger.mjs";
 import {readSponsors,sponsorCatalogue,sponsorRoute,sponsorReservation,SponsorError} from './sponsors.mjs';
 import { openEventStore, validateEvents } from "./events-store.mjs";
+import { MessageError, openMessageStore } from "./messages-store.mjs";
 import { withRangeTools } from "../../packages/codex-protocol/range-tools.mjs";
 import { codexRequest, codexResult, ContractError } from "../../packages/codex-protocol/codex-contract.mjs";
 import {channelSnapshot,providerRequest,generateProvider} from '../../packages/codex-protocol/provider-adapter.mjs';
@@ -206,7 +207,7 @@ async function identity(config, token, fetchImpl) {
   if (!active || typeof active.userId !== "string" || !active.userId.length || active.userId.length>160 || /[\x00-\x1f]/.test(active.userId) || active.clientId !== "geod-agent-desktop" || active.scope !== "geod:agent" || !Number.isSafeInteger(active.expiresAt) || active.expiresAt <= Date.now()) throw new HttpError(401, "UNAUTHORIZED");
   return active.userId;
 }
-function publicError(error) { return error instanceof HttpError || error instanceof ContractError || error instanceof SponsorError || error instanceof PaymentError ? error : new HttpError(500, "INTERNAL_ERROR"); }
+function publicError(error) { return error instanceof HttpError || error instanceof ContractError || error instanceof SponsorError || error instanceof PaymentError || error instanceof MessageError ? error : new HttpError(500, "INTERNAL_ERROR"); }
 
 function sponsoredSnapshot(route){
   const {provider,model}=route;
@@ -239,13 +240,14 @@ export function createGatewayServer(config, { fetchImpl = fetch } = {}) {
   // retain their independent budgets; the ordinary test policy stays unlimited.
   const ledger = openLedger(config.dbPath, config.tokenLimit, config.secret, creditWalletEnforced(config)?false:config.quotaEnforced);
   const eventStore = openEventStore(config.dbPath);
+  const messageStore = openMessageStore(config.dbPath);
   const eventRates = new Map();
   const authenticate=async request=>{
     try{return await identity(config,request.headers.authorization?.match(/^Bearer (.+)$/)?.[1]??'',fetchImpl);}
     catch(cause){const safe=publicError(cause);throw new PaymentError(safe.code,safe.code,safe.status);}
   };
   let payments;
-  try{payments=createPaymentHostCandidate(config,ledger,authenticate);}catch(cause){eventStore.close();ledger.close();throw cause;}
+  try{payments=createPaymentHostCandidate(config,ledger,authenticate);}catch(cause){messageStore.close();eventStore.close();ledger.close();throw cause;}
   const server = createServer(async (request, response) => {
     try {
       const url = new URL(request.url, "http://localhost");
@@ -254,6 +256,14 @@ export function createGatewayServer(config, { fetchImpl = fetch } = {}) {
       const bearer = request.headers.authorization?.match(/^Bearer (.+)$/)?.[1] ?? "";
       const userId = await identity(config, bearer, fetchImpl);
       payments.onSignIn(userId);
+      if (request.method === 'GET' && url.pathname === '/api/agent/messages') {
+        return json(response, 200, messageStore.list(userId, url.searchParams.get('clientVersion') ?? '0.0.0'));
+      }
+      if (request.method === 'POST' && url.pathname === '/api/agent/messages/read') {
+        const body = await readJson(request, 16384);
+        if (body?.accountId !== userId) throw new HttpError(409, 'ACCOUNT_CHANGED');
+        return json(response, 200, messageStore.markRead(userId, body.clientVersion, body.messageIds));
+      }
       if (request.method === 'POST' && url.pathname === '/api/agent/events') {
         const minute = Math.floor(Date.now() / 60000);
         for (const [id, rate] of eventRates) if (rate.minute !== minute) eventRates.delete(id);
@@ -387,7 +397,7 @@ export function createGatewayServer(config, { fetchImpl = fetch } = {}) {
       return json(response, safe.status, { error: safe.code });
     }
   });
-  server.on("close", () => { payments.close(); eventStore.close(); ledger.close(); });
+  server.on("close", () => { payments.close(); messageStore.close(); eventStore.close(); ledger.close(); });
   return server;
 }
 

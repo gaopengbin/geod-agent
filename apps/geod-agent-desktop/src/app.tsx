@@ -5,6 +5,7 @@ import { CacheManager } from "./cache-manager";
 import { BackgroundDialog, BACKGROUND_OPEN } from "./background-dialog";
 import { LanguageDialog, LANGUAGE_OPEN } from "./language-dialog";
 import { DesktopSettingsDialog, DESKTOP_SETTINGS_OPEN, announceDesktopUpdate } from "./desktop-settings-dialog";
+import { MessageCenter } from "./message-center";
 import {PaymentDialog,PAYMENT_OPEN} from './payment-dialog';
 import { Tiles3dConnections } from "./tiles3d-connections";
 import { TILES3D_CONNECTION_OPEN } from "./data-connection-tools";
@@ -346,6 +347,7 @@ export function App() {
       {focusedConversation && mainView === "conversation" && <Button variant="ghost" size="sm" className="empty-map-entry" onClick={revealMap}><MapTrifold size={16}/>{t("地图选范围")}</Button>}
       <WorkspaceControls layout={layout} focused={focusedConversation || mainView !== "conversation"} tasksOpen={resultsOpen} onTasksChange={setResultsOpen}/>
       <div className="header-right">
+        {desktopAvailable&&<MessageCenter accountId={accountId} desktop={desktopAvailable}/>}
         {!desktopAvailable && <UiTooltip content={t("浏览器仅用于界面预览，本机操作请使用桌面应用。")} side="bottom"><span className="preview-label">{t("界面预览")}</span></UiTooltip>}
         {desktopAvailable && <div className="window-controls">
           <UiTooltip content={t("最小化")} side="bottom"><button type="button" aria-label={t("最小化")} onClick={() => void getCurrentWindow().minimize()}><Minus size={16} /></button></UiTooltip>

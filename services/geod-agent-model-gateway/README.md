@@ -144,3 +144,7 @@ Keep `credit-history.mjs` in the frozen service package. These read-only routes
 do not enable checkout or replace merchant cash reconciliation.
 
 See [order/refund desktop and native acceptance](../../docs/implementation/2026-10-05-payment-history.md).
+
+### In-app announcements
+
+Authenticated `/api/agent/messages` and `/api/agent/messages/read` use GeoD account ownership, persistent read receipts, and version/date targeting. Publishing is restricted to the owner CLI on the server; there is no public announcement-write endpoint. See [publishing, retraction and delivery behavior](MESSAGES.md).

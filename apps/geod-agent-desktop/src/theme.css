@@ -490,7 +490,7 @@ body { background: var(--background); color: var(--app-text); font: 14px/1.5 var
 
 
 /* Frameless desktop chrome and compact conversation layout. */
-.custom-titlebar { height: 42px; padding: 0 0 0 14px; user-select: none; cursor: move; }
+.custom-titlebar { height: 42px; padding: 0 0 0 14px; user-select: none; cursor: default; }
 .custom-titlebar button { cursor: pointer; }
 .custom-titlebar .brand { gap: 7px; min-width: 0; }
 .custom-titlebar .brand img { width: 24px; height: 24px; padding: 3px; border-radius: 6px; pointer-events: none; }

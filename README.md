@@ -2,11 +2,11 @@
 
 GeoD Agent 是面向地理数据获取与交付的独立桌面产品。用户描述目标，检查图源、区域和资源预算，确认后由自己的电脑下载、拼接、裁剪并核验成果。GeoD 托管模型负责理解需求和提出工具调用；影像瓦片不经 GeoD 模型服务器中转。
 
-**当前版本：0.2.1 Windows x64 测试版。** 包含 Codex Agent、二维/三维地图、数据输入与下载、后台任务、多语言、定时任务入口、缩略图缓存和 Credits 界面。本次补丁接入首次启用 Agent 钱包赠送 20,000 Credits，支持一次性发放与真实用量结算。2026-10-04 正式网关已同步，GeoD 托管模型和自动赠送已通过正式账号验证；也可在“模型与渠道”配置自己的模型服务。充值和真实收费保持关闭，全新 Windows 验收依用户指示暂缓。
+**当前版本：0.2.3 Windows x64 测试版。** 包含 Codex Agent、二维/三维地图、数据输入与下载、后台任务、多语言、定时任务、缩略图缓存和 Credits 界面。本版启用签名在线更新通道和应用内消息中心，正式网关已于 2026-10-06 同步。新用户首次启用 Agent 钱包仍赠送 20,000 Credits，支持一次性发放与真实用量结算；也可在“模型与渠道”配置自己的模型服务。充值和真实收费保持关闭，全新 Windows 与本版真实安装升级验收依用户指示暂缓。
 
-安装包和便携包入口：[GitHub Release v0.2.1](https://github.com/gaopengbin/geod-agent/releases/tag/v0.2.1)。Release 标记为预发布，仓库维持私有权限。
+安装包：[GeoD 公开下载](https://geod.laogao.xyz/agent-updates/windows-x86_64/0.2.3/GeoD%20Agent_0.2.3_x64-setup.exe)。完整发行资源：[GitHub Release v0.2.3](https://github.com/gaopengbin/geod-agent/releases/tag/v0.2.3)。Release 标记为预发布，仓库维持私有权限。旧 0.2.0/0.2.1 需要先手动安装这一版，之后可在应用内更新。
 
-本轮入口见 [0.2.1 版本说明](docs/releases/0.2.1.md)和[体验额度实现与验收](docs/implementation/2026-10-04-welcome-credits.md)。0.2.0 的[版本说明](docs/releases/0.2.0.md)、[发行收尾与固定校验值](docs/implementation/2026-10-04-release-closeout.md)和[配套网关候选](docs/implementation/2026-10-04-gateway-020-candidate.md)保留历史记录。完整验收范围见[功能清单](docs/implementation/2026-10-03-functional-roadmap.md)；七种附件、加密数据库及关窗执行的历史整合证据见[此前整合候选](docs/implementation/2026-10-04-integrated-release.md)，以前的安装/升级核对保留在[原发行候选记录](docs/implementation/2026-10-03-release-candidate.md)。
+本轮入口见 [0.2.3 版本说明](docs/releases/0.2.3.md)和[更新与消息上线记录](docs/implementation/2026-10-06-updates-messages.md)。[0.2.1 版本说明](docs/releases/0.2.1.md)、[体验额度验收](docs/implementation/2026-10-04-welcome-credits.md)以及 0.2.0 的[版本说明](docs/releases/0.2.0.md)、[发行收尾](docs/implementation/2026-10-04-release-closeout.md)保留历史记录。完整验收范围见[功能清单](docs/implementation/2026-10-03-functional-roadmap.md)；以前的安装/升级核对保留在[原发行候选记录](docs/implementation/2026-10-03-release-candidate.md)。
 
 ## 当前实现
 

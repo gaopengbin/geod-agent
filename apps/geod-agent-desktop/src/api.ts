@@ -172,6 +172,9 @@ export interface AiScheduledRun { runId:string; scheduleId:string; conversationI
 export interface AiScheduleOverview { schedules:AiSchedule[]; runs:AiScheduledRun[]; windowRequired:boolean }
 
 export const api = {
+  agentMessages:()=>invoke<AppMessageFeed>("agent_messages_list"),
+  agentMessagesRead:(accountId:string,messageIds:string[])=>invoke<{accountId:string;accepted:number}>("agent_messages_read",{accountId,messageIds}),
+  agentMessageOpenLink:(url:string)=>invoke<void>("agent_message_open_link",{url}),
   desktopSettings:()=>invoke<DesktopSettings>("desktop_settings_get"),
   desktopAutostart:(enabled:boolean)=>invoke<DesktopSettings>("desktop_autostart_set",{enabled}),
   desktopUpdatePreferences:(automaticChecks:boolean)=>invoke<DesktopSettings>("desktop_update_preferences",{automaticChecks}),
@@ -325,6 +328,9 @@ export const api = {
 };
 
 export { errorMessage } from "./app-error";
+export interface AppMessageText {zh:string;en?:string}
+export interface AppMessage {id:string;revision:number;title:AppMessageText;body:AppMessageText;priority:'normal'|'important';publishedAt:string;expiresAt:string|null;readAt:string|null;action:{kind:'update'|'link';label:AppMessageText;url?:string}|null}
+export interface AppMessageFeed {schemaVersion:1;accountId:string;checkedAt:string;unreadCount:number;items:AppMessage[]}
 export interface DesktopSettings {version:string;development:boolean;autostart:boolean;automaticUpdateChecks:boolean;lastUpdateCheck:string|null;updateConfigured:boolean}
 export interface DesktopUpdate {state:"unconfigured"|"upToDate"|"available"|"ready";currentVersion?:string;version?:string;notes?:string|null;publishedAt?:string|null;bytes?:number;verified?:boolean}
 export interface DesktopUpdateProgress {phase:"downloading"|"verifying"|"ready";downloaded?:number;total?:number|null}

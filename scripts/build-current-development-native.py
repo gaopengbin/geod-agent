@@ -77,7 +77,7 @@ assert os.name == "nt" and not process_in_job(os.getpid()) and process_package_i
 root = (args.output or BUILDS / ("build-" + secrets.token_hex(8))).resolve()
 assert root.is_relative_to(BUILDS.resolve()) and not root.exists()
 config = source_config(NATIVE)
-assert config["version"] == tomllib.loads((NATIVE / "Cargo.toml").read_text(encoding="utf-8"))["package"]["version"] == "0.2.2"
+assert config["version"] == tomllib.loads((NATIVE / "Cargo.toml").read_text(encoding="utf-8"))["package"]["version"]
 root.mkdir(parents=True, exist_ok=False)
 target=(args.build_cache or root/"target").resolve()
 if args.build_cache:
@@ -124,7 +124,7 @@ try:
         executable=frozen
     assert executable.is_file() and config["identifier"].encode() in executable.read_bytes()
     file_version = executable_version(executable)
-    assert file_version == "0.2.2.0"
+    assert file_version == config["version"].split("-")[0] + ".0"
     report.update(passed=True, executable=str(executable), executableSha256=digest(executable),
                   executableBytes=executable.stat().st_size, windowsFileVersion=file_version,
                   protectedAfter=protected(), originalExecutableHashUnchanged=True)

@@ -10,6 +10,8 @@ export {
   ArrowRight,
   ArrowUp,
   Bot,
+  Bell,
+  CheckCheck,
   ChartNoAxesColumn,
   ChevronDown,
   ChevronLeft,

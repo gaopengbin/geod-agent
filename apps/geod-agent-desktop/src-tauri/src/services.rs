@@ -983,13 +983,19 @@ fn gateway_call(
 ) -> Result<Value, ServiceError> {
     let config = load_config(&state.config_path)?;
     let token = get_access_token(state, &config)?;
-    let client = client(&config.gateway_origin)?;
+    // The development model proxy uses an isolated ledger identity. Notices
+    // remain attached to the real GeoD account when that proxy is selected.
+    let messages_origin = cfg!(debug_assertions) && path.starts_with("/api/agent/messages")
+        && config.identity_origin=="https://geod.laogao.xyz"
+        && Url::parse(&config.gateway_origin).ok().is_some_and(|url|matches!(url.host_str(),Some("127.0.0.1"|"localhost"|"[::1]")));
+    let origin=if messages_origin {"https://geod.laogao.xyz"} else {&config.gateway_origin};
+    let client = client(origin)?;
     let request = if let Some(body) = body {
         client
-            .post(format!("{}{path}", config.gateway_origin))
+            .post(format!("{origin}{path}"))
             .json(&body)
     } else {
-        client.get(format!("{}{path}", config.gateway_origin))
+        client.get(format!("{origin}{path}"))
     };
     let response = request
         .bearer_auth(token)
@@ -999,6 +1005,9 @@ fn gateway_call(
 }
 fn gateway_json_response(response:reqwest::blocking::Response,path:&str)->Result<Value,ServiceError>{
     let status=response.status();
+    if status==reqwest::StatusCode::NOT_FOUND && path.starts_with("/api/agent/messages") {
+        return Err(error("MESSAGES_UNAVAILABLE", "消息服务暂不可用，请稍后重试。"));
+    }
     // Optional status routes may be absent at the reverse proxy itself, which
     // returns HTML rather than the gateway's JSON. Other responses stay strict.
     if status==reqwest::StatusCode::NOT_FOUND&&(path=="/v1/payments/status"||path.starts_with("/v1/payments/history/")){
@@ -1155,6 +1164,34 @@ pub async fn agent_payment_snapshot(state: State<'_, ServiceState>) -> Result<Va
         let wallet=gateway_call(&state,"/v1/payments/wallet",None)?;
         Ok(json!({"status":status,"wallet":wallet}))
     }).await.map_err(|_|error("PAYMENT_ERROR","支付查询线程中断"))?
+}
+
+#[tauri::command]
+pub async fn agent_messages_list(app: AppHandle, state: State<'_, ServiceState>) -> Result<Value, ServiceError> {
+    let state=state.inner().clone();
+    let version=app.package_info().version.to_string();
+    tauri::async_runtime::spawn_blocking(move||gateway_call(&state,&format!("/api/agent/messages?clientVersion={version}"),None))
+        .await.map_err(|_|error("MESSAGES_UNAVAILABLE","消息服务暂不可用，请稍后重试。"))?
+}
+
+#[tauri::command]
+pub fn agent_message_open_link(app: AppHandle, url: String) -> Result<(), ServiceError> {
+    let parsed=Url::parse(&url).map_err(|_|error("MESSAGES_LINK","消息链接不可用。"))?;
+    if parsed.scheme()!="https" || !parsed.username().is_empty() || parsed.password().is_some() || url.len()>2000 {
+        return Err(error("MESSAGES_LINK","消息链接不可用。"));
+    }
+    app.opener().open_url(parsed.as_str(),None::<&str>).map_err(|_|error("MESSAGES_LINK","消息链接不可用。"))
+}
+
+#[tauri::command]
+pub async fn agent_messages_read(app: AppHandle, state: State<'_, ServiceState>, account_id: String, message_ids: Vec<String>) -> Result<Value, ServiceError> {
+    if message_ids.is_empty() || message_ids.len()>100 || message_ids.iter().any(|id|id.len()>100||id.is_empty()||!id.bytes().all(|byte|byte.is_ascii_alphanumeric()||byte==b'_'||byte==b'-')) {
+        return Err(error("MESSAGES_INVALID","消息标识不可读。"));
+    }
+    let state=state.inner().clone();
+    let version=app.package_info().version.to_string();
+    tauri::async_runtime::spawn_blocking(move||gateway_call(&state,"/api/agent/messages/read",Some(json!({"accountId":account_id,"clientVersion":version,"messageIds":message_ids}))))
+        .await.map_err(|_|error("MESSAGES_UNAVAILABLE","消息服务暂不可用，请稍后重试。"))?
 }
 fn payment_order_id(value:&str)->bool{value.len()==35&&value.starts_with("GDA")&&value[3..].bytes().all(|c|c.is_ascii_digit()||(b'a'..=b'f').contains(&c))}
 fn payment_checkout_url(value:&Value,gateway_origin:&str)->Result<Url,ServiceError>{
