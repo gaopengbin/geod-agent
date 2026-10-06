@@ -54,3 +54,18 @@ Windows 的 [AppData 虚拟化说明](https://learn.microsoft.com/en-us/windows/
 实际回执位于 `fixture-b7af3bbafc2c137c/`：`interrupted-identity-cleanup-20261006.json`、`interrupted-owned-state-cleanup-20261006.json` 和 `interrupted-unowned-state-preserved-20261006.json` 均通过。152 个用量代、73 次运行及 5,497 项事件内容不变；13 份保留的会话选择和 23 项其他测试计划与备份逐行一致。个人用户资料未改动，清理结果不代表原 26 次跨日验收通过。
 
 0.2.2 固定发行候选没有重新构建、安装或发布。正式路由、现金充值与外部多模型费用测试的授权边界继续保持。
+
+## 当前源码的开发原生程序
+
+原恢复窗口运行 0.2.0 原生代码，前端热更新来自 0.2.2；因此另行构建当前源码的开发程序，待跨日测试终态后再切换，保留本轮保护基线。
+
+`build-current-development-native.py` 已于 2026-10-06 07:10:01–07:16:14 UTC 完成一次独立构建。使用新的目标目录、锁定依赖、离线缓存和两个编译并行任务，没有运行安装器、替换运行中的程序或向编译器传入测试供应商凭据。
+
+实际回执：`artifacts/development-native-current-20261006/build-b49aeaa1117d5bc3/build.json`。
+
+- 585 项产品源码与正在进行的完整 QA 相同，构建前后没有产品输入变化。
+- Windows 文件版本为 `0.2.2.0`，应用标识为 `dev.geod-agent.desktop`；独立开发程序 105,569,280 字节，SHA-256 为 `773853afb601321979283e6765e9346e814dc024c9efad2b302e813c067cc6d4`。
+- 原开发程序字节摘要不变；原前台、后台、网关、跨日顶层控制器及专用后台的 PID、创建时间和可执行路径保持。
+- 编译进程正常退出。新程序尚未启动，`runtimeVerified=false`；文件版本核验不代表新程序的实际登录、历史或模型流程已验收。
+
+这份程序用于下一次开发原生验证，不改变固定的 0.2.2 安装包、免安装 ZIP 或 Linux 网关归档。新的用户资料恢复、原生用量历史及既有连接能力须在实际切换后再核对。
