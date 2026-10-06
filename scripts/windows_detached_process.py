@@ -59,7 +59,7 @@ def spawn_hidden_detached(command, *, cwd=None, env=None, stdout=None, stderr=No
     """Return only after a new owned process is verified outside Windows jobs."""
     if os.name != "nt":
         raise RuntimeError("This launcher is only for Windows development helpers")
-    if process_in_job(os.getpid()) and not _bootstrap:
+    if not _bootstrap and (process_in_job(os.getpid()) or process_package_identity(os.getpid()) is not None):
         from windows_explorer_launch import spawn_from_explorer
         return spawn_from_explorer(command, cwd=cwd, env=env, stdout=stdout, stderr=stderr)
     process = subprocess.Popen(
@@ -82,3 +82,48 @@ def spawn_hidden_detached(command, *, cwd=None, env=None, stdout=None, stderr=No
             process.wait(timeout=15)
         raise
     return process
+
+
+def independent_entrypoint(script, arguments, *, label, inspect_only=False):
+    """Detach the whole launcher before it resolves AppData or opens local stores.
+
+    Return True when the caller should exit. A read-only launch-context request
+    executes the exact entrypoint without starting the desktop or gateway.
+    """
+    from pathlib import Path
+    import json
+    import secrets
+    import sys
+    import psutil
+    from windows_explorer_launch import LAUNCHES
+
+    script = Path(script).resolve(strict=True)
+    assert script.is_relative_to(Path(__file__).resolve().parents[1])
+    assert label in ("development-desktop", "development-gateway")
+    if process_in_job(os.getpid()) or process_package_identity(os.getpid()) is not None:
+        prefix = LAUNCHES / (label + "-entrypoint-" + secrets.token_hex(8))
+        LAUNCHES.mkdir(parents=True, exist_ok=True)
+        with prefix.with_suffix(".log").open("ab") as log:
+            child = spawn_hidden_detached([sys.executable, "-X", "utf8", str(script), *arguments],
+                                          cwd=script.parents[1] if label == "development-desktop" else script.parents[3],
+                                          env=dict(os.environ), stdout=log, stderr=log)
+        process = psutil.Process(child.pid)
+        value = {"pid": child.pid, "created": process.create_time(), "exe": process.exe(),
+                 "outsideWindowsJobs": not process_in_job(child.pid),
+                 "packageIdentity": process_package_identity(child.pid),
+                 "inspectOnly": inspect_only, "log": str(prefix.with_suffix(".log"))}
+        prefix.with_suffix(".json").write_text(json.dumps(value, indent=2), encoding="utf-8")
+        print(json.dumps({"independentLaunchRequested": True, "receipt": str(prefix.with_suffix(".json"))}))
+        return True
+    if inspect_only:
+        LAUNCHES.mkdir(parents=True, exist_ok=True)
+        report = {"pid": os.getpid(), "outsideWindowsJobs": True, "packageIdentity": None,
+                  "entrypoint": str(script), "appData": os.environ["APPDATA"],
+                  "localAppData": os.environ["LOCALAPPDATA"], "providerCalls": 0, "userDataModified": False}
+        (LAUNCHES / (label + "-context-" + secrets.token_hex(8) + ".json")).write_text(
+            json.dumps(report, indent=2), encoding="utf-8")
+        print(json.dumps(report), flush=True)
+        # The parent verifies the identity before the bounded read-only helper exits.
+        time.sleep(1)
+        return True
+    return False

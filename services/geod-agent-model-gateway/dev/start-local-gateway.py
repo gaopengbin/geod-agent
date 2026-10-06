@@ -7,11 +7,14 @@ import subprocess
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts"))
-from windows_detached_process import spawn_hidden_detached
+from windows_detached_process import spawn_hidden_detached, independent_entrypoint
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--existing-config", action="store_true", help="Read the current GeoD provider config over pinned SSH; no server changes.")
+parser.add_argument("--inspect-launch-context", action="store_true", help="Inspect the independent Windows context without reading credentials or starting a gateway")
 args = parser.parse_args()
+if independent_entrypoint(__file__, sys.argv[1:], label="development-gateway", inspect_only=args.inspect_launch_context):
+    raise SystemExit(0)
 environment = dict(os.environ)
 if not environment.get("DEEPSEEK_API_KEY"):
     if not args.existing_config:

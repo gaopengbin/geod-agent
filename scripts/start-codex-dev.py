@@ -6,12 +6,16 @@ import subprocess
 import time
 import urllib.request
 import argparse
-from windows_detached_process import spawn_hidden_detached
+import sys
+from windows_detached_process import spawn_hidden_detached, independent_entrypoint
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--local-gateway", action="store_true")
 parser.add_argument("--update-fixture", type=Path, help="Debug-only signed updater acceptance configuration")
+parser.add_argument("--inspect-launch-context", action="store_true", help="Inspect the independent Windows context without starting the desktop")
 args = parser.parse_args()
+if independent_entrypoint(__file__, sys.argv[1:], label="development-desktop", inspect_only=args.inspect_launch_context):
+    raise SystemExit(0)
 
 desktop = Path(__file__).resolve().parents[1] / "apps" / "geod-agent-desktop"
 logs = Path(os.environ["LOCALAPPDATA"]) / "GeoD Agent" / "dev-logs"
