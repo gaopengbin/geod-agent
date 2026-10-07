@@ -5,7 +5,7 @@
 <p align="center">对话规划 · 本机下载 · 二维 / 三维地图 · 可核验成果</p>
 <p align="center"><a href="https://geod.laogao.xyz/agent">官网</a> · <a href="#开始使用">开始使用</a> · <a href="docs/releases/0.2.4.md">0.2.4 候选说明</a> · <a href="README.EN.md">English</a></p>
 
-![GeoD Agent 对话、地图与任务工作区](docs/images/workbench-light.png)
+![GeoD Agent 对话、地图与任务工作区](docs/images/workbench-light.jpg)
 
 *工作区界面预览，图中任务与进度为演示数据；下方影像与三维截图来自真实本机验证。*
 

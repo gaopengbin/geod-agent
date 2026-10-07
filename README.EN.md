@@ -5,7 +5,7 @@
 <p align="center">Conversational planning · Local downloads · 2D / 3D maps · Verifiable files</p>
 <p align="center"><a href="https://geod.laogao.xyz/en/agent">Website</a> · <a href="#get-started">Get started</a> · <a href="docs/releases/0.2.4.md">0.2.4 candidate notes</a> · <a href="README.md">简体中文</a></p>
 
-![Conversation, map and task workspace](docs/images/workbench-light.png)
+![Conversation, map and task workspace](docs/images/workbench-light.jpg)
 
 *Workspace preview with demo tasks and progress. The imagery and 3D screenshots below come from actual local validation.*
 
