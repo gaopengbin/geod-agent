@@ -349,4 +349,3 @@ Overture官方给出DuckDB远程读取GeoParquet、筛选字段并导出的路�
 - [用户选择卡](G:/code/geod-agent/docs/implementation/2026-10-06-agent-user-input.md)、[生成成果活动状态](G:/code/geod-agent/docs/implementation/2026-10-06-processing-loading.md)。
 - [轻量基础包和可选GIS技能](G:/code/geod-agent/docs/implementation/2026-10-06-slim-gis-skills.md)。
 - 本轮搜索当前Rust、Python和相关服务实现，没有发现ERA5、Marine、SoilGrids、CMIP、Earthdata、GeoParquet或LAS/LAZ产品的专用闭环。已有通用后台命令和MCP扩展能力，不代替具体提供方接入与验收。
-
