@@ -33,6 +33,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         _ => return Err("kind must be mvt or osm".into()),
     };
     let request = Request {
+        target_crs: None,
         source,
         bounds: [13.404, 52.52, 13.406, 52.522],
         boundary: None,

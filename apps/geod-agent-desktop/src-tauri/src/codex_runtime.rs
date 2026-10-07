@@ -333,12 +333,19 @@ async fn run_operation(
             if let Ok(source) = fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("codex-host.mjs")) { host_source = source; }
         }
         let mut hook_source=include_str!("../plugin-hook-runner.mjs").to_owned();
+        let mut bulk_source=include_str!("../codex-bulk-data.mjs").to_owned();
+        let mut rtk_source=include_str!("../rtk-output.mjs").to_owned();
+        if cfg!(debug_assertions){if let Ok(source)=fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("rtk-output.mjs")){rtk_source=source;}}
+        if cfg!(debug_assertions){if let Ok(source)=fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("codex-bulk-data.mjs")){bulk_source=source;}}
         if cfg!(debug_assertions){if let Ok(source)=fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("plugin-hook-runner.mjs")){hook_source=source;}}
         // A loaded Codex thread retains its lifecycle handlers even after an
         // MCP reload. Replace the idle owned process when reviewed automation
         // changes; resume the durable thread under the newly exported hooks.
-        let source_hash = format!("{:x}", Sha256::digest(format!("{host_source}\n{hook_source}\n{capabilities}\n{}",extensions["pluginHooks"]).as_bytes()));
+        let source_hash = format!("{:x}", Sha256::digest(format!("{host_source}\n{hook_source}\n{bulk_source}\n{rtk_source}\n{capabilities}\n{}",extensions["pluginHooks"]).as_bytes()));
+        fs::write(home.join("rtk-output.mjs"),rtk_source).map_err(|_|error("CODEX_STORAGE_ERROR","无法准备命令输出精简环境"))?;
+        fs::write(home.join("codex-bulk-data.mjs"),bulk_source).map_err(|_|error("CODEX_STORAGE_ERROR","无法准备本机几何数据传递环境"))?;
         fs::write(home.join("plugin-hook-runner.mjs"),hook_source).map_err(|_|error("CODEX_STORAGE_ERROR","无法准备插件自动化运行环境"))?;
+        fs::write(home.join("codex-input-wait.mjs"),include_str!("../codex-input-wait.mjs")).map_err(|_|error("CODEX_STORAGE_ERROR","无法准备问答等待运行环境"))?;
         fs::write(&host, host_source).map_err(|_| error("CODEX_STORAGE_ERROR", "无法准备 Codex 适配层"))?;
         fs::write(&tools, if isolated{include_str!("../worker-tools.json")}else{include_str!("../codex-tools.json")}).map_err(|_| error("CODEX_STORAGE_ERROR", "无法准备 GeoD 工具定义"))?;
         let (sender, receiver) = mpsc::channel();
@@ -358,7 +365,7 @@ async fn run_operation(
             runs.insert(run_id.clone(), ActiveRun { owner:owner.clone(), input: Arc::clone(&stdin), cancelled:cancelled.clone() });
         }
         *route.lock().unwrap() = Some(sender);
-        let start = json!({"type":operation_type,"runId":run_id,"options":{"codex":executable,"home":home,"sqliteHome":sqlite_home,"toolsFile":tools,"capabilities":capabilities},"params":{"conversationId":conversation_id,"threadKey":thread_key,"workspace":workspace,"permission":settings.permission,"input":input,"history":history,"images":images,"historyImages":history_images,"skillDirectories":extensions["skillDirectories"],"selectedSkills":extensions["selectedSkills"],"mcpServers":extensions["mcpServers"],"pluginHooks":extensions["pluginHooks"],"memory":memory,"background":background,"sourceConversationId":operation["sourceConversationId"],"resumeThread":resume,"sourceThread":source_thread}});
+        let start = json!({"type":operation_type,"runId":run_id,"options":{"codex":executable,"home":home,"sqliteHome":sqlite_home,"toolsFile":tools,"capabilities":capabilities},"params":{"conversationId":conversation_id,"threadKey":thread_key,"workspace":workspace,"permission":settings.permission,"outputCrs":settings.output_crs,"rtkOutput":if isolated{None}else{crate::rtk_runtime::descriptor(&owner)},"input":input,"history":history,"images":images,"historyImages":history_images,"skillDirectories":extensions["skillDirectories"],"selectedSkills":extensions["selectedSkills"],"mcpServers":extensions["mcpServers"],"pluginHooks":extensions["pluginHooks"],"memory":memory,"background":background,"sourceConversationId":operation["sourceConversationId"],"resumeThread":resume,"sourceThread":source_thread}});
         if write_command(&stdin, &start).is_err() { active.lock().unwrap().remove(&run_id); *route.lock().unwrap() = None; return Err(error("CODEX_PROCESS_ERROR", "无法启动 Codex 对话")); }
         let mut result = Err(error("CODEX_PROCESS_ERROR", "Codex 对话进程提前结束，请重新发送消息"));
         let last_model_error=Arc::new(Mutex::new(None::<ServiceError>));
@@ -387,6 +394,13 @@ async fn run_operation(
                     calls.lock().unwrap().remove(&request_id);
                 });
                 continue;
+            }
+            if value["type"]=="embeddedData" {
+                let request_id=value["requestId"].as_str().unwrap_or("");
+                let execution_id=format!("codex:{conversation_id}:{}",value["callId"].as_str().unwrap_or(""));
+                let output=crate::extensions::save_embedded_result_for_owner(&app.state::<crate::extensions::ExtensionState>(),&owner,&conversation_id,value["connectorId"].as_str().unwrap_or(""),value["toolName"].as_str().unwrap_or(""),&value["arguments"],&execution_id,value["result"].clone());
+                let reply=match output{Ok(output)=>json!({"type":"response","requestId":request_id,"value":output}),Err(cause)=>json!({"type":"response","requestId":request_id,"error":cause.message})};
+                if write_command(&stdin,&reply).is_err(){result=Err(error("CODEX_PROCESS_ERROR","无法保存本机地图结果"));break;}continue;
             }
             if value["type"] == "model" {
                 if operation_type=="start"{if let Err(cause)=crate::execution_receipts::requested(&receipts,&owner,&run_id,value["generationId"].as_str().unwrap_or("")){result=Err(error(cause.code,cause.message));break;}}
@@ -445,7 +459,7 @@ pub fn codex_command(app:AppHandle,runtime: State<'_, CodexState>, services: Sta
     send_command(runtime.inner(), &owner, &run_id, command)
 }
 pub(crate) fn send_command(runtime: &CodexState, owner: &str, run_id: &str, command: Value) -> Result<(), ServiceError> {
-    if !matches!(command["type"].as_str(), Some("response" | "interrupt" | "steer")) { return Err(error("CODEX_COMMAND_INVALID", "无效的 Codex 响应")); }
+    if !matches!(command["type"].as_str(), Some("response" | "interrupt" | "steer" | "userInputState")) { return Err(error("CODEX_COMMAND_INVALID", "无效的 Codex 响应")); }
     let runs = runtime.active.lock().unwrap();
     let run=runs.get(run_id).filter(|run| run.owner == owner).ok_or_else(|| error("CODEX_RUN_NOT_FOUND", "本轮对话已结束"))?;
     if command["type"]=="interrupt"{run.cancelled.store(true,Ordering::Release);}

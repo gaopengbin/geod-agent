@@ -123,7 +123,7 @@
         },
         "compression": {
           "$ref": "#/$defs/TiffCompression",
-          "default": "lzw"
+          "default": "none"
         },
         "elevationEncoding": {
           "anyOf": [
@@ -152,9 +152,18 @@
             "$ref": "#/$defs/OverlaySourceRef"
           }
         },
+        "resampling": {
+          "$ref": "#/$defs/RasterResampling"
+        },
         "reuseVerifiedCache": {
           "description": "A recovery plan keeps previously verified pixels even after the normal\nfreshness window. Hash, size, decoding and source revision still apply.",
           "type": "boolean"
+        },
+        "targetCrs": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false
@@ -184,6 +193,14 @@
       "required": [
         "sourceId",
         "configRevision"
+      ]
+    },
+    "RasterResampling": {
+      "type": "string",
+      "enum": [
+        "nearest",
+        "bilinear",
+        "cubic"
       ]
     },
     "ResourceLimits": {

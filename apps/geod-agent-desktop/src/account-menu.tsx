@@ -1,12 +1,13 @@
 import { getLocale, t } from "./i18n";
 // i18n: presentation strings migrated
 import { MorphPopover, MorphPopoverContent, MorphPopoverTrigger } from "@/components/motion/popover-morph";
-import { Bot, ChartNoAxesColumn, ChevronDown, Globe2, HardDrive, LogOut, Moon, Network, Server, Settings, Sun, UserRound, Wallet } from "./icons";
+import { Bot, ChartNoAxesColumn, ChevronDown, Globe2, HardDrive, LogOut, Moon, Network, RefreshCw, Server, Settings, Sun, Wallet } from "./icons";
 import { BACKGROUND_OPEN } from "./background-dialog";
 import { LANGUAGE_OPEN } from "./language-dialog";
 import { PAYMENT_OPEN } from "./payment-dialog";
 import { DESKTOP_SETTINGS_OPEN, DESKTOP_UPDATE_AVAILABLE, getAnnouncedDesktopUpdate } from "./desktop-settings-dialog";
-import { api, type ModelUsage, type PaymentSnapshot } from "./api";
+import { api, type AccountProfile, type ModelUsage, type PaymentSnapshot } from "./api";
+import { AccountAvatar } from "./account-avatar";
 import { CREDITS_CHANGED, formatCredits } from "./credits";
 import { useEffect, useRef, useState } from "react";
 
@@ -14,11 +15,14 @@ function tokens(value: number) {
   return `${(value / 1000).toLocaleString(getLocale(), { maximumFractionDigits: 1 })}K`;
 }
 
-export function AccountMenu({ open, onOpenChange, connected, userId, usage, busy, theme, onModels, onNetwork, onCache, onTheme, onLogout, telemetryEnabled, onTelemetry }: {
+export function AccountMenu({ open, onOpenChange, connected, userId, profile, profileError, onProfileRefresh, usage, busy, theme, onModels, onNetwork, onCache, onTheme, onLogout, telemetryEnabled, onTelemetry }: {
   open: boolean; onOpenChange: (value: boolean) => void; connected: boolean; userId: string | null; usage: ModelUsage | null;
   busy: boolean; theme: "light" | "dark"; onNetwork: () => void; onCache: () => void; onTheme: () => void; onLogout: () => void;
   telemetryEnabled: boolean; onTelemetry: () => void; onModels: () => void;
+  profile: AccountProfile | null; profileError: boolean; onProfileRefresh: (force?: boolean) => Promise<void>;
 }) {
+  const currentProfile = connected && profile?.accountId === userId ? profile : null;
+  useEffect(() => { if (open && connected) void onProfileRefresh(); }, [open, connected, onProfileRefresh]);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [credits, setCredits] = useState<{ accountId: string; snapshot: PaymentSnapshot } | null>(null);
   const [creditsLoading, setCreditsLoading] = useState(false), [creditsError, setCreditsError] = useState(false);
@@ -63,10 +67,11 @@ export function AccountMenu({ open, onOpenChange, connected, userId, usage, busy
   const action = (callback: () => void) => { onOpenChange(false); callback(); };
   return <div className="conversation-account"><MorphPopover open={open} onOpenChange={onOpenChange} className="account-menu-root">
     <MorphPopoverTrigger><button type="button" className="conversation-account-trigger" aria-label={t("账号与设置")} onClick={event => setKeyboardOpen(event.detail === 0 && !open)} onKeyDown={event => { if (event.key === "ArrowDown") { event.preventDefault(); setKeyboardOpen(true); onOpenChange(true); } }}>
-      <span className="account-avatar"><UserRound size={17}/></span><span><strong>{connected ? t("GeoD 账号") : t("登录 GeoD")}</strong><small>{connected ? balanceLabel ?? t("账号与设置") : t("登录后使用 AI 能力")}</small></span><ChevronDown size={15}/>
+      <AccountAvatar key={currentProfile?.accountId ?? "signed-out"} profile={currentProfile}/><span><strong title={currentProfile?.nickname ?? undefined}>{connected ? currentProfile?.nickname ?? t("GeoD 账号") : t("登录 GeoD")}</strong><small>{connected ? balanceLabel ?? t("账号与设置") : t("登录后使用 AI 能力")}</small></span><ChevronDown size={15}/>
     </button></MorphPopoverTrigger>
     <MorphPopoverContent side="top" align="start" radius={12} className="conversation-account-menu">
-      <div className="account-menu-identity"><span className="account-avatar"><UserRound size={17}/></span><div><strong>{connected ? t("GeoD 账号") : t("未登录")}</strong><small title={userId ?? undefined}>{userId ?? t("登录以使用 AI 模型")}</small></div></div>
+      <div className="account-menu-identity"><AccountAvatar key={currentProfile?.accountId ?? "signed-out"} profile={currentProfile}/><div><strong title={currentProfile?.nickname ?? undefined}>{connected ? currentProfile?.nickname ?? t("GeoD 账号") : t("未登录")}</strong><small title={currentProfile?.email ?? userId ?? undefined}>{currentProfile?.email ?? userId ?? t("登录以使用 AI 模型")}</small></div></div>
+      {connected && profileError && <button type="button" className="account-profile-retry" onClick={() => void onProfileRefresh(true)}><RefreshCw size={16} aria-hidden="true"/>{t("重新同步头像与账号")}</button>}
       {connected && <div className="account-menu-usage"><span>{legacyQuota ? t("Token 配额") : t("AI Credits")}</span><strong>{creditsLoading && !snapshot ? t("查询中…") : legacyQuota && usage ? t("可用 {0} · 总额 {1}", {"0": tokens(usage.remainingTokens ?? 0), "1": tokens(usage.limitTokens ?? 0)}) : balanceLabel ?? t("额度暂不可用")}</strong>{unlimited && <small>{t("测试模式 · 不限额度")}</small>}{!legacyQuota && !unlimited && snapshot?.wallet?.reservedNanoCny && BigInt(snapshot.wallet.reservedNanoCny) > 0n && <small>{t("请求预留 {0}", { 0: formatCredits(snapshot.wallet.reservedNanoCny) })}</small>}{creditsError && <small>{t("读取失败，可在余额与订阅中刷新。")}</small>}{usage && <small>{t("累计模型用量 {0} tokens", { 0: tokens(usage.committedTokens) })}</small>}</div>}
       <button type="button" ref={firstAction} onClick={() => action(onModels)}><Bot size={16} aria-hidden="true"/>{t("模型与渠道")}</button>
       {connected&&<button type="button" onClick={()=>action(()=>window.dispatchEvent(new Event(PAYMENT_OPEN)))}><Wallet size={16} aria-hidden="true"/>{t('余额与订阅')}</button>}

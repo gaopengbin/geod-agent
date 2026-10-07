@@ -24,7 +24,7 @@ export function groupWorkRecords(messages: DisplayMessage[]): TranscriptEntry[] 
   for (const item of uniqueDisplayMessages(messages)) {
     if (item.role === "user") legacyTurn = `legacy-${item.id}`;
     const work = (item.role === "tool" || item.phase === "progress") && item.role !== "user"
-      && !item.sourceDraft && !item.extensionProposal && !item.backgroundJob;
+      && !item.sourceDraft && !item.extensionProposal && !item.backgroundJob && !item.userInput && !item.turnOutcome;
     if (work) {
       const turnId = item.turnId ?? item.monitorTrace?.[0]?.turnId;
       const id = turnId ?? legacyTurn;

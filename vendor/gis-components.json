@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "components": [
+    {
+      "id": "gis-common",
+      "version": "1.0.0",
+      "filename": "gis-common-1376ff186a78bd004409df9108909a58183af7bf5dcde1974623db26c1770781.zip",
+      "url": "https://geod.laogao.xyz/agent-updates/windows-x86_64/components/1/gis-common-1376ff186a78bd004409df9108909a58183af7bf5dcde1974623db26c1770781.zip",
+      "sha256": "1376ff186a78bd004409df9108909a58183af7bf5dcde1974623db26c1770781",
+      "manifestSha256": "e09b9c667b2115d3373c33c9f84e3d49a780b45fcfa44124182515376a8e06de",
+      "downloadBytes": 10958891,
+      "installedBytes": 35197154,
+      "files": 468
+    },
+    {
+      "id": "gis-vector",
+      "version": "1.0.0",
+      "filename": "gis-vector-d3de3d64cedf70e59587471fc94453df39aca3687e025952ce8980d97ecf28cf.zip",
+      "url": "https://geod.laogao.xyz/agent-updates/windows-x86_64/components/1/gis-vector-d3de3d64cedf70e59587471fc94453df39aca3687e025952ce8980d97ecf28cf.zip",
+      "sha256": "d3de3d64cedf70e59587471fc94453df39aca3687e025952ce8980d97ecf28cf",
+      "manifestSha256": "65f98445f703f4be81c9f69383a26f91d80f14d4f87e36671d2642988e1177fa",
+      "downloadBytes": 39419736,
+      "installedBytes": 125719717,
+      "files": 1607
+    },
+    {
+      "id": "gis-raster",
+      "version": "1.0.0",
+      "filename": "gis-raster-34480bcce6a43cff421deafb08657206024a44b8a6b3d7ede86468f6c04379ed.zip",
+      "url": "https://geod.laogao.xyz/agent-updates/windows-x86_64/components/1/gis-raster-34480bcce6a43cff421deafb08657206024a44b8a6b3d7ede86468f6c04379ed.zip",
+      "sha256": "34480bcce6a43cff421deafb08657206024a44b8a6b3d7ede86468f6c04379ed",
+      "manifestSha256": "57b42cde43865eebf4df4c3a92fde09624401e2805cbd4ab2e29c5dccb341b1e",
+      "downloadBytes": 30861113,
+      "installedBytes": 99875053,
+      "files": 454
+    }
+  ]
+}

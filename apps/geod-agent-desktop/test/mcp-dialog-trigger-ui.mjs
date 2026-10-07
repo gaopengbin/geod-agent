@@ -1,0 +1,57 @@
+import assert from 'node:assert/strict';
+import {mkdirSync,writeFileSync} from 'node:fs';
+import {resolve,join} from 'node:path';
+import {pathToFileURL} from 'node:url';
+const {chromium}=await import(pathToFileURL('C:/Users/Administrator/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs').href);
+const output=resolve('../../artifacts/mcp-dialog-trigger-20261007');
+mkdirSync(output,{recursive:true});
+const browser=await chromium.launch({channel:'msedge',headless:true});
+const checks=[],errors=[];
+try {
+  for (const provider of ['amap','mapbox']) for (const theme of ['light','dark']) {
+    const page=await browser.newPage({viewport:{width:680,height:780}});
+    page.on('pageerror',e=>errors.push(e.message));
+    await page.goto(`http://127.0.0.1:1420/test/mcp-dialog-trigger-harness.html?provider=${provider}&theme=${theme}`);
+    const configure=page.getByRole('button',{name:'配置并连接'});
+    const dialog=page.getByRole('dialog');
+    await configure.waitFor();
+    assert.equal(await dialog.count(),0,`${provider}: a historical setup card must not open while an unrelated task is busy`);
+    await configure.click();
+    await dialog.waitFor();
+    assert.match(await dialog.textContent(),provider==='amap'?/连接高德地图 MCP/:/连接 Mapbox MCP/);
+    await page.getByRole('button',{name:'稍后配置'}).click();
+    assert.equal(await dialog.count(),0);
+    await page.getByTestId('toggle-busy').click();
+    await page.getByTestId('toggle-busy').click();
+    assert.equal(await dialog.count(),0,'new work must not reopen the dismissed form');
+    await page.getByTestId('switch-chat').click();
+    assert.equal(await configure.count(),0);
+    await page.getByTestId('switch-chat').click();
+    await configure.waitFor();
+    assert.equal(await dialog.count(),0,'remounting saved history must keep the form closed');
+    await page.reload();
+    await configure.waitFor();
+    assert.equal(await dialog.count(),0,'reloading saved history must keep the form closed');
+    await configure.click();
+    await dialog.waitFor();
+    await page.keyboard.press('Escape');
+    assert.equal(await dialog.count(),0);
+    await configure.click();
+    await dialog.waitFor();
+    await page.getByRole('button',{name:'关闭连接配置'}).click();
+    assert.equal(await dialog.count(),0);
+    await page.getByTestId('configured').click();
+    await page.getByRole('button',{name:'确认启用',exact:true}).waitFor();
+    assert.equal(await configure.count(),0);
+    assert.equal(await dialog.count(),0,'saved credentials must replace the obsolete setup card');
+    await page.getByTestId('enabled').click();
+    await page.waitForFunction(()=>!document.querySelector('.agent-source-review'));
+    assert.equal(await dialog.count(),0);
+    await page.screenshot({path:join(output,`${provider}-${theme}-enabled.png`)});
+    checks.push(`${provider}/${theme}: busy history closed; click opens; dismiss, new task, switch, reload and reopen; configured and enabled reconciliation`);
+    await page.close();
+  }
+  assert.deepEqual(errors,[]);
+  writeFileSync(join(output,'ui-report.json'),JSON.stringify({passed:true,fixture:true,networkCalls:0,checks,errors},null,2));
+  console.log(JSON.stringify({passed:true,checks}));
+} finally {await browser.close();}

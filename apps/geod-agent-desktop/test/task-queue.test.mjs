@@ -66,9 +66,10 @@ test('batch approval failures preserve native reasons instead of object coercion
   assert.deepEqual(calls.filter(item=>item[0]==='start').map(item=>item[1]),['ok']);
 });
 test('batch cancel only addresses selected jobs in cancellable stages',async()=>{
-  const {api,calls,jobs}=fixture();jobs.set('a',job('a','downloading'));jobs.set('b',job('b','processing'));jobs.set('other',job('other','downloading'));
-  const result=await runTaskBatch(api,memory(),'alice','chat',[plan('a'),plan('b')],'cancel');
-  assert.deepEqual(calls,[['cancel','job-a']]);assert.equal(result.failed.length,1);
+  const {api,calls,jobs}=fixture();jobs.set('a',job('a','downloading'));jobs.set('b',job('b','processing'));jobs.set('verify',job('verify','verifying'));jobs.set('done',job('done','completed'));jobs.set('other',job('other','downloading'));
+  const result=await runTaskBatch(api,memory(),'alice','chat',[plan('a'),plan('b'),plan('verify'),plan('done')],'cancel');
+  assert.deepEqual(calls,[['cancel','job-a'],['cancel','job-b']]);assert.equal(result.failed.length,2);
+  assert.deepEqual(result.succeeded.map(item=>item.planId),['a','b']);
 });
 test('a pending discard wins over a queued model start, while an earlier start prevents discard',async()=>{
   const {api,jobs}=fixture();const store=memory();let unlock;

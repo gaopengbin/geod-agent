@@ -62,8 +62,8 @@ with tempfile.TemporaryDirectory(prefix='geod-release-signature-qa-') as tempora
     except ValueError:
         pass
     names = [name for _, name in runtime_directories(ROOT)]
-    assert set(names) == {'codex-runtime', 'gdal-runtime', 'pgedge-runtime', 'document-runtime', 'dbhub-runtime', 'audio-runtime', 'ocr-runtime', 'legacy-office-runtime'}
-    cases.append({'name': 'Declared portable runtimes include documents/DBHub/audio/OCR/legacy Office and reject modified files', 'passed': True})
+    assert set(names) == {'codex-runtime', 'python-runtime', 'pgedge-runtime', 'document-runtime', 'dbhub-runtime', 'audio-runtime'}
+    cases.append({'name': 'Six base runtimes exclude GIS/Java/OCR and reject modified files', 'passed': True})
 workflow = yaml.load((ROOT / '.github/workflows/release-candidate.yml').read_text(encoding='utf-8'), Loader=yaml.BaseLoader)
 desktop_tools=json.loads((ROOT/'apps/geod-agent-desktop/src-tauri/codex-tools.json').read_text(encoding='utf-8'))
 native_tools=json.loads((ROOT/'apps/geod-agent-desktop/src-tauri/native-tools.json').read_text(encoding='utf-8'))

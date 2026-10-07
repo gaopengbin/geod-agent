@@ -2,7 +2,7 @@ import { api, type BoundaryImport, type Bounds, type ExportOptions, type OutputF
 
 export function compactPlan(stored: StoredPlan, permission: WorkspaceSettings["permission"] = "confirmEach") {
   const plan = stored.plan;
-  return { permission, requiresPlanConfirmation: permission !== "fullAccess", canStartWithoutPlanConfirmation: permission === "fullAccess", planId: stored.planId, planHash: plan.planHash, source: plan.sourceName, bounds: plan.spec.bounds, boundary: plan.spec.boundary ? `${plan.spec.boundary.polygons.length} 个面；GeoTIFF 按边界透明裁剪，MBTiles 保留整瓦片` : null, zoomLevels: plan.spec.zoomLevels, outputFormats: plan.spec.outputFormats, outputLocation: "当前本机工作区中的新文件夹，模型不可读取路径", totalTiles: plan.totalTiles, decodedRgbaBytes: plan.decodedRgbaBytes, requiredFreeDiskBytes: plan.requiredFreeDiskBytes, license: plan.license, attribution: plan.attribution, expiresAt: plan.expiresAt, execution: permission === "fullAccess" ? "可调用 jobs_start；本机将验证工作区完全访问授权及计划路径" : "需要用户点击聊天里的任务入口，在右侧任务面板确认" };
+  return { permission, requiresPlanConfirmation: permission !== "fullAccess", canStartWithoutPlanConfirmation: permission === "fullAccess", planId: stored.planId, planHash: plan.planHash, source: plan.sourceName, bounds: plan.spec.bounds, boundary: plan.spec.boundary ? `${plan.spec.boundary.polygons.length} 个面；GeoTIFF 按边界透明裁剪，MBTiles 保留整瓦片` : null, zoomLevels: plan.spec.zoomLevels, outputFormats: plan.spec.outputFormats, targetCrs: plan.spec.exportOptions?.targetCrs ?? "EPSG:3857", resampling: plan.spec.exportOptions?.resampling ?? "nearest", outputLocation: "当前本机工作区中的新文件夹，模型不可读取路径", totalTiles: plan.totalTiles, decodedRgbaBytes: plan.decodedRgbaBytes, requiredFreeDiskBytes: plan.requiredFreeDiskBytes, license: plan.license, attribution: plan.attribution, expiresAt: plan.expiresAt, execution: permission === "fullAccess" ? "可调用 jobs_start；本机将验证工作区完全访问授权及计划路径" : "需要用户点击聊天里的任务入口，在右侧任务面板确认" };
 }
 
 export interface ImageryPlanResult { plans: { stored: StoredPlan; rangeName?: string }[]; errors: { boundaryId?: string; name?: string; error: unknown }[] }
@@ -29,11 +29,13 @@ export function requestedExportOptions(value: unknown): ExportOptions | undefine
   if (value === undefined) return undefined;
   if (!value || typeof value !== "object" || Array.isArray(value)) return invalid("exportOptions 必须为导出参数对象");
   const options = value as Record<string, unknown>;
-  if (Object.keys(options).some(key => !["compression", "buildPyramid", "generateSidecars", "jpegQuality", "elevationEncoding"].includes(key))) return invalid("导出参数包含不支持的字段");
+  if (Object.keys(options).some(key => !["compression", "buildPyramid", "generateSidecars", "jpegQuality", "elevationEncoding", "targetCrs", "resampling"].includes(key))) return invalid("导出参数包含不支持的字段");
   if (options.elevationEncoding !== undefined && options.elevationEncoding !== "terrarium") return invalid("高程编码目前支持 Terrarium");
   if (options.compression !== undefined && !["none", "lzw", "deflate"].includes(String(options.compression))) return invalid("压缩支持 none、lzw、deflate");
   if (["buildPyramid", "generateSidecars"].some(key => options[key] !== undefined && typeof options[key] !== "boolean")) return invalid("金字塔和辅助文件选项必须为布尔值");
   if (options.jpegQuality !== undefined && (typeof options.jpegQuality !== "number" || !Number.isInteger(options.jpegQuality) || options.jpegQuality < 1 || options.jpegQuality > 100)) return invalid("JPEG 质量需要为 1–100 的整数");
+  if (options.targetCrs !== undefined && typeof options.targetCrs !== "string") return invalid("目标坐标系需要 EPSG 编号");
+  if (options.resampling !== undefined && !["nearest", "bilinear", "cubic"].includes(String(options.resampling))) return invalid("请选择有效的重采样方式");
   return { ...options } as ExportOptions;
 }
 

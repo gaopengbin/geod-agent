@@ -79,7 +79,8 @@ impl Drop for PendingConnection {
 }
 
 async fn worker(request: Value) -> Result<Value, AppError> {
-    let mut command = crate::python_runtime::command(include_str!("data_input_worker.py"))?;
+    let basic=request["paths"].as_array().is_some_and(|paths|paths.iter().all(|v|v.as_str().is_some_and(|name|matches!(Path::new(name).extension().and_then(|s|s.to_str()).unwrap_or("").to_ascii_lowercase().as_str(),"geojson"|"json")))) && request["sourceCrs"].as_str().is_none_or(|s|matches!(s,"EPSG:4326"|"OGC:CRS84"));
+    let mut command = if basic {crate::python_runtime::command(include_str!("data_input_worker.py"))?}else{crate::python_runtime::gis_command(include_str!("data_input_worker.py"),&["gis-common","gis-vector"])?};
     command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).kill_on_drop(true);
     #[cfg(windows)] command.creation_flags(0x08000000);
     for key in ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"] { command.env_remove(key); }

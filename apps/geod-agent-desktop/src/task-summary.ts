@@ -1,7 +1,7 @@
 import type { WorkspaceSettings } from "./api";
 import { taskEnded, type QueueTask } from "./task-queue.ts";
 
-const labels: Record<string, string> = { pending: "待确认", discarded: "已丢弃", queued: "排队中", downloading: "下载中", paused: "已暂停", processing: "处理中", verifying: "核验中", completed: "已完成", partial: "部分完成", failed: "失败", cancelled: "已取消", interrupted: "已中断" };
+const labels: Record<string, string> = { pending: "待确认", discarded: "已丢弃", queued: "排队中", downloading: "下载中", paused: "已暂停", processing: "生成成果", verifying: "核验中", completed: "已完成", partial: "部分完成", failed: "失败", cancelled: "已取消", interrupted: "已中断" };
 export function summarizeTasks(tasks: QueueTask[], permission?: WorkspaceSettings["permission"] | null) {
   const counts = { pending: 0, running: 0, attention: 0, ended: 0 };
   const scheduledCount=tasks.filter(task=>task.state==='scheduled').length;

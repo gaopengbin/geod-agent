@@ -303,7 +303,7 @@ fn advance(
                     run.finished_at = Some(Utc::now());
                 }
             }
-            JobState::Queued | JobState::Downloading => {
+            JobState::Queued | JobState::Downloading | JobState::Processing => {
                 if !state
                     .running_jobs
                     .lock()
@@ -320,7 +320,7 @@ fn advance(
                 }
                 run.state = "running".into();
             }
-            JobState::Processing | JobState::Verifying => {
+            JobState::Verifying => {
                 run.state = "running".into();
             }
         }

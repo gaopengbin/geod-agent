@@ -1,0 +1,1321 @@
+{
+  "asOf": "2026-10-07",
+  "queries": 14,
+  "resultSlotsRequested": 133,
+  "returnedResults": 123,
+  "uniqueSearchUrls": 120,
+  "communityPagesRead": 32,
+  "communityTypes": 10,
+  "sourceCounts": {
+    "userThreads": 31,
+    "communityHowTo": 1,
+    "officialPages": 9
+  },
+  "scope": "对照当前 GeoD Agent 开发源码和既有验收记录；不是这些论坛任务已经逐项完成，也不是公开发行版本能力承诺。",
+  "limitations": [
+    "非统计抽样；不能推算需求占比或市场规模。",
+    "Reddit 和知乎检索未得到可核读且符合筛选条件的原始求助帖；不计入已覆盖平台。",
+    "排除推广、资源合集、AI 生成问答正文、无法溯源的百分比及重复转载。",
+    "旧帖子用于需求样本；过时 URL 和 API 限制以本轮官方资料复核。"
+  ],
+  "cases": [
+    {
+      "id": "F01",
+      "url": "https://gis.stackexchange.com/questions/340605/mass-downloading-google-earth-historical-imagery",
+      "title": "Mass downloading Google Earth historical imagery",
+      "platform": "GIS Stack Exchange",
+      "date": "2019-11-03",
+      "topic": "历史影像",
+      "userNeed": "上传研究区后批量获取历年带坐标影像，而不是手工截图。",
+      "assessment": "已有 Wayback 目录和区域元数据；Google Earth 原帖需求不能直接等同于我们已覆盖。",
+      "questions": "数据年份、拍摄期次、用途及是否需要原始多波段。",
+      "priority": "P0",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "researchPriority": "P0",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F02",
+      "url": "https://gis.stackexchange.com/questions/416014/batch-downloading-time-series-of-tiff-images-using-multi-polygons",
+      "title": "Batch downloading time series of TIFF images using multi-polygons",
+      "platform": "GIS Stack Exchange",
+      "date": "2021-11-10",
+      "topic": "批量时序",
+      "userNeed": "多个多边形逐年或逐月导出栅格，并避免超出 GEE 负载限制。",
+      "assessment": "已有多任务和范围输入；GEE 时序产品任务未接入。",
+      "questions": "逐区独立文件还是合并；时间粒度、分辨率。",
+      "priority": "范围外",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "researchPriority": "P1",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "F03",
+      "url": "https://gis.stackexchange.com/questions/254815/simple-way-to-collect-the-sentinel-data-of-a-given-roi",
+      "title": "Simple way to collect the Sentinel data of a given ROI?",
+      "platform": "GIS Stack Exchange",
+      "date": "2017-09-09",
+      "topic": "原始遥感",
+      "userNeed": "只要指定区域、日期和波段的 Sentinel 数据，减少整景下载和手工裁剪。",
+      "assessment": "缺少 Sentinel 原始产品目录与分波段下载；现有 RGB 瓦片不能替代。",
+      "questions": "产品级别、波段、日期、分辨率、允许的云量。",
+      "priority": "范围外",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "researchPriority": "P1",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "F04",
+      "url": "https://gis.stackexchange.com/questions/482312/download-all-landsat-tiles-for-a-specific-data-range-onto-my-computer-using-goog",
+      "title": "Download all Landsat tiles for a specific data range onto my computer using Google Earth Engine",
+      "platform": "GIS Stack Exchange",
+      "date": "2024-06-06",
+      "topic": "原始遥感",
+      "userNeed": "按区域和日期保存 Landsat 的每个原始产品及所有波段，不先合成。",
+      "assessment": "缺少 Landsat 产品适配；需保留原始产品与波段元数据。",
+      "questions": "保留整景还是裁剪；产品级别、时间范围。",
+      "priority": "范围外",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "researchPriority": "P1",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "F05",
+      "url": "https://gis.stackexchange.com/questions/367192/downloading-all-images-in-time-interval-with-wms-getmap-request",
+      "title": "Downloading all images in time interval with WMS getmap request",
+      "platform": "GIS Stack Exchange",
+      "date": "2020-07-08",
+      "topic": "时序目录",
+      "userNeed": "请求时间区间后只得到一张合成图，实际想获得全部拍摄期次。",
+      "assessment": "需要产品目录逐项检索；WMS 图片响应本身不是完整产品清单。",
+      "questions": "每景、每日还是区间合成；原始数据或显示图片。",
+      "priority": "P1",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "researchPriority": "P1",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F06",
+      "url": "https://community.esri.com/t5/arcgis-api-for-python-questions/using-api-doesn-t-return-all-data/td-p/1599976",
+      "title": "Solved: Using API doesn't return all data - Esri Community",
+      "platform": "Esri Community",
+      "date": "2025-03-27",
+      "topic": "矢量完整性",
+      "userNeed": "约 2.8 万条野火边界只下载到 2,000 条，并有 SHP 属性字段导出问题。",
+      "assessment": "已分页与保留属性，但当前最多 10,000 要素；不能完整覆盖原帖规模。",
+      "questions": "全量还是范围筛选；输出 GPKG、GeoJSON 或必须 SHP。",
+      "priority": "P0",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "researchPriority": "P0",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F07",
+      "url": "https://stackoverflow.com/questions/72747040/arcgis-feature-layer-extract-all-records",
+      "title": "ARCGIS feature layer extract all records",
+      "platform": "Stack Overflow",
+      "date": "2022-06-24",
+      "topic": "矢量完整性",
+      "userNeed": "服务有约 9 万条记录，但一次响应只有 2,000 条。",
+      "assessment": "当前 10,000 要素硬上限；需流式全量导出和总数核验。",
+      "questions": "所需图层、字段与筛选条件。",
+      "priority": "P0",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "researchPriority": "P0",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F08",
+      "url": "https://gis.stackexchange.com/questions/40445/download-dataset-from-arcgis-rest-service",
+      "title": "Download Dataset From ArcGIS REST Service",
+      "platform": "GIS Stack Exchange",
+      "date": "2012-11-06",
+      "topic": "在线服务发现",
+      "userNeed": "能浏览 ArcGIS 服务，却找不到原始要素的下载方式。",
+      "assessment": "已有 ArcGIS 图层发现及在线导出；大数据量仍受本机读取上限约束。",
+      "questions": "目标图层、属性、范围和所需数据类型。",
+      "priority": "P0",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "researchPriority": "P0",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F09",
+      "url": "https://gis.stackexchange.com/questions/437456/how-do-i-get-the-rest-of-the-data-in-a-feature-service",
+      "title": "How do I get the rest of the data in a Feature Service?",
+      "platform": "GIS Stack Exchange",
+      "date": "2022-08-04",
+      "topic": "矢量完整性",
+      "userNeed": "服务只返回 1,000 条，目标超过 3 万条且无法更改服务端限制。",
+      "assessment": "有分页基础；要补分批落盘、检查点和稳定 ID 完整性核验。",
+      "questions": "完整数据还是特定范围；输出格式。",
+      "priority": "P0",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "researchPriority": "P0",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F10",
+      "url": "https://forums.dovetailgames.com/threads/qgis-cannot-merge-layers.75853/",
+      "title": "Qgis: Cannot Merge Layers | Dovetail Games Forums",
+      "platform": "Dovetail Games 论坛",
+      "date": "2023-11-05",
+      "topic": "DEM 处理",
+      "userNeed": "两个州的高程数据格式不同，部分数据覆盖全州，下载后合并失败。",
+      "assessment": "可选技能能检查与重投影；原始 DEM 目录和通用多文件镶嵌流程未验收。",
+      "questions": "目标区域、像元大小、坐标系及输出格式。",
+      "priority": "P2",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "researchPriority": "P2",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F11",
+      "url": "https://gis.stackexchange.com/questions/88354/qgis-clipping-and-reprojecting-srtm-data-creates-a-huge-file",
+      "title": "QGIS Clipping and reprojecting SRTM data creates a HUGE file",
+      "platform": "GIS Stack Exchange",
+      "date": "2014-03-03",
+      "topic": "栅格体积",
+      "userNeed": "约 23 MB 的 SRTM 数据在裁剪或重投影后膨胀到数百 GB。",
+      "assessment": "有检查、统计、重投影和规划基础；需补单位、像元数与临时磁盘预测。",
+      "questions": "输出 CRS 与像元单位；是否保持原始分辨率。",
+      "priority": "P1",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "researchPriority": "P1",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F12",
+      "url": "https://github.com/qgis/QGIS/issues/39148",
+      "title": "Simple merge of 4 LIDAR tif tiles changes elevations · Issue #39148 · qgis/QGIS",
+      "platform": "GitHub Issues 或 Discussions",
+      "date": "2020-10-02",
+      "topic": "成果核验",
+      "userNeed": "合并后看到不同的高程最小最大值，怀疑数据被改变。",
+      "assessment": "可选栅格统计技能可诊断；维护者指出显示使用估算统计，不应直接判为数据损坏。",
+      "questions": "比较实际像元还是图层显示统计。",
+      "priority": "P1",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "researchPriority": "P1",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F13",
+      "url": "https://www.prospectingaustralia.com/threads/help-lidar-driving-me-nuts.44334/",
+      "title": "Help! Lidar driving me nuts. | Prospecting Australia - Gold Prospecting & Fossicking Forum",
+      "platform": "Prospecting Australia",
+      "date": "2026-05-20",
+      "topic": "数据选择与显示",
+      "userNeed": "下载 DEM 后在 QGIS 里的显示不符合预期，不清楚 DEM 与 LiDAR 产品的区别。",
+      "assessment": "有 DEM 读取基础；LAS/LAZ 产品检索与处理未接入，不能只靠显示设置保证符合用途。",
+      "questions": "要裸地高程、地表高程还是点云；所需精度与展示方式。",
+      "priority": "P2",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "researchPriority": "P2",
+      "productScope": "当前范围",
+      "scopeNote": "当前只借用 DEM 类型与显示诊断；不接入 LAS/LAZ 原始点云。"
+    },
+    {
+      "id": "F14",
+      "url": "https://github.com/gee-community/geemap/discussions/1800",
+      "title": "Using geemap.download_ee_image · gee-community/geemap · Discussion #1800 · GitHub",
+      "platform": "GitHub Issues 或 Discussions",
+      "date": null,
+      "topic": "处理进度",
+      "userNeed": "约 1.23 GB 的导出一直 0%；维护者解释前置计算仍未完成。",
+      "assessment": "本地任务已有下载、生成、核验阶段；GEE 云计算任务状态尚未接入。",
+      "questions": "是否等待原始精度计算；可以先生成低分辨率预览吗。",
+      "priority": "范围外",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "researchPriority": "P1",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "F15",
+      "url": "https://github.com/gee-community/geemap/discussions/775",
+      "title": "Image too large to export · gee-community/geemap · Discussion #775 · GitHub",
+      "platform": "GitHub Issues 或 Discussions",
+      "date": null,
+      "topic": "GEE 导出限制",
+      "userNeed": "导出超过直接下载大小上限，想避免手工切块。",
+      "assessment": "需 GEE 授权、任务调度与分块导出适配；不能承诺已支持。",
+      "questions": "云端批处理还是切块下载；保持哪种分辨率和波段。",
+      "priority": "范围外",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "researchPriority": "P2",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "F16",
+      "url": "https://gis.stackexchange.com/questions/366044/image-getdownloadurl-download-pixel-grid-dimension-limit",
+      "title": "image.getDownloadURL download pixel grid dimension limit",
+      "platform": "GIS Stack Exchange",
+      "date": "2020-06-25",
+      "topic": "GEE 导出限制",
+      "userNeed": "大范围栅格超过每边 10,000 像素的直接下载限制。",
+      "assessment": "官方限制仍有效；应分块或使用云端导出，不能静默降低精度。",
+      "questions": "目标像元大小、格式；是否允许改变精度。",
+      "priority": "范围外",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "researchPriority": "P2",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "F17",
+      "url": "https://community.openstreetmap.org/t/using-qgis-but-buildings-not-all-downloading/4361",
+      "title": "Using Qgis but buildings not all downloading - Help and support - OpenStreetMap Community Forum",
+      "platform": "OpenStreetMap 社区",
+      "date": "2022-10-20",
+      "topic": "OSM 全量与属性",
+      "userNeed": "想下载整片城市建筑及高度，遇到范围太大、导出丢属性、浏览器崩溃。",
+      "assessment": "小范围 OSM 导出已有真实验收；城市级 PBF 离线提取、去重与高度单位核验需补。",
+      "questions": "建筑还是全部类型；高度缺失如何处理、输出字段。",
+      "priority": "P1",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "researchPriority": "P1",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F18",
+      "url": "https://help.openstreetmap.org/questions/56122/overpass-query-roads-within-polygon/",
+      "title": "OpenStreetMap Help",
+      "platform": "OpenStreetMap 社区",
+      "date": null,
+      "topic": "地名歧义",
+      "userNeed": "按 Halle 地名查询道路超时，后发现同名地区导致查询了多个范围。",
+      "assessment": "可用问答卡澄清地区并保存明确范围；大范围查询策略需另处理。",
+      "questions": "哪个国家或行政区的 Halle。",
+      "priority": "P0",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "researchPriority": "P0",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F19",
+      "url": "https://stackoverflow.com/questions/68784648/downloading-osm-data-for-large-area",
+      "title": "Downloading OSM data for large area",
+      "platform": "Stack Overflow",
+      "date": "2021-08-14",
+      "topic": "OSM 大范围",
+      "userNeed": "下载整个墨尔本道路网络时，在线导出与 Overpass 查询失败。",
+      "assessment": "现有小范围查询不足以证明城市级稳定；优先区域 PBF 或用户自有数据库。",
+      "questions": "只要道路还是其他对象；属性、范围和格式。",
+      "priority": "P1",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "researchPriority": "P1",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F20",
+      "url": "https://gis.stackexchange.com/questions/377499/download-all-data-for-an-area-from-openstreetmap",
+      "title": "Download ALL data for an area from OpenStreetMap",
+      "platform": "GIS Stack Exchange",
+      "date": "2020-10-26",
+      "topic": "OSM 数据类型",
+      "userNeed": "想按行政区导出道路、商店、河流、公园等全部 OSM 对象。",
+      "assessment": "目前支持标签查询；通用全量区域提取和多图层输出需要补。",
+      "questions": "全量原始对象还是整理好的图层；哪些类别必须包含。",
+      "priority": "P1",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "researchPriority": "P1",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F21",
+      "url": "https://forum.dataspace.copernicus.eu/t/request-for-sentinel2-download-unauthorized-in-python-httperror-401/234",
+      "title": "Request for Sentinel2 download unauthorized in python (HTTPERROR 401) - APIs - Copernicus Data Space Ecosystem | Community forum",
+      "platform": "Copernicus Data Space",
+      "date": "2024-01-10",
+      "topic": "提供方授权",
+      "userNeed": "产品目录能检索，但 Sentinel 下载返回 401。",
+      "assessment": "有本机凭据管理；CDSE 下载授权通道与刷新未作为产品接入。",
+      "questions": "采用哪个账号或授权连接；不在聊天中索取明文密码。",
+      "priority": "范围外",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "researchPriority": "P1",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "F22",
+      "url": "https://forum.dataspace.copernicus.eu/t/401-error-message/4954",
+      "title": "\"401\" Error message - Sentinel-2 - Copernicus Data Space Ecosystem | Community forum",
+      "platform": "Copernicus Data Space",
+      "date": "2026-04-10",
+      "topic": "令牌过期与续传",
+      "userNeed": "Sentinel-2 下载到约 93% 出现 Token 过期，用户不清楚慢下载与失败原因。",
+      "assessment": "需提供方专属刷新、续传与文件一致性校验；现有瓦片恢复不等于大产品续传已支持。",
+      "questions": "可用授权连接；仅在需要重新授权时询问用户。",
+      "priority": "范围外",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "researchPriority": "P1",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "F23",
+      "url": "https://forum.dataspace.copernicus.eu/t/download-process-stops-before-all-the-required-data-have-been-downloaded/3344",
+      "title": "Download process stops before all the required data have been downloaded - OData - Copernicus Data Space Ecosystem | Community forum",
+      "platform": "Copernicus Data Space",
+      "date": "2025-03-04",
+      "topic": "遥感目录完整性",
+      "userNeed": "一个月的批量 Sentinel 下载中途结束，网页可见的部分产品被遗漏。",
+      "assessment": "需目录分页、稳定产品清单和逐项成功失败账本；不是重复请求同一页。",
+      "questions": "日期、产品级别、区域及缺失产品处理。",
+      "priority": "范围外",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "researchPriority": "P1",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "F24",
+      "url": "https://forum.dataspace.copernicus.eu/t/access-token-creation-failed-for-large-number-of-image-download/835",
+      "title": "\"Access token creation failed\" for large number of image download - OData - Copernicus Data Space Ecosystem | Community forum",
+      "platform": "Copernicus Data Space",
+      "date": "2024-07-02",
+      "topic": "长批次授权",
+      "userNeed": "约 5,000 景下载长时间运行后 refresh token 无效，反复中断。",
+      "assessment": "需集中管理提供方 token、长批次检查点；不能让每个下载线程独立刷新。",
+      "questions": "选择哪个授权连接；失效时暂停并提供重新授权入口。",
+      "priority": "范围外",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "researchPriority": "P1",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "F25",
+      "url": "https://forum.dataspace.copernicus.eu/t/403-error-forbidden-get-while-retrieving-sentinel-2-images-from-the-s3-bucket/4749",
+      "title": "403 error (Forbidden get) while retrieving sentinel-2 images from the s3 bucket - S3 Access - Copernicus Data Space Ecosystem | Community forum",
+      "platform": "Copernicus Data Space",
+      "date": "2026-02-27",
+      "topic": "S3 产品读取",
+      "userNeed": "原本可运行的 eodata S3 分波段下载变成 403，重新生成 key 也未解决。",
+      "assessment": "尚无已验收 S3 产品读取适配；应区别签名、区域、权限、资源路径和限额错误。",
+      "questions": "所用 S3 连接、产品与波段；凭据通过本机授权界面输入。",
+      "priority": "范围外",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "researchPriority": "P1",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "F26",
+      "url": "https://community.cesium.com/t/is-it-possible-to-download-3d-tiles-that-i-did-not-upload-via-rest-api/42691",
+      "title": "Is it possible to download 3D tiles (that I did not upload) via REST API? - Cesium ion - Cesium Community",
+      "platform": "Cesium Community",
+      "date": "2025-08-12",
+      "topic": "离线三维权限",
+      "userNeed": "希望发送范围后直接得到别人的全球三维资产或离线 glTF。",
+      "assessment": "技术下载能力不能推导资产导出权限；官方裁剪、归档、导出需分别核实。",
+      "questions": "资产归属、授权途径、输出用途和是否需要精确切网格。",
+      "priority": "P0",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "researchPriority": "P0",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F27",
+      "url": "https://community.cesium.com/t/tiles-for-offline-terrain-server/40557",
+      "title": "Tiles for offline terrain server",
+      "platform": "Cesium Community",
+      "date": null,
+      "topic": "离线三维权限",
+      "userNeed": "想将 Google Photorealistic 3D Tiles 下载后自托管离线使用。",
+      "assessment": "Cesium 官方社区明确该数据不可离线使用；应解释限制并提供允许的替代数据。",
+      "questions": "接受哪种可离线的自有或获授权数据。",
+      "priority": "P0",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "researchPriority": "P0",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F28",
+      "url": "https://community.cesium.com/t/render-the-gltf-3d-model-as-tileset-json/39886",
+      "title": "Render the GLTF 3d model as tileset.json - CesiumJS - Cesium Community",
+      "platform": "Cesium Community",
+      "date": "2025-04-09",
+      "topic": "三维依赖与预览",
+      "userNeed": "有离线 tileset.json，但三维模型无法显示。",
+      "assessment": "已有递归依赖下载、成果核验和 Cesium 预览；需核对资产许可、资源完整性及坐标。",
+      "questions": "是自有资产还是外部服务；缺失哪些依赖资源。",
+      "priority": "P0",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "researchPriority": "P0",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F29",
+      "url": "https://community.cesium.com/t/downloading-terrain-data-for-offline-use/36833",
+      "title": "Downloading terrain data for offline use - Cesium ion - Cesium Community",
+      "platform": "Cesium Community",
+      "date": "2024-11-23",
+      "topic": "云端归档状态",
+      "userNeed": "用户将自己的 GeoTIFF 上传 Ion 后归档一直 0%，无法获取离线地形。",
+      "assessment": "尚无 Ion 官方归档任务管理；现有场景加载和下载其他 3D Tiles 不能替代。",
+      "questions": "已有上传资产、账号权限和目标离线格式。",
+      "priority": "P2",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "researchPriority": "P2",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F30",
+      "url": "http://bbs.3s001.com/thread-242954-1-1.html",
+      "title": "关于下载谷歌影像的坐标系转换和纠正—ARCGIS—地信网论坛",
+      "platform": "地信网论坛",
+      "date": null,
+      "topic": "坐标偏移",
+      "userNeed": "影像标为 WGS84，却无法与道路矢量正确叠加。",
+      "assessment": "已验证特定 GCJ-02 预设校正；不能对所有偏移自动套用同一转换。",
+      "questions": "影像来源、矢量真实 CRS、是否有控制点。",
+      "priority": "P0",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "researchPriority": "P0",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F31",
+      "url": "http://bbs.3s001.com/thread-361706-1-1.html",
+      "title": "按掩膜提取出现error010092：无效的输出范围—ARCGIS—地信网论坛",
+      "platform": "地信网论坛",
+      "date": "2022-07-20",
+      "topic": "范围与投影",
+      "userNeed": "下载全球 DEM 后自行定义投影，再按掩膜提取报无效范围。",
+      "assessment": "有输入与 CRS 检查；缺少 CRS 时应询问，不能猜测或仅改标签。",
+      "questions": "数据真实投影、掩膜 CRS 和来源说明。",
+      "priority": "P0",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "researchPriority": "P0",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F32",
+      "url": "http://bbs.3s001.com/thread-355070-1-1.html",
+      "title": "ArcMap和ArcGISPro加载天地图服务—ARCGIS—地信网论坛",
+      "platform": "地信网论坛",
+      "date": "2021-12-19",
+      "topic": "国内服务认证",
+      "userNeed": "经验帖记录天地图 Key 类型和 WMTS 参数差异影响桌面加载。",
+      "assessment": "用户服务端 Key 的小范围影像加注记下载已验证；不能推断所有地方节点接口。",
+      "questions": "已有哪种 Key 和图层；凭据留在本机连接。",
+      "priority": "P0",
+      "sourceType": "经验说明",
+      "verification": "核读原文；未在本轮重现下载",
+      "researchPriority": "P0",
+      "productScope": "当前范围"
+    }
+  ],
+  "officialSources": [
+    {
+      "url": "https://developers.google.com/earth-engine/apidocs/ee-image-getdownloadurl",
+      "title": "ee.Image.getDownloadURL  |  Google Earth Engine  |  Google for Developers"
+    },
+    {
+      "url": "https://cesium.com/learn/ion/cesium-ion-archives-and-exports/",
+      "title": "Cesium ion Archives and Exports – Cesium"
+    },
+    {
+      "url": "https://dev.overpass-api.de/overpass-doc/en/preface/commons.html",
+      "title": "Commons"
+    },
+    {
+      "url": "https://developers.arcgis.com/rest/services-reference/enterprise/query-feature-service-layer/",
+      "title": "Query (Feature Service/Layer) | ArcGIS REST APIs | Esri Developer"
+    },
+    {
+      "url": "https://www.esri.com/arcgis-blog/products/arcgis-living-atlas/imagery/wayback-with-world-imagery-metadata",
+      "title": "Wayback with World Imagery Metadata"
+    },
+    {
+      "url": "https://www.esri.com/arcgis-blog/products/arcgis-living-atlas/imagery/wayback-export",
+      "title": "World Imagery Wayback Export"
+    },
+    {
+      "url": "https://documentation.dataspace.copernicus.eu/APIs/STAC.html",
+      "title": "STAC product catalogue – Documentation"
+    },
+    {
+      "url": "https://documentation.dataspace.copernicus.eu/APIs/Token.html",
+      "title": "Copernicus Data Space Ecosystem Token Generation – Documentation"
+    },
+    {
+      "url": "https://documentation.dataspace.copernicus.eu/notebook-samples/geo/odata_basics.html",
+      "title": "How to query CDSE Catalogue and download products – Documentation"
+    }
+  ],
+  "searchInventory": [
+    {
+      "queryKey": "imagery",
+      "title": "Mass downloading Google Earth historical imagery",
+      "url": "https://gis.stackexchange.com/questions/340605/mass-downloading-google-earth-historical-imagery/340608",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "imagery",
+      "title": "Batch downloading time series of TIFF images using multi-polygons",
+      "url": "https://gis.stackexchange.com/questions/416014/batch-downloading-time-series-of-tiff-images-using-multi-polygons",
+      "date": "2021-11-10T01:29:27.000Z"
+    },
+    {
+      "queryKey": "imagery",
+      "title": "Simple way to collect the Sentinel data of a given ROI?",
+      "url": "https://gis.stackexchange.com/questions/254815/simple-way-to-collect-the-sentinel-data-of-a-given-roi",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "imagery",
+      "title": "README.md",
+      "url": "https://github.com/hpa-code/geoimagery/blob/main/README.md",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "imagery",
+      "title": "Download all Landsat tiles for a specific data range onto my computer using Google Earth Engine",
+      "url": "https://gis.stackexchange.com/questions/482312/download-all-landsat-tiles-for-a-specific-data-range-onto-my-computer-using-goog",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "imagery",
+      "title": "Downloading all images in time interval with WMS getmap request",
+      "url": "https://gis.stackexchange.com/questions/367192/downloading-all-images-in-time-interval-with-wms-getmap-request",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "imagery",
+      "title": "docs/dump.md",
+      "url": "https://github.com/Mbucari/GEHistoricalImagery/blob/master/docs/dump.md",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "imagery",
+      "title": "ernstste/landsatlinks",
+      "url": "https://github.com/ernstste/landsatlinks",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "imagery",
+      "title": "How to access Google Earth Historical Tiled Imagery Url to other Map APIs or Cesium.js?",
+      "url": "https://gis.stackexchange.com/questions/190029/how-to-access-google-earth-historical-tiled-imagery-url-to-other-map-apis-or-ces",
+      "date": "2016-04-18T19:54:56.000Z"
+    },
+    {
+      "queryKey": "imagery",
+      "title": "vascobnunes/fetchLandsatSentinelFromGoogleCloud",
+      "url": "https://github.com/vascobnunes/fetchLandsatSentinelFromGoogleCloud",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "bulk",
+      "title": "Qgis: Cannot Merge Layers | Dovetail Games Forums",
+      "url": "https://forums.dovetailgames.com/threads/qgis-cannot-merge-layers.75853/",
+      "date": "2023-11-05T00:00:00.000Z"
+    },
+    {
+      "queryKey": "bulk",
+      "title": "Help! Lidar driving me nuts. | Prospecting Australia - Gold Prospecting & Fossicking Forum",
+      "url": "https://www.prospectingaustralia.com/threads/help-lidar-driving-me-nuts.44334/",
+      "date": "2026-05-20T05:45:02.000Z"
+    },
+    {
+      "queryKey": "bulk",
+      "title": "sameeeyy/PointCloudFR",
+      "url": "https://github.com/sameeeyy/PointCloudFR",
+      "date": "2025-01-10T00:00:00.000Z"
+    },
+    {
+      "queryKey": "bulk",
+      "title": "QGIS Clipping and reprojecting SRTM data creates a HUGE file",
+      "url": "https://gis.stackexchange.com/questions/88354/qgis-clipping-and-reprojecting-srtm-data-creates-a-huge-file",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "bulk",
+      "title": "Getting NoData strips, and high memory usage, when processing block-maximum/minimum rasters from LiDAR using Whiteboxtools",
+      "url": "https://gis.stackexchange.com/questions/491706/getting-nodata-strips-and-high-memory-usage-when-processing-block-maximum-mini",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "bulk",
+      "title": "GDAL merge of DEM data resulting in large black tiles ...",
+      "url": "https://gis.stackexchange.com/questions/279781/gdal-merge-of-dem-data-resulting-in-large-black-tiles-elevation-min-max-problem",
+      "date": "2018-04-17T14:58:35.000Z"
+    },
+    {
+      "queryKey": "bulk",
+      "title": "Simple merge of 4 LIDAR tif tiles changes elevations · Issue #39148 · qgis/QGIS",
+      "url": "https://github.com/qgis/QGIS/issues/39148",
+      "date": "2020-10-02T23:03:52.000Z"
+    },
+    {
+      "queryKey": "bulk",
+      "title": "hkristen/qgis-arcgis-imageserver-downloader",
+      "url": "https://github.com/hkristen/qgis-arcgis-imageserver-downloader",
+      "date": "2026-01-26T00:00:00.000Z"
+    },
+    {
+      "queryKey": "bulk",
+      "title": "Download USGS 3DEP LiDAR Data | 3DEP LidarExplorer Guide",
+      "url": "https://lidarvisor.com/download-usgs-3dep-lidar/",
+      "date": "2026-02-24T20:37:50.000Z"
+    },
+    {
+      "queryKey": "bulk",
+      "title": "DJI Multispectral GeoTIFF batch merge in QGIS",
+      "url": "https://gis.stackexchange.com/questions/493605/dji-multispectral-geotiff-batch-merge-in-qgis",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "vector",
+      "title": "How to HTTP GET a full dataset from ArcGIS WFS server?",
+      "url": "https://gis.stackexchange.com/questions/175977/how-to-http-get-a-full-dataset-from-arcgis-wfs-server",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "vector",
+      "title": "Solved: Using API doesn't return all data - Esri Community",
+      "url": "https://community.esri.com/t5/arcgis-api-for-python-questions/using-api-doesn-t-return-all-data/td-p/1599976",
+      "date": "2025-03-27T15:32:55.000Z"
+    },
+    {
+      "queryKey": "vector",
+      "title": "Download Dataset From ArcGIS REST Service",
+      "url": "https://gis.stackexchange.com/questions/40445/download-dataset-from-arcgis-rest-service",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "vector",
+      "title": "ARCGIS feature layer extract all records",
+      "url": "https://stackoverflow.com/questions/72747040/arcgis-feature-layer-extract-all-records",
+      "date": "2022-06-24T16:37:55.000Z"
+    },
+    {
+      "queryKey": "vector",
+      "title": "BUG-000114589 for ArcGIS GIS Server",
+      "url": "https://support.esri.com/en-us/bug/a-web-feature-service-wfs-service-getfeature-request-fa-bug-000114589",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "vector",
+      "title": "Query in published services more than 2000 counts not working - Esri Community",
+      "url": "https://community.esri.com/en/discussion/1138794/query-in-published-services-more-than-2000-counts-not-working",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "vector",
+      "title": "How do I get the rest of the data in a Feature Service?",
+      "url": "https://gis.stackexchange.com/questions/437456/how-do-i-get-the-rest-of-the-data-in-a-feature-service",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "vector",
+      "title": "Selecting more than 1,000 features from AGOL hosted feature service?",
+      "url": "https://gis.stackexchange.com/questions/177304/selecting-more-than-1-000-features-from-agol-hosted-feature-service",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "vector",
+      "title": "WFS max number of features - Esri Community",
+      "url": "https://community.esri.com/t5/arcgis-enterprise-questions/wfs-max-number-of-features/td-p/1251181",
+      "date": "2023-01-25T00:00:00.000Z"
+    },
+    {
+      "queryKey": "vector",
+      "title": "How can I export data from a feature layer in ArcGis Server?",
+      "url": "https://gis.stackexchange.com/questions/42497/how-can-i-export-data-from-a-feature-layer-in-arcgis-server",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "chinese",
+      "title": "天地图高清影像下载失败常见原因？_编程语言-CSDN问答",
+      "url": "https://ask.csdn.net/questions/9112293",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "chinese",
+      "title": "QGIS天地图插件无法加载影像图层，提示“网络连接失败”如何解决？_编程语言-CSDN问答",
+      "url": "https://ask.csdn.net/questions/9337195",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "chinese",
+      "title": "天地图2024版正式启用！首次开放多时相影像专题，可直接查看历史影像",
+      "url": "https://blog.csdn.net/gis_zss/article/details/138669312",
+      "date": "2024-05-10T07:46:16.000Z"
+    },
+    {
+      "queryKey": "chinese",
+      "title": "天地图历史影像下载",
+      "url": "https://blog.csdn.net/weixin_49445195/article/details/134839633",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "chinese",
+      "title": "ArcMap和ArcGISPro加载天地图服务—ARCGIS—地信网论坛",
+      "url": "http://bbs.3s001.com/thread-355070-1-1.html",
+      "date": "2021-12-19T00:00:00.000Z"
+    },
+    {
+      "queryKey": "chinese",
+      "title": "如何下载不同年份的历史影像(多时相影像)-万能地图下载器X3-私有化地图部署_离线地图瓦片发布-水经注GIS",
+      "url": "http://rivermap.cn/docs/show-1679.html",
+      "date": "2017-06-08T00:00:00.000Z"
+    },
+    {
+      "queryKey": "chinese",
+      "title": "高分GF与环境HJ系列国产卫星遥感影像数据图像免费批量下载方法_卫星影像数据2017下载-CSDN博客",
+      "url": "https://blog.csdn.net/zhebushibiaoshifu/article/details/118546799",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "chinese",
+      "title": "QGIS + ArcGIS Pro 下载常见卫星影像及 ESRI Wayback 历史影像 - 教程 - mthoutai - 博客园",
+      "url": "https://www.cnblogs.com/mthoutai/p/19169754",
+      "date": "2025-10-27T00:00:00.000Z"
+    },
+    {
+      "queryKey": "chinese",
+      "title": "历史影像再来一波（能到70年代、80年代的历史影像数据）",
+      "url": "https://blog.csdn.net/xiaopeixiaojun/article/details/124039157",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "chinese",
+      "title": "天地图如何导出某个区域_如何巧用ArcGIS提取天地图建筑轮廓-CSDN博客",
+      "url": "https://blog.csdn.net/weixin_35925298/article/details/112248220",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "gee",
+      "title": "ee.Image.getDownloadURL  |  Google Earth Engine  |  Google for Developers",
+      "url": "https://developers.google.com/earth-engine/apidocs/ee-image-getdownloadurl",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "gee",
+      "title": "image.getDownloadURL download pixel grid dimension limit",
+      "url": "https://gis.stackexchange.com/questions/366044/image-getdownloadurl-download-pixel-grid-dimension-limit",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "gee",
+      "title": "Export Sentinel-2 image with 10 m resolution · gee-community/geemap · Discussion #735 · GitHub",
+      "url": "https://github.com/gee-community/geemap/discussions/735",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "gee",
+      "title": "How to fix Google Earth Engine image.getDownloadURL pixel grid dimensions limit",
+      "url": "https://gis.stackexchange.com/questions/438250/how-to-fix-google-earth-engine-image-getdownloadurl-pixel-grid-dimensions-limit",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "gee",
+      "title": "Max pixel issue downloading a Sentinel image for my ROI",
+      "url": "https://gis.stackexchange.com/questions/439871/max-pixel-issue-downloading-a-sentinel-image-for-my-roi",
+      "date": "2022-09-04T09:08:01.000Z"
+    },
+    {
+      "queryKey": "gee",
+      "title": "Using geemap.download_ee_image · gee-community/geemap · Discussion #1800 · GitHub",
+      "url": "https://github.com/gee-community/geemap/discussions/1800",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "gee",
+      "title": "11 export image - geemap",
+      "url": "https://geemap.org/notebooks/11_export_image/",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "gee",
+      "title": "Cannot download \"BIG\" data (normal size satellite imagery) from Google Earth Engine with Python",
+      "url": "https://gis.stackexchange.com/questions/413056/cannot-download-big-data-normal-size-satellite-imagery-from-google-earth-eng",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "gee",
+      "title": "Image too large to export · gee-community/geemap · Discussion #775 · GitHub",
+      "url": "https://github.com/gee-community/geemap/discussions/775",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "gee",
+      "title": "classified image export · gee-community geemap · Discussion #929 · GitHub",
+      "url": "https://github.com/gee-community/geemap/discussions/929",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "osm",
+      "title": "Get all city information (roads, buildings, ..etc) in OpenStreetMap via Overpass API",
+      "url": "https://gis.stackexchange.com/questions/339209/get-all-city-information-roads-buildings-etc-in-openstreetmap-via-overpass/339210",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "osm",
+      "title": "Download ALL data for an area from OpenStreetMap",
+      "url": "https://gis.stackexchange.com/questions/377499/download-all-data-for-an-area-from-openstreetmap",
+      "date": "2020-10-26T05:00:40.000Z"
+    },
+    {
+      "queryKey": "osm",
+      "title": "Large queries in Overpass Turbo ran out of memory",
+      "url": "https://gis.stackexchange.com/questions/300136/large-queries-in-overpass-turbo-ran-out-of-memory",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "osm",
+      "title": "Using the Wizard in Overpass Turbo to download all layers within the Bounding-Box",
+      "url": "https://gis.stackexchange.com/questions/259857/using-the-wizard-in-overpass-turbo-to-download-all-layers-within-the-bounding-bo",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "osm",
+      "title": "overpass query roads within polygon - OpenStreetMap Help",
+      "url": "https://help.openstreetmap.org/questions/56122/overpass-query-roads-within-polygon/",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "osm",
+      "title": "How to download all OpenStreetMap highways in a large area?",
+      "url": "https://gis.stackexchange.com/questions/204156/how-to-download-all-openstreetmap-highways-in-a-large-area",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "osm",
+      "title": "Shapefiles - OpenStreetMap Wiki",
+      "url": "https://wiki.openstreetmap.org/wiki/Shapefiles",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "osm",
+      "title": "Download certain POIs for a whole country and transfer to PostgreSQL database",
+      "url": "https://gis.stackexchange.com/questions/341238/download-certain-pois-for-a-whole-country-and-transfer-to-postgresql-database",
+      "date": "2019-11-08T15:23:33.000Z"
+    },
+    {
+      "queryKey": "osm",
+      "title": "Using Qgis but buildings not all downloading - Help and support - OpenStreetMap Community Forum",
+      "url": "https://community.openstreetmap.org/t/using-qgis-but-buildings-not-all-downloading/4361",
+      "date": "2022-10-20T02:54:14.000Z"
+    },
+    {
+      "queryKey": "osm",
+      "title": "Downloading OSM data for large area",
+      "url": "https://stackoverflow.com/questions/68784648/downloading-osm-data-for-large-area",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "cesium",
+      "title": "Documentation/OfflineGuide/README.md",
+      "url": "https://github.com/CesiumGS/cesium/blob/main/Documentation/OfflineGuide/README.md",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "cesium",
+      "title": "Cesium ion Archives and Exports",
+      "url": "https://cesium.com/learn/ion/cesium-ion-archives-and-exports/",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "cesium",
+      "title": "Is it possible to download 3D tiles (that I did not upload) via REST API? - Cesium ion - Cesium Community",
+      "url": "https://community.cesium.com/t/is-it-possible-to-download-3d-tiles-that-i-did-not-upload-via-rest-api/42691",
+      "date": "2025-08-12T16:53:19.000Z"
+    },
+    {
+      "queryKey": "cesium",
+      "title": "Tiles for offline terrain server - CesiumJS - Cesium Community",
+      "url": "https://community.cesium.com/t/tiles-for-offline-terrain-server/40557",
+      "date": "2025-05-12T00:00:00.000Z"
+    },
+    {
+      "queryKey": "cesium",
+      "title": "Unable to view high-resolution map in offline mode - Cesium ion - Cesium Community",
+      "url": "https://community.cesium.com/t/unable-to-view-high-resolution-map-in-offline-mode/37674",
+      "date": "2025-01-02T00:00:00.000Z"
+    },
+    {
+      "queryKey": "cesium",
+      "title": "Downloading terrain data for offline use - Cesium ion - Cesium Community",
+      "url": "https://community.cesium.com/t/downloading-terrain-data-for-offline-use/36833",
+      "date": "2024-11-23T06:09:26.000Z"
+    },
+    {
+      "queryKey": "cesium",
+      "title": "Is offline terrain support deprecated? - CesiumJS - Cesium Community",
+      "url": "https://community.cesium.com/t/is-offline-terrain-support-deprecated/5080",
+      "date": "2017-01-26T00:00:00.000Z"
+    },
+    {
+      "queryKey": "cesium",
+      "title": "Render the GLTF 3d model as tileset.json - CesiumJS - Cesium Community",
+      "url": "https://community.cesium.com/t/render-the-gltf-3d-model-as-tileset-json/39886",
+      "date": "2025-04-09T05:12:06.000Z"
+    },
+    {
+      "queryKey": "cesium",
+      "title": "CesiumJS/iON in an \"offline\" environment",
+      "url": "https://community.cesium.com/t/cesiumjs-ion-in-an-offline-environment/8738",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "cesium",
+      "title": "How can I download photorealistic 3D tiles for Cesium JS (React) offline (self hosted)? - CesiumJS - Cesium Community",
+      "url": "https://community.cesium.com/t/how-can-i-download-photorealistic-3d-tiles-for-cesium-js-react-offline-self-hosted/26293",
+      "date": "2023-08-23T00:00:00.000Z"
+    },
+    {
+      "queryKey": "cnforums",
+      "title": "关于下载谷歌影像的坐标系转换和纠正—ARCGIS—地信网论坛",
+      "url": "http://bbs.3s001.com/thread-242954-1-1.html",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "cnforums",
+      "title": "按指定范围批量提取（裁剪）工具—ARCGIS—地信网论坛",
+      "url": "http://bbs.3s001.com/thread-351409-2-1.html",
+      "date": "2024-01-31T00:00:00.000Z"
+    },
+    {
+      "queryKey": "cnforums",
+      "title": "按掩膜提取出现error010092：无效的输出范围—ARCGIS—地信网论坛",
+      "url": "http://bbs.3s001.com/thread-361706-1-1.html",
+      "date": "2022-07-20T00:00:00.000Z"
+    },
+    {
+      "queryKey": "cnforums",
+      "title": "影像数据获取方案—ARCGIS—地信网论坛",
+      "url": "http://bbs.3s001.com/thread-108809-1-1.html",
+      "date": "2012-09-06T00:00:00.000Z"
+    },
+    {
+      "queryKey": "cnforums",
+      "title": "DEM系列教程 | 免费下载全球数字高程数据（DEM）详解教程，还有地形晕渲等高线等—快乐茶座—地信网论坛",
+      "url": "http://bbs.3s001.com/thread-306606-1-1.html",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "cnforums",
+      "title": "求助，10.6，按掩膜提取后，自动补充为外接矩形—地理信息系统(GIS)—地信网论坛",
+      "url": "http://bbs.3s001.com/thread-349957-1-1.html",
+      "date": "2021-07-19T00:00:00.000Z"
+    },
+    {
+      "queryKey": "cnforums",
+      "title": "求大神指导批量配准图斑—ARCGIS—地信网论坛",
+      "url": "http://bbs.3s001.com/thread-348123-1-1.html",
+      "date": "2021-05-28T00:00:00.000Z"
+    },
+    {
+      "queryKey": "cnforums",
+      "title": "遥感影像—地理信息系统(GIS)—地信网论坛",
+      "url": "http://bbs.3s001.com/thread-91882-1-1.html",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "cnforums",
+      "title": "MAPGIS有问有答（求助）—地信网论坛",
+      "url": "http://bbs.3s001.com/forum-57-19.html",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "cnforums",
+      "title": "ArcMap和ArcGISPro加载天地图服务—ARCGIS—地信网论坛",
+      "url": "http://bbs.3s001.com/thread-355070-1-1.html",
+      "date": "2021-12-19T00:00:00.000Z"
+    },
+    {
+      "queryKey": "auth",
+      "title": "Request for Sentinel2 download unauthorized in python (HTTPERROR 401) - APIs - Copernicus Data Space Ecosystem | Community forum",
+      "url": "https://forum.dataspace.copernicus.eu/t/request-for-sentinel2-download-unauthorized-in-python-httperror-401/234",
+      "date": "2024-01-10T13:35:05.000Z"
+    },
+    {
+      "queryKey": "auth",
+      "title": "'401 – Unauthorized' error on 'Download Sentinel data' operator - meta - STEP Forum",
+      "url": "https://forum.step.esa.int/t/401-unauthorized-error-on-download-sentinel-data-operator/30153",
+      "date": "2021-05-05T15:40:50.000Z"
+    },
+    {
+      "queryKey": "auth",
+      "title": "Error 401 [{\"detail\":\"Expired signature!\"}] - Sentinel-2 - Copernicus Data Space Ecosystem | Community forum",
+      "url": "https://forum.dataspace.copernicus.eu/t/error-401-detail-expired-signature/3363",
+      "date": "2025-03-06T08:11:43.000Z"
+    },
+    {
+      "queryKey": "auth",
+      "title": "\"401\" Error message - Sentinel-2 - Copernicus Data Space Ecosystem | Community forum",
+      "url": "https://forum.dataspace.copernicus.eu/t/401-error-message/4954",
+      "date": "2026-04-10T07:02:50.000Z"
+    },
+    {
+      "queryKey": "auth",
+      "title": "\"Access token creation failed\" for large number of image download - OData - Copernicus Data Space Ecosystem | Community forum",
+      "url": "https://forum.dataspace.copernicus.eu/t/access-token-creation-failed-for-large-number-of-image-download/835",
+      "date": "2024-07-02T09:39:25.000Z"
+    },
+    {
+      "queryKey": "auth",
+      "title": "Download process stops before all the required data have been downloaded - OData - Copernicus Data Space Ecosystem | Community forum",
+      "url": "https://forum.dataspace.copernicus.eu/t/download-process-stops-before-all-the-required-data-have-been-downloaded/3344",
+      "date": "2025-03-04T13:01:26.000Z"
+    },
+    {
+      "queryKey": "auth",
+      "title": "403 error (Forbidden get) while retrieving sentinel-2 images from the s3 bucket - S3 Access - Copernicus Data Space Ecosystem | Community forum",
+      "url": "https://forum.dataspace.copernicus.eu/t/403-error-forbidden-get-while-retrieving-sentinel-2-images-from-the-s3-bucket/4749",
+      "date": "2026-02-27T15:43:05.000Z"
+    },
+    {
+      "queryKey": "auth",
+      "title": "Persistent 401 Unauthorized Error on /api/v1/process - Sentinel Hub Catalog API - Copernicus Data Space Ecosystem | Community forum",
+      "url": "https://forum.dataspace.copernicus.eu/t/persistent-401-unauthorized-error-on-api-v1-process/3698",
+      "date": "2025-05-15T08:13:46.000Z"
+    },
+    {
+      "queryKey": "auth",
+      "title": "OData download repeated failures - APIs - Copernicus Data Space Ecosystem | Community forum",
+      "url": "https://forum.dataspace.copernicus.eu/t/odata-download-repeated-failures/285",
+      "date": "2023-10-26T18:48:05.000Z"
+    },
+    {
+      "queryKey": "auth",
+      "title": "Connection broken when download data - APIs - Copernicus Data Space Ecosystem | Community forum",
+      "url": "https://forum.dataspace.copernicus.eu/t/connection-broken-when-download-data/268",
+      "date": "2023-11-08T15:43:49.000Z"
+    },
+    {
+      "queryKey": "reddit2",
+      "title": "Mass downloading Google Earth historical imagery",
+      "url": "https://gis.stackexchange.com/questions/340605/mass-downloading-google-earth-historical-imagery",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "reddit2",
+      "title": "Download Historical Satellite Data with USGS EarthExplorer",
+      "url": "https://www.geowgs84.com/post/download-historical-satellite-data-with-usgs-earthexplorer",
+      "date": "2025-05-22T16:16:03.000Z"
+    },
+    {
+      "queryKey": "reddit2",
+      "title": "Static File Webmap - ",
+      "url": "https://az.id.au/dev/static-file-webmap/",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "reddit2",
+      "title": "Mass downloading Google Earth historical imagery",
+      "url": "https://gis.stackexchange.com/questions/340605/mass-downloading-google-earth-historical-imagery/340608",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "reddit2",
+      "title": "Imagery Downloader for Polish Orthophoto Map - SmartCarto.com",
+      "url": "https://smartcarto.com/gis/polish-imagery-downloader/",
+      "date": "2020-07-28T10:39:00.000Z"
+    },
+    {
+      "queryKey": "reddit2",
+      "title": "ItemInfo",
+      "url": "https://services.pasda.psu.edu/server/rest/services/pasda/SWPA_SPRPC_1990_1991/MapServer/0/iteminfo",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "reddit2",
+      "title": "How to Download Free Satellite Imagery (Google, Esri, Bing) Using SAS Planet - GIS-Schools",
+      "url": "https://gisschools.com/course_details.php?title=How+to+Download+Free+Satellite+Imagery+%28Google%2C+Esri%2C+Bing%29+Using+SAS+Planet",
+      "date": "2026-03-26T05:06:13.000Z"
+    },
+    {
+      "queryKey": "reddit2",
+      "title": "N/A",
+      "url": "https://www.dpreview.com/forums/threads/has-anyone-tried-google-earth-time-lapse-30-years.4579412/",
+      "date": "2021-06-03T09:01:22.000Z"
+    },
+    {
+      "queryKey": "reddit2",
+      "title": "New satellite to give Google Maps unprecedented resolution | Ars OpenForum",
+      "url": "https://arstechnica.com/civis/threads/new-satellite-to-give-google-maps-unprecedented-resolution.18870/",
+      "date": "2008-09-08T10:10:13.000Z"
+    },
+    {
+      "queryKey": "reddit2",
+      "title": "Reddit Sentiment Analyzer",
+      "url": "https://reddit.sentinel-team.org/posts/1ueskgv/snapshots/2026-06-25T15%3A13%3A29.814993Z",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "cnqa",
+      "title": "批量下载Landsat与MODIS等遥感影像的最新可行方法-腾讯云开发者社区-腾讯云",
+      "url": "https://cloud.tencent.com/developer/article/2441017",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "cnqa",
+      "title": "[RS] 地理空间数据云 使用ftp批量下载影像（以批量下载Landsat8数据为例）_地理空间数据云批量下载-CSDN博客",
+      "url": "https://geodoer.blog.csdn.net/article/details/78938946",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "cnqa",
+      "title": "哨兵Sentinel遥感影像下载方法-腾讯云开发者社区-腾讯云",
+      "url": "https://cloud.tencent.cn/developer/article/2514967?policyId=1003",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "cnqa",
+      "title": "使用QGIS下载遥感影像（Landsat、哨兵2） - 程序员大本营",
+      "url": "https://www.pianshen.com/article/16622514133/",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "cnqa",
+      "title": "你是一名科学家，现需要在GEE中下载Sentinel-2影像除B1外所有波段，并将所有波段的空间分辨率重采样为10 m，范围为经度：108.5-110.8，纬度：34.0-36.0。请编写具体的检索和下载代码，请注意以下细节： 数据检索时间为2025年3-5月经过大气校正的数据，在对该事件内所有数据的云量进行筛选，对整个区域拼接一幅云量最少影像数据。 - CSDN文库",
+      "url": "https://wenku.csdn.net/answer/201b3xjz02",
+      "date": "2025-07-28T00:00:00.000Z"
+    },
+    {
+      "queryKey": "cnqa",
+      "title": "Landsat遥感影像下载-腾讯云开发者社区-腾讯云",
+      "url": "https://cloud.tencent.cn/developer/article/2186560?from=15425&frompage=seopage",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "cnqa",
+      "title": "哨兵10米多光谱遥感影像",
+      "url": "https://www.resdc.cn/data.aspx?DATAID=350",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "cnqa",
+      "title": "如何在本地python环境中下载GEE的指定区域Sentinel-2遥感影像（去除云量影响，进行大气校正，辐射校正） - CSDN文库",
+      "url": "https://wenku.csdn.net/answer/2mubk4pqpu",
+      "date": "2025-08-08T10:17:37.000Z"
+    },
+    {
+      "queryKey": "cnqa",
+      "title": "地理空间数据云Landsat 8数据下载保姆级教程（附注册+高级检索技巧） - CSDN文库",
+      "url": "https://wenku.csdn.net/answer/ymc8u2x2jl8",
+      "date": "2026-03-20T00:00:00.000Z"
+    },
+    {
+      "queryKey": "cnqa",
+      "title": "利用gee下载sentinel-2的高清影像数据要求去云和大气校正的代码，用重庆市巴南区行政区边界线，下载22年5月份的数据，可以在gee上预览 - CSDN文库",
+      "url": "https://wenku.csdn.net/answer/6sph7ffqgf",
+      "date": "2025-07-09T00:00:00.000Z"
+    },
+    {
+      "queryKey": "official_search",
+      "title": "Wayback with World Imagery Metadata",
+      "url": "https://www.esri.com/arcgis-blog/products/arcgis-living-atlas/imagery/wayback-with-world-imagery-metadata",
+      "date": "2018-12-20T00:00:00.000Z"
+    },
+    {
+      "queryKey": "official_search",
+      "title": "World Imagery Wayback - 2025 Enhancements",
+      "url": "https://www.esri.com/arcgis-blog/products/arcgis-living-atlas/imagery/world-imagery-wayback-2025-updates",
+      "date": "2025-06-17T23:30:47.000Z"
+    },
+    {
+      "queryKey": "official_search",
+      "title": "World Imagery Wayback Export",
+      "url": "https://www.esri.com/arcgis-blog/products/arcgis-living-atlas/imagery/wayback-export",
+      "date": "2023-11-17T04:24:15.000Z"
+    },
+    {
+      "queryKey": "official_search",
+      "title": "Global - Cesium Documentation",
+      "url": "https://cesium.com/learn/ion-sdk/ref-doc/global.html?classFilter=createWorldImageryAsync",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "official_search",
+      "title": "Explore imagery archives using World Imagery Wayback",
+      "url": "https://www.esri.com/arcgis-blog/products/arcgis-living-atlas/mapping/use-world-imagery-wayback",
+      "date": "2022-02-21T00:00:00.000Z"
+    },
+    {
+      "queryKey": "official_search",
+      "title": "What's New in World Imagery - July 2024",
+      "url": "https://www.esri.com/arcgis-blog/products/arcgis-living-atlas/imagery/whats-new-in-world-imagery-july-2024",
+      "date": "2024-07-12T00:00:00.000Z"
+    },
+    {
+      "queryKey": "official_search",
+      "title": "Esri/wayback-core",
+      "url": "https://github.com/Esri/wayback-core",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "official_search",
+      "title": "Create more with World Imagery Wayback",
+      "url": "https://www.esri.com/arcgis-blog/products/arcgis-living-atlas/imagery/create-more-with-world-imagery-wayback",
+      "date": "2026-07-09T22:43:48.000Z"
+    },
+    {
+      "queryKey": "cdse_docs",
+      "title": "STAC product catalogue - Documentation",
+      "url": "https://documentation.dataspace.copernicus.eu/APIs/STAC.html",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "cdse_docs",
+      "title": "Copernicus Data Space Ecosystem Token Generation",
+      "url": "https://documentation.dataspace.copernicus.eu/APIs/Token.html",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "cdse_docs",
+      "title": "APIs - Documentation - Copernicus",
+      "url": "https://documentation.dataspace.copernicus.eu/APIs.html",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "cdse_docs",
+      "title": "How to query CDSE Catalogue and download products – Documentation",
+      "url": "https://documentation.dataspace.copernicus.eu/notebook-samples/geo/odata_basics.html",
+      "date": "N/A"
+    },
+    {
+      "queryKey": "cdse_docs",
+      "title": "OData – Documentation",
+      "url": "https://documentation.v1.dataspace.copernicus.eu/APIs/OData.html",
+      "date": "N/A"
+    }
+  ],
+  "productScopeCorrection": {
+    "date": "2026-10-07",
+    "authority": "用户明确原始遥感下载不在当前产品范围",
+    "currentScope": "地图服务与瓦片、历史服务、已接DEM/三维、矢量/在线服务/数据库输入及成果整理",
+    "excludedFromCurrentRoadmap": "原始卫星景、多波段、SAR及科研平台下载处理；其他新领域仅观察或待评估",
+    "priorityMeaning": "priority 为当前范围筛选后的建议，researchPriority 保留原跨领域研究排序"
+  }
+}

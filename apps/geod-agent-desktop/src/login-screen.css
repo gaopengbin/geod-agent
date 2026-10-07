@@ -1,0 +1,45 @@
+.login-screen {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  align-items: center;
+  overflow-y: auto;
+  scrollbar-width: none;
+  background: var(--app-surface);
+  color: var(--app-text);
+  padding: 32px 24px 20px;
+}
+.login-screen::-webkit-scrollbar { display: none; }
+.login-content {
+  width: min(380px, 100%);
+  margin: auto 0;
+  padding: 32px 0 48px;
+  text-align: center;
+  animation: login-enter 240ms var(--app-ease) both;
+}
+.login-symbol { display: block; margin: 0 auto 24px; border-radius: 14px; }
+.login-content h1 { margin: 0; font-size: 26px; font-weight: 600; line-height: 1.4; letter-spacing: -.025em; }
+.login-summary { margin: 12px 0 32px; font-size: 15px; line-height: 1.7; color: var(--app-soft-text); }
+.login-controls { display: grid; gap: 16px; text-align: left; }
+.login-primary-action { width: 100%; min-height: 46px; font-size: 15px; }
+.login-status { text-align: center; color: var(--app-soft-text); font-size: 13px; line-height: 1.7; min-height: 44px; }
+.login-error { display: flex; align-items: flex-start; gap: 8px; padding: 12px; border: 1px solid var(--app-line); border-radius: 8px; background: var(--app-warning-soft); color: var(--app-warning); font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
+.login-error > svg { flex: none; margin-top: 3px; }
+.login-error p { margin: 0; }
+.login-recheck { justify-self: center; color: var(--app-soft-text); }
+.login-spinner { animation: login-spin 1s linear infinite; }
+.app-shell > .workspace[hidden] { display: none !important; }
+.login-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; flex: none; gap: 4px; padding-top: 24px; }
+.login-footer button { color: var(--app-soft-text); font-size: 13px; padding-inline: 10px; }
+.login-footer-divider { width: 1px; height: 12px; margin: 0 4px; background: var(--app-line); }
+@keyframes login-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes login-spin { to { transform: rotate(360deg); } }
+@media (max-width: 440px) {
+  .login-screen { padding: 24px 20px 16px; }
+  .login-content h1 { font-size: 24px; }
+  .login-footer { gap: 0; }
+  .login-footer button { padding-inline: 8px; }
+  .login-footer-divider { margin: 0 2px; }
+}
+@media (prefers-reduced-motion: reduce) { .login-content, .login-spinner { animation: none; } }

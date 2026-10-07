@@ -9,12 +9,13 @@ import { errorMessage } from "./app-error";
 import { canTaskAction, type QueueTask, type TaskAction } from "./task-queue";
 import type { WorkspaceSettings } from "./api";
 import { outputFormatLabel } from "./output-formats";
+import { TaskProgressBar } from "./task-progress";
 
 export interface TaskListEntry {
   id: string; title: string; state: string; description: string; tooltip?: string;
   progress?: number; actions: TaskAction[]; imagery?: QueueTask;
 }
-export const taskStateLabels: Record<string, string> = { scheduled: "已设定时", pending: "待确认", planned: "待确认", discarded: "已丢弃", queued: "排队中", downloading: "下载中", paused: "已暂停", processing: "处理中", verifying: "核验中", completed: "已完成", partial: "部分完成", failed: "失败", cancelled: "已取消", interrupted: "已中断" };
+export const taskStateLabels: Record<string, string> = { scheduled: "已设定时", pending: "待确认", planned: "待确认", discarded: "已丢弃", queued: "排队中", downloading: "下载中", paused: "已暂停", processing: "生成成果", verifying: "核验中", completed: "已完成", partial: "部分完成", failed: "失败", cancelled: "已取消", interrupted: "已中断" };
 const ended = (task: TaskListEntry) => ["discarded", "completed", "partial", "cancelled"].includes(task.state);
 function imageryEntry(task: QueueTask): TaskListEntry {
   const p = task.stored.plan;
@@ -64,7 +65,7 @@ export function UnifiedTaskQueueView({ tasks, additionalTasks = [], selectedId, 
         <UiTooltip content={t.tooltip ?? t.title} side="left"><Button variant="ghost" size="sm" className="task-queue-select" whileHover={undefined} whileTap={undefined} aria-current={selectedId === t.id ? "true" : undefined} onClick={() => t.imagery ? onSelect(t.imagery) : onAdditionalSelect?.(t.id)}>
           <span className="task-queue-row-head"><span aria-hidden="true" className={`task-queue-state-dot state-${t.state}`} /><strong>{t.title}</strong><span className={`task-queue-state state-${t.state}`}>{["pending", "planned"].includes(t.state) && permission === "fullAccess" ? tr("待执行") : localize(taskStateLabels[t.state] ?? t.state)}</span></span>
           <span className="task-queue-row-meta"><span className="task-queue-row-description">{localize(t.description)}</span><ChevronDown size={14} /></span>
-          {!ended(t) && t.progress !== undefined && <span className="task-queue-progress"><span style={{ width: `${Math.min(100, Math.max(0, t.progress * 100))}%` }} /></span>}
+          {!ended(t) && (t.progress !== undefined || t.state === "processing" || t.state === "verifying") && <TaskProgressBar className="task-queue-progress" state={t.state} percent={(t.progress ?? 0) * 100} downloadLabel={t.imagery ? tr("瓦片下载进度") : tr("数据下载进度")}/>}
           {t.imagery?.connectionError && <span className="task-queue-sync">{tr("状态同步中…")}</span>}
         </Button></UiTooltip>
       </div>)}

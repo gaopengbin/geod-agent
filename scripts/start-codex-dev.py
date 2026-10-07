@@ -34,7 +34,7 @@ if args.update_fixture:
     fixture = args.update_fixture.resolve(strict=True)
     env["GEOD_AGENT_DEV_UPDATE_CONFIG"] = str(fixture)
 subprocess.run([shutil.which("python"), "-X", "utf8", str(desktop.parents[1] / "scripts/prepare-pgedge-runtime.py")], check=True, creationflags=subprocess.CREATE_NO_WINDOW)
-subprocess.run([shutil.which("python"), "-X", "utf8", str(desktop.parents[1] / "scripts/prepare-gdal-runtime.py")], check=True, creationflags=subprocess.CREATE_NO_WINDOW)
+subprocess.run([shutil.which("python"), "-X", "utf8", str(desktop.parents[1] / "scripts/prepare-python-runtime.py")], check=True, creationflags=subprocess.CREATE_NO_WINDOW)
 def healthy():
     try:
         with urllib.request.urlopen("http://127.0.0.1:1420", timeout=1) as response:

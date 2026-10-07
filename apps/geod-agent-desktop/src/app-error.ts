@@ -16,6 +16,18 @@ function errorDetails(cause: unknown, seen = new Set<object>(), depth = 0): { co
   return { code: code ?? nested.code, message: nested.message };
 }
 
+export const runtimeUpdateMessage = "界面与本机程序版本不一致，请更新并重新启动 GeoD Agent。已停止本轮操作，未使用其他坐标系替代。";
+export function runtimeCompatibilityFailure(cause: unknown): boolean {
+  const {code, message} = errorDetails(cause);
+  return code === "NATIVE_RUNTIME_UPDATE_REQUIRED" ||
+    /invalid args.*unknown field [`'"](?:targetCrs|resampling)[`'"]/is.test(message ?? "") ||
+    /(?:command.*(?:desktop_runtime_capabilities|gis_install_prepare|gis_install_cancel).*not found|(?:desktop_runtime_capabilities|gis_install_prepare|gis_install_cancel).*(?:unknown|not found))/i.test(message ?? "");
+}
+
+export function runtimeUpdateError() {
+  return Object.assign(new Error(runtimeUpdateMessage), {code:"NATIVE_RUNTIME_UPDATE_REQUIRED"});
+}
+
 const messages: Record<string, string> = {
   PLAN_STALE: "计划已过期或图源配置已变化，请重新生成计划。",
   PLAN_NOT_FOUND: "计划不存在，请重新生成计划。",

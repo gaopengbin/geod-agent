@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { compactGeometryToolOutput } from './bulk-data.mjs';
 
 export class ContractError extends Error {
   constructor(code) { super(code); this.code = code; this.status = 400; }
@@ -68,7 +69,7 @@ export function codexRequest(request) {
       calls.set(item.call_id, call);
     } else if (['function_call_output', 'custom_tool_call_output'].includes(item.type)) {
       if (!calls.has(item.call_id)) fail('CODEX_HISTORY_TOOL_PAIR_INVALID');
-      messages.push({ role: 'tool', tool_call_id: item.call_id, content: typeof item.output === 'string' ? item.output : text(item.output) });
+      messages.push({ role: 'tool', tool_call_id: item.call_id, content: compactGeometryToolOutput(typeof item.output === 'string' ? item.output : text(item.output)) });
     } else if (item.type === 'reasoning') {
       pendingReasoning = [...(item.summary ?? []), ...(item.content ?? [])].map(part => part.text ?? '').join('\n');
       if(typeof item.encrypted_content==='string')pendingProviderState=item.encrypted_content;
@@ -83,7 +84,7 @@ export function codexRequest(request) {
   return { messages, tools, definitions, hasImages:messages.some(message=>Array.isArray(message.content)&&message.content.some(part=>part.type==='image_url')) };
 }
 
-export function codexResult(message, definitions) {
+export function codexResult(message, definitions, {finishReason} = {}) {
   const toolCalls = (message.tool_calls ?? []).map(call => {
     const definition = definitions.get(call.function?.name);
     if (!definition || typeof call.function?.arguments !== 'string' || typeof call.id !== 'string') fail('CODEX_UNDECLARED_TOOL');
@@ -99,5 +100,6 @@ export function codexResult(message, definitions) {
   return { role: 'assistant', content: message.content ?? null, toolCalls,
     reasoning: message.reasoning_content ?? null,
     phase: message.phase ?? (toolCalls.length ? 'commentary' : 'final_answer'),
-    phaseSource: message.phase ? 'provider' : 'compatibility' };
+    phaseSource: message.phase ? 'provider' : 'compatibility',
+    ...(typeof finishReason==='string'?{finishReason}:{}) };
 }

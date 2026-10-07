@@ -5,6 +5,8 @@ description: 配置网络影像图源；查询中国行政区边界并生成下�
 
 # 图源 Creator
 
+默认先澄清影响结果的歧义和缺失要求，通过 `ask_user` 等待用户回答。图源、同名区域、时期、分辨率、输出格式、合并方式以及容量不足后的替代方案，均不能未经说明代选。已有明确要求和工具能查明的事实不重复询问。只有用户明确要求不要询问或授权你决定相应选择时，才在该范围内自行选择并简短说明假设。完全访问不等于授权代选，技术实现细节和用户已指定的默认设置不必逐项询问。
+
 完成用户请求的图源配置：检查服务接口，填写参数，调用 `source_configure` 保存，再读取 `sources_list` 验证。配置结果以本机实际保存的记录为准。
 
 通过 `extensions_list` 发现 `builtin-source-creator`，用 `mcp_call` 调用其 `search_sources` 和 `inspect_source`。用户给链接时直接检查；没给链接时从网络获取候选并继续检查，不要求用户先准备好图源。
@@ -43,11 +45,13 @@ description: 配置网络影像图源；查询中国行政区边界并生成下�
 - `mode: "merge"`：一个任务按所有范围的并集裁剪，保留各面的孔洞和岛屿。用户要求一个整体或同一裁剪成果时使用；默认名称用区域名称，例如“驻马店及周边六市”。
 - `mode: "split"`：每个区域独立任务和成果目录。用户要求各市分别输出或批量下载时使用。
 
-未指定拆分方式时可默认合并，简短说明；无需为一个可调整的规划选择反复询问。检查返回的 `plans` 与 `errors`，完全访问且用户要求执行时为成功计划调用 `jobs_start`，逐次确认时由任务列表批量确认。单个范围也可以 `boundaries_combine` 保存为合并范围再规划。合并范围超出容量时降低缩放或改为分区；不要悄悄漏掉地区或把行政区变成矩形。
+未指定拆分方式时通过问答卡确认合并或分别输出；用户已明确授权自行选择时才可默认合并并说明。检查返回的 `plans` 与 `errors`，完全访问且用户要求执行时为成功计划调用 `jobs_start`，逐次确认时由任务列表批量确认。单个范围也可以 `boundaries_combine` 保存为合并范围再规划。合并范围超出容量时询问降低缩放、缩小范围或分区的选择；用户已明确委托该选择时可调整并说明。不要悄悄漏掉地区或把行政区变成矩形。
 
 同名区县返回候选时，只询问必要的所属省市；版本缺少该区域几何时如实说明，不能伪造矩形充当行政边界。该库采集于 2026-04-03，不能声称实时最新。
 
-只缺少缩放或格式时，先以 Z12、GeoTIFF 生成计划，简短说明默认参数；超出计划容量则降低缩放并说明。
+只缺少缩放或格式时，用问答卡确认所需分辨率和输出格式。用户明确委托自行选择或要求按默认参数时，可采用 Z12、GeoTIFF 并说明。不能因计划容量不足悄悄降低用户要求的分辨率。
+
+GeoTIFF 默认不压缩（`exportOptions.compression: "none"`），默认不生成金字塔，以减少本机处理时间。仅在用户明确要求压缩、指定 LZW/DEFLATE 或要求金字塔时选择对应选项，不因节省磁盘空间自行启用压缩。说明不压缩会增大文件；不将磁盘空闲空间预算说成最终文件大小。
 
 执行方式以本轮本机权限状态及工具返回的 permission 为准，不能沿用旧对话里的权限描述：
 
@@ -58,3 +62,11 @@ description: 配置网络影像图源；查询中国行政区边界并生成下�
 用户用中文提问时，所有用户可见的过程说明和最终回复均用中文。先执行必要查询和规划，完成后简短报告实际结果与下一步，不以长篇能力说明代替操作。
 
 最终回复用一两句话报告真实结果。完全访问且 `jobs_start` 成功时，例如“已启动北京市 Z12 / GeoTIFF 下载，共 600 张瓦片，按行政边界裁剪。进度在任务面板查看。”只有逐次确认时才说明“计划已生成，请在任务面板确认后开始下载”。只要求规划时说明计划已生成。不要重复枚举工具、坐标、adcode、计划 ID 或所有元数据；边界采集日期已在查询记录中显示。
+
+
+## Historical imagery requires the user's period
+
+- If a historical imagery request lacks a year, date, season or period and the user has not explicitly delegated that choice or asked not to be questioned, call the application tool `ask_user` before selecting a source or creating a download plan. Present 1–3 concise questions with short headers, useful options and descriptions; the application adds custom input. Wait for the user's actual reply. Ask whether a single period or multiple periods are needed when that affects the task.
+- Full Access authorizes execution within the workspace; it does not resolve missing time requirements. An already registered Wayback source or the newest release is not the user's selection. Do not ask again if the period is explicit.
+- Inspect `wayback_versions` for actual catalogue releases before presenting specific available versions. Wayback release/publication dates are not photography dates. Use `wayback_metadata` to inspect local capture dates and coverage; report unknown capture dates accurately. Never promise that an entire region was captured in the requested year or season from a release date alone.
+- After answers arrive, reconsider the plan using those answers. If the user cancels, stop this operation. Do not substitute a default choice or start a download.

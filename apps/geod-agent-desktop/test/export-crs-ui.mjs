@@ -1,0 +1,34 @@
+import assert from 'node:assert/strict';
+import {mkdirSync,writeFileSync} from 'node:fs';
+import {resolve,join} from 'node:path';
+import {pathToFileURL} from 'node:url';
+const {chromium}=await import(pathToFileURL('C:/Users/Administrator/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs').href);
+const output=resolve('../../artifacts/export-crs-20261007');mkdirSync(output,{recursive:true});
+const browser=await chromium.launch({channel:'msedge',headless:true});
+const checks=[],errors=[];
+for(const theme of ['dark','light']){
+ const page=await browser.newPage({viewport:{width:620,height:760}});page.on('pageerror',e=>errors.push(e.message));
+ await page.goto(`http://127.0.0.1:1420/test/export-crs-harness.html?theme=${theme}`);
+ await page.getByRole('region',{name:'Agent 等待你的回复'}).waitFor();
+ assert.equal(await page.locator('input:checked').count(),0);
+ await page.screenshot({path:join(output,`question-${theme}.png`)});
+ await page.getByText('EPSG:4326 · WGS84 经纬度',{exact:true}).click();
+ await page.getByRole('button',{name:'下一题'}).click();
+ assert(await page.getByRole('button',{name:'提交并继续'}).isDisabled());
+ await page.getByText('当前会话默认',{exact:true}).click();
+ await page.screenshot({path:join(output,`scope-${theme}.png`)});
+ await page.getByRole('button',{name:'提交并继续'}).click();
+ const reply=JSON.parse(await page.getByTestId('reply').textContent());
+ assert.equal(reply.answers.export_crs.answers[0],'EPSG:4326 · WGS84 经纬度');
+ assert.equal(reply.answers.export_crs_scope.answers[0],'当前会话默认');
+ checks.push(`${theme}: no preselection, required scope, accepted answers`);
+ await page.reload();await page.getByRole('button',{name:'取消本次操作'}).click();assert.deepEqual(JSON.parse(await page.getByTestId('reply').textContent()),{answers:{}});
+ checks.push(`${theme}: cancellation returns no choice`);
+ await page.setViewportSize({width:360,height:760});await page.reload();
+ assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ await page.screenshot({path:join(output,`question-${theme}-narrow.png`)});
+ checks.push(`${theme}: narrow layout`);
+ await page.close();
+}
+await browser.close();assert.deepEqual(errors,[]);
+writeFileSync(join(output,'ui-acceptance.json'),JSON.stringify({passed:true,checks,errors},null,2));console.log(JSON.stringify({passed:true,checks}));

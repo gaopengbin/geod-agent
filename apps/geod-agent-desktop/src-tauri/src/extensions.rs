@@ -22,6 +22,7 @@ pub(crate) mod plugin_package;
 pub(crate) mod plugin_marketplace;
 pub(crate) mod plugin_hooks;
 pub(crate) mod plugin_apps;
+mod bulk_data;
 
 pub(crate) struct ExtensionState {
     path: PathBuf,
@@ -30,6 +31,22 @@ pub(crate) struct ExtensionState {
 }
 
 impl ExtensionState {
+    pub(crate) fn gis_skill_status(&self,id:&str,owner:&str)->Option<bool>{
+        self.load().ok()?.skills.iter().find(|s|s.id==format!("gis-{owner}-{id}")).map(|s|s.enabled)
+    }
+    pub(crate) fn install_gis_skill(&self,feature:&crate::gis_components::Feature,owner:&str)->Result<(),AppError>{
+        self.update(|store|{
+            let id=format!("gis-{owner}-{}",feature.id);
+            let mut skill=parse_skill_document(feature.skill.into(),Some(feature.id))?;
+            skill.id=id.clone();skill.enabled=true;skill.content_sha256=Some(format!("{:x}",Sha256::digest(skill.content.as_bytes())));
+            store.skills.retain(|s|s.id!=id);store.skills.push(skill);store.skill_owners.insert(id.clone(),owner.into());
+            let connector_id=format!("{id}-tools");
+            store.connectors.retain(|s|s.id!=connector_id);
+            store.connectors.push(Connector{id:connector_id.clone(),name:feature.name.into(),url:format!("gis:{}",feature.id),enabled:true,transport:ConnectorTransport::GdalStdio});
+            store.connector_settings.insert(connector_id,crate::mcp_credentials::Metadata{owner:owner.into(),runtime:Default::default(),command:None,header_names:vec![],query_names:vec![],env_names:vec![],argument_count:0,oauth:false});
+            Ok(())
+        })?;Ok(())
+    }
     #[cfg(test)]
     pub(crate) fn new(path: PathBuf) -> Self { Self::with_runtime(path,None) }
 
@@ -74,7 +91,7 @@ impl ExtensionState {
         secret.headers.retain(|name,_|!name.eq_ignore_ascii_case("authorization"));
         let result=self.update(|store|{
             if !store.connectors.iter().any(|item|item.id==id){return Err(error("MCP_NOT_FOUND","此连接器已移除"));}
-            let settings=store.connector_settings.entry(id.into()).or_insert(crate::mcp_credentials::Metadata{owner:owner.into(),command:None,header_names:vec![],env_names:vec![],argument_count:0,oauth:false,runtime:Default::default()});
+            let settings=store.connector_settings.entry(id.into()).or_insert(crate::mcp_credentials::Metadata{owner:owner.into(),command:None,header_names:vec![],query_names:vec![],env_names:vec![],argument_count:0,oauth:false,runtime:Default::default()});
             if settings.owner!=owner{return Err(error("MCP_NOT_FOUND","未找到当前账号的 MCP 连接器"));}
             crate::mcp_credentials::save(&self.path,id,&secret)?;
             settings.oauth=enabled;settings.header_names=secret.headers.keys().cloned().collect();
@@ -185,10 +202,12 @@ struct McpCallRecord {
     result: Option<Value>,
     #[serde(default)]
     owner: Option<String>,
+    #[serde(default)]
+    conversation_id: Option<String>,
 }
 
 const MCP_RESULT_PAGE_CHARS: usize = 7_000;
-const MCP_RESULT_MAX_BYTES: usize = 512 * 1024;
+const MCP_RESULT_MAX_BYTES: usize = 8 * 1024 * 1024;
 
 fn mcp_result_page(value: &Value, execution_id: &str, offset: usize) -> Result<Value, AppError> {
     if value.get("truncated").and_then(Value::as_bool) == Some(true) {
@@ -206,6 +225,7 @@ fn mcp_result_page(value: &Value, execution_id: &str, offset: usize) -> Result<V
             "limitBytes": MCP_RESULT_MAX_BYTES,
         }));
     }
+    if let Some(summary) = bulk_data::summary(value, execution_id) { return Ok(summary); }
     let total = serialized.chars().count();
     if offset > total {
         return Err(error("INVALID_MCP_RESULT_OFFSET", "MCP 结果读取位置超出范围"));
@@ -293,6 +313,8 @@ pub(crate) struct RegistryItem {
     title: String,
     description: String,
     url: String,
+    source: &'static str,
+    documentation_url: Option<&'static str>,
 }
 
 #[derive(Serialize)]
@@ -370,6 +392,7 @@ fn overview(store: ExtensionStore) -> ExtensionOverview {
             if let Some(settings)=store.connector_settings.get(&connector.id) {
                 value["command"]=serde_json::json!(settings.command);
                 value["headerNames"]=serde_json::json!(settings.header_names);
+                value["queryNames"]=serde_json::json!(settings.query_names);
                 value["envNames"]=serde_json::json!(settings.env_names);
                 value["argumentCount"]=serde_json::json!(settings.argument_count);
                 value["private"]=Value::Bool(true);
@@ -1133,6 +1156,7 @@ pub(crate) fn skill_set_enabled(
             .find(|item| item.id == id)
             .ok_or_else(|| error("SKILL_NOT_FOUND", "未找到该 Skill"))?;
         skill.enabled = enabled;
+        if id.starts_with("gis-") {if let Some(connector)=store.connectors.iter_mut().find(|c|c.id==format!("{id}-tools")){connector.enabled=enabled;}}
         Ok(())
     })?,Some(&owner)))
 }
@@ -1141,7 +1165,7 @@ pub(crate) fn skill_set_enabled(
 pub(crate) fn skill_remove(state: State<'_, ExtensionState>, services:State<'_,services::ServiceState>, id: String) -> Result<ExtensionOverview, AppError> {
     if id == SOURCE_CREATOR_ID { return Err(error("BUILTIN_SKILL", "内置技能可以停用")); }
     let owner=services::current_user_id(&services).map_err(|e|error(e.code,&e.message))?;
-    Ok(scoped_overview(state.update(|store| { check_skill_owner(store,&id,&owner)?;store.skills.retain(|skill| skill.id != id);store.skill_owners.remove(&id); Ok(()) })?,Some(&owner)))
+    Ok(scoped_overview(state.update(|store| { check_skill_owner(store,&id,&owner)?;store.skills.retain(|skill| skill.id != id);store.skill_owners.remove(&id); if id.starts_with("gis-"){let connector=format!("{id}-tools");store.connectors.retain(|c|c.id!=connector);store.connector_settings.remove(&connector);} Ok(()) })?,Some(&owner)))
 }
 
 #[tauri::command]
@@ -1166,6 +1190,7 @@ pub(crate) fn mcp_add(
     args: Option<Vec<String>>,
     env: Option<BTreeMap<String,String>>,
     headers: Option<BTreeMap<String,String>>,
+    query: Option<BTreeMap<String,String>>,
     runtime: Option<crate::mcp_runtime_config::Settings>,
 ) -> Result<ExtensionOverview, AppError> {
     let name = name.trim();
@@ -1177,12 +1202,12 @@ pub(crate) fn mcp_add(
     }
     let command=command.map(|v|v.trim().to_owned());
     let runtime=runtime.unwrap_or_default();runtime.validate(command.is_some())?;
-    let secret=crate::mcp_credentials::Secret{args:args.unwrap_or_default(),env:env.unwrap_or_default(),headers:headers.unwrap_or_default()};
+    let secret=crate::mcp_credentials::Secret{args:args.unwrap_or_default(),env:env.unwrap_or_default(),headers:headers.unwrap_or_default(),query:query.unwrap_or_default()};
     crate::mcp_credentials::validate(command.as_deref(),&secret)?;
     if command.is_none() {valid_mcp_url(&url)?;} else if !url.is_empty() {return Err(error("MCP_CONFIG_INVALID","本机 MCP 不使用服务网址"));}
     let owner=services::current_user_id(&services).map_err(|e|error(e.code,&e.message))?;
     let id=Uuid::new_v4().to_string();
-    let private=command.is_some() || !secret.headers.is_empty() || runtime.env_http_headers.len()>0 || runtime.bearer_token_env_var.is_some() || runtime.startup_timeout_sec.is_some() || runtime.tool_timeout_sec.is_some() || runtime.enabled_tools.is_some() || !runtime.disabled_tools.is_empty();
+    let private=command.is_some() || !secret.headers.is_empty() || !secret.query.is_empty() || runtime.env_http_headers.len()>0 || runtime.bearer_token_env_var.is_some() || runtime.startup_timeout_sec.is_some() || runtime.tool_timeout_sec.is_some() || runtime.enabled_tools.is_some() || !runtime.disabled_tools.is_empty();
     if private {crate::mcp_credentials::save(&state.path,&id,&secret)?;}
     let result=state.update(|store| {
         if command.is_none() && store.connectors.iter().any(|item| item.url == url && store.connector_settings.get(&item.id).is_none_or(|settings|settings.owner==owner)) {
@@ -1195,11 +1220,47 @@ pub(crate) fn mcp_add(
             enabled: false,
             transport: if command.is_some(){ConnectorTransport::Stdio}else{ConnectorTransport::Http},
         });
-        if private {store.connector_settings.insert(id.clone(),crate::mcp_credentials::Metadata{owner:owner.clone(),command,header_names:secret.headers.keys().cloned().collect(),env_names:secret.env.keys().cloned().collect(),argument_count:secret.args.len(),oauth:false,runtime});}
+        if private {store.connector_settings.insert(id.clone(),crate::mcp_credentials::Metadata{owner:owner.clone(),command,header_names:secret.headers.keys().cloned().collect(),query_names:secret.query.keys().cloned().collect(),env_names:secret.env.keys().cloned().collect(),argument_count:secret.args.len(),oauth:false,runtime});}
         Ok(())
     });
     if result.is_err() && private {let _=crate::mcp_credentials::remove(&state.path,&id);}
     Ok(scoped_overview(result?,Some(&owner)))
+}
+
+#[tauri::command]
+pub(crate) fn mcp_query_credentials_set(state:State<'_,ExtensionState>,services:State<'_,services::ServiceState>,id:String,query:BTreeMap<String,String>)->Result<(),AppError>{
+    let owner=services::current_user_id(&services).map_err(|e|error(e.code,&e.message))?;
+    state.update(|store|{
+        let found=store.connectors.iter().find(|c|c.id==id).ok_or_else(||error("MCP_NOT_FOUND","未找到此 MCP 连接器"))?;
+        if found.transport!=ConnectorTransport::Http{return Err(error("MCP_CONFIG_INVALID","Key 参数用于在线 MCP 服务"));}
+        valid_mcp_url(&found.url)?;
+        let previous=store.connector_settings.get(&id);
+        if previous.is_some_and(|s|s.owner!=owner){return Err(error("MCP_NOT_FOUND","未找到当前账号的 MCP 连接器"));}
+        let mut secret=if previous.is_some(){crate::mcp_credentials::load(&state.path,&id)?}else{Default::default()};
+        secret.query=query;crate::mcp_credentials::validate(None,&secret)?;
+        crate::mcp_credentials::save(&state.path,&id,&secret)?;
+        let metadata=store.connector_settings.entry(id.clone()).or_insert(crate::mcp_credentials::Metadata{owner:owner.clone(),command:None,header_names:vec![],query_names:vec![],env_names:vec![],argument_count:0,oauth:false,runtime:Default::default()});
+        metadata.query_names=secret.query.keys().cloned().collect();Ok(())
+    })?;Ok(())
+}
+
+#[tauri::command]
+pub(crate) fn mcp_header_credentials_set(state:State<'_,ExtensionState>,services:State<'_,services::ServiceState>,id:String,headers:BTreeMap<String,String>)->Result<(),AppError>{
+    let owner=services::current_user_id(&services).map_err(|e|error(e.code,&e.message))?;
+    state.update(|store|{
+        let found=store.connectors.iter().find(|c|c.id==id).ok_or_else(||error("MCP_NOT_FOUND","未找到此 MCP 连接器"))?;
+        if found.transport!=ConnectorTransport::Http{return Err(error("MCP_CONFIG_INVALID","Token 用于在线 MCP 服务"));}
+        valid_mcp_url(&found.url)?;
+        let previous=store.connector_settings.get(&id);
+        if previous.is_some_and(|s|s.owner!=owner){return Err(error("MCP_NOT_FOUND","未找到当前账号的 MCP 连接器"));}
+        let bearer=headers.keys().any(|name|name.eq_ignore_ascii_case("authorization"));
+        let secret=crate::mcp_credentials::with_headers(if previous.is_some(){crate::mcp_credentials::load(&state.path,&id)?}else{Default::default()},headers)?;
+        crate::mcp_credentials::save(&state.path,&id,&secret)?;
+        let metadata=store.connector_settings.entry(id.clone()).or_insert(crate::mcp_credentials::Metadata{owner:owner.clone(),command:None,header_names:vec![],query_names:vec![],env_names:vec![],argument_count:0,oauth:false,runtime:Default::default()});
+        metadata.header_names=secret.headers.keys().cloned().collect();
+        if bearer{metadata.oauth=false;metadata.runtime.bearer_token_env_var=None;metadata.runtime.env_http_headers.retain(|name,_|!name.eq_ignore_ascii_case("authorization"));}
+        Ok(())
+    })?;Ok(())
 }
 
 #[tauri::command]
@@ -1271,26 +1332,48 @@ pub(crate) async fn mcp_registry_search(query: String) -> Result<Vec<RegistryIte
     if query.len() < 2 || query.len() > 80 {
         return Ok(Vec::new());
     }
-    let client = http_client("https://registry.modelcontextprotocol.io/")?;
-    let response = client
-        .get("https://registry.modelcontextprotocol.io/v0.1/servers")
-        .query(&[("search", query), ("limit", "12")])
-        .send()
-        .await
-        .map_err(|_| error("REGISTRY_UNAVAILABLE", "MCP Registry 暂时不可用"))?;
-    if !response.status().is_success() {
-        return Err(error("REGISTRY_UNAVAILABLE", "MCP Registry 查询失败"));
+    // A verified official provider preset does not depend on Registry availability or Chinese name indexing.
+    let presets=official_mcp_presets(query);
+    if !presets.is_empty(){return Ok(presets);}
+    let payload = registry_payload(query).await?;
+    Ok(registry_items(payload))
+}
+
+fn official_mcp_presets(query:&str)->Vec<RegistryItem>{
+    let mut items=Vec::new();let lower=query.to_ascii_lowercase();
+    if query.contains("高德")||lower.contains("amap"){
+        items.push(RegistryItem{name:"official/amap-maps".into(),title:"高德地图 MCP（官方服务预设）".into(),description:"高德官方 Streamable HTTP 服务，需要在本机填写 Web 服务 Key；此预设来源于高德官方文档。".into(),url:"https://mcp.amap.com/mcp".into(),source:"officialPreset",documentation_url:Some("https://lbs.amap.com/api/mcp-server/gettingstarted")});
     }
-    let payload: Value = response
-        .json()
-        .await
-        .map_err(|_| error("REGISTRY_INVALID", "MCP Registry 返回了无效数据"))?;
+    if lower.contains("mapbox"){
+        items.push(RegistryItem{name:"official/mapbox".into(),title:"Mapbox MCP（官方服务预设）".into(),description:"Mapbox 官方远程 Streamable HTTP 服务，支持地点检索、路线几何和地图工具。需要本机 Access Token 或浏览器授权；服务预设来源于 Mapbox 官方文档。".into(),url:"https://mcp.mapbox.com/mcp".into(),source:"officialPreset",documentation_url:Some("https://github.com/mapbox/mcp-server/blob/main/docs/hosted-mcp-guide.md")});
+    }
+    items
+}
+
+async fn registry_payload(query:&str)->Result<Value,AppError>{
+    let mut reason=String::new();
+    // Both domains are operated by the official Registry. Keep the user's configured proxy policy.
+    for (origin,seconds) in [("https://registry.modelcontextprotocol.io",10),("https://prod.registry.modelcontextprotocol.io",20)]{
+        let client=http_client(origin)?;
+        match client.get(format!("{origin}/v0.1/servers")).query(&[("search",query),("limit","12")]).timeout(Duration::from_secs(seconds)).send().await{
+            Ok(response) if response.status().is_success()=>match response.json::<Value>().await{
+                Ok(value) if value.get("servers").is_some_and(Value::is_array)=>return Ok(value),
+                _=>reason="返回数据格式无效".into(),
+            },
+            Ok(response)=>reason=format!("HTTP {}",response.status().as_u16()),
+            Err(cause)=>reason=if cause.is_timeout(){"连接超时"}else if cause.is_connect(){"网络连接失败，请检查网络与代理"}else{"网络请求失败"}.into(),
+        }
+    }
+    Err(error("REGISTRY_UNAVAILABLE",&format!("MCP Registry 主站和备用入口查询失败：{reason}。请稍后重试或选择官方服务预设。")))
+}
+
+fn registry_items(payload:Value)->Vec<RegistryItem>{
     let results = payload
         .get("servers")
         .and_then(Value::as_array)
         .cloned()
         .unwrap_or_default();
-    Ok(results
+    results
         .into_iter()
         .filter_map(|row| {
             let server = row.get("server")?;
@@ -1326,9 +1409,11 @@ pub(crate) async fn mcp_registry_search(query: String) -> Result<Vec<RegistryIte
                     .collect(),
                 name,
                 url: url.to_owned(),
+                source: "registry",
+                documentation_url: None,
             })
         })
-        .collect())
+        .collect()
 }
 
 fn connector(
@@ -1611,15 +1696,17 @@ async fn connect_owned(state:&ExtensionState, found:&Connector, workspace:Option
     let command=settings.as_ref().and_then(|settings|settings.command.clone());
     let secret=if let Some(settings)=settings {
         if Some(settings.owner.as_str())!=owner {return Err(error("MCP_NOT_FOUND","未找到当前账号的 MCP 连接器"));}
-        tauri::async_runtime::spawn_blocking(move||crate::mcp_credentials::load(&path,&id)).await
-            .map_err(|_|error("MCP_CREDENTIAL_FAILED","读取 MCP 本机凭据失败"))??
+        if found.transport==ConnectorTransport::GdalStdio {crate::mcp_credentials::Secret::default()}else{
+            tauri::async_runtime::spawn_blocking(move||crate::mcp_credentials::load(&path,&id)).await
+                .map_err(|_|error("MCP_CREDENTIAL_FAILED","读取 MCP 本机凭据失败"))??
+        }
     } else {crate::mcp_credentials::Secret::default()};
     if oauth {
         let manager=crate::mcp_oauth::manager(state.path.clone(),found.id.clone(),&found.url).await?;
         let mut builder=reqwest_mcp::Client::builder().no_proxy().redirect(reqwest_mcp::redirect::Policy::none()).connect_timeout(Duration::from_secs(20)).default_headers(runtime.headers(&secret)?);
         if let Some(proxy)=crate::network::proxy_for(&found.url).map_err(|_|error("MCP_PROXY_INVALID","MCP 代理配置无效"))?{builder=builder.proxy(reqwest_mcp::Proxy::all(proxy).map_err(|_|error("MCP_PROXY_INVALID","MCP 代理配置无效"))?);}
         let client=builder.build().map_err(|_|error("MCP_CONNECT_FAILED","MCP 网络连接无法准备"))?;
-        let transport=StreamableHttpClientTransport::with_client(rmcp::transport::auth::AuthClient::new(client,manager),StreamableHttpClientTransportConfig::with_uri(found.url.as_str()));
+        let transport=StreamableHttpClientTransport::with_client(rmcp::transport::auth::AuthClient::new(client,manager),StreamableHttpClientTransportConfig::with_uri(crate::mcp_credentials::transport_url(&found.url,&secret)?));
         tokio::time::timeout(runtime.startup_timeout(40),crate::mcp_interaction::McpClient{interactive}.serve(transport)).await.map_err(|_|error("MCP_CONNECT_TIMEOUT","MCP 授权连接超时"))?
             .map_err(|_|error("MCP_AUTH_REQUIRED","MCP 授权失效或连接失败，请检查服务状态或重新授权"))
     }else{connect_runtime(found,workspace,command,secret,&runtime,interactive,state.runtime_root.as_deref()).await}
@@ -1643,7 +1730,7 @@ async fn connect_runtime(found:&Connector,workspace:Option<&LocalWorkspace>,comm
             let client=builder.build().map_err(|_|error("MCP_CONNECT_FAILED","无法创建 MCP 网络连接"))?;
             let transport = StreamableHttpClientTransport::with_client(
                 client,
-                StreamableHttpClientTransportConfig::with_uri(found.url.as_str()),
+                StreamableHttpClientTransportConfig::with_uri(crate::mcp_credentials::transport_url(&found.url,&secret)?),
             );
             tokio::time::timeout(runtime.startup_timeout(35),crate::mcp_interaction::McpClient{interactive}.serve(transport)).await
                 .map_err(|_|error("MCP_CONNECT_TIMEOUT","MCP 连接超时"))?
@@ -1666,7 +1753,15 @@ async fn connect_runtime(found:&Connector,workspace:Option<&LocalWorkspace>,comm
         }
         ConnectorTransport::GdalStdio => {
             let workspace = workspace.ok_or_else(|| error("MCP_WORKSPACE_REQUIRED", "请先选择工作区对话"))?;
-            let mut command = crate::python_runtime::command(include_str!("gdal_stdio.py"))?;
+            let feature=found.url.strip_prefix("gis:").map(crate::gis_components::feature).transpose()?;
+            let tools=feature.ok_or_else(||error("GIS_SKILL_NOT_INSTALLED","GDAL 已拆分为独立技能，请在技能与连接器中安装对应功能"))?.tools.to_vec();
+            if tools.is_empty(){return Err(error("GIS_SKILL_NOT_INSTALLED","请在技能与连接器中单独安装 GIS 功能"));}
+            let mut components=vec!["gis-common"];
+            if tools.iter().any(|n|n.starts_with("vector_")){components.push("gis-vector");}
+            if tools.iter().any(|n|n.starts_with("raster_")){components.push("gis-raster");}
+            let script=format!("{}\n{}",include_str!("gis_worker.py"),include_str!("gdal_stdio.py"));
+            let mut command = crate::python_runtime::gis_command(&script,&components)?;
+            command.env("GEOD_GIS_TOOLS",serde_json::to_string(&tools).unwrap()).env("GEOD_GIS_SCHEMAS",include_str!("gis-tools.json"));
             command.current_dir(&workspace.directory)
                 .env("GDAL_MCP_WORKSPACES", ".");
             let proxy = crate::network::proxy_for("https://pypi.org")
@@ -1782,7 +1877,7 @@ pub(crate) async fn mcp_call(
     } else { None };
     let owner=services::current_user_id(&services).map_err(|e|error(e.code,&e.message))?;
     let interaction=if interactive==Some(true){conversation_id.as_ref().map(|conversation|crate::mcp_interaction::InteractiveMcp{app:app.clone(),owner:owner.clone(),conversation:conversation.clone(),scope:execution_id.clone(),connector:found.name.clone()})}else{None};
-    call_mcp_for_owner(&state,id,tool_name,arguments,execution_id,workspace.as_ref(),Some(&owner),interaction).await
+    call_mcp_for_owner(&state,id,tool_name,arguments,execution_id,workspace.as_ref(),Some(&owner),conversation_id.as_deref(),interaction).await
 }
 
 #[tauri::command]
@@ -1794,6 +1889,53 @@ pub(crate) fn mcp_result_read(
 ) -> Result<Value, AppError> {
     let owner=services::current_user_id(&services).map_err(|e|error(e.code,&e.message))?;
     read_mcp_result_for_owner(&state,&execution_id,offset,Some(&owner))
+}
+
+/// Persist real embedded-map output before exposing geometry to the model.
+#[tauri::command]
+pub(crate) fn mcp_embedded_result_save(state:State<'_,ExtensionState>,services:State<'_,services::ServiceState>,id:String,tool_name:String,arguments:Value,result:Value,execution_id:String,conversation_id:String)->Result<Value,AppError>{
+    let owner=services::current_user_id(&services).map_err(|e|error(e.code,&e.message))?;
+    save_embedded_result_for_owner(&state,&owner,&conversation_id,&id,&tool_name,&arguments,&execution_id,result)
+}
+pub(crate) fn save_embedded_result_for_owner(state:&ExtensionState,owner:&str,conversation:&str,id:&str,tool:&str,args:&Value,execution_id:&str,value:Value)->Result<Value,AppError>{
+    if !matches!(id,"builtin-openlayers-mcp"|"builtin-cesium-mcp")||conversation.is_empty()||conversation.len()>80||!conversation.bytes().all(|b|b.is_ascii_alphanumeric()||b==b'-')||tool.is_empty()||tool.len()>120||!tool.bytes().all(|b|b.is_ascii_alphanumeric()||b==b'_')||execution_id.is_empty()||execution_id.len()>160||!execution_id.bytes().all(|b|b.is_ascii_alphanumeric()||matches!(b,b':'|b'_'|b'-'))||!args.is_object(){return Err(error("INVALID_MCP_EXECUTION","地图数据保存参数无效"));}
+    let bytes=serde_json::to_vec(&value).map_err(|_|error("MCP_RESULT_INVALID","地图数据无法序列化"))?;
+    if bytes.len()>MCP_RESULT_MAX_BYTES{return Err(error("MCP_RESULT_TOO_LARGE","地图数据超过本机结果保存上限"));}
+    let Some(summary)=bulk_data::summary(&value,execution_id)else{return Ok(value);};
+    let fingerprint=format!("{:x}",Sha256::digest(serde_json::to_vec(&serde_json::json!({"connectorId":id,"toolName":tool,"arguments":args})).unwrap()));
+    state.update(|store|{
+        if let Some(previous)=store.mcp_calls.iter().find(|r|r.execution_id==execution_id){
+            if previous.owner.as_deref()!=Some(owner)||previous.conversation_id.as_deref()!=Some(conversation){return Err(error("MCP_RESULT_NOT_FOUND","未找到当前会话的地图结果"));}
+            if previous.fingerprint!=fingerprint||previous.result.as_ref()!=Some(&value){return Err(error("MCP_EXECUTION_CONFLICT","原始地图结果已改变，未覆盖已保存的数据"));}
+        }else{store.mcp_calls.push(McpCallRecord{execution_id:execution_id.into(),fingerprint:fingerprint.clone(),result:Some(value.clone()),owner:Some(owner.into()),conversation_id:Some(conversation.into())});}
+        Ok(())
+    })?;Ok(summary)
+}
+
+#[tauri::command]
+pub(crate) fn mcp_result_export(
+    app: AppHandle,
+    state: State<'_, ExtensionState>,
+    workspace_state: State<'_, AppState>,
+    services: State<'_, services::ServiceState>,
+    execution_id: String,
+    conversation_id: String,
+    json_pointer: Option<String>,
+) -> Result<Value, AppError> {
+    let owner=services::current_user_id(&services).map_err(|e|error(e.code,&e.message))?;
+    let workspace=local_workspace(&app,&workspace_state,&services,Some(&conversation_id))?;
+    export_mcp_result_for_owner(&state,&execution_id,json_pointer.as_deref().unwrap_or(""),&workspace,&owner,&conversation_id)
+}
+
+fn export_mcp_result_for_owner(state:&ExtensionState,execution_id:&str,pointer:&str,workspace:&LocalWorkspace,owner:&str,conversation:&str)->Result<Value,AppError> {
+    let store=state.load()?;
+    let record=store.mcp_calls.iter().find(|r|r.execution_id==execution_id&&r.owner.as_deref()==Some(owner))
+        .ok_or_else(||error("MCP_RESULT_NOT_FOUND","未找到当前账号的 MCP 调用结果"))?;
+    let belongs=match record.conversation_id.as_deref() {Some(id)=>id==conversation,None=>execution_id.starts_with(&format!("codex:{conversation}:"))};
+    if !belongs {return Err(error("MCP_RESULT_NOT_FOUND","未找到当前会话的 MCP 调用结果"));}
+    let value=record.result.as_ref().ok_or_else(||error("MCP_RESULT_UNKNOWN","此 MCP 调用结果尚不明确"))?;
+    if value["truncated"]==true||value["error"]=="MCP_RESULT_TOO_LARGE" {return Err(error("MCP_RESULT_INCOMPLETE","未保存完整数据，不能导出或声称已核验"));}
+    bulk_data::export(value,execution_id,pointer,workspace,owner,conversation)
 }
 
 #[cfg(test)]
@@ -1822,7 +1964,7 @@ fn read_mcp_result_for_owner(
 
 #[cfg(test)]
 async fn call_mcp_with_state(state:&ExtensionState,id:String,tool_name:String,arguments:Value,execution_id:String,workspace:Option<&LocalWorkspace>)->Result<Value,AppError> {
-    call_mcp_for_owner(state,id,tool_name,arguments,execution_id,workspace,None,None).await
+    call_mcp_for_owner(state,id,tool_name,arguments,execution_id,workspace,None,None,None).await
 }
 
 async fn call_mcp_for_owner(
@@ -1833,6 +1975,7 @@ async fn call_mcp_for_owner(
     execution_id: String,
     workspace: Option<&LocalWorkspace>,
     owner: Option<&str>,
+    conversation_id: Option<&str>,
     interactive:Option<crate::mcp_interaction::InteractiveMcp>,
 ) -> Result<Value, AppError> {
     if execution_id.is_empty()
@@ -1872,6 +2015,7 @@ async fn call_mcp_for_owner(
         .find(|item| item.execution_id == execution_id)
     {
         if previous.owner.as_deref().is_some_and(|record_owner|Some(record_owner)!=owner) {return Err(error("MCP_RESULT_NOT_FOUND","未找到当前账号的 MCP 调用结果"));}
+        if previous.conversation_id.as_deref().is_some_and(|id|Some(id)!=conversation_id) {return Err(error("MCP_RESULT_NOT_FOUND","未找到当前会话的 MCP 调用结果"));}
         if previous.fingerprint != fingerprint {
             return Err(error(
                 "MCP_EXECUTION_CONFLICT",
@@ -1913,6 +2057,7 @@ async fn call_mcp_for_owner(
             .find(|item| item.execution_id == execution_id)
         {
             if previous.owner.as_deref().is_some_and(|record_owner|Some(record_owner)!=owner) {return Err(error("MCP_RESULT_NOT_FOUND","未找到当前账号的 MCP 调用结果"));}
+            if previous.conversation_id.as_deref().is_some_and(|id|Some(id)!=conversation_id) {return Err(error("MCP_RESULT_NOT_FOUND","未找到当前会话的 MCP 调用结果"));}
             if previous.fingerprint != fingerprint {
                 return Err(error(
                     "MCP_EXECUTION_CONFLICT",
@@ -1932,6 +2077,7 @@ async fn call_mcp_for_owner(
             fingerprint: fingerprint.clone(),
             result: None,
             owner: owner.map(str::to_owned),
+            conversation_id: conversation_id.map(str::to_owned),
         });
         Ok(())
     })?;
@@ -1983,6 +2129,17 @@ async fn call_mcp_for_owner(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn official_mapbox_queries_resolve_without_registry_network(){
+        for query in ["mapbox","Mapbox MCP server","MAPBOX"]{
+            let found=mcp_registry_search(query.into()).await.unwrap();
+            assert_eq!(found.len(),1);assert_eq!(found[0].name,"official/mapbox");
+            assert_eq!(found[0].url,"https://mcp.mapbox.com/mcp");assert_eq!(found[0].source,"officialPreset");
+        }
+        assert_eq!(official_mcp_presets("高德和 Mapbox").len(),2);
+        assert!(official_mcp_presets("another-provider").is_empty());
+    }
 
     #[test]
     fn skill_metadata_and_url_rules() {
@@ -2328,6 +2485,18 @@ mod tests {
     }
 
     #[test]
+    fn gis_skill_install_is_idempotent_and_account_scoped(){
+        let directory=tempfile::tempdir().unwrap();let state=ExtensionState::new(directory.path().join("extensions.json"));
+        let feature=crate::gis_components::feature("gis-vector-analysis").unwrap();
+        state.install_gis_skill(feature,"account-a").unwrap();state.install_gis_skill(feature,"account-a").unwrap();
+        let store=state.load().unwrap();assert_eq!(store.skills.iter().filter(|s|s.name==feature.id).count(),1);
+        assert_eq!(store.connectors.iter().filter(|c|c.url=="gis:gis-vector-analysis").count(),1);
+        assert_eq!(state.gis_skill_status(feature.id,"account-a"),Some(true));assert_eq!(state.gis_skill_status(feature.id,"account-b"),None);
+        assert!(!visible_to(store,Some("account-b")).skills.iter().any(|s|s.name==feature.id));
+        assert!(feature.tools.contains(&"vector_clip"));assert!(!feature.tools.contains(&"raster_convert"));
+    }
+
+    #[test]
     fn bundled_source_creator_preserves_enabled_preference() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("extensions.json");
@@ -2590,7 +2759,7 @@ mod tests {
             .unwrap_err();
             assert_eq!(conflict.code, "MCP_EXECUTION_CONFLICT");
             reopened.update(|store| {
-                store.mcp_calls.push(McpCallRecord { execution_id: "generation-2:call-2".into(), fingerprint: format!("{:x}", Sha256::digest(serde_json::to_vec(&serde_json::json!({ "connectorId": "test-connector", "toolName": "echo", "arguments": arguments })).unwrap())), result: None, owner:None });
+                store.mcp_calls.push(McpCallRecord { execution_id: "generation-2:call-2".into(), fingerprint: format!("{:x}", Sha256::digest(serde_json::to_vec(&serde_json::json!({ "connectorId": "test-connector", "toolName": "echo", "arguments": arguments })).unwrap())), result: None, owner:None, conversation_id:None });
                 Ok(())
             }).unwrap();
             let unknown = call_mcp_with_state(
@@ -2622,6 +2791,7 @@ mod tests {
                 fingerprint: "test".into(),
                 result: Some(original.clone()),
                 owner: None,
+                conversation_id: None,
             });
             Ok(())
         }).unwrap();
@@ -2645,12 +2815,62 @@ mod tests {
         let dir=tempfile::tempdir().unwrap();
         let path=dir.path().join("extensions.json");
         ExtensionState::new(path.clone()).update(|store|{
-            store.mcp_calls.push(McpCallRecord{execution_id:"owned:call".into(),fingerprint:"test".into(),result:Some(serde_json::json!({"content":[]})),owner:Some("alice".into())});Ok(())
+            store.mcp_calls.push(McpCallRecord{execution_id:"owned:call".into(),fingerprint:"test".into(),result:Some(serde_json::json!({"content":[]})),owner:Some("alice".into()),conversation_id:None});Ok(())
         }).unwrap();
         let state=ExtensionState::new(path);
         assert!(read_mcp_result_for_owner(&state,"owned:call",0,Some("alice")).is_ok());
         assert_eq!(read_mcp_result_for_owner(&state,"owned:call",0,Some("bob")).unwrap_err().code,"MCP_RESULT_NOT_FOUND");
         assert_eq!(read_mcp_result_for_owner(&state,"owned:call",0,None).unwrap_err().code,"MCP_RESULT_NOT_FOUND");
+    }
+
+    #[test]
+    fn bulk_geometry_receipts_export_only_to_the_owned_conversation_and_survive_restart() {
+        let dir=tempfile::tempdir().unwrap();let path=dir.path().join("extensions.json");
+        let raw=serde_json::json!({"structuredContent":{"route":{"distance":2100,"geometry":{"type":"LineString","coordinates":(0..1000).map(|i|vec![116.0+i as f64/10000.0,39.0]).collect::<Vec<_>>()}}}});
+        let id="codex:conversation-a:geometry";
+        ExtensionState::new(path.clone()).update(|store|{store.mcp_calls.push(McpCallRecord{execution_id:id.into(),fingerprint:"test".into(),result:Some(raw.clone()),owner:Some("alice".into()),conversation_id:Some("conversation-a".into())});Ok(())}).unwrap();
+        let reopened=ExtensionState::new(path);let workspace=LocalWorkspace{directory:dir.path().into(),permission:WorkspacePermission::FullAccess};
+        let compact=read_mcp_result_for_owner(&reopened,id,0,Some("alice")).unwrap();assert_eq!(compact["bulkData"],true);assert!(compact.get("content").is_none());assert!(compact.get("nextOffset").is_none());
+        let export=export_mcp_result_for_owner(&reopened,id,"/structuredContent/route/geometry",&workspace,"alice","conversation-a").unwrap();
+        let saved:Value=serde_json::from_slice(&fs::read(dir.path().join(export["relativePath"].as_str().unwrap())).unwrap()).unwrap();assert_eq!(saved,raw["structuredContent"]["route"]["geometry"]);
+        assert_eq!(export_mcp_result_for_owner(&reopened,id,"",&workspace,"bob","conversation-a").unwrap_err().code,"MCP_RESULT_NOT_FOUND");
+        assert_eq!(export_mcp_result_for_owner(&reopened,id,"",&workspace,"alice","conversation-b").unwrap_err().code,"MCP_RESULT_NOT_FOUND");
+        assert_eq!(reopened.load().unwrap().mcp_calls[0].result,Some(raw));
+        if let Ok(folder)=std::env::var("GEOD_BULK_EVIDENCE_DIR") {
+            let root=PathBuf::from(folder);fs::create_dir_all(&root).unwrap();
+            let evidence_workspace=LocalWorkspace{directory:root.clone(),permission:WorkspacePermission::FullAccess};
+            let exported=export_mcp_result_for_owner(&reopened,id,"/structuredContent/route/geometry",&evidence_workspace,"alice","conversation-a").unwrap();
+            let original=reopened.load().unwrap().mcp_calls[0].result.clone().unwrap();
+            let report=serde_json::json!({"fixture":true,"nativeFunctions":true,"pointCount":1000,"originalChars":original.to_string().len(),"summaryChars":compact.to_string().len(),"summary":compact,"export":exported,"accountIsolation":true,"conversationIsolation":true,"originalReceiptPreserved":true});
+            fs::write(root.join("native-fixture.json"),serde_json::to_vec_pretty(&report).unwrap()).unwrap();
+        }
+    }
+
+    #[test]
+    fn legacy_owned_geometry_references_remain_usable_without_authorizing_other_conversations() {
+        let dir=tempfile::tempdir().unwrap();let state=ExtensionState::new(dir.path().join("extensions.json"));
+        let id="codex:conversation-a:legacy";let raw=serde_json::json!({"coordinates":[[116,39],[117,40]]});
+        state.update(|store|{store.mcp_calls.push(McpCallRecord{execution_id:id.into(),fingerprint:"test".into(),result:Some(raw),owner:Some("alice".into()),conversation_id:None});Ok(())}).unwrap();
+        let workspace=LocalWorkspace{directory:dir.path().into(),permission:WorkspacePermission::FullAccess};
+        assert!(export_mcp_result_for_owner(&state,id,"",&workspace,"alice","conversation-a").is_ok());
+        assert_eq!(export_mcp_result_for_owner(&state,id,"",&workspace,"alice","conversation").unwrap_err().code,"MCP_RESULT_NOT_FOUND");
+    }
+
+    #[test]
+    fn embedded_map_geometry_is_owned_exact_and_idempotent() {
+        let dir=tempfile::tempdir().unwrap();let path=dir.path().join("extensions.json");let state=ExtensionState::new(path.clone());
+        let raw=serde_json::json!({"featureCount":1,"geojson":{"type":"FeatureCollection","features":[{"type":"Feature","properties":{"name":"original route"},"geometry":{"type":"LineString","coordinates":(0..400).map(|i|vec![116.0+i as f64/100000.0,39.0+i as f64/200000.0]).collect::<Vec<_>>()}}]}});
+        let id="codex:conversation-a:embedded";let args=serde_json::json!({"layerId":"route"});
+        let summary=save_embedded_result_for_owner(&state,"alice","conversation-a","builtin-openlayers-mcp","exportFeatures",&args,id,raw.clone()).unwrap();
+        assert_eq!(summary["bulkData"],true);assert_eq!(summary["geometryFields"][0]["pointCount"],400);
+        assert_eq!(save_embedded_result_for_owner(&state,"alice","conversation-a","builtin-openlayers-mcp","exportFeatures",&args,id,raw.clone()).unwrap(),summary);
+        let reopened=ExtensionState::new(path);let workspace=LocalWorkspace{directory:dir.path().into(),permission:WorkspacePermission::FullAccess};
+        let exported=export_mcp_result_for_owner(&reopened,id,"/geojson",&workspace,"alice","conversation-a").unwrap();
+        let saved:Value=serde_json::from_slice(&fs::read(dir.path().join(exported["relativePath"].as_str().unwrap())).unwrap()).unwrap();assert_eq!(saved,raw["geojson"]);
+        assert_eq!(save_embedded_result_for_owner(&reopened,"bob","conversation-a","builtin-openlayers-mcp","exportFeatures",&args,id,raw.clone()).unwrap_err().code,"MCP_RESULT_NOT_FOUND");
+        assert_eq!(save_embedded_result_for_owner(&reopened,"alice","conversation-b","builtin-openlayers-mcp","exportFeatures",&args,id,raw.clone()).unwrap_err().code,"MCP_RESULT_NOT_FOUND");
+        let mut changed=raw.clone();changed["featureCount"]=serde_json::json!(2);assert_eq!(save_embedded_result_for_owner(&reopened,"alice","conversation-a","builtin-openlayers-mcp","exportFeatures",&args,id,changed).unwrap_err().code,"MCP_EXECUTION_CONFLICT");
+        assert_eq!(reopened.load().unwrap().mcp_calls.iter().find(|r|r.execution_id==id).unwrap().result,Some(raw));
     }
 
     #[test]

@@ -19,6 +19,7 @@ pub(crate) struct OnlineSpec {
     pub connection_revision:Option<String>,
     pub layer:Option<String>,
     pub source_crs:Option<String>,
+    #[serde(default,skip_serializing_if="Option::is_none")] pub target_crs:Option<String>,
     pub bounds:Option<[f64;4]>,
     pub boundary:Option<geod_core::boundary::BoundaryGeometry>,
     #[serde(default="default_max")] pub max_features:usize,
@@ -41,6 +42,10 @@ impl OnlineSpec {
         if self.layer.as_ref().is_some_and(|v|v.trim().is_empty()||v.len()>256||v.chars().any(char::is_control))||self.source_crs.as_ref().is_some_and(|v|v.len()>128||v.chars().any(char::is_control)){return Err(workspace_error("DATA_PLAN_INVALID","在线图层或坐标系无效"));}
         let mut result=self.clone();
         result.outputs.sort();result.outputs.dedup();
+        if let Some(crs)=&mut result.target_crs {
+            *crs=crate::export_crs::normalize(crs)?;
+            if crs!="EPSG:4326" && result.outputs != ["gpkg"] {return Err(workspace_error("OUTPUT_CRS_FORMAT_CONFLICT","GeoJSON 固定为 WGS84；其他成果坐标系请使用 GeoPackage"));}
+        }
         if result.outputs.is_empty()||result.outputs.iter().any(|v|!matches!(v.as_str(),"geojson"|"gpkg")){return Err(workspace_error("DATA_PLAN_INVALID","在线矢量数据支持 GeoJSON 和 GeoPackage 导出"));}
         if let Some(boundary)=&mut result.boundary {
             let bounds=boundary.normalize().map_err(|e|workspace_error("DATA_PLAN_INVALID",e.0))?;
@@ -56,7 +61,7 @@ impl OnlineSpec {
 async fn cancelled(cancel:Arc<AtomicBool>){while !cancel.load(Ordering::SeqCst){tokio::time::sleep(Duration::from_millis(50)).await;}}
 
 async fn worker(request:Value,cancel:Arc<AtomicBool>)->Result<Value,String>{
-    let mut command=crate::python_runtime::command(include_str!("online_export_worker.py")).map_err(|e|e.message)?;
+    let mut command=crate::python_runtime::gis_command(include_str!("online_export_worker.py"),&["gis-common","gis-vector"]).map_err(|e|e.message)?;
     command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).kill_on_drop(true);
     #[cfg(windows)] command.creation_flags(0x08000000);
     for key in ["HTTP_PROXY","HTTPS_PROXY","ALL_PROXY","http_proxy","https_proxy","all_proxy"]{command.env_remove(key);}
@@ -93,8 +98,8 @@ pub(crate) async fn run(app:AppHandle,owner:String,spec:&OnlineSpec,output:&Path
         let source=stage.join(format!("input.{extension}"));
         fs::write(&source,&bytes).map_err(|_|"在线数据暂存失败")?;
         let total=info["featureCount"].as_u64().unwrap_or(0);
-        report("packaging",0,total,bytes.len() as u64);
-        let mut manifest=worker(json!({"inputPath":source,"directory":stage,"sourceCrs":spec.source_crs,"storageLayer":if info["remoteLayer"]==true{Value::Null}else{json!(spec.layer)},"maxFeatures":spec.max_features,"expectedFeatures":info["featureCount"],"bounds":spec.bounds,"boundary":spec.boundary,"outputs":spec.outputs}),cancel.clone()).await?;
+        report(if spec.target_crs.as_deref().is_some_and(|c|c!="EPSG:4326"){"reprojecting"}else{"packaging"},0,total,bytes.len() as u64);
+        let mut manifest=worker(json!({"inputPath":source,"directory":stage,"sourceCrs":spec.source_crs,"targetCrs":spec.target_crs,"storageLayer":if info["remoteLayer"]==true{Value::Null}else{json!(spec.layer)},"maxFeatures":spec.max_features,"expectedFeatures":info["featureCount"],"bounds":spec.bounds,"boundary":spec.boundary,"outputs":spec.outputs}),cancel.clone()).await?;
         fs::remove_file(source).map_err(|_|"暂存数据清理失败")?;
         manifest["schemaVersion"]=json!(1);manifest["kind"]=json!("online");manifest["planHash"]=json!(plan_hash);manifest["sourceFingerprint"]=json!(spec.fingerprint()?);
         manifest["createdAt"]=json!(chrono::Utc::now().to_rfc3339());manifest["protocol"]=info["protocol"].clone();manifest["sourceLayer"]=info["sourceLayer"].clone();manifest["sourceName"]=info["sourceName"].clone();manifest["complete"]=info["complete"].clone();manifest["failures"]=json!([]);
@@ -120,6 +125,7 @@ pub(crate) fn inspect(output:&Path,spec:&OnlineSpec,plan_hash:&str)->Result<Valu
     if fs::metadata(&path).map_err(|_|"成果清单不存在")?.len()>1024*1024{return Err("成果清单过大".into());}
     let value:Value=serde_json::from_slice(&fs::read(path).map_err(|_|"成果清单不可读")?).map_err(|_|"成果清单无效")?;
     if value["schemaVersion"]!=1||value["kind"]!="online"||value["planHash"]!=plan_hash||value["sourceFingerprint"]!=spec.fingerprint()?||value["featureCount"].as_u64().is_none_or(|n|n>spec.max_features as u64){return Err("在线成果与当前计划不匹配".into());}
+    if value["outputCrs"]!=spec.target_crs.as_deref().unwrap_or("EPSG:4326"){return Err("成果坐标系与计划不一致".into());}
     let root=output.canonicalize().map_err(|_|"成果目录不存在")?;
     let assets=value["assets"].as_array().ok_or("成果文件记录无效")?;
     if assets.len()!=spec.outputs.len()+1{return Err("成果文件数量与计划不一致".into());}

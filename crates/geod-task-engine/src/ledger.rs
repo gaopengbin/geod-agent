@@ -119,6 +119,8 @@ pub struct JobEvent {
     pub completed_tiles: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub total_tiles: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub processing_stage: Option<String>,
 }
 
 pub struct TaskStore {
@@ -600,6 +602,7 @@ impl TaskStore {
             error_code: None,
             completed_tiles: None,
             total_tiles: None,
+            processing_stage: None,
         };
         let insert = tx.execute(
             "INSERT INTO jobs(job_id, plan_id, approval_id, plan_hash, idempotency_key, state, version, created_at)
@@ -657,7 +660,7 @@ impl TaskStore {
         let plan = self
             .get_plan(&job.plan_id)?
             .ok_or_else(|| LedgerError::new("PLAN_NOT_FOUND", "Plan was not found"))?;
-        let manifest = imagery::inspect_bundle(&PathBuf::from(plan.plan.spec.output_directory))
+        let manifest = imagery::inspect_bundle(&PathBuf::from(&plan.plan.spec.output_directory))
             .map_err(|error| LedgerError::new(error.code, error.message))?;
         if manifest.id != format!("geod-agent-job-{job_id}") {
             return Err(LedgerError::new(
@@ -665,6 +668,8 @@ impl TaskStore {
                 "Artifact belongs to another job",
             ));
         }
+        verify_manifest_crs(&manifest, &plan.plan.spec)
+            .map_err(|error| LedgerError::new(error.code, error.message))?;
         Ok(manifest)
     }
 
@@ -691,6 +696,7 @@ impl TaskStore {
                     "Artifact belongs to another job",
                 ));
             }
+            verify_manifest_crs(&manifest, &plan.plan.spec)?;
             Ok(manifest)
         });
         match inspected {
@@ -764,7 +770,7 @@ impl TaskStore {
             .get_job(job_id)?
             .ok_or_else(|| LedgerError::new("JOB_NOT_FOUND", "Job was not found"))?;
         match job.state {
-            JobState::Queued | JobState::Downloading | JobState::Paused => {
+            JobState::Queued | JobState::Downloading | JobState::Processing | JobState::Paused => {
                 self.transition(job_id, job.state, JobState::Cancelled, None, Utc::now())
             }
             _ => Err(LedgerError::new(
@@ -779,7 +785,7 @@ impl TaskStore {
             .get_job(job_id)?
             .ok_or_else(|| LedgerError::new("JOB_NOT_FOUND", "Job was not found"))?;
         match job.state {
-            JobState::Queued | JobState::Downloading => {
+            JobState::Queued | JobState::Downloading | JobState::Processing => {
                 self.transition(job_id, job.state, JobState::Paused, None, Utc::now())
             }
             _ => Err(LedgerError::new(
@@ -895,6 +901,7 @@ impl TaskStore {
             error_code: error_code.map(str::to_owned),
             completed_tiles: None,
             total_tiles: None,
+            processing_stage: None,
         };
         tx.execute(
             "INSERT INTO job_events(job_id, seq, body) VALUES (?1, ?2, ?3)",
@@ -935,6 +942,7 @@ impl TaskStore {
             error_code: None,
             completed_tiles: Some(completed),
             total_tiles: Some(total),
+            processing_stage: None,
         };
         tx.execute(
             "INSERT INTO job_events(job_id,seq,body) VALUES (?1,?2,?3)",
@@ -942,6 +950,16 @@ impl TaskStore {
         )?;
         tx.commit()?;
         Ok(())
+    }
+
+    fn record_processing_stage(&mut self, job_id:&str, stage:&str)->Result<(),LedgerError>{
+        let tx=self.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let job=read_job(&tx,job_id)?.ok_or_else(||LedgerError::new("JOB_NOT_FOUND","任务不存在"))?;
+        if job.state!=JobState::Processing{return Err(LedgerError::new("JOB_STATE_CONFLICT","任务未在生成成果"));}
+        let event=JobEvent{job_id:job_id.into(),seq:job.version+1,occurred_at:Utc::now(),state:JobState::Processing,error_code:None,completed_tiles:None,total_tiles:None,processing_stage:Some(stage.into())};
+        tx.execute("UPDATE jobs SET version=?1 WHERE job_id=?2 AND version=?3",params![event.seq,job_id,job.version])?;
+        tx.execute("INSERT INTO job_events(job_id,seq,body) VALUES(?1,?2,?3)",params![job_id,event.seq,serde_json::to_string(&event)?])?;
+        tx.commit()?;Ok(())
     }
 
     /// Execute a previously approved job on this computer. The endpoint must
@@ -1013,10 +1031,15 @@ impl TaskStore {
         &mut self, job_id: &str, current_source: &SourceDescriptor, endpoint: &HttpSource, overlays: &[HttpSource],
         now: DateTime<Utc>, cancelled: &AtomicBool, paused: &AtomicBool, proxy: imagery::ProxyRoute<'_>,
     ) -> Result<Manifest, LedgerError> {
+        self.run_job_with_projector(job_id,current_source,endpoint,overlays,now,cancelled,paused,proxy,None).await
+    }
+
+    pub async fn run_job_with_projector(&mut self,job_id:&str,current_source:&SourceDescriptor,endpoint:&HttpSource,overlays:&[HttpSource],
+        now:DateTime<Utc>,cancelled:&AtomicBool,paused:&AtomicBool,proxy:imagery::ProxyRoute<'_>,projector:Option<&dyn imagery::RasterProjector>) -> Result<Manifest,LedgerError> {
         let mut job = self
             .get_job(job_id)?
             .ok_or_else(|| LedgerError::new("JOB_NOT_FOUND", "Job was not found"))?;
-        if !matches!(job.state, JobState::Queued | JobState::Downloading) {
+        if !matches!(job.state, JobState::Queued | JobState::Downloading | JobState::Processing) {
             return Err(LedgerError::new(
                 "JOB_STATE_CONFLICT",
                 "Job is not runnable",
@@ -1102,8 +1125,8 @@ impl TaskStore {
             destination: destination.clone(),
             deadline: Duration::from_secs(1800 + stored.plan.total_tiles.saturating_mul(2)),
         };
-        if job.state == JobState::Queued {
-            job = self.transition(job_id, JobState::Queued, JobState::Downloading, None, now)?;
+        if matches!(job.state, JobState::Queued | JobState::Processing) {
+            job = self.transition(job_id, job.state, JobState::Downloading, None, now)?;
         }
         let result = if destination.exists() {
             imagery::inspect_bundle(&destination).and_then(|manifest| {
@@ -1113,28 +1136,45 @@ impl TaskStore {
                         "Output belongs to another job",
                     ));
                 }
+                verify_manifest_crs(&manifest, &stored.plan.spec)?;
                 Ok(manifest)
             })
         } else {
-            imagery::fetch_bundle_with_cache_control_proxy(
+            imagery::fetch_bundle_with_projector_progress(
                 &request,
                 endpoint,
                 cancelled,
                 paused,
                 &cache,
                 proxy,
-                |completed, total| {
+                |progress| {
                     if cancelled.load(std::sync::atomic::Ordering::Relaxed) {
                         return Err(geod_core::imagery::CoreError::new(
                             "CANCELLED",
                             "Download cancelled",
                         ));
                     }
-                    if completed <= 10 || completed % 16 == 0 || completed == total {
-                        self.record_progress(job_id, completed, total)
-                            .map_err(|error| {
-                                geod_core::imagery::CoreError::new(error.code, error.message)
-                            })?;
+                    match progress {
+                        imagery::BundleProgress::Stage(stage) => {
+                            let next = match stage {
+                                imagery::BundleStage::Downloading => JobState::Downloading,
+                                imagery::BundleStage::Processing | imagery::BundleStage::Reprojecting => JobState::Processing,
+                            };
+                            if job.state != next {
+                                job = self.transition(job_id, job.state, next, None, Utc::now())
+                                    .map_err(|error| imagery::CoreError::new(error.code, error.message))?;
+                            }
+                            if next==JobState::Processing && request.export_options.target_crs.as_deref().is_some_and(|c|c!="EPSG:3857") {
+                                self.record_processing_stage(job_id,if stage==imagery::BundleStage::Reprojecting{"reprojecting"}else{"assembling"})
+                                    .map_err(|e|imagery::CoreError::new(e.code,e.message))?;
+                            }
+                        }
+                        imagery::BundleProgress::Tiles { completed, total } => {
+                            if completed <= 10 || completed % 16 == 0 || completed == total {
+                                self.record_progress(job_id, completed, total)
+                                    .map_err(|error| imagery::CoreError::new(error.code, error.message))?;
+                            }
+                        }
                     }
                     if paused.load(std::sync::atomic::Ordering::Relaxed) {
                         return Err(geod_core::imagery::CoreError::new(
@@ -1144,6 +1184,7 @@ impl TaskStore {
                     }
                     Ok(())
                 },
+                projector,
             )
             .await
         };
@@ -1163,6 +1204,14 @@ impl TaskStore {
             }
         }
     }
+}
+
+fn verify_manifest_crs(manifest: &Manifest, spec: &TaskSpec) -> Result<(), imagery::CoreError> {
+    let target = spec.export_options.as_ref().and_then(|options| options.target_crs.as_deref()).unwrap_or("EPSG:3857");
+    if manifest.assets.iter().filter(|asset| asset.role == "analysis").any(|asset| asset.crs != target) {
+        return Err(imagery::CoreError::new("ARTIFACT_CRS_MISMATCH", "Artifact coordinate system differs from the approved plan"));
+    }
+    Ok(())
 }
 
 fn plan_id_for_tool_execution(tool_execution_id: &str) -> Result<String, LedgerError> {

@@ -3,6 +3,7 @@ use geod_core::{
     imagery::{
         fetch_bundle, fetch_bundle_with_cache_control_proxy,
         fetch_bundle_with_cache_control_proxy_options, fetch_bundle_with_cancel, inspect_bundle,
+        fetch_bundle_with_cache_control_proxy_progress, BundleProgress, BundleStage,
         DownloadOptions, HttpSource, ImageryRequest, NetworkPolicy, ProxyRoute, TileCacheConfig,
         TileScheme,
     },
@@ -24,6 +25,51 @@ use tiff::{
     decoder::{Decoder, DecodingResult},
     tags::Tag,
 };
+
+#[tokio::test]
+async fn pause_during_processing_keeps_tiles_and_resumes_without_network() {
+    let fixture = Fixture::start(false);
+    let directory = tempfile::tempdir().unwrap();
+    let output = directory.path().join("paused-export");
+    let cache = TileCacheConfig {
+        root: directory.path().join("checkpoint"), plan_hash: "a".repeat(64),
+        job_id: uuid::Uuid::new_v4().to_string(),
+    };
+    let cancelled = AtomicBool::new(false);
+    let paused = AtomicBool::new(false);
+    let mut downloaded = 0;
+    let result = fetch_bundle_with_cache_control_proxy_progress(
+        &request(output.clone(), 256), &fixture.source(), &cancelled, &paused,
+        &cache, ProxyRoute::Direct, |progress| {
+            match progress {
+                BundleProgress::Tiles { completed, .. } => downloaded = completed,
+                BundleProgress::Stage(BundleStage::Processing) => {
+                    assert_eq!(downloaded, 2);
+                    assert!(!output.exists());
+                    paused.store(true, Ordering::Relaxed);
+                }
+                _ => {},
+            }
+            Ok(())
+        },
+    ).await.unwrap_err();
+    assert_eq!(result.code, "PAUSED");
+    assert!(!output.exists());
+    assert_eq!(fixture.requests.load(Ordering::Relaxed), 2);
+    paused.store(false, Ordering::Relaxed);
+    let mut stages = Vec::new();
+    fetch_bundle_with_cache_control_proxy_progress(
+        &request(output.clone(), 256), &fixture.source(), &cancelled, &paused,
+        &cache, ProxyRoute::Direct, |progress| {
+            if let BundleProgress::Stage(stage) = progress { stages.push(stage); }
+            Ok(())
+        },
+    ).await.unwrap();
+    assert_eq!(stages.first(), Some(&BundleStage::Downloading));
+    assert!(stages.contains(&BundleStage::Processing));
+    assert_eq!(fixture.requests.load(Ordering::Relaxed), 2);
+    assert_eq!(inspect_bundle(&output).unwrap().quality.status, "complete");
+}
 
 struct Fixture {
     address: SocketAddr,
@@ -247,6 +293,7 @@ async fn publishes_inspectable_geotiff_mbtiles_and_manifest() {
     let mut tiff =
         Decoder::new(std::fs::File::open(output.join("imagery-z1.tif")).unwrap()).unwrap();
     assert_eq!(tiff.dimensions().unwrap(), (4, 2));
+    assert_eq!(tiff.get_tag_u32(Tag::Compression).unwrap(), 1, "Default GeoTIFF must be uncompressed");
     assert!(manifest.assets[0].bounds[0] <= -1.0);
     assert!(manifest.assets[0].bounds[2] >= 1.0);
     let keys = tiff.get_tag_u16_vec(Tag::GeoKeyDirectoryTag).unwrap();

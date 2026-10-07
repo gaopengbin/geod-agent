@@ -163,6 +163,7 @@ async fn approved_job_downloads_and_only_then_completes() {
             JobState::Downloading,
             JobState::Downloading,
             JobState::Downloading,
+            JobState::Processing,
             JobState::Verifying,
             JobState::Completed
         ]
@@ -175,6 +176,13 @@ async fn approved_job_downloads_and_only_then_completes() {
         store.inspect_job_artifact(&queued.job_id).unwrap().id,
         format!("geod-agent-job-{}", queued.job_id)
     );
+    // A restart after export must recover the Processing checkpoint and verify
+    // the published bundle without fetching the already downloaded imagery.
+    rusqlite::Connection::open(directory.path().join("jobs.sqlite")).unwrap()
+        .execute("UPDATE jobs SET state='processing' WHERE job_id=?1", [&queued.job_id]).unwrap();
+    store.run_job(&queued.job_id, &descriptor, &endpoint, now()).await.unwrap();
+    assert_eq!(store.get_job(&queued.job_id).unwrap().unwrap().state, JobState::Completed);
+    assert_eq!(requests.load(Ordering::Relaxed), 2);
     let second_plan = store.create_plan(spec.clone(), &descriptor, now()).unwrap();
     let second_approval = store
         .grant_approval(

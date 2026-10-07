@@ -168,6 +168,7 @@ pub(super) fn parse(root:&Path,owner:&str)->Result<Package,AppError>{
             if !matches!(transport,""|"stdio"|"http"|"streamable-http")||(command.is_some()&&!matches!(transport,""|"stdio"))||(command.is_none()&&transport=="stdio"){return Err(error("PLUGIN_COMPONENT_UNSUPPORTED","仅支持 stdio 和 Streamable HTTP MCP"));}
             let decode=|key:&str,default:Value|config.get(key).filter(|value|!value.is_null()).cloned().unwrap_or(default);
             let secret=crate::mcp_credentials::Secret {
+                query:BTreeMap::new(),
                 args:serde_json::from_value(decode("args",json!([]))).map_err(|_|error("PLUGIN_INVALID","MCP args 须为字符串数组"))?,
                 env:serde_json::from_value(decode("env",json!({}))).map_err(|_|error("PLUGIN_INVALID","MCP env 须为字符串对象"))?,
                 headers:serde_json::from_value(config.get("headers").filter(|value|!value.is_null()).or_else(||config.get("http_headers").filter(|value|!value.is_null())).cloned().unwrap_or(json!({}))).map_err(|_|error("PLUGIN_INVALID","MCP headers 须为字符串对象"))?,
@@ -247,7 +248,7 @@ pub(super) fn install(state:&ExtensionState,mut package:Package,expected:&str,en
             server.runtime.validate(command.is_some())?;
             crate::mcp_credentials::validate(command.as_deref(),&server.secret)?;
             crate::mcp_credentials::save(&state.path,&id,&server.secret)?;credentials.push(id.clone());
-            settings.insert(id.clone(),crate::mcp_credentials::Metadata{owner:package.record.owner.clone(),command:command.clone(),header_names:server.secret.headers.keys().cloned().collect(),env_names:server.secret.env.keys().cloned().collect(),argument_count:server.secret.args.len(),oauth:false,runtime:server.runtime});
+            settings.insert(id.clone(),crate::mcp_credentials::Metadata{owner:package.record.owner.clone(),command:command.clone(),header_names:server.secret.headers.keys().cloned().collect(),query_names:vec![],env_names:server.secret.env.keys().cloned().collect(),argument_count:server.secret.args.len(),oauth:false,runtime:server.runtime});
             connectors.push(Connector{id:id.clone(),name:server.name,url:server.url,enabled:enabled&&server.enabled,transport:if command.is_some(){ConnectorTransport::Stdio}else{ConnectorTransport::Http}});
             package.record.mcp_server_ids.insert(server.alias,id.clone());
             package.record.connector_ids.push(id);

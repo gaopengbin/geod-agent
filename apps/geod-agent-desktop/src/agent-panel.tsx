@@ -1,4 +1,6 @@
 import { getLocale, t, localize, replyLanguageInstruction } from "./i18n";
+import {continueTaskContext} from './continue-task';
+import {inheritedImageryCrs,resolvedRevisionQuestions} from './imagery-revision';
 // i18n: presentation strings migrated
 import { localStateStore, flushLocalState } from "./local-state";
 import { TILES3D_CONNECTION_ID, tiles3dConnectionTools, executeTiles3dConnectionTool } from "./data-connection-tools";
@@ -9,7 +11,7 @@ import { ConversationSessions, conversationSessionSeed } from "./conversation-se
 import { useConversationState } from "./use-conversation-session";
 import { motion, useReducedMotion } from "motion/react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { Bot, ChevronDown, CircleAlert, Clock3, DotsThree, File, Folder, FolderOpen, FolderPlus, GitBranch, LogIn, MapTrifold, NewChat, PencilSimple, Plus, PuzzlePiece, Search, ShieldAlert, ShieldCheck, Trash, X } from "./icons";
+import { Bot, ChevronDown, CircleAlert, Clock3, DotsThree, File, Folder, FolderOpen, FolderPlus, GitBranch, MapTrifold, NewChat, PencilSimple, Plus, PuzzlePiece, Search, ShieldAlert, ShieldCheck, Trash, X } from "./icons";
 import { open, save as saveFileDialog } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { ConversationRow, ConversationHistory, ConversationEditor, type ConversationAction } from "./conversation-manager";
@@ -20,13 +22,22 @@ import { PromptInput } from "@/components/agents/prompt-input";
 import { MorphPopover, MorphPopoverContent, MorphPopoverTrigger } from "@/components/motion/popover-morph";
 import { ContextWindow } from "./context-window";
 import { AccountMenu } from "./account-menu";
+import type { GeoDAuth } from "./geod-auth";
 import { useAIModels, modelValue,availableAIChannels,SPONSORED_CHANNELS_VISIBLE } from "./ai-channels";
 import { useDownloadTelemetry } from "./use-download-telemetry";
 import { ChatTranscript } from "./chat-ui";
 import { ExtensionStorePage } from "./extension-store";
 import { SchedulesPage } from "./schedules-page";
 import { requestScheduleFocus } from "./schedule-navigation";
-import { api, desktopAvailable, errorMessage, type AgentMessage, type AgentToolCall, type AuthStatus, type BoundaryImport, type DataInputRequest, type DataConnectionDraft, type DataConnectionResult, type Generation, type Job, type ModelUsage, type OnlineSkillCandidate, type RegistryMcpItem, type SkillSourceCandidate, type SourceRegistrationDraft, type StoredPlan, type WorkspaceSettings } from "./api";
+import { api, desktopAvailable, errorMessage, type AgentMessage, type AgentToolCall, type BoundaryImport, type DataInputRequest, type DataConnectionDraft, type DataConnectionResult, type Generation, type Job, type ModelUsage, type OnlineSkillCandidate, type RegistryMcpItem, type SkillSourceCandidate, type SourceRegistrationDraft, type StoredPlan, type WorkspaceSettings } from "./api";
+import { crsFromAnswers, exportCrsQuestions, humanCrsIntent, isExportPlan, resolveExportCrs } from "./export-crs";
+import {ensureExportRuntime} from "./runtime-compatibility";
+import {listen} from "@tauri-apps/api/event";
+import {GisInstallCard} from "./gis-install-card";
+import {GisInstallFlow,type GisInstallRequest} from "./gis-install-flow";
+import {GisDependencyGate,gisRequirement,missingGisDependency,type GisRequirement} from "./gis-dependencies";
+import type {GisInstallProgress} from "./api";
+import {runtimeCompatibilityFailure, runtimeUpdateError} from "./app-error";
 import { sourceRegistrationDraft, toolDisplay, userProvidedUrl, workspacePermissionContext } from "./agent-workflow";
 import { configureSource } from "./source-configuration";
 import { artifactResultForModel, modelMessagesWithoutArtifactPaths } from "./model-artifacts";
@@ -41,6 +52,12 @@ import { displayPath } from "./path-display";
 import { runCodexTurn, type CodexEvent, type CodexTokenUsage } from "./codex-client";
 import { reduceCodexItems } from "./codex-items";
 import { CodexRequestCard, type CodexRequest } from "./codex-request";
+import { inputQuestions, validatedInputReply, UserInputGate } from "./user-input";
+import {answeredCrsChoice,reusableInputReply,userInputReplyText,detachedUserInput,isDetachedUserInput,inputOrigin,type UserInputDraft} from './user-input-records';
+import {userApprovedMcpUrl,reconcileMcpProposals} from './mcp-onboarding';
+import {resolveMcpTarget,prepareMcpConnection} from './mcp-connection';
+import {repairSavedMcpHistory,knownSavedMcpAddress} from './mcp-history-repair';
+import {turnOutcomeMessage,outputFailureCode,modelResponseIssue,orphanedReasoningTurn,recoverTurnOutcome} from './turn-outcome';
 import { McpRequestQueue } from "./mcp-request-queue";
 import { backgroundHandoff, backgroundRunning, backgroundStateLabels, type BackgroundSnapshot } from "./background-jobs";
 import { jobExecutionState, jobStatusFacts } from "./job-runtime";
@@ -69,7 +86,6 @@ import { scheduleTools, SCHEDULE_CONNECTOR_ID } from "./schedule-tools";
 import { dataDownloadTools, DATA_DOWNLOAD_ID, executeDataDownloadTool } from "./data-download-tools";
 import { accountChatStore, chatPlanIds, CHAT_LIST_KEY, clearPending, commitPending, deleteStoredConversation, importLegacyChats, LEGACY_IMPORT_MARKER, legacyChats, pendingBoundary, persistCompletedChat, readPending, restorePendingChats, savePending, type DisplayMessage, type ExtensionProposal, type SavedChat } from "./pending-generations";
 
-const blankStatus: AuthStatus = { state: "unconfigured", userId: null, error: null };
 const WORKSPACE_LIST_KEY = "geod-agent-workspace-list-0.1";
 const ACTIVE_CHAT_KEY = "geod-agent-active-conversation-0.1";
 interface WorkspaceListView { names: Record<string, string>; hidden: string[] }
@@ -111,7 +127,7 @@ function modelUserText(value: string, boundary: BoundaryImport | null) {
 }
 function stringArg(value: unknown) { return typeof value === "string" && value.length > 0 && value.length <= 100 ? value : null; }
 export type AgentMainView = "conversation" | "extensions" | "sources" | "models" | "schedules";
-export function AgentPanel({ onAccountChange, onBackgroundSnapshots, ledgerJobs, conversationTasks, onTaskGroupSelect, onWorkspaceChange, onConversationChange, registeredSource, onPlanned, onOpenSources, onOpenNetwork, onOpenCache, onToggleTheme, onEmptyConversationChange, mainView, onMainViewChange, theme, onSelectConversation, selectedJob, onJobStarted, onOpenJob }: { onAccountChange: (id: string | null) => void; onBackgroundSnapshots: (snapshots: Record<string, BackgroundSnapshot>) => void; ledgerJobs: Job[]; conversationTasks: QueueTask[]; onTaskGroupSelect: (planIds: string[]) => void; onWorkspaceChange?: (state: { conversationId: string; permission: WorkspaceSettings["permission"] | null }) => void; onConversationChange: (conversationId: string) => void; registeredSource: { eventId: string; conversationId: string; sourceId: string; displayName: string } | null; onPlanned: (plan: StoredPlan, originConversationId: string) => void; onOpenSources: (draft?: SourceRegistrationDraft, originConversationId?: string) => void; onOpenNetwork: () => void; onOpenCache: () => void; onToggleTheme: () => void; onEmptyConversationChange: (empty: boolean) => void; mainView: AgentMainView; onMainViewChange: (view: AgentMainView) => void; theme: "light" | "dark"; onSelectConversation: (planIds: string[], conversationId: string) => void; selectedJob: Job | null; onJobStarted: (job: Job, originConversationId: string) => void; onOpenJob?: (job: Job) => void }) {
+export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledgerJobs, conversationTasks, onTaskGroupSelect, onWorkspaceChange, onConversationChange, registeredSource, onPlanned, onOpenSources, onOpenNetwork, onOpenCache, onToggleTheme, onEmptyConversationChange, mainView, onMainViewChange, theme, onSelectConversation, selectedJob, onJobStarted, onOpenJob }: { auth: GeoDAuth; onAccountChange: (id: string | null) => void; onBackgroundSnapshots: (snapshots: Record<string, BackgroundSnapshot>) => void; ledgerJobs: Job[]; conversationTasks: QueueTask[]; onTaskGroupSelect: (planIds: string[]) => void; onWorkspaceChange?: (state: { conversationId: string; permission: WorkspaceSettings["permission"] | null }) => void; onConversationChange: (conversationId: string) => void; registeredSource: { eventId: string; conversationId: string; sourceId: string; displayName: string } | null; onPlanned: (plan: StoredPlan, originConversationId: string) => void; onOpenSources: (draft?: SourceRegistrationDraft, originConversationId?: string) => void; onOpenNetwork: () => void; onOpenCache: () => void; onToggleTheme: () => void; onEmptyConversationChange: (empty: boolean) => void; mainView: AgentMainView; onMainViewChange: (view: AgentMainView) => void; theme: "light" | "dark"; onSelectConversation: (planIds: string[], conversationId: string) => void; selectedJob: Job | null; onJobStarted: (job: Job, originConversationId: string) => void; onOpenJob?: (job: Job) => void }) {
   const reduceMotion = useReducedMotion();
   const [accountId, setAccountId] = useState<string | null>(null);
   useEffect(() => onAccountChange(accountId), [accountId, onAccountChange]);
@@ -193,6 +209,106 @@ export function AgentPanel({ onAccountChange, onBackgroundSnapshots, ledgerJobs,
   const [codexRequests, setCodexRequests] = useConversationState<CodexRequest[]>(session,"codexRequests",[]);
   const codexRequest = codexRequests[0];
   const codexRequestResolve = session.ref("codexRequestResolve",new Map<string, (value: unknown) => void>());
+  const [openInputId,setOpenInputId]=useConversationState<string|null>(session,'openInputId',null);
+  const userInputGate = session.ref("userInputGate",new UserInputGate());
+  const humanRequestRevision=session.ref("humanRequestRevision",0);
+  const gisDependencyGate=session.ref("gisDependencyGate",new GisDependencyGate());
+  const [gisInstallRequest,setGisInstallRequest]=useConversationState<GisInstallRequest|null>(session,"gisInstallRequest",null);
+  const gisInstallFlow=session.ref("gisInstallFlow",new GisInstallFlow({
+    install:(id,requestId)=>api.gisSkillInstall(id,null,requestId),cancel:api.gisInstallCancel,
+    subscribe:callback=>listen<GisInstallProgress>('geod:gis-install-progress',event=>callback(event.payload)),
+    change:setGisInstallRequest,
+    installed:offer=>appendDisplay({id:crypto.randomUUID(),role:"tool",content:`已安装技能 · ${offer.name}`}),
+    failure:cause=>setError(errorMessage(cause)),errorMessage,
+  }));
+  function cancelGisInstall(){gisInstallFlow.current.cancel();}
+  async function pauseUserWait(requestId:string|undefined,waiting:boolean){
+    const run=codexRun.current;if(run&&requestId)await api.codexCommand(run,{type:'userInputState',requestId,waiting}).catch(()=>{});
+  }
+  async function ensureGis(requirement:GisRequirement,nativeRequestId?:string) {
+    const result=await gisDependencyGate.current.ensure(()=>api.gisInstallPrepare(requirement.id,requirement.requireTools),offer=>{
+      if(userInputGate.current.cancelled)return Promise.resolve(false);
+      userInputGate.current.begin();setLiveActivity("等待确认组件安装…");
+      void pauseUserWait(nativeRequestId,true);
+      return gisInstallFlow.current.ask(offer,requirement.reason).then(accepted=>{
+        void pauseUserWait(nativeRequestId,false);
+        userInputGate.current.finishDependency(accepted);
+        setLiveActivity(accepted?"正在继续原来的操作…":"已取消组件安装");
+        return accepted;
+      });
+    });
+    if(userInputGate.current.cancelled||result==='cancelled')return {error:"USER_INPUT_CANCELLED",message:"用户取消了组件安装，未继续本次操作。"};
+    if(result==='pending')return {error:"USER_INPUT_PENDING",message:"正在等待所需组件安装，不重复发起安装或规划。"};
+    return null;
+  }
+  const exportCrsPreferenceProcessed=session.ref<string|undefined>("exportCrsPreferenceProcessed",undefined);
+  const exportCrsChoice = session.ref<{userMessageId?:string;crs:string;resampling?:"nearest"|"bilinear"|"cubic"}|null>("exportCrsChoice",null);
+  async function rememberHumanCrsPreference(text: string, messageId?: string) {
+    const intent = humanCrsIntent(text);
+    if (intent.clear) await api.workspaceSetOutputCrs(conversationId, null);
+    else if (intent.session && intent.crs) await api.workspaceSetOutputCrs(conversationId, intent.crs);
+    exportCrsPreferenceProcessed.current = messageId;
+  }
+  async function rememberCrsAnswer(questions: ReturnType<typeof inputQuestions>, reply: ReturnType<typeof validatedInputReply>,userMessageId=[...displayRef.current].reverse().find(item=>item.role==='user')?.id) {
+    const choice=crsFromAnswers(questions,reply);
+    if (!choice) return;
+    exportCrsChoice.current={...choice,userMessageId};
+    if(choice.session) await api.workspaceSetOutputCrs(conversationId,choice.crs);
+  }
+  async function persistQuestionTranscript(){
+    const previous=chatRecordsRef.current.find(chat=>chat.conversationId===conversationId);
+    setChatRecords(persistCompletedChat(chatStore(),{...previous,...session.snapshot(),conversationId,messages:session.get('messages',[]),display:displayRef.current,updatedAt:new Date().toISOString()}));
+    await flushLocalState();
+  }
+  async function waitForUserInput(request: CodexRequest,nativeRequestId?:string,toolCallId?:string): Promise<unknown> {
+    const question=request.method==='item/tool/requestUserInput';
+    if(question){
+      const questions=inputQuestions(request.params.questions);
+      if(questions.some(q=>q.isSecret))throw new Error('认证信息请通过对应的本机认证表单填写。');
+      const human=[...displayRef.current].reverse().find(item=>item.role==='user');
+      const id=`question-${request.requestId}`;
+      appendDisplay({id,role:'tool',content:'补充需求',turnId:codexRun.current??undefined,userInput:{requestId:request.requestId,questions,status:'pending',userMessageId:human?.id,userText:human?.content,toolCallId,createdAt:new Date().toISOString()}});
+      setOpenInputId(id);
+      await persistQuestionTranscript();
+    }
+    await pauseUserWait(nativeRequestId??(question?request.requestId:undefined),true);
+    try{return await new Promise(resolve => {
+      codexRequestResolve.current.set(request.requestId, resolve);
+      if(!question)setCodexRequests(previous => [...previous, request]);setLiveActivity("等待你的回复…");
+    });}finally{await pauseUserWait(nativeRequestId??(question?request.requestId:undefined),false);}
+  }
+  function updateInputDraft(id:string,value:UserInputDraft){
+    const current=displayRef.current.find(item=>item.id===id)?.userInput;if(!current||current.status!=='pending'||JSON.stringify(current.draft)===JSON.stringify(value))return;
+    replaceDisplay(id,{userInput:{...current,draft:value}});void persistQuestionTranscript().catch(cause=>setError(errorMessage(cause)));
+  }
+  async function replyToInput(id:string,value:unknown){
+    const record=displayRef.current.find(item=>item.id===id)?.userInput;if(!record)return;
+    if(record.status==='resolved'&&record.resolution?.kind==='existingPlanCrs'&&value&&typeof value==='object'&&'continueRevision' in value){
+      if(busy||sending.current||inputOrigin(displayRef.current,[...displayRef.current].reverse().find(m=>m.role==='user')?.id)!==record.userMessageId)return;
+      if(pendingId){const generation=await api.agentGenerationGet(pendingId);if(['reserved','streaming','pending_reconcile'].includes(generation.state))throw new Error('模型请求还在核对中，请稍后检查。');await releasePending();await persistQuestionTranscript();}
+      await send('继续刚才的任务');return;
+    }
+    if(record.status!=='pending')return;
+    const reply=validatedInputReply(record.questions,value),resolve=codexRequestResolve.current.get(record.requestId);
+    if(!resolve&&(busy||sending.current))throw new Error('请等当前回复结束后，再回答这张历史问答卡。');
+    if(!resolve&&reply&&pendingId){
+      const generation=await api.agentGenerationGet(pendingId);
+      if(['reserved','streaming','pending_reconcile'].includes(generation.state))throw new Error('模型请求还在核对中，请稍后检查。');
+      await releasePending();
+    }
+    await rememberCrsAnswer(record.questions,reply,record.userMessageId);
+    replaceDisplay(id,{userInput:{...record,status:reply?'answered':'cancelled',reply:reply??undefined,draft:undefined}});
+    await persistQuestionTranscript();setOpenInputId(null);
+    if(resolve){codexRequestResolve.current.delete(record.requestId);if(reply)setLiveActivity("正在继续处理…");resolve(reply??{answers:{}});}
+    else if(reply)await send(userInputReplyText(record,reply),undefined,false,undefined,crsFromAnswers(record.questions,reply));
+    if(!reply&&resolve){userInputGate.current.cancelled=true;if(codexRun.current)void api.codexCommand(codexRun.current,{type:'interrupt'}).catch(cause=>setError(errorMessage(cause)));}
+  }
+  function cancelInputRequests(explicit=false) {
+    cancelGisInstall();
+    if(explicit){displayRef.current=displayRef.current.map(item=>item.userInput?.status==='pending'&&codexRequestResolve.current.has(item.userInput.requestId)?{...item,userInput:{...item.userInput,status:'cancelled'}}:item);setDisplay(displayRef.current);}
+    for (const resolve of codexRequestResolve.current.values()) resolve(explicit?{ answers: {} }:detachedUserInput);
+    codexRequestResolve.current.clear(); setCodexRequests([]);
+  }
   const engine = chatRecords.find(chat => chat.conversationId === conversationId)?.engine ?? (codexAvailable ? "codex" : "legacy");
   const lastInputTokensRef = session.ref<number | null>("lastInputTokensRef",lastInputTokens);
   const [clock, setClock] = useState(() => Date.now());
@@ -274,20 +390,87 @@ export function AgentPanel({ onAccountChange, onBackgroundSnapshots, ledgerJobs,
     connectionResolve.current?.(value); connectionResolve.current = null;
     setConnectionAuthentication(null); setDataInputOpen(false);
   }
-  function runDataTool(tool: string, args: Record<string, unknown>) {
-    return executeDataInputTool(conversationId, tool, args, {
+  async function runDataTool(tool: string, args: Record<string, unknown>,nativeRequestId?:string) {
+    const revision=humanRequestRevision.current;
+    const userId=[...displayRef.current].reverse().find(item=>item.role==='user')?.id;
+    const run=()=>executeDataInputTool(conversationId, tool, args, {
       attach: attachRange,
       authenticate: draft => new Promise<DataConnectionResult>(resolve => {
         connectionResolve.current = resolve; setConnectionAuthentication(draft); setInitialDataInput(null); setDataInputOpen(true); setLiveActivity("等待数据库认证…");
       }),
       authenticateSql: draft=>new Promise<SqlConnectionResult>(resolve=>{sqlResolve.current=resolve;setSqlAuthentication(draft);setLiveActivity("等待数据库认证…");}),
     });
+    let result;
+    try{result=await run();}catch(cause){if(!missingGisDependency(cause))throw cause;result=cause;}
+    const requirement=missingGisDependency(result)?gisRequirement(tool,args,true):null;
+    if(!requirement)return result;
+    const blocked=await ensureGis(requirement,nativeRequestId);if(blocked)return blocked;
+    if(revision!==humanRequestRevision.current||userId!==[...displayRef.current].reverse().find(item=>item.role==='user')?.id)return {error:"REPLAN_AFTER_USER_INPUT",message:"用户请求已更新，请重新读取当前请求。"};
+    return await run();
   }
   const boundaryRef = session.ref<BoundaryImport | null>("boundaryRef",boundary);
-  const [status, setStatus] = useState<AuthStatus>(blankStatus);
-  const [statusReady, setStatusReady] = useState(false);
+  const { status } = auth;
   const [usage, setUsage] = useState<ModelUsage | null>(null);
   const [busy, setBusy] = useConversationState(session,"busy",false);
+  const revisionQuestionState=JSON.stringify(display.filter(m=>m.userInput?.status==='pending'&&m.userInput.requestId.startsWith('crs-')).map(m=>[m.id,m.userInput?.draft]));
+  useEffect(()=>{
+    if(!desktopAvailable||!accountId||mainView!=='conversation'||!displayRef.current.some(m=>m.userInput?.status==='pending'&&m.userInput.requestId.startsWith('crs-')))return;
+    let cancelled=false;
+    const original=displayRef.current;
+    void resolvedRevisionQuestions(original,planIdsRef.current,boundaryRef.current,api.plansGet).then(async next=>{
+      if(cancelled||next===original)return;
+      const changed=next.filter((m,i)=>m!==original[i]).filter(m=>{const current=displayRef.current.find(n=>n.id===m.id);return current?.userInput?.status==='pending'&&JSON.stringify(current.userInput)===JSON.stringify(original.find(o=>o.id===m.id)?.userInput);});
+      if(!changed.length)return;
+      // A live old question belongs to the superseded implementation. Stop
+      // that waiting turn without billing another generation or inventing answers.
+      const runs=[...new Set(changed.map(m=>m.turnId).filter((id):id is string=>!!id))];
+      displayRef.current=displayRef.current.map(m=>changed.find(n=>n.id===m.id)??m);
+      setDisplay(displayRef.current);await persistQuestionTranscript();
+      for(const run of runs){const proof=await api.billingRunSnapshot(run);if(proof.status==='running'&&proof.conversationId===conversationId){try{await api.codexCommand(run,{type:'interrupt'});}catch(cause){if(!(cause&&typeof cause==='object'&&'code' in cause&&cause.code==='CODEX_RUN_NOT_FOUND'))throw cause;}}}
+      for(const m of changed){const r=m.userInput!;codexRequestResolve.current.get(r.requestId)?.(detachedUserInput);codexRequestResolve.current.delete(r.requestId);}
+    }).catch(cause=>{if(!cancelled)setError(errorMessage(cause));});
+    return ()=>{cancelled=true;};
+  },[accountId,conversationId,mainView,revisionQuestionState]);
+  const resolvedRevisionState=JSON.stringify(display.filter(m=>m.userInput?.resolution?.kind==='existingPlanCrs').map(m=>[m.id,m.turnId]));
+  useEffect(()=>{
+    if(!accountId||busy||!pendingId||!resolvedRevisionState||mainView!=='conversation')return;
+    let cancelled=false;
+    const generationId=pendingId;
+    const origin=inputOrigin(displayRef.current,[...displayRef.current].reverse().find(m=>m.role==='user')?.id);
+    const records=displayRef.current.filter(m=>m.userInput?.resolution?.kind==='existingPlanCrs'&&m.userInput.userMessageId===origin&&m.turnId);
+    void (async()=>{
+      for(const record of records){const proof=await api.billingRunSnapshot(record.turnId!);
+        if(proof.status==='running'||proof.conversationId!==conversationId||!proof.generations.some(g=>g.generationId===generationId))continue;
+        const generation=await api.agentGenerationGet(generationId);
+        if(generation.state!=='settled'||cancelled||session.get('pendingId','')!==generationId)return;
+        await releasePending();await persistQuestionTranscript();return;
+      }
+    })().catch(cause=>{if(!cancelled)setError(errorMessage(cause));});
+    return ()=>{cancelled=true;};
+  },[accountId,conversationId,mainView,busy,pendingId,resolvedRevisionState]);
+  // Recheck restored/new cards without requesting connector state on every streamed delta.
+  const mcpProposalState=JSON.stringify(display.filter(item=>item.extensionProposal?.kind==='mcp').map(item=>[item.id,item.extensionProposal!.id,item.extensionProposal!.detail,!!item.extensionProposal!.requiresKey]));
+  useEffect(()=>{
+    if(!desktopAvailable||!accountId||mainView!=='conversation')return;
+    let cancelled=false;
+    void api.extensionsList().then(installed=>{
+      if(cancelled)return;
+      const next=reconcileMcpProposals(busy?displayRef.current:repairSavedMcpHistory(displayRef.current,installed.connectors),installed.connectors);
+      if(next!==displayRef.current){displayRef.current=next;setDisplay(next);void persistQuestionTranscript().catch(()=>{});}
+    }).catch(()=>{});
+    return ()=>{cancelled=true;};
+  },[accountId,conversationId,mainView,busy,mcpProposalState]);
+  const orphanedTurn=orphanedReasoningTurn(display);
+  useEffect(()=>{
+    if(!desktopAvailable||!accountId||busy||codexRun.current||!orphanedTurn||mainView!=='conversation')return;
+    let cancelled=false;
+    void recoverTurnOutcome(displayRef.current,conversationId,api).then(outcome=>{
+      if(cancelled||!outcome||session.get('busy',false)||codexRun.current||orphanedReasoningTurn(displayRef.current)!==orphanedTurn)return;
+      appendDisplay(outcome);void persistQuestionTranscript().catch(()=>{});
+    }).catch(()=>{});
+    return()=>{cancelled=true;};
+  },[accountId,conversationId,mainView,busy,orphanedTurn]);
+
   const [liveActivity, setLiveActivity] = useConversationState(session,"liveActivity","正在思考下一步…");
   const [error, setError] = useConversationState(session,"error","");
   useEffect(()=>{
@@ -311,10 +494,6 @@ export function AgentPanel({ onAccountChange, onBackgroundSnapshots, ledgerJobs,
   useEffect(() => {
     if (!desktopAvailable) return;
     void api.codexAvailable().then(value => setCodexAvailable(value.available)).catch(() => setCodexAvailable(false));
-    void api.authStatus()
-      .then(setStatus)
-      .catch(cause => setError(errorMessage(cause)))
-      .finally(() => setStatusReady(true));
   }, []);
   function changeEngine(value: string) {
     if (busy || pendingId || (value !== "codex" && value !== "legacy")) return;
@@ -322,7 +501,6 @@ export function AgentPanel({ onAccountChange, onBackgroundSnapshots, ledgerJobs,
     if(value==="legacy"&&documents.length){setError("已附加文档，请使用 Codex 引擎发送，或先移除文档。");return;}
     setChatRecords(records => records.map(chat => chat.conversationId === conversationId ? { ...chat, engine: value } : chat));
   }
-  useEffect(() => { if (!desktopAvailable || status.state !== "waiting") return; const timer = window.setInterval(() => { void api.authStatus().then(setStatus).catch(cause => setError(errorMessage(cause))); }, 1200); return () => window.clearInterval(timer); }, [status.state]);
   useEffect(() => { if (status.state === "connected") void api.agentUsage().then(setUsage).catch(cause => setError(errorMessage(cause))); }, [status.state]);
   useEffect(() => {
     if (!desktopAvailable || !accountMenuOpen || status.state !== "connected") return;
@@ -353,7 +531,7 @@ export function AgentPanel({ onAccountChange, onBackgroundSnapshots, ledgerJobs,
   useEffect(() => {
     if (status.state !== "connected" || !status.userId) {
       if (accountId) {
-        for(const running of sessions.running(accountId)){const run=running.ref<string|null>("codexRun",null).current;if(run)void api.codexCommand(run,{type:"interrupt"}).catch(()=>{});}
+        for(const running of sessions.running(accountId)){ running.ref("userInputGate",new UserInputGate()).current.cancelled=true; const replies=running.ref("codexRequestResolve",new Map<string,(value:unknown)=>void>()).current; for(const reply of replies.values())reply({answers:{}});replies.clear();running.set("codexRequests",[]); const run=running.ref<string|null>("codexRun",null).current;if(run)void api.codexCommand(run,{type:"interrupt"}).catch(()=>{});}
         setAccountId(null); setChatRecords([]); setConversationId(""); setWorkspaceList(emptyWorkspaceList()); setWorkspaceMenu(null);setLegacyImportReady(false);onSelectConversation([], '');
       }
       return;
@@ -405,18 +583,9 @@ export function AgentPanel({ onAccountChange, onBackgroundSnapshots, ledgerJobs,
     return accountChatStore(localStateStore, accountId);
   }
 
-  async function beginAuth() {
-    setBusy(true); setError("");
-    try { setStatus(await api.authBegin()); }
-    catch (cause) { setError(errorMessage(cause)); }
-    finally { setBusy(false); }
-  }
   async function logout() {
-    if(runningIds.length)return;
-    setBusy(true); setError("");
-    try { setStatus(await api.authLogout()); setUsage(null); }
-    catch (cause) { setError(errorMessage(cause)); }
-    finally { setBusy(false); }
+    if (runningIds.length || auth.busy) return;
+    if (await auth.logout()) setUsage(null);
   }
   function saveWorkspaceList(next: WorkspaceListView) {
     if (!accountId) return;
@@ -616,14 +785,69 @@ export function AgentPanel({ onAccountChange, onBackgroundSnapshots, ledgerJobs,
   async function ownsPlan(id: string) {
     return planIdsRef.current.includes(id) || (await api.schedulesRuns(conversationId)).some(run => run.planId === id);
   }
-  async function executeTool(call: AgentToolCall, generationId: string, context: AgentMessage[], toolMessageId?: string): Promise<unknown> {
+  async function executeTool(call: AgentToolCall, generationId: string, context: AgentMessage[], toolMessageId?: string,nativeRequestId?:string): Promise<unknown> {
     // Capture the requesting message before awaits: steering and parallel calls may arrive meanwhile.
     const userMessageId = [...displayRef.current].reverse().find(item => item.role === "user")?.id;
+    const requestRevision=humanRequestRevision.current;
     let args: Record<string, unknown>;
     try { args = JSON.parse(call.function.arguments) as Record<string, unknown>; }
     catch { return { error: "INVALID_TOOL_ARGUMENTS" }; }
     if (!args || typeof args !== "object" || Array.isArray(args)) return { error: "INVALID_TOOL_ARGUMENTS" };
+    const inputBlock = userInputGate.current.block(call.function.name);
+    if (inputBlock) return inputBlock;
     try {
+      if (isExportPlan(call.function.name,args)) {
+        await ensureExportRuntime(api.runtimeCapabilities);
+        const human=[...displayRef.current].reverse().find(item=>item.role==="user");
+        const intent=humanCrsIntent(human?.content ?? "");
+        let workspace=await api.workspaceGet(conversationId);
+        if ([...displayRef.current].reverse().find(item=>item.role==="user")?.id !== human?.id) return {error:"REPLAN_AFTER_USER_INPUT",message:"用户请求已更新，请依据最新请求重新规划。"};
+        if(exportCrsPreferenceProcessed.current!==human?.id) {
+          if(intent.clear) workspace=await api.workspaceSetOutputCrs(conversationId,null);
+          else if(intent.session && intent.crs) workspace=await api.workspaceSetOutputCrs(conversationId,intent.crs);
+          exportCrsPreferenceProcessed.current=human?.id;
+        }
+        const accepted=exportCrsChoice.current?.userMessageId===human?.id ? exportCrsChoice.current : answeredCrsChoice(displayRef.current,human?.id);
+        const inherited=!accepted?await inheritedImageryCrs({messages:displayRef.current,userMessageId:human?.id,toolName:call.function.name,args,planIds:planIdsRef.current,activeBoundary:boundaryRef.current},api.plansGet):null;
+        const answer=accepted??inherited;
+        const raster=call.function.name!=="data_download_plan";
+        const crs=resolveExportCrs(intent,answer?.crs,workspace.outputCrs,userInputGate.current.allowsChoices,raster);
+        if(!crs) {
+          if(userInputGate.current.waiting) return {error:"USER_INPUT_PENDING",message:"等待用户选择坐标系，不重复询问。"};
+          const questions=inputQuestions(exportCrsQuestions.map(question=>({...question,header:t(question.header),question:t(question.question),options:question.options?.map(option=>({...option,label:t(option.label),description:option.description ? t(option.description) : undefined}))})));
+          userInputGate.current.begin();
+          const value=await waitForUserInput({type:"request",requestId:`crs-${crypto.randomUUID()}`,method:"item/tool/requestUserInput",params:{questions}},nativeRequestId,toolMessageId);
+          if(isDetachedUserInput(value)){userInputGate.current.waiting=false;return {error:'USER_INPUT_SAVED',message:'问题已保存在会话中，用户可稍后打开并回答。未继续操作。'};}
+          const reply=validatedInputReply(questions,value);
+          userInputGate.current.finish(questions,reply);
+          await rememberCrsAnswer(questions,reply);
+          return reply ? {error:"REPLAN_AFTER_USER_INPUT",...reply,answeredBy:"user",message:"用户已选择成果坐标系和应用范围。读取答案后重新规划，未执行旧参数。"} : {error:"USER_INPUT_CANCELLED"};
+        }
+        if(raster) args.exportOptions={...(args.exportOptions as object ?? {}),targetCrs:crs,...(answer?.resampling?{resampling:answer.resampling}:{})};
+        else args.targetCrs=crs;
+        const requirement=gisRequirement(call.function.name,args);
+        if(requirement){const blocked=await ensureGis(requirement,nativeRequestId);if(blocked)return blocked;}
+        if(userInputGate.current.cancelled)return {error:"USER_INPUT_CANCELLED"};
+        if(requestRevision!==humanRequestRevision.current||[...displayRef.current].reverse().find(item=>item.role==='user')?.id!==userMessageId)return {error:"REPLAN_AFTER_USER_INPUT",message:"用户请求已更新，请依据最新请求重新规划。"};
+      }
+      if (call.function.name === "ask_user") {
+        const questions = inputQuestions(args.questions);
+        if (questions.some(question => question.isSecret)) return { error: "SECRET_INPUT_NOT_SUPPORTED", message: "认证信息请通过对应的本机认证表单填写。" };
+        const accepted=reusableInputReply(questions,displayRef.current,userMessageId);
+        if(accepted)return {...accepted,answeredBy:'user',reusedPreviousAnswer:true};
+        if(questions.some(q=>/(?:MCP|服务|server)/i.test(q.question)&&/(?:地址|endpoint|url)/i.test(q.question))){
+          const known=knownSavedMcpAddress(questions,(await api.extensionsList()).connectors,displayRef.current.find(m=>m.id===userMessageId)?.content??'');
+          if(known)return known;
+        }
+        userInputGate.current.begin();
+        const value = await waitForUserInput({ type: "request", requestId: `ask-${crypto.randomUUID()}`, method: "item/tool/requestUserInput", params: { questions } },nativeRequestId,toolMessageId);
+        if(isDetachedUserInput(value)){userInputGate.current.waiting=false;return {error:'USER_INPUT_SAVED',message:'问题已保存在会话中，用户可稍后打开并回答。未继续操作。'};}
+        const reply = validatedInputReply(questions, value);
+        userInputGate.current.finish(questions, reply);
+        await rememberCrsAnswer(questions,reply);
+        if (!reply) return { error: "USER_INPUT_CANCELLED", message: "用户取消了本次操作；未使用默认答案。" };
+        return { ...reply, answeredBy: "user" };
+      }
       if(call.function.name==="attachment_list")return await api.documentAttachmentsList(conversationId);
       if(call.function.name==="attachment_read"){const id=stringArg(args.id);if(!id)return{error:"INVALID_ATTACHMENT_ID"};return await api.documentAttachmentRead(conversationId,id,typeof args.offset==="number"?args.offset:undefined,typeof args.limit==="number"?args.limit:undefined);}
       if (call.function.name.startsWith("tiles3d_connection")) return await executeTiles3dConnectionTool(call.function.name, args);
@@ -646,6 +870,7 @@ export function AgentPanel({ onAccountChange, onBackgroundSnapshots, ledgerJobs,
       }
       if (call.function.name === "extensions_list") {
         const installed = await api.extensionsList();
+        const next=reconcileMcpProposals(displayRef.current,installed.connectors);if(next!==displayRef.current){displayRef.current=next;setDisplay(next);await persistQuestionTranscript();}
         const builtin = installed.skills.some(item => item.id === SOURCE_CREATOR_ID && item.enabled)
           ? [dataInputTools(), await api.sourceCreatorTools()] : [dataInputTools()];
         builtin.push(scheduleTools());
@@ -706,28 +931,18 @@ export function AgentPanel({ onAccountChange, onBackgroundSnapshots, ledgerJobs,
         const query = stringArg(args.query);
         if (!query || query.trim().length < 2) return { error: "INVALID_REGISTRY_QUERY" };
         const results = (await api.mcpRegistrySearch(query)).slice(0, 8);
-        registryCandidates.current.clear();
         for (const item of results) registryCandidates.current.set(item.name, item);
-        return { candidates: results.map(({ name, title, description }) => ({ name, title, description })) };
+        const saved=(await api.extensionsList()).connectors;
+        while(registryCandidates.current.size>32)registryCandidates.current.delete(registryCandidates.current.keys().next().value!);
+        return {candidates:results.map(item=>{const found=saved.find(c=>c.url===item.url);return {...item,candidateId:item.name,registryName:item.name,...(found?{connectorId:found.id,registered:true,enabled:found.enabled,authenticationConfigured:!!(found.queryNames?.length||found.headerNames?.length||found.oauth)}:{})};})};
       }
       if (call.function.name === "mcp_connect") {
-        const registryName = stringArg(args.registryName);
-        let item = registryName ? registryCandidates.current.get(registryName) : undefined;
-        if (!item && typeof args.url === "string") {
-          const lastUser = [...context].reverse().find(message => message.role === "user")?.content ?? "";
-          if (!userProvidedUrl(lastUser, args.url) || args.url.length > 2048) return { error: "MCP_URL_NOT_USER_PROVIDED" };
-          const name = stringArg(args.name) ?? "用户提供的 MCP";
-          item = { name, title: name, description: "用户在本轮对话中提供的 MCP 地址", url: args.url };
-        }
-        if (!item) return { error: "MCP_CANDIDATE_NOT_FOUND", next: "先调用 mcp_registry_search 获取候选，或使用用户本轮明确提供的 MCP 地址" };
-        let connector = (await api.extensionsList()).connectors.find(found => found.url === item.url);
-        if (!connector) connector = (await api.mcpAdd(item.title.slice(0, 80), item.url)).connectors.find(found => found.url === item.url);
-        if (!connector) return { error: "MCP_ADD_FAILED" };
-        const tools = await api.mcpTools(connector.id, conversationId);
-        if (!tools.tools.length) return { error: "MCP_NO_TOOLS", registered: true, enabled: false };
-        if (connector.enabled) return { connected: true, enabled: true, connectorId: connector.id, tools: tools.tools.map(tool => tool.name) };
-        return { connected: true, enabled: false, requiresUserReview: true,
-          extensionProposal: { kind: "mcp", id: connector.id, name: connector.name, description: item.description, detail: connector.url, toolNames: tools.tools.slice(0, 8).map(tool => tool.name) } satisfies ExtensionProposal };
+        const installed=(await api.extensionsList()).connectors;
+        const lastUser=[...context].reverse().find(message=>message.role==='user')?.content??'';
+        const target=resolveMcpTarget(args,installed,registryCandidates.current,url=>userProvidedUrl(lastUser,url)||userApprovedMcpUrl(displayRef.current,userMessageId,url));
+        if('error' in target)return target;
+        const existingSetup=displayRef.current.some(m=>m.extensionProposal?.requiresKey&&m.extensionProposal.detail===target.item.url);
+        return prepareMcpConnection(target,conversationId,call.id,api,existingSetup);
       }
       if (call.function.name === "gdal_connect") {
         let connector = (await api.extensionsList()).connectors.find(item => item.transport === "gdalStdio");
@@ -754,18 +969,21 @@ export function AgentPanel({ onAccountChange, onBackgroundSnapshots, ledgerJobs,
         if (!connectorId || !toolName || !toolArgs || typeof toolArgs !== "object" || Array.isArray(toolArgs)) return { error: "INVALID_MCP_CALL" };
         if(connectorId===SCHEDULE_CONNECTOR_ID){
           if(!scheduleTools().tools.some(tool=>tool.name===toolName))return {error:'TOOL_NOT_ALLOWED'};
-          return {connectorId,toolName,result:await executeTool({...call,function:{...call.function,name:toolName,arguments:JSON.stringify(toolArgs)}},generationId,context,toolMessageId)};
+          return {connectorId,toolName,result:await executeTool({...call,function:{...call.function,name:toolName,arguments:JSON.stringify(toolArgs)}},generationId,context,toolMessageId,nativeRequestId)};
         }
         if (connectorId === TILES3D_CONNECTION_ID) return {connectorId,toolName,result:await executeTiles3dConnectionTool(toolName,toolArgs as Record<string,unknown>)};
         if (connectorId === AI_SCHEDULE_ID) return {connectorId,toolName,result:await executeAiScheduleTool(conversationId,toolName,toolArgs as Record<string,unknown>,`${generationId}:${call.id}`,context)};
         if (connectorId === BACKGROUND_COMMAND_ID) return {connectorId,toolName,result:await executeBackgroundCommandTool(conversationId,toolName,toolArgs as Record<string,unknown>,`${generationId}:${call.id}`)};
         if (connectorId === AGENT_TASK_ID) return {connectorId,toolName,result:await executeAgentTaskTool(conversationId,toolName,toolArgs as Record<string,unknown>,`${generationId}:${call.id}`)};
         if (connectorId === MEMORY_ID) return {connectorId,toolName,result:await executeMemoryTool(conversationId,toolName,toolArgs as Record<string,unknown>)};
-        if (connectorId === DATA_DOWNLOAD_ID) return { connectorId, toolName, result: await executeDataDownloadTool(conversationId, toolName, toolArgs as Record<string, unknown>, `${generationId}:${call.id}`) };
+        if (connectorId === DATA_DOWNLOAD_ID) {
+          if (!dataDownloadTools().tools.some(tool=>tool.name===toolName)) return {error:"TOOL_NOT_ALLOWED"};
+          return {connectorId,toolName,result:await executeTool({...call,function:{...call.function,name:toolName,arguments:JSON.stringify(toolArgs)}},generationId,context,toolMessageId,nativeRequestId)};
+        }
         if (connectorId === "builtin-data-schedules") return {connectorId,toolName,result:await executeDataScheduleTool(conversationId,toolName,toolArgs as Record<string,unknown>,`${generationId}:${call.id}`)};
         if (connectorId === "builtin-cache") return {connectorId,toolName,result:await executeCacheTool(toolName,toolArgs as Record<string,unknown>)};
         if (connectorId === DATA_INPUT_ID) {
-          return runDataTool(toolName, toolArgs as Record<string, unknown>);
+          return await runDataTool(toolName, toolArgs as Record<string, unknown>,nativeRequestId);
         }
         if (connectorId === SOURCE_CREATOR_ID) {
           if (toolName === "lookup_boundary" || toolName === "lookup_boundaries") { boundaryRef.current = null; setBoundary(null); }
@@ -776,6 +994,11 @@ export function AgentPanel({ onAccountChange, onBackgroundSnapshots, ledgerJobs,
           return { connectorId, kind: "builtin", toolName, result };
         }
         return { connectorId, toolName, result: await api.mcpCall(connectorId, toolName, toolArgs as Record<string, unknown>, `${generationId}:${call.id}`, conversationId) };
+      }
+      if (call.function.name === "mcp_result_export") {
+        const executionId=stringArg(args.executionId);
+        if(!executionId||typeof (args.jsonPointer??"")!=="string")return {error:"INVALID_MCP_RESULT_REFERENCE"};
+        return await api.mcpResultExport(executionId,conversationId,String(args.jsonPointer??""));
       }
       if (call.function.name === "mcp_result_read") {
         const executionId = stringArg(args.executionId);
@@ -803,7 +1026,7 @@ export function AgentPanel({ onAccountChange, onBackgroundSnapshots, ledgerJobs,
       if (call.function.name === "workspace_status") {
         const current = await api.workspaceGet(conversationId);
         applyWorkspace(current);
-        return { name: current.directory.split(/[\\/]/).filter(Boolean).at(-1), permission: current.permission, defaultOutput: "此工作区中的新文件夹", canStartWithoutPlanConfirmation: current.permission === "fullAccess", currentTime: new Date().toISOString(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone };
+        return { name: current.directory.split(/[\\/]/).filter(Boolean).at(-1), outputCrs:current.outputCrs ?? null, permission: current.permission, defaultOutput: "此工作区中的新文件夹", canStartWithoutPlanConfirmation: current.permission === "fullAccess", currentTime: new Date().toISOString(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone };
       }
       if (call.function.name === "workspace_boundaries_list") {
         return { files: await api.workspaceBoundariesList(conversationId) };
@@ -815,7 +1038,7 @@ export function AgentPanel({ onAccountChange, onBackgroundSnapshots, ledgerJobs,
         await attachRange(found);
         return { ...rangeSummary(boundaryRef.current!), source: "selected workspace" };
       }
-      if (dataInputTools().tools.some(tool => tool.name === call.function.name)) return runDataTool(call.function.name, args);
+      if (dataInputTools().tools.some(tool => tool.name === call.function.name)) return await runDataTool(call.function.name, args,nativeRequestId);
       if (call.function.name === "us_county_boundary") {
         const stateFips = stringArg(args.stateFips);
         const countyName = stringArg(args.countyName);
@@ -909,7 +1132,10 @@ export function AgentPanel({ onAccountChange, onBackgroundSnapshots, ledgerJobs,
         return artifactResultForModel(id, manifest);
       }
       return { error: "TOOL_NOT_ALLOWED" };
-    } catch (cause) { return { error: cause && typeof cause === "object" && "code" in cause && typeof cause.code === "string" ? cause.code : "LOCAL_TOOL_ERROR", message: errorMessage(cause) }; }
+    } catch (cause) {
+      if (runtimeCompatibilityFailure(cause)) throw runtimeUpdateError();
+      return { error: cause && typeof cause === "object" && "code" in cause && typeof cause.code === "string" ? cause.code : "LOCAL_TOOL_ERROR", message: errorMessage(cause) };
+    }
   }
   function appendDisplay(item: DisplayMessage) {
     displayRef.current = [...displayRef.current, item];
@@ -971,6 +1197,10 @@ export function AgentPanel({ onAccountChange, onBackgroundSnapshots, ledgerJobs,
     if (rejectedForQuota) {
       if (saved) { setMessages(saved.messages); await commitFinalGeneration(saved.generationId, saved.messages); }
       else await releasePending();
+    } else if(saved?.engine==='codex'&&outputFailureCode(errorMessage(cause))){
+      const observed=await api.agentGenerationGet(saved.generationId).catch(()=>null);
+      if(modelResponseIssue(observed)){await persistQuestionTranscript();await releasePending();setError('');void api.agentUsage().then(setUsage).catch(()=>{});return;}
+      else setPendingNeedsReview(true);
     } else setPendingNeedsReview(!!saved);
     setError(errorMessage(cause));
     void api.agentUsage().then(setUsage).catch(() => {});
@@ -979,7 +1209,7 @@ export function AgentPanel({ onAccountChange, onBackgroundSnapshots, ledgerJobs,
     if (!status.userId) throw new Error("GeoD 账号状态未确认，请重新检查登录状态。");
     const currentWorkspace = await api.workspaceGet(conversationId);
     applyWorkspace(currentWorkspace);
-    const permissionContext = workspacePermissionContext(context, currentWorkspace.permission);
+    const permissionContext = workspacePermissionContext(context, currentWorkspace.permission, currentWorkspace.outputCrs);
     const requestContext = boundedContext(permissionContext);
     contextCompressedRef.current ||= JSON.stringify(requestContext).length < JSON.stringify(permissionContext).length;
     setContextCompressed(contextCompressedRef.current);
@@ -1061,6 +1291,7 @@ export function AgentPanel({ onAccountChange, onBackgroundSnapshots, ledgerJobs,
         await commitFinalGeneration(generation.generationId, context);
         return;
       }
+      if (userInputGate.current.cancelled) { await commitFinalGeneration(generation.generationId, context); return; }
       if (Number.isSafeInteger(generation.inputTokens) && (generation.inputTokens ?? -1) >= 0) {
         lastInputTokensRef.current = generation.inputTokens!;
         setLastInputTokens(generation.inputTokens!);
@@ -1076,6 +1307,7 @@ export function AgentPanel({ onAccountChange, onBackgroundSnapshots, ledgerJobs,
         await trackBackgroundJob(job ?? handoff);
       }
       if (round === 11) { appendDisplay({ id: crypto.randomUUID(), role: "assistant", phase: "final", content: "本轮工具处理已达到上限。当前结果已保留，可以继续让我处理这项任务。" }); await commitFinalGeneration(generation.generationId, context); return; }
+      userInputGate.current.freshModelRound();
       generation = await requestGeneration(context, boundaryRef.current);
     }
   }
@@ -1086,6 +1318,8 @@ export function AgentPanel({ onAccountChange, onBackgroundSnapshots, ledgerJobs,
     try {
       const saved = readPending(chatStore())?.[conversationId];
       if (!saved || saved.generationId !== pendingId) throw new Error("未找到本机请求记录，无法安全重试。请保留当前对话并检查任务记录。");
+      const humanRequests=(saved.display ?? []).filter(item=>item.role==="user").map(item=>item.content);
+      userInputGate.current.reset(humanRequests.at(-1) ?? "", humanRequests.slice(0,-1));
       if (saved.userId && saved.userId !== status.userId) throw new Error("此请求属于另一个 GeoD 账号，请切回原账号后核对。");
       if (saved.engine === "codex") {
         const generation = await api.agentGenerationGet(saved.generationId);
@@ -1124,14 +1358,14 @@ export function AgentPanel({ onAccountChange, onBackgroundSnapshots, ledgerJobs,
     catch (cause) { await handleGenerationFailure(cause); }
     finally { setBusy(false); }
   }
-  async function send(value: string,queuedImages?:ImageAttachment[],fromQueue=false,queuedDocuments?:DocumentAttachment[]) {
+  async function send(value: string,queuedImages?:ImageAttachment[],fromQueue=false,queuedDocuments?:DocumentAttachment[],inputCrsChoice?:ReturnType<typeof crsFromAnswers>) {
     const text = value.trim()||(documents.length?"请阅读这些文档。":images.length?"请查看这些图片。":"");
     if (text && sending.current && engine === "codex" && codexRun.current) {
       if(followupMode==="queue"||images.length||documents.length){
         if(queuedInputs.length>=20){setError("消息队列最多暂存 20 条，请先移除或等待发送。");return;}
         const item={id:crypto.randomUUID(),text,images:images.length?images:undefined,documents:documents.length?documents:undefined,createdAt:new Date().toISOString()};changeQueue(chat=>({...chat,queuedInputs:[...(chat.queuedInputs??[]),item]}));setDraft("");setImages([]);setDocuments([]);return;
       }
-      try { await api.codexCommand(codexRun.current, { type: "steer", text }); setDraft(""); }
+      try { humanRequestRevision.current++; await rememberHumanCrsPreference(text); await api.codexCommand(codexRun.current, { type: "steer", text }); setDraft(""); }
       catch (cause) { setError(errorMessage(cause)); }
       return;
     }
@@ -1140,13 +1374,18 @@ export function AgentPanel({ onAccountChange, onBackgroundSnapshots, ledgerJobs,
     sending.current = true; setBusy(true); setLiveActivity("正在思考下一步…"); setError(""); if(!fromQueue)setDraft("");
     setChatRecords(current => current.map(chat => chat.conversationId === conversationId ? { ...chat, updatedAt: new Date().toISOString() } : chat));
     const visible = [...displayRef.current, { id: crypto.randomUUID(), role: "user" as const, content: boundary ? `${text}\n已附加边界：${boundary.name} · ${boundary.polygonCount} 个面` : text, ...(attachments.length?{images:attachments}:{}),...(attachedDocuments.length?{documents:attachedDocuments}:{}) }];
+    userInputGate.current.reset(text, displayRef.current.filter(item=>item.role==="user").map(item=>item.content));
+    humanRequestRevision.current++;
     displayRef.current = visible;
     setDisplay(visible);
+    if(inputCrsChoice)exportCrsChoice.current={...inputCrsChoice,userMessageId:visible.at(-1)?.id};
     try {
+      await ensureExportRuntime(api.runtimeCapabilities);
+      await rememberHumanCrsPreference(text, visible.at(-1)?.id);
       const installed = await api.extensionsList();
       const activeBoundary = boundaryRef.current;
       const history=session.get<AgentMessage[]>("messages",[]);
-      const modelText = modelUserText(text, activeBoundary) + documentContext(attachedDocuments) + (engine === "codex" ? "" : skillDiscoveryText(installed.skills));
+      const modelText = modelUserText(text, activeBoundary) + documentContext(attachedDocuments) + continueTaskContext(text,visible) + (engine === "codex" ? "" : skillDiscoveryText(installed.skills));
       const context: AgentMessage[] = [...history, { role: "user", content: modelText, ...(attachments.length?{images:attachments}:{}),...(attachedDocuments.length?{documents:attachedDocuments}:{}) }];
       setMessages(context);
       if (engine === "codex") await sendWithCodex(modelText, history, context, activeBoundary,attachments,attachedDocuments);
@@ -1154,7 +1393,7 @@ export function AgentPanel({ onAccountChange, onBackgroundSnapshots, ledgerJobs,
       void api.agentUsage().then(setUsage).catch(() => {});
     } catch (cause) { changeQueue(chat=>({...chat,queuePaused:true}));await handleGenerationFailure(cause); }
     finally {
-      sending.current = false; setBusy(false);
+      cancelInputRequests(); sending.current = false; setBusy(false);
       window.setTimeout(()=>{
         const chat=chatRecordsRef.current.find(chat=>chat.conversationId===conversationId);
         const next=chat?.queuedInputs?.[0];
@@ -1192,10 +1431,21 @@ export function AgentPanel({ onAccountChange, onBackgroundSnapshots, ledgerJobs,
     try {
       const result = await runCodexTurn(runId, conversationId, input, history, {
         onEvent,
-        onRequest: request => new Promise(resolve => {
-          codexRequestResolve.current.set(request.requestId, resolve); setCodexRequests(previous => [...previous, request]); setLiveActivity("等待你的回复…");
-        }),
+        onRequest: async request => {
+          if (request.method !== "item/tool/requestUserInput") return waitForUserInput(request);
+          const questions = inputQuestions(request.params.questions);
+          const accepted=reusableInputReply(questions,displayRef.current,[...displayRef.current].reverse().find(item=>item.role==='user')?.id);
+          if(accepted)return accepted;
+          userInputGate.current.begin();
+          const value = await waitForUserInput(request);
+          if(isDetachedUserInput(value)){userInputGate.current.waiting=false;return {answers:{}};}
+          const reply = validatedInputReply(questions, value);
+          userInputGate.current.finish(questions, reply);
+        await rememberCrsAnswer(questions,reply);
+          return reply ?? { answers: {} };
+        },
         onModel: async (generationId, context) => {
+          userInputGate.current.freshModelRound();
           savePending(chatStore(), { engine: "codex", conversationId, generationId, userId: status.userId, messages: context, display: displayRef.current, boundary: activeBoundary, boundaryRequired: !!activeBoundary });
           await flushLocalState();
           lastGenerationId = generationId; current = context; setMessages(current);
@@ -1204,11 +1454,11 @@ export function AgentPanel({ onAccountChange, onBackgroundSnapshots, ledgerJobs,
         onGeneration: generation => {
           if (generation.inputTokens != null) { lastInputTokensRef.current = generation.inputTokens; setLastInputTokens(generation.inputTokens); }
         },
-        execute: async (call, executionId, context) => {
+        execute: async (call, executionId, context,nativeRequestId) => {
           const id = replyId(call.id);
           appendDisplay({ id, turnId: runId, role: "tool", toolName: call.function.name, toolStatus: "running", content: `正在调用工具：${call.function.name}`, details: call.function.arguments });
           setLiveActivity(`正在调用工具：${call.function.name}`);
-          const output = toolStopReason ? { error: toolStopReason === "review" ? "SKIPPED_FOR_USER_REVIEW" : "SKIPPED_AFTER_MCP_UNKNOWN" } : await executeTool(call, executionId, context, id);
+          const output = toolStopReason ? { error: toolStopReason === "review" ? "SKIPPED_FOR_USER_REVIEW" : "SKIPPED_AFTER_MCP_UNKNOWN" } : await executeTool(call, executionId, context, id,nativeRequestId);
           replaceDisplay(id, { ...toolDisplay(call.function.name, output), details: JSON.stringify({ arguments: JSON.parse(call.function.arguments), result: output }, null, 2) });
           current = [...current, { role: "assistant", content: null, tool_calls: [call] }, { role: "tool", tool_call_id: call.id, content: JSON.stringify(output) }];
           setMessages(current);
@@ -1229,7 +1479,7 @@ export function AgentPanel({ onAccountChange, onBackgroundSnapshots, ledgerJobs,
       if (interrupted) {
         changeQueue(chat=>({...chat,queuePaused:true}));
         displayRef.current = displayRef.current.map(item => item.id.startsWith(`codex-${runId}-`) ? { ...item, streaming: false, ...(item.toolStatus === "running" ? { toolStatus: "attention" as const } : {}) } : item); setDisplay(displayRef.current);
-        appendDisplay({ id: crypto.randomUUID(), turnId: runId, role: "tool", toolStatus: "attention", content: "本轮回复已停止。已经启动的本机任务可在后台状态中查看。" });
+        appendDisplay(turnOutcomeMessage(runId,{status:'interrupted',message:"本轮回复已停止。已经启动的本机任务可在后台状态中查看。"}));
       }
       if (result.text) current = [...current, { role: "assistant", content: result.text }];
       const completed: SavedChat = { conversationId, engine: "codex", messages: current, display: displayRef.current, planId: planIdRef.current || undefined, planIds: planIdsRef.current, workspaceDirectory: workspace?.directory, lastInputTokens: lastInputTokensRef.current ?? undefined, codexContext: currentTokens ?? undefined, updatedAt: new Date().toISOString(),queuePaused:interrupted?true:undefined };
@@ -1238,11 +1488,18 @@ export function AgentPanel({ onAccountChange, onBackgroundSnapshots, ledgerJobs,
       await flushLocalState();
       setChatRecords(persistCompletedChat(chatStore(), completed)); await releasePending();
       await flushLocalState();
+    } catch(cause) {
+      displayRef.current=displayRef.current.map(item=>item.id.startsWith(`codex-${runId}-`)?{...item,streaming:false,...(item.toolStatus==='running'?{toolStatus:'attention' as const}:{})}:item);
+      setDisplay(displayRef.current);
+      const message=errorMessage(cause),code=outputFailureCode(message);
+      appendDisplay(turnOutcomeMessage(runId,{status:code?'incomplete':'failed',message,code,generationId:lastGenerationId??undefined}));
+      await persistQuestionTranscript();
+      throw cause;
     } finally {
       displayRef.current = displayRef.current.map(item => item.id.startsWith(`codex-${runId}-`) ? { ...item, streaming: false, ...(item.toolStatus === "running" ? { toolStatus: "attention" as const } : {}) } : item);
       setDisplay(displayRef.current); codexRun.current = null;
       if (connectionResolve.current) finishConnectionAuthentication({ error: { code: "INPUT_CANCELLED", message: "数据库认证已取消" } });
-      for (const resolve of codexRequestResolve.current.values()) resolve({ answers: {} }); codexRequestResolve.current.clear(); setCodexRequests([]);
+      cancelInputRequests();
     }
   }
 
@@ -1271,10 +1528,10 @@ export function AgentPanel({ onAccountChange, onBackgroundSnapshots, ledgerJobs,
         models={[{ value: modelValue("hosted", "hosted"), label: t("GeoD 托管"), shortLabel: t("GeoD 托管"), disabled: !codexAvailable || busy || aiModels.loading }, ...availableAIChannels(aiModels.list).flatMap(channel => channel.models.map(model => ({ value: modelValue(channel.id, model.id), label: `${channel.name} · ${model.name}${channel.id.startsWith("sponsor:") ? ` · ${t("赞助")}` : ""}`, shortLabel: channel.id.startsWith("sponsor:") ? `${model.name} · ${t("赞助")}` : model.name, disabled: busy || aiModels.loading || !codexAvailable }))), ...(aiModels.selection.channelId !== "hosted" && !availableAIChannels(aiModels.list).some(c => c.id === aiModels.selection.channelId && c.models.some(m => m.id === aiModels.selection.modelId)) ? [{ value: modelValue(aiModels.selection.channelId, aiModels.selection.modelId), label: t(!SPONSORED_CHANNELS_VISIBLE&&aiModels.selection.channelId.startsWith("sponsor:")?"已保存的模型 · 请选择":"原模型不可用 · 请选择"), shortLabel: t(!SPONSORED_CHANNELS_VISIBLE&&aiModels.selection.channelId.startsWith("sponsor:")?"已保存的模型":"模型不可用"), disabled: true }] : []), { value: "manage-models", label: t("模型与渠道…"), icon: <Bot size={15}/> }, { value: "legacy", label: t("GeoD 托管 · 兼容引擎"), disabled: busy }]}
         model={engine === "legacy" ? "legacy" : modelValue(aiModels.selection.channelId, aiModels.selection.modelId)}
         onModelChange={value => { if (value === "manage-models") { onMainViewChange("models"); return; } if (value === "legacy") { changeEngine(value); return; } if (busy || aiModels.loading) return; const [channelId, modelId] = JSON.parse(value) as string[]; void aiModels.select(channelId, modelId).then(() => { changeEngine("codex"); setCodexContext(null); }).catch(cause => setError(errorMessage(cause))); }}
-        loading={busy && engine === "codex"}
+        loading={busy && (engine === "codex" || !!codexRequest)}
         allowSteer={engine === "codex" && !!codexRun.current}
         loadingSubmitLabel={followupMode==="queue"?"加入消息队列":"补充指令"}
-        onStop={engine === "codex" ? () => { void api.mcpRequestsCancel(conversationId).catch(cause=>setError(errorMessage(cause))); if (connectionResolve.current) finishConnectionAuthentication({ error: { code: "INPUT_CANCELLED", message: "数据库认证已取消" } }); if(sqlResolve.current)finishSqlAuthentication({error:{code:"INPUT_CANCELLED",message:"数据库认证已取消"}}); if (codexRun.current) void api.codexCommand(codexRun.current, { type: "interrupt" }).catch(cause => setError(errorMessage(cause))); } : undefined}
+        onStop={engine === "codex" || codexRequest ? () => { userInputGate.current.cancelled = true; cancelInputRequests(true); void api.mcpRequestsCancel(conversationId).catch(cause=>setError(errorMessage(cause))); if (connectionResolve.current) finishConnectionAuthentication({ error: { code: "INPUT_CANCELLED", message: "数据库认证已取消" } }); if(sqlResolve.current)finishSqlAuthentication({error:{code:"INPUT_CANCELLED",message:"数据库认证已取消"}}); if (codexRun.current) void api.codexCommand(codexRun.current, { type: "interrupt" }).catch(cause => setError(errorMessage(cause))); } : undefined}
         onPaste={pasteIntoComposer}
         placeholder={t("描述需求，添加图片、数据网址或矢量范围")}
         aria-label={t("发送给 GeoD Agent")}
@@ -1343,21 +1600,21 @@ export function AgentPanel({ onAccountChange, onBackgroundSnapshots, ledgerJobs,
       </div>;
     })}</div>
     {legacyImportReady && <div className="conversation-legacy-import"><p>{t("发现旧版未归属账号的本机对话。")}</p><button type="button" onClick={importOlderChats} disabled={busy}>{t("导入到当前账号")}</button></div>}
-    <AccountMenu open={accountMenuOpen} onOpenChange={setAccountMenuOpen} connected={status.state === "connected"} userId={status.userId} usage={usage} busy={busy||runningIds.length>0} theme={theme} onModels={() => onMainViewChange("models")} onNetwork={onOpenNetwork} onCache={onOpenCache} onTheme={onToggleTheme} onLogout={() => void logout()} telemetryEnabled={downloadTelemetry.enabled} onTelemetry={downloadTelemetry.toggle}/>
+    <AccountMenu open={accountMenuOpen} onOpenChange={setAccountMenuOpen} connected={status.state === "connected"} userId={status.userId} profile={auth.profile} profileError={auth.profileError} onProfileRefresh={auth.refreshProfile} usage={usage} busy={busy||runningIds.length>0} theme={theme} onModels={() => onMainViewChange("models")} onNetwork={onOpenNetwork} onCache={onOpenCache} onTheme={onToggleTheme} onLogout={() => void logout()} telemetryEnabled={downloadTelemetry.enabled} onTelemetry={downloadTelemetry.toggle}/>
   </aside><section className={`agent-panel agent-primary ${emptyConversation ? "agent-start" : ""}`} aria-label={t("GeoD Agent 智能助手")} hidden={mainView !== "conversation"}>
     <div className="agent-header"><strong>{currentChat?chatTitle(currentChat):t("新对话")}</strong>{engine==="codex"&&display.some(m=>m.role==="assistant"&&m.phase!=="progress")&&<UiTooltip content={t("复制已完成的对话，创建独立分支")}><Button variant="ghost" size="icon" aria-label={t("创建会话分支")} disabled={busy||!!pendingId||!workspace} onClick={()=>void forkChat()}><GitBranch size={16}/></Button></UiTooltip>}</div>
     {error && <div className="agent-error" role="alert"><CircleAlert size={16} />{localize(error)}</div>}
-    {status.error && <div className="agent-error" role="alert"><CircleAlert size={16} />{localize(status.error)}</div>}
-    {!emptyConversation && (!desktopAvailable || !statusReady || status.state !== "connected") && <div className="agent-auth-landing"><div className="agent-auth-mark"><Bot size={26} /></div><span className="eyebrow">GEOD ACCOUNT</span><h3>{desktopAvailable && !statusReady ? t("正在检查 GeoD 登录状态") : t("登录 GeoD，开始对话")}</h3><p>{desktopAvailable && !statusReady ? t("正在读取本机保存的授权，无需重复打开浏览器。") : t("在浏览器完成 GeoD 账号授权后，回到这里使用托管模型规划任务。地图和本机已有成果可以先查看。")}</p>{statusReady && status.state === "unconfigured" && desktopAvailable && <div className="agent-auth-note">{t("GeoD 桌面授权接口尚未上线，暂时无法登录。")}</div>}{!desktopAvailable && <div className="agent-auth-note">{t("当前是浏览器界面预览，请在桌面应用中登录。")}</div>}<Button onClick={beginAuth} disabled={!desktopAvailable || !statusReady || status.state === "unconfigured" || status.state === "waiting" || busy}><LogIn size={16} />{status.state === "waiting" ? t("等待浏览器授权…") : t("登录 GeoD")}</Button></div>}
-    {emptyConversation ? <div className="agent-start-screen"><div className="agent-start-content"><div className="agent-start-heading"><h1>{t("需要什么地理数据？")}</h1><p>{t("影像、矢量或三维数据，描述范围和用途即可。")}</p></div>{composer}{status.state !== "connected" && <div className="agent-start-auth">{!desktopAvailable ? <span>{t("浏览器预览仅展示界面，请在桌面应用中登录后开始对话。")}</span> : <><span>{!statusReady ? t("正在检查 GeoD 登录状态…") : status.state === "unconfigured" ? t("GeoD 桌面授权接口尚未上线。") : t("登录 GeoD 后即可开始对话。")}</span><Button onClick={beginAuth} disabled={!statusReady || status.state === "unconfigured" || status.state === "waiting" || busy}><LogIn size={16} />{status.state === "waiting" ? t("等待浏览器授权…") : t("登录 GeoD")}</Button></>}</div>}</div></div> : desktopAvailable && status.state === "connected" && <>
-      <ChatTranscript planTitles={planTitles} afterEntry={id => {
+    {(status.error || auth.error) && <div className="agent-error" role="alert"><CircleAlert size={16} />{localize(status.error || auth.error)}</div>}
+    {emptyConversation ? <div className="agent-start-screen"><div className="agent-start-content"><div className="agent-start-heading"><h1>{t("需要什么地理数据？")}</h1><p>{t("影像、矢量或三维数据，描述范围和用途即可。")}</p></div>{composer}</div></div> : desktopAvailable && status.state === "connected" && <>
+      <ChatTranscript openInputId={openInputId} onOpenInput={setOpenInputId} onInputReply={replyToInput} onInputDraft={updateInputDraft} canAnswerInput={id=>{const request=displayRef.current.find(item=>item.id===id)?.userInput;if(request?.resolution?.kind==='existingPlanCrs'&&inputOrigin(displayRef.current,[...displayRef.current].reverse().find(m=>m.role==='user')?.id)!==request.userMessageId)return false;return !!request&&(codexRequestResolve.current.has(request.requestId)||!busy&&!sending.current);}} planTitles={planTitles} afterEntry={id => {
         const group = (planAnchors[id] ?? []).flatMap(planId => {
           const task = ownedTasks.find(item => item.stored.planId === planId);
           return task ? [{ ...task, title: presentations[planId].title }] : [];
         });
         return <TranscriptTaskGroup key={`tasks-${id}`} tasks={group} permission={workspace?.permission} onOpen={onTaskGroupSelect}/>;
-      }} backgroundJobs={backgroundJobs} onOpenJob={id => void openBackgroundJob(id)} conversationId={conversationId} messages={display} busy={busy || extensionApprovalBusy} activeTurnId={codexRun.current} activity={liveActivity} onReviewSource={draft => onOpenSources(draft, conversationId)} onApproveExtension={proposal => void approveExtension(proposal)}>
-        {codexRequest && <CodexRequestCard key={codexRequest.requestId} request={codexRequest} respond={value => { codexRequestResolve.current.get(codexRequest.requestId)?.(value); codexRequestResolve.current.delete(codexRequest.requestId); setCodexRequests(previous => previous.filter(item => item.requestId !== codexRequest.requestId)); }} />}
+      }} backgroundJobs={backgroundJobs} onOpenJob={id => void openBackgroundJob(id)} conversationId={conversationId} messages={display} busy={busy || extensionApprovalBusy} activeTurnId={codexRun.current} activity={liveActivity} onContinueTurn={()=>{if(!busy&&!pendingId&&!sending.current)void send('继续刚才的任务');}} canContinueTurn={!busy&&!pendingId&&!sending.current} onReviewSource={draft => onOpenSources(draft, conversationId)} onApproveExtension={proposal => void approveExtension(proposal)} onConfigureExtension={(old,next)=>{displayRef.current=displayRef.current.map(item=>item.extensionProposal?.id===old.id?{...item,content:`已连接 MCP · ${next.name}，等待确认启用`,extensionProposal:next}:item);setDisplay(displayRef.current);void persistQuestionTranscript().catch(cause=>setError(errorMessage(cause)));}}>
+        {codexRequest && <CodexRequestCard key={codexRequest.requestId} request={codexRequest} respond={value => { codexRequestResolve.current.get(codexRequest.requestId)?.(value); codexRequestResolve.current.delete(codexRequest.requestId); setCodexRequests(previous => previous.filter(item => item.requestId !== codexRequest.requestId)); if (codexRequest.method === "item/tool/requestUserInput" && !Object.keys((value as {answers?:object})?.answers ?? {}).length) { userInputGate.current.cancelled = true; if (codexRun.current) void api.codexCommand(codexRun.current, { type: "interrupt" }).catch(cause => setError(errorMessage(cause))); } }} />}
+        {gisInstallRequest&&<GisInstallCard key={gisInstallRequest.requestId} request={gisInstallRequest} onInstall={()=>void gisInstallFlow.current.install()} onCancel={cancelGisInstall}/>}
         <McpRequestQueue conversationId={conversationId} accountId={accountId}/>
         {pendingId && pendingNeedsReview && !busy && <div className="agent-recovery-note" role="status"><CircleAlert size={17} /><span>{t("上次请求尚未确认结果，可检查状态后继续。")}</span><Button variant="ghost" size="sm" onClick={checkPending}>{t("检查状态")}</Button></div>}
       </ChatTranscript>

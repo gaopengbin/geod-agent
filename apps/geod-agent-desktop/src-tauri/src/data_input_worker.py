@@ -13,10 +13,6 @@ import sys
 import xml.etree.ElementTree as ET
 import zipfile
 
-import geopandas as gpd
-import pyogrio
-from shapely import from_wkt
-from shapely.geometry import mapping, shape
 
 MAX_BYTES = 32 * 1024 * 1024
 MAX_FEATURES = 10000
@@ -28,6 +24,8 @@ class InputError(Exception):
 
 
 def normalize(geometries, crs):
+    import geopandas as gpd
+    from shapely.geometry import mapping
     if not crs:
         raise InputError("INPUT_CRS_REQUIRED", "数据未声明坐标系，请填写源 EPSG 编号后读取。")
     if not geometries:
@@ -75,7 +73,44 @@ def unpack(path):
     return files
 
 
+def simple_geojson(request):
+    layers=[]; collections={}
+    for raw in request['paths']:
+        path=Path(raw)
+        if path.stat().st_size>MAX_BYTES: raise InputError('INPUT_TOO_LARGE','输入超过 32 MiB。')
+        value=json.loads(path.read_text(encoding='utf-8-sig'))
+        crs=value.get('crs',{}).get('properties',{}).get('name')
+        if crs and crs not in ('EPSG:4326','OGC:CRS84','urn:ogc:def:crs:OGC:1.3:CRS84','urn:ogc:def:crs:EPSG::4326'):
+            raise InputError('GIS_SKILL_NOT_INSTALLED','此 GeoJSON 需要坐标转换，请安装多格式范围导入技能。')
+        features=value.get('features') if value.get('type')=='FeatureCollection' else [value] if value.get('type')=='Feature' else [{'type':'Feature','properties':{},'geometry':value}]
+        if not isinstance(features,list) or not features: raise InputError('INPUT_EMPTY','输入没有面几何。')
+        if len(features)>MAX_FEATURES: raise InputError('INPUT_TOO_LARGE','要素超过 10,000 个。')
+        geometries=[f.get('geometry') for f in features]
+        if any(not isinstance(g,dict) or g.get('type') not in ('Polygon','MultiPolygon') for g in geometries):
+            raise InputError('INPUT_NOT_POLYGON','裁剪范围需要 Polygon / MultiPolygon。')
+        normalized={'type':'FeatureCollection','features':[{'type':'Feature','properties':{},'geometry':g} for g in geometries]}
+        if len(json.dumps(normalized).encode())>8*1024*1024: raise InputError('INPUT_TOO_LARGE','边界超过 8 MiB。')
+        name=path.stem
+        if name in collections: raise InputError('INPUT_LAYER_NOT_FOUND','输入图层名称重复。')
+        layers.append({'name':name,'geometryType':'Polygon','crs':'EPSG:4326','featureCount':len(features)})
+        collections[name]=normalized
+    selected=request.get('layer')
+    if not selected and len(layers)!=1: return {'layers':layers,'selectionRequired':True}
+    selected=selected or layers[0]['name']
+    if selected not in collections: raise InputError('INPUT_LAYER_NOT_FOUND','所选图层不存在。')
+    return {'layers':layers,'selectedLayer':selected,'sourceCrs':'EPSG:4326','geojson':collections[selected]}
+
 def vector(request):
+    paths=request["paths"]
+    if paths and all(Path(p).suffix.lower() in ('.geojson','.json') for p in paths) and request.get('sourceCrs') in (None,'EPSG:4326','OGC:CRS84'):
+        return simple_geojson(request)
+    try:
+        import geopandas as gpd
+        import pyogrio
+        from shapely import from_wkt
+    except ImportError:
+        raise InputError("GIS_SKILL_NOT_INSTALLED","请在技能与连接器中安装“多格式范围导入”后读取此格式。")
+
     paths = []
     for path in request["paths"]:
         paths.extend(unpack(Path(path)))

@@ -30,6 +30,7 @@ export const dataDownloads = {
   cancel: (conversationId: string, taskId: string) => invoke<DataDownloadTask>("data_download_cancel", { conversationId, taskId }),
   discard: (conversationId: string, taskId: string) => invoke<DataDownloadTask>("data_download_discard", { conversationId, taskId }),
   inspect: (conversationId: string, taskId: string) => invoke<DataDownloadTask>("data_download_inspect", { conversationId, taskId }),
+  openDirectory: (conversationId: string, taskId: string) => invoke<void>("data_download_open_directory", { conversationId, taskId }),
   preview: (conversationId: string, taskId: string) => invoke<DataDownloadPreview>("data_download_preview", { conversationId, taskId }),
 };
 export function dataTaskEntry(task: DataDownloadTask): TaskListEntry {

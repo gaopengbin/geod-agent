@@ -6,14 +6,13 @@ import type { CodexEvent } from "./codex-client";
 import { api, errorMessage } from "./api";
 import { ExternalLink } from "./icons";
 import { elicitationBrowserUrl, elicitationContent, fieldOptions, type ElicitationSchema } from "./codex-elicitation";
+import { UserInputQuestionCard } from "./user-input-card";
 
 export type CodexRequest = Extract<CodexEvent, { type: "request" }>;
 export function CodexRequestCard({ request, respond }: { request: CodexRequest; respond: (value: unknown) => void|Promise<void> }) {
-  const [values, setValues] = useState<Record<string, string>>({});
   const [formValues, setFormValues] = useState<Record<string, unknown>>({});
   const [formError, setFormError] = useState("");
   const [submitting,setSubmitting]=useState(false);
-  const questions = (request.params.questions ?? []) as { id: string; question: string; options?: { label: string; description: string }[] }[];
   const approval = request.method === "item/commandExecution/requestApproval" || request.method === "item/fileChange/requestApproval";
   const permissions = request.method === "item/permissions/requestApproval";
   const userInput = request.method === "item/tool/requestUserInput";
@@ -27,6 +26,7 @@ export function CodexRequestCard({ request, respond }: { request: CodexRequest; 
   const schema = request.params.requestedSchema as ElicitationSchema | undefined;
   const fields = Object.entries(schema?.properties ?? {});
   const setField = (name: string, value: unknown) => setFormValues(previous => ({ ...previous, [name]: value }));
+  if (userInput) return <UserInputQuestionCard questions={request.params.questions} respond={respond}/>;
   return <section className="codex-request-card" role="region" aria-label={t("Agent 等待你的回复")}>
     <strong>{verificationMode?t("设备身份验证"):urlMode?t("在浏览器中继续"):approval || permissions ? t("需要你的确认") : t("需要补充信息")}</strong>
     {verificationMode&&<div className="codex-browser-flow">
@@ -37,10 +37,6 @@ export function CodexRequestCard({ request, respond }: { request: CodexRequest; 
     {typeof request.params.reason === "string" && <p>{request.params.reason}</p>}
     {typeof request.params.command === "string" && <pre>{request.params.command}</pre>}
     {typeof request.params.message === "string" && <p>{request.params.message}</p>}
-    {userInput && questions.map(question => <label key={question.id}><span>{question.question}</span>
-      {question.options?.map(option => <Button key={option.label} variant={values[question.id] === option.label ? "outline" : "ghost"} onClick={() => setValues(previous => ({ ...previous, [question.id]: option.label }))}>{localize(option.label)}</Button>)}
-      <input value={values[question.id] ?? ""} aria-label={question.question} onChange={event => setValues(previous => ({ ...previous, [question.id]: event.target.value }))} />
-    </label>)}
     {elicitation && formMode && fields.map(([name, field]) => {
       const value = formValues[name] ?? field.default;
       const options = fieldOptions(field);
@@ -59,7 +55,6 @@ export function CodexRequestCard({ request, respond }: { request: CodexRequest; 
     {!approval && !permissions && !userInput && !elicitation && <p>{t("当前客户端尚未支持此请求：")}{request.method}</p>}
     <div className="codex-request-actions">
       {(approval || permissions) && <Button variant="outline" disabled={submitting} onClick={() => void sendReply(approval ? { decision: "accept" } : { permissions: request.params.permissions, scope: "turn" })}>{t("允许本次操作")}</Button>}
-      {userInput && <Button variant="outline" disabled={submitting||questions.some(question => !values[question.id]?.trim())} onClick={() => void sendReply({ answers: Object.fromEntries(questions.map(question => [question.id, { answers: [values[question.id]] }])) })}>{t("发送回复")}</Button>}
       {elicitation && formMode && <Button variant="outline" disabled={submitting} onClick={() => { try { void sendReply({ action: "accept", content: elicitationContent(schema ?? {}, formValues), _meta: null }); } catch (cause) { setFormError((cause as Error).message); } }}>{t("发送回复")}</Button>}
       {urlMode&&<Button variant="outline" disabled={!browserUrl||submitting} onClick={()=>void openBrowser()}><ExternalLink size={15}/>{submitting?t("正在打开…"):t("打开浏览器继续")}</Button>}
       <Button variant="ghost" disabled={submitting} onClick={() => void sendReply(approval ? { decision: "decline" } : permissions ? { permissions: {}, scope: "turn" } : userInput ? { answers: {} } : { action: "cancel", content: null, _meta: null })}>{t("取消")}</Button>

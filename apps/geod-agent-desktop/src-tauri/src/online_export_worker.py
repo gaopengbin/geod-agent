@@ -73,7 +73,7 @@ def load_snapshot(request):
     return features, list(frame.geometry), str(crs)
 
 
-def write_gpkg(features, geometries, output):
+def write_gpkg(features, geometries, output, target="EPSG:4326"):
     rows = [f.get("properties") or {} for f in features]
     names = list(dict.fromkeys(k for row in rows for k in row))
     if any(not isinstance(n, str) or not n or "\0" in n for n in names):
@@ -112,8 +112,8 @@ def write_gpkg(features, geometries, output):
     geometry_name = unique_name("__geod_geometry", columns)
     fid_name = unique_name("__geod_fid", [*columns, geometry_name])
     frame = pd.DataFrame(columns, index=range(len(features)))
-    frame[geometry_name] = gpd.GeoSeries(geometries, crs="EPSG:4326", index=frame.index)
-    frame = gpd.GeoDataFrame(frame, geometry=geometry_name, crs="EPSG:4326")
+    frame[geometry_name] = gpd.GeoSeries(geometries, crs=target, index=frame.index)
+    frame = gpd.GeoDataFrame(frame, geometry=geometry_name, crs=target)
     pyogrio.write_dataframe(frame, output, driver="GPKG", layer="features", geometry_type="Unknown", layer_options={"FID": fid_name, "GEOMETRY_NAME": geometry_name})
     actual = pyogrio.read_info(output, layer="features", force_feature_count=True)
     if actual["features"] != len(features) or set(actual["fields"]) != set(columns):
@@ -122,7 +122,7 @@ def write_gpkg(features, geometries, output):
     # GeoPandas calls its active geometry "geometry" on read. Read attributes
     # separately so a user's ordinary field with that name is not shadowed.
     attributes = pyogrio.read_dataframe(output, layer="features", read_geometry=False)
-    if len(readback) != len(features) or CRS(readback.crs) != CRS("EPSG:4326"):
+    if len(readback) != len(features) or CRS(readback.crs) != CRS(target):
         raise ExportError("GeoPackage 坐标系核验失败")
     for i, geometry in enumerate(geometries):
         got = readback.geometry.iloc[i]
@@ -139,6 +139,9 @@ def write_gpkg(features, geometries, output):
 
 
 def export(request):
+    target = CRS(request.get("targetCrs") or "EPSG:4326")
+    if target != CRS("EPSG:4326") and request["outputs"] != ["gpkg"]:
+        raise ExportError("GeoJSON 固定为 WGS84；其他坐标系请选择 GeoPackage")
     features, geometries, crs = load_snapshot(request)
     if len(features) > request["maxFeatures"]:
         raise ExportError("要素超过计划上限，未导出截断的数据")
@@ -172,7 +175,11 @@ def export(request):
         outputs.append((path, "geojson"))
     if "gpkg" in request["outputs"]:
         path = directory / "features.gpkg"
-        encodings, source_id = write_gpkg(features, geometries, path)
+        projection=Transformer.from_crs("EPSG:4326",target,always_xy=True)
+        projected=[transform(projection.transform,g) if g is not None else None for g in geometries]
+        if any(g is not None and not g.is_empty and not all(math.isfinite(v) for v in g.bounds) for g in projected):
+            raise ExportError("指定投影不适用于当前范围")
+        encodings, source_id = write_gpkg(features, projected, path, target)
         outputs.append((path, "gpkg"))
         if encodings:
             warnings.append("GeoPackage 的复杂属性及原始要素 ID 按清单中的编码保存为文本；GeoJSON 保留原属性对象。")
@@ -188,7 +195,7 @@ def export(request):
         if path.stat().st_size > 256 * 1024 * 1024:
             raise ExportError("单个导出文件超过 256 MiB")
         assets.append({"path": path.name, "kind": kind, "size": path.stat().st_size, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
-    return {"featureCount": len(features), "sourceFeatureCount": source_count, "sourceCrs": str(CRS(crs)), "outputCrs": "EPSG:4326", "bounds": bounds, "fields": fields, "geometryTypes": sorted({g.geom_type for g in geometries if g is not None}), "previewFeatureCount": min(1000, len(features)), "previewTruncated": len(features) > 1000, "fieldEncodings": encodings, "sourceIdField": source_id, "warnings": warnings, "assets": assets}
+    return {"featureCount": len(features), "sourceFeatureCount": source_count, "sourceCrs": str(CRS(crs)), "outputCrs": target.to_string(), "bounds": bounds, "fields": fields, "geometryTypes": sorted({g.geom_type for g in geometries if g is not None}), "previewFeatureCount": min(1000, len(features)), "previewTruncated": len(features) > 1000, "fieldEncodings": encodings, "sourceIdField": source_id, "warnings": warnings, "assets": assets}
 
 
 if __name__ == "__main__":

@@ -320,6 +320,7 @@ fn transient_failure_requeues_same_approved_job_after_restart() {
         error_code: Some("SOURCE_NETWORK".into()),
         completed_tiles: None,
         total_tiles: None,
+        processing_stage: None,
     };
     conn.execute(
         "INSERT INTO job_events(job_id,seq,body) VALUES (?1,2,?2)",

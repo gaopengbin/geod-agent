@@ -7,8 +7,6 @@ sys.dont_write_bytecode = True
 MAX_CHARS = 2_000_000
 MAX_XML = 24 * 1024 * 1024
 MAX_ARCHIVE = 128 * 1024 * 1024
-MAX_OCR_PAGES = 50
-MAX_IMAGE_PIXELS = 25_000_000
 class DocumentError(Exception): pass
 def fail(code): raise DocumentError(code)
 def clean(text):
@@ -119,50 +117,6 @@ def parse_xlsx(file):
             output.add(label, '\n'.join(lines))
             if output.truncated: break
     return output.result(kind='spreadsheet', units=len(sheets), unitLabel='sheets', sheets=sheet_names, warnings=['FORMULAS_NOT_RECALCULATED'] if formulas else [])
-class LocalOcr:
-    """Only local images and pinned local models enter this CPU engine."""
-    def __init__(self, modules, runtime=None):
-        root = Path(runtime) if runtime else next((candidate for candidate in
-            [modules.parent / 'ocr', modules.parent / 'ocr-runtime']
-            if (candidate / 'manifest.json').is_file()), modules.parent / 'ocr')
-        if not (root / 'manifest.json').is_file(): fail('ATTACHMENT_OCR_RUNTIME')
-        sys.path.insert(0, str(root))
-        self.root = root; self.engine = None; self.low_confidence = False
-        self.pages = []; self.skipped = []
-
-    def recognize(self, image, page):
-        from PIL import ImageStat
-        if max(ImageStat.Stat(image.convert('RGB')).stddev) < 1: return ''
-        if self.engine is None:
-            from rapidocr import RapidOCR
-            models = self.root / 'rapidocr/models'
-            paths = {name: models / model for name, model in {
-                'Det.model_path': 'PP-OCRv6_det_small.onnx',
-                'Rec.model_path': 'PP-OCRv6_rec_small.onnx',
-                'Cls.model_path': 'ch_ppocr_mobile_v2.0_cls_mobile.onnx'}.items()}
-            if not all(path.is_file() for path in paths.values()): fail('ATTACHMENT_OCR_RUNTIME')
-            with contextlib.redirect_stdout(sys.stderr):
-                self.engine = RapidOCR(params={**{key: str(value) for key, value in paths.items()},
-                    'Global.log_level': 'critical',
-                    'EngineConfig.onnxruntime.intra_op_num_threads': 4,
-                    'EngineConfig.onnxruntime.inter_op_num_threads': 1,
-                    'EngineConfig.onnxruntime.use_cuda': False,
-                    'EngineConfig.onnxruntime.use_dml': False})
-        with contextlib.redirect_stdout(sys.stderr): result = self.engine(image)
-        text = '\n'.join(result.txts or ())
-        if text:
-            self.pages.append(page)
-            if any(score < 0.8 for score in (result.scores or ())): self.low_confidence = True
-        return text
-
-    def metadata(self):
-        warnings = []
-        if self.low_confidence: warnings.append('OCR_LOW_CONFIDENCE')
-        if self.skipped: warnings.append('OCR_PAGE_LIMIT')
-        return {'ocrPages': self.pages or None,
-                'ocrEngine': 'RapidOCR PP-OCRv6 / CPU' if self.pages else None,
-                'warnings': warnings}
-
 def page_needs_ocr(page, text):
     if not text.strip(): return True
     if len(text.strip()) >= 200: return False
@@ -177,80 +131,28 @@ def page_needs_ocr(page, text):
     return False
 
 def parse_pdf(file, modules, runtime=None, password=None):
-    sys.path.insert(0, str(modules)); logging.getLogger('pypdf').setLevel(logging.ERROR)
+    sys.path.insert(0,str(modules)); logging.getLogger('pypdf').setLevel(logging.ERROR)
     from pypdf import PdfReader, overwrite_configuration
     overwrite_configuration(zlib_maximum_output_length=16_000_000,lzw_maximum_output_length=16_000_000,run_length_maximum_output_length=16_000_000,array_based_stream_maximum_output_length=16_000_000)
-    output = Output(); reader = None; rendered = None; ocr = None; attempts = 0
+    output=Output(); reader=None; scanned=[]
     try:
-        reader = PdfReader(file, strict=False)
-        encrypted=reader.is_encrypted
-        if encrypted and not reader.decrypt(password if password is not None else ''):
-            fail('ATTACHMENT_PASSWORD_INCORRECT' if password is not None else 'ATTACHMENT_PASSWORD_REQUIRED')
-        if len(reader.pages) > 1000: fail('ATTACHMENT_CONTENT_LIMIT')
-        for index, page in enumerate(reader.pages, 1):
-            # pypdf also caps decompressed streams; retain a smaller processing bound.
-            contents = page.get_contents()
-            if contents and len(contents.get_data()) > 12 * 1024 * 1024: fail('ATTACHMENT_CONTENT_LIMIT')
-            text = page.extract_text() or ''
-            if page_needs_ocr(page, text):
-                if ocr is None: ocr = LocalOcr(modules, runtime)
-                if attempts >= MAX_OCR_PAGES:
-                    ocr.skipped.append(index); output.truncated = True
-                else:
-                    attempts += 1
-                    import pypdfium2 as pdfium
-                    if rendered is None: rendered = pdfium.PdfDocument(file,password=password)
-                    pdf_page = rendered.get_page(index-1)
-                    try:
-                        width, height = pdf_page.get_size()
-                        if not all(math.isfinite(value) and value > 0 for value in [width, height]): fail('ATTACHMENT_DOCUMENT_INVALID')
-                        scale = min(2.5, 2600/max(width, height), math.sqrt(6_000_000/(width*height)))
-                        bitmap = pdf_page.render(scale=scale, rev_byteorder=True)
-                        try:
-                            image = bitmap.to_pil().convert('RGB')
-                            try: recognized = ocr.recognize(image, index)
-                            finally: image.close()
-                        finally: bitmap.close()
-                    finally: pdf_page.close()
-                    if len(recognized.strip()) >= len(text.strip()): text = recognized or text
-                    elif index in ocr.pages: ocr.pages.remove(index)
-            output.add('Page ' + str(index), text)
+        reader=PdfReader(file,strict=False); encrypted=reader.is_encrypted
+        if encrypted and not reader.decrypt(password if password is not None else ''): fail('ATTACHMENT_PASSWORD_INCORRECT' if password is not None else 'ATTACHMENT_PASSWORD_REQUIRED')
+        if len(reader.pages)>1000: fail('ATTACHMENT_CONTENT_LIMIT')
+        for index,page in enumerate(reader.pages,1):
+            contents=page.get_contents()
+            if contents and len(contents.get_data())>12*1024*1024: fail('ATTACHMENT_CONTENT_LIMIT')
+            text=page.extract_text() or ''
+            if page_needs_ocr(page,text): scanned.append(index)
+            output.add('Page '+str(index),text)
             if output.truncated: break
-        metadata = ocr.metadata() if ocr else {'warnings': []}
-        if not output.parts: metadata['warnings'].append('SCANNED_OR_EMPTY_PDF')
-        return output.result(kind='pdf', units=len(reader.pages), unitLabel='pages', wasEncrypted=encrypted, **metadata)
+        warnings=['SCANNED_PDF_REQUIRES_VISION'] if scanned else []
+        return output.result(kind='pdf',units=len(reader.pages),unitLabel='pages',wasEncrypted=encrypted,warnings=warnings,scannedPages=scanned)
     except DocumentError: raise
     except NotImplementedError: fail('ATTACHMENT_PASSWORD_UNSUPPORTED')
     except Exception: fail('ATTACHMENT_DOCUMENT_INVALID')
     finally:
-        if rendered: rendered.close()
         if reader: reader.close()
-
-def parse_scan_image(file, modules, runtime=None):
-    ocr = LocalOcr(modules, runtime)
-    from PIL import Image, ImageOps
-    output = Output()
-    try:
-        with Image.open(file) as source:
-            units = getattr(source, 'n_frames', 1)
-            for index in range(min(units, MAX_OCR_PAGES)):
-                source.seek(index)
-                if source.width*source.height > MAX_IMAGE_PIXELS: fail('ATTACHMENT_CONTENT_LIMIT')
-                corrected = ImageOps.exif_transpose(source)
-                try: image = corrected.convert('RGB')
-                finally: corrected.close()
-                try:
-                    image.thumbnail((2600, 2600))
-                    output.add('Page '+str(index+1), ocr.recognize(image, index+1))
-                finally: image.close()
-                if output.truncated: break
-            if units > MAX_OCR_PAGES: output.truncated = True; ocr.skipped = list(range(MAX_OCR_PAGES+1, units+1))
-        metadata = ocr.metadata()
-        if not output.parts: metadata['warnings'].append('OCR_NO_TEXT')
-        return output.result(kind='scan', units=units, unitLabel='pages', **metadata)
-    except DocumentError: raise
-    except Image.DecompressionBombError: fail('ATTACHMENT_CONTENT_LIMIT')
-    except Exception: fail('ATTACHMENT_DOCUMENT_INVALID')
 
 class DecryptedBuffer(io.BytesIO):
     def write(self,data):
@@ -317,7 +219,6 @@ def decode_text(data, extension):
 
 def parse(file, extension, modules, runtime=None, password=None):
     if extension == 'pdf': return parse_pdf(file, modules, runtime, password)
-    if extension in ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'tif', 'tiff']: return parse_scan_image(file, modules, runtime)
     if extension in ['docx','xlsx','pptx']: return parse_office(file, extension, modules, password)
     if extension not in ['txt', 'md', 'csv', 'json', 'xml', 'log']: fail('ATTACHMENT_FORMAT')
     text = clean(decode_text(Path(file).read_bytes(), extension))

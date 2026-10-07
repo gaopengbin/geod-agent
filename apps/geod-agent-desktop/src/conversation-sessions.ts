@@ -1,4 +1,6 @@
 import { chatPlanIds, pendingBoundary, type PendingGeneration, type SavedChat } from './pending-generations.ts';
+import {restoreUserInputRecords} from './user-input-records.ts';
+import {restoreMcpSetup} from './mcp-onboarding.ts';
 
 type Listener = () => void;
 const pendingNotifications=new Set<Set<Listener>>();
@@ -80,7 +82,7 @@ export function conversationSessionSeed(chat?:SavedChat,pending?:PendingGenerati
   const saved=pending?.committed??chat;
   let boundary=null,boundaryError='';
   try{boundary=pending?pendingBoundary(pending):null;}catch(error){boundaryError=String(error instanceof Error?error.message:error);}
-  return {messages:pending?.messages??saved?.messages??[],display:saved?.display??pending?.display??[],
+  return {messages:pending?.messages??saved?.messages??[],display:restoreMcpSetup(restoreUserInputRecords(saved?.display??pending?.display??[])),
     pendingId:pending&&!pending.committed?pending.generationId:chat?.pendingId??'',pendingNeedsReview:!!pending&&!pending.committed,
     planId:saved?.planId??'',planIds:saved?chatPlanIds(saved):[],planReady:!!saved?.planId,
     contextCompressed:!!saved?.contextCompressed,lastInputTokens:saved?.lastInputTokens??null,codexContext:saved?.codexContext??null,

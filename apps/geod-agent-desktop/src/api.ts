@@ -2,10 +2,11 @@ import { OPENLAYERS_ID, OPENLAYERS_CONNECTOR, openLayersEnabled, setOpenLayersEn
 import { CESIUM_ID, CESIUM_CONNECTOR, cesiumEnabled, setCesiumEnabled, cesiumTools, cesiumCall } from "./cesium-mcp";
 import { Channel, invoke, isTauri } from "@tauri-apps/api/core";
 import type { CodexEvent, CodexResult } from "./codex-client";
+import {hasBulkGeometry} from '../../../packages/codex-protocol/bulk-data.mjs';
 
 export type Bounds = [number, number, number, number];
 export type OutputFormat = "geotiff" | "mbtiles" | "png" | "jpeg" | "gpkg" | "tiles";
-export interface ExportOptions { cacheOnly?: boolean; reuseVerifiedCache?: boolean; compression?: "none" | "lzw" | "deflate"; buildPyramid?: boolean; generateSidecars?: boolean; jpegQuality?: number; overlaySources?: { sourceId: string; configRevision: string }[]; elevationEncoding?: "terrarium" }
+export interface ExportOptions { targetCrs?: string; resampling?: "nearest" | "bilinear" | "cubic"; cacheOnly?: boolean; reuseVerifiedCache?: boolean; compression?: "none" | "lzw" | "deflate"; buildPyramid?: boolean; generateSidecars?: boolean; jpegQuality?: number; overlaySources?: { sourceId: string; configRevision: string }[]; elevationEncoding?: "terrarium" }
 export type JobState = "queued" | "downloading" | "paused" | "processing" | "verifying" | "completed" | "partial" | "failed" | "cancelled";
 export interface BoundaryGeometry { polygons: [number, number][][][] }
 export interface BoundaryImport { name: string; bounds: Bounds; polygonCount: number; geometry: BoundaryGeometry; boundaryId?: string }
@@ -111,12 +112,13 @@ export interface ImagerySchedule { templatePlanId:string|null; scheduleId:string
 export interface ScheduleRun { runId:string; scheduleId:string; scheduledAt:string; state:string; attempt:number; nextAttemptAt:string; planId:string|null; jobId:string|null; errorCode:string|null; finishedAt:string|null }
 export interface Approval { approvalId: string; planId: string; planHash: string; approvedAt: string }
 export interface Job { jobId: string; planId: string; approvalId: string; planHash: string; state: JobState; version: number; createdAt: string }
-export interface JobEvent { jobId: string; seq: number; occurredAt: string; state: JobState; errorCode?: string; completedTiles?: number; totalTiles?: number }
-export interface Asset { id: string; kind: string; role: string; path: string; bytes: number; sha256: string; bounds: Bounds; width?: number; height?: number }
+export interface JobEvent { jobId: string; seq: number; occurredAt: string; state: JobState; processingStage?: "assembling" | "reprojecting"; errorCode?: string; completedTiles?: number; totalTiles?: number }
+export interface Asset { crs: string; crsDefinition?: string; geoTransform?: number[]; id: string; kind: string; role: string; path: string; bytes: number; sha256: string; bounds: Bounds; width?: number; height?: number }
 export interface Manifest { name: string; bounds: Bounds; assets: Asset[]; quality: { status: string; missingTiles: number; missing?: { zoom: number; x: number; y: number }[]; warnings: string[] }; provenance: { source: string; attribution: string; retrievedAt: string }[] }
 export interface ArtifactPreview { dataUrl: string; bounds: Bounds; attribution: string }
 export interface AuthStatus { state: "unconfigured" | "disconnected" | "waiting" | "connected"; userId: string | null; error: string | null }
-export interface WorkspaceSettings { directory: string; permission: "confirmEach" | "fullAccess" }
+export interface AccountProfile { accountId: string; email: string; nickname: string | null; avatar: { kind: "preset"; id: string } | { kind: "upload"; version: string } | null; avatarDataUrl: string | null }
+export interface WorkspaceSettings { directory: string; permission: "confirmEach" | "fullAccess"; outputCrs?: string }
 export interface NetworkSettings { mode: "auto" | "manual" | "direct"; manualUrl: string | null }
 export interface NetworkStatus { settings: NetworkSettings; effectiveProxy: string | null; source: string }
 export interface NetworkProbe { effectiveProxy: string | null; source: string; elapsedMs: number }
@@ -152,15 +154,15 @@ export interface OnlineSkillCandidate { id: string; name: string; source: string
 export interface SkillSourceCandidate { id: string; name: string; source: string }
 export interface RemoteSkillStage { id: string; name: string; description: string; sourceUrl: string; contentSha256: string; enabled: boolean }
 export interface McpRuntimeSettings { cwd?: string | null; envVars?: string[]; envHttpHeaders?: Record<string,string>; bearerTokenEnvVar?: string | null; startupTimeoutSec?: number | null; toolTimeoutSec?: number | null; enabledTools?: string[] | null; disabledTools?: string[] }
-export interface McpConnector { id: string; name: string; url: string; enabled: boolean; transport?: "http" | "gdalStdio" | "stdio" | "embedded"; command?: string | null; headerNames?: string[]; envNames?: string[]; argumentCount?: number; private?: boolean; oauth?: boolean; runtime?: McpRuntimeSettings }
+export interface McpConnector { id: string; name: string; url: string; enabled: boolean; transport?: "http" | "gdalStdio" | "stdio" | "embedded"; command?: string | null; headerNames?: string[]; queryNames?:string[]; envNames?: string[]; argumentCount?: number; private?: boolean; oauth?: boolean; runtime?: McpRuntimeSettings }
 export interface McpAuthorization { authorizationId: string; connectorId:string; state:"waiting"|"saving"|"authorized"|"failed"|"cancelled"; message?:string; authorizationUrl?:string }
-export interface McpConnectionOptions { command?: string; args?: string[]; env?: Record<string,string>; headers?: Record<string,string>; runtime?: McpRuntimeSettings }
+export interface McpConnectionOptions { command?: string; args?: string[]; env?: Record<string,string>; headers?: Record<string,string>; query?:Record<string,string>; runtime?: McpRuntimeSettings }
 export interface RegisteredPluginApp { pluginId: string; pluginName: string; name: string; registeredId: string; category: string | null; route: "bundledMcp" | "unavailable"; connectorId: string | null; enabled: boolean; registeredAccountRouteAvailable: false; reason: string | null }
 export interface ExtensionOverview { skills: SkillSummary[]; connectors: McpConnector[]; registeredApps?: RegisteredPluginApp[] }
 export interface McpTool { name: string; description?: string; inputSchema: Record<string, unknown>; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean; idempotentHint?: boolean; openWorldHint?: boolean } }
 export interface McpToolList { connectorId: string; name: string; tools: McpTool[] }
-export interface ArtifactRaster { resourceId: string; jobId: string; assetId: string; name: string; path: string; bounds: Bounds; crs: string; width: number; height: number; sha256: string; elevationEncoding?: "terrarium" | null }
-export interface RegistryMcpItem { name: string; title: string; description: string; url: string }
+export interface ArtifactRaster { resourceId: string; jobId: string; assetId: string; name: string; path: string; bounds: Bounds; crs: string; crsDefinition?: string | null; width: number; height: number; sha256: string; elevationEncoding?: "terrarium" | null }
+export interface RegistryMcpItem { name: string; title: string; description: string; url: string; source?:'officialPreset'|'registry'; documentationUrl?:string }
 export interface WorkspaceSkillCandidate { name: string; description: string; relativePath: string }
 
 export const desktopAvailable = isTauri();
@@ -172,6 +174,7 @@ export interface AiScheduledRun { runId:string; scheduleId:string; conversationI
 export interface AiScheduleOverview { schedules:AiSchedule[]; runs:AiScheduledRun[]; windowRequired:boolean }
 
 export const api = {
+  runtimeCapabilities:()=>invoke<import("./runtime-compatibility").NativeRuntimeCapabilities>("desktop_runtime_capabilities"),
   agentMessages:()=>invoke<AppMessageFeed>("agent_messages_list"),
   agentMessagesRead:(accountId:string,messageIds:string[])=>invoke<{accountId:string;accepted:number}>("agent_messages_read",{accountId,messageIds}),
   agentMessageOpenLink:(url:string)=>invoke<void>("agent_message_open_link",{url}),
@@ -199,6 +202,7 @@ export const api = {
   networkGet: () => invoke<NetworkStatus>("network_get"),
   networkSet: (settings: NetworkSettings) => invoke<NetworkStatus>("network_set", { settings }),
   networkTest: (settings: NetworkSettings) => invoke<NetworkProbe>("network_test", { settings }),
+  workspaceSetOutputCrs: (conversationId: string, crs: string | null) => invoke<WorkspaceSettings>("workspace_set_output_crs", { conversationId, crs }),
   workspaceGet: (conversationId: string) => invoke<WorkspaceSettings>("workspace_get", { conversationId }),
   workspaceOpenDirectory: (conversationId: string) => invoke<void>("workspace_open_directory", { conversationId }),
   workspaceDefault: () => invoke<WorkspaceSettings>("workspace_default"),
@@ -223,6 +227,7 @@ export const api = {
   sqlConnectionConnect:(conversationId:string,request:Record<string,unknown>)=>invoke<SqlConnectionResult>("sql_connection_connect",{conversationId,request}),
   sqlConnectionSave:(conversationId:string,draft:SqlConnectionDraft)=>invoke<SqlConnectionResult>("sql_connection_save",{conversationId,draft}),
   sqlConnectionRemove:(connectionId:string)=>invoke<void>("sql_connection_remove",{connectionId}),
+  billingRunSnapshot:(runId:string)=>invoke<{status:string;conversationId:string;generations:{generationId:string}[]}>("billing_run_snapshot",{runId}),
   sqlObjectsSearch:(connectionId:string,request:Record<string,unknown>={objectType:"table"})=>invoke<{result:unknown;mcp:unknown}>("sql_objects_search",{connectionId,request}),
   sqlQuery:(connectionId:string,sql:string)=>invoke<unknown>("sql_query",{connectionId,sql}),
   dataConnectionConnect: (conversationId: string, request: DataConnectionRequest) => invoke<DataConnectionResult>("data_connection_connect", { conversationId, request }),
@@ -235,6 +240,14 @@ export const api = {
   sourcePreviewTile: (endpoint: HttpSource, z: number, x: number, y: number, credential?: SourceCredentialInput) => invoke<string>("map_preview_tile", { sourceId: null, url: null, endpoint, credential, z, x, y }),
   sourceThumbnailMetadata: (url: string) => invoke<Record<string, unknown>>("source_thumbnail_metadata", { url }),
   sourcesGet: (sourceId: string) => invoke<RegisteredSource | null>("sources_get", { sourceId }),
+  gisSkillsList:()=>invoke<GisSkill[]>("gis_skills_list"),
+  rtkStatus:()=>invoke<RtkStatus>("rtk_status"),
+  rtkInstall:(requestId:string,archivePath:string|null=null)=>invoke<RtkStatus>("rtk_install",{requestId,archivePath}),
+  rtkSetEnabled:(value:boolean)=>invoke<RtkStatus>("rtk_set_enabled",{value}),
+  rtkInstallCancel:(requestId:string)=>invoke<{cancelled:boolean}>("rtk_install_cancel",{requestId}),
+  gisInstallPrepare:(id:string,requireTools=false)=>invoke<GisInstallOffer>("gis_install_prepare",{id,requireTools}),
+  gisSkillInstall:(id:string,directory:string|null=null,requestId:string=crypto.randomUUID())=>invoke<{installed:boolean;id:string}>("gis_skill_install",{id,directory,requestId}),
+  gisInstallCancel:(requestId:string)=>invoke<{cancelled:boolean}>("gis_install_cancel",{requestId}),
   sourceCreatorTools: () => invoke<McpToolList & { kind: "builtin" }>("source_creator_tools"),
   sourceCreatorCall: (toolName: string, arguments_: Record<string, unknown>) => invoke<Record<string, unknown>>("source_creator_call", { toolName, arguments: arguments_ }),
   sourcesSave: (endpoint: HttpSource, minZoom: number, maxZoom: number, replaceExisting = false, credential?: SourceCredentialInput) => invoke<SourceDescriptor>("sources_save", { endpoint, minZoom, maxZoom, replaceExisting, credential }),
@@ -254,9 +267,11 @@ export const api = {
   jobsResume: (jobId: string) => invoke<Job>("jobs_resume", { jobId }),
   jobsEvents: (jobId: string, afterSeq: number) => invoke<JobEvent[]>("jobs_events", { jobId, afterSeq }),
   artifactsInspect: (jobId: string) => invoke<Manifest>("artifacts_inspect", { jobId }),
+  artifactOpenDirectory: (conversationId: string, jobId: string) => invoke<void>("artifact_open_directory", { conversationId, jobId }),
   artifactPreview: (jobId: string) => invoke<ArtifactPreview | null>("artifact_preview", { jobId }),
   artifactRaster: (jobId: string, assetId?: string) => invoke<ArtifactRaster>("artifact_raster", { jobId, assetId }),
   authStatus: () => invoke<AuthStatus>("auth_status"),
+  accountProfile: (accountId: string) => invoke<AccountProfile>("account_profile", { accountId }),
   authBegin: () => invoke<AuthStatus>("auth_begin"),
   authLogout: () => invoke<AuthStatus>("auth_logout"),
   agentGenerate: (generationId: string, conversationId: string, messages: AgentMessage[]) => invoke<Generation>("agent_generate", { generationId, conversationId, messages }),
@@ -306,6 +321,8 @@ export const api = {
   skillSourceInspect: (url: string) => invoke<SkillSourceCandidate[]>("skill_source_inspect", { url }),
   skillRemoteStage: (source: string) => invoke<RemoteSkillStage>("skill_remote_stage", { source }),
   mcpAdd: async (name: string, url: string, options: McpConnectionOptions = {}) => { await invoke<ExtensionOverview>("mcp_add", { name, url, ...options }); return api.extensionsList(); },
+  mcpQueryCredentialsSet:(id:string,query:Record<string,string>)=>invoke<void>('mcp_query_credentials_set',{id,query}),
+  mcpHeaderCredentialsSet:(id:string,headers:Record<string,string>)=>invoke<void>('mcp_header_credentials_set',{id,headers}),
   mcpRemove: async (id: string) => { await invoke<ExtensionOverview>("mcp_remove", { id }); return api.extensionsList(); },
   mcpOauthStart: (id:string,clientId?:string,scopes?:string[],clientSecret?:string,callbackPort?:number) => invoke<McpAuthorization>("mcp_oauth_start",{id,clientId,scopes,clientSecret,callbackPort}),
   mcpOauthStatus: (authorizationId:string) => invoke<McpAuthorization>("mcp_oauth_status",{authorizationId}),
@@ -316,12 +333,19 @@ export const api = {
   mcpAddGdal: async () => { await invoke<ExtensionOverview>("mcp_add_gdal"); return api.extensionsList(); },
   mcpSetEnabled: async (id: string, enabled: boolean): Promise<ExtensionOverview> => { if (id === OPENLAYERS_ID) setOpenLayersEnabled(enabled); else if (id === CESIUM_ID) setCesiumEnabled(enabled); else await invoke<ExtensionOverview>("mcp_set_enabled", { id, enabled }); return api.extensionsList(); },
   mcpTools: (id: string, conversationId?: string) => id === OPENLAYERS_ID ? openLayersTools(conversationId ?? "") : id === CESIUM_ID ? cesiumTools(conversationId ?? "") : invoke<McpToolList>("mcp_tools", { id, conversationId }),
-  mcpCall: (id: string, toolName: string, arguments_: Record<string, unknown>, executionId: string, conversationId?: string) => id === OPENLAYERS_ID ? openLayersCall(conversationId ?? "", toolName, arguments_) : id === CESIUM_ID ? cesiumCall(conversationId ?? "", toolName, arguments_) : invoke<unknown>("mcp_call", { id, toolName, arguments: arguments_, executionId, conversationId, interactive:true }),
+  mcpCall: async (id: string, toolName: string, arguments_: Record<string, unknown>, executionId: string, conversationId?: string) => {
+    if(id!==OPENLAYERS_ID&&id!==CESIUM_ID)return invoke<unknown>("mcp_call", { id, toolName, arguments: arguments_, executionId, conversationId, interactive:true });
+    const result=id===OPENLAYERS_ID?await openLayersCall(conversationId??"",toolName,arguments_):await cesiumCall(conversationId??"",toolName,arguments_);
+    // Embedded map results share the native, account-owned geometry receipt path.
+    if(desktopAvailable&&hasBulkGeometry(result))return invoke<unknown>("mcp_embedded_result_save",{id,toolName,arguments:arguments_,result,executionId,conversationId});
+    return result;
+  },
   mcpRequestOpenBrowser: (requestId:string)=>invoke<{opened:boolean}>("mcp_request_open_browser",{requestId}),
   mcpPendingRequests: (conversationId:string)=>invoke<{type:"request";requestId:string;method:string;params:Record<string,unknown>}[]>("mcp_requests_pending",{conversationId}),
   mcpRequestReply: (requestId:string,value:unknown)=>invoke<void>("mcp_request_reply",{requestId,value}),
   mcpRequestsCancel: (conversationId:string)=>invoke<void>("mcp_requests_cancel",{conversationId}),
   mcpResultRead: (executionId: string, offset: number) => invoke<unknown>("mcp_result_read", { executionId, offset }),
+  mcpResultExport: (executionId: string, conversationId: string, jsonPointer = "") => invoke<unknown>("mcp_result_export", { executionId, conversationId, jsonPointer }),
   mcpRegistrySearch: (query: string) => invoke<RegistryMcpItem[]>("mcp_registry_search", { query }),
   workspaceSkillsList: (conversationId: string) => invoke<WorkspaceSkillCandidate[]>("workspace_skills_list", { conversationId }),
   workspaceSkillImport: (conversationId: string, relativePath: string) => invoke<ExtensionOverview>("workspace_skill_import", { conversationId, relativePath }),
@@ -334,3 +358,9 @@ export interface AppMessageFeed {schemaVersion:1;accountId:string;checkedAt:stri
 export interface DesktopSettings {version:string;development:boolean;autostart:boolean;automaticUpdateChecks:boolean;lastUpdateCheck:string|null;updateConfigured:boolean}
 export interface DesktopUpdate {state:"unconfigured"|"upToDate"|"available"|"ready";currentVersion?:string;version?:string;notes?:string|null;publishedAt?:string|null;bytes?:number;verified?:boolean}
 export interface DesktopUpdateProgress {phase:"downloading"|"verifying"|"ready";downloaded?:number;total?:number|null}
+
+export interface GisSkill {id:string;name:string;description:string;tools:string[];installed:boolean;enabled:boolean;ready:boolean;downloadBytes:number;installedBytes:number}
+export interface RtkStatus {supported:boolean;version:string;installed:boolean;ready:boolean;enabled:boolean;downloadBytes:number;installedBytes:number;activeRequestId:string|null;sourceUrl:string}
+export interface RtkInstallProgress {requestId:string;phase:string;bytes:number;total:number}
+export interface GisInstallOffer {id:string;name:string;description:string;ready:boolean;enabled:boolean;downloadBytes:number;installedBytes:number;components:{id:string;ready:boolean;cached:boolean;downloadBytes:number;installedBytes:number}[]}
+export interface GisInstallProgress {requestId:string;featureId:string;phase:'checking'|'downloading'|'verifying'|'installing'|'ready';bytes:number;total:number;component?:string|null}

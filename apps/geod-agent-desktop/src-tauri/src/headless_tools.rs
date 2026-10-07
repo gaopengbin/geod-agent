@@ -51,6 +51,7 @@ pub(crate) async fn execute(
         };
     }
     match tool {
+        "ask_user" => Err(workspace_error("USER_INPUT_REQUIRED", "此任务需要用户补充需求。后台不会代填答案，请回到会话明确要求后重试。")),
         "attachment_list"=>encode(crate::attachment_inputs::document_attachments_list(app.clone(),conversation.into())?),
         "attachment_read"=>crate::attachment_inputs::document_attachment_read(app.clone(),conversation.into(),f!("id"),f!("offset"),f!("limit")).await,
         "agent_tasks_spawn" => encode(crate::agent_tasks::spawn(app,conversation.into(),key.into(),serde_json::from_value(a).map_err(|_|workspace_error("AGENT_INPUT","子任务参数无效"))?)?),
@@ -129,7 +130,7 @@ pub(crate) async fn execute(
             }
         }
         "workspace_status" => Ok(
-            json!({"name":std::path::Path::new(&workspace.directory).file_name().map(|s|s.to_string_lossy()),"permission":workspace.permission,"canStartWithoutPlanConfirmation":workspace.permission==crate::WorkspacePermission::FullAccess,"currentTime":chrono::Utc::now(),"background":true}),
+            json!({"name":std::path::Path::new(&workspace.directory).file_name().map(|s|s.to_string_lossy()),"permission":workspace.permission,"canStartWithoutPlanConfirmation":workspace.permission==crate::WorkspacePermission::FullAccess,"outputCrs":workspace.output_crs,"currentTime":chrono::Utc::now(),"background":true}),
         ),
         "workspace_boundaries_list" => Ok(
             json!({"files":crate::workspace_boundaries_list(app.clone(),state,services,conversation.into())?}),
@@ -288,6 +289,7 @@ pub(crate) async fn execute(
         "mcp_result_read" => Ok(
             json!({"executionId":a["executionId"],"result":extensions::mcp_result_read(app.state(),services,f!("executionId"),f!("offset"))?}),
         ),
+        "mcp_result_export" => extensions::mcp_result_export(app.clone(),app.state(),state,services,f!("executionId"),conversation.into(),a["jsonPointer"].as_str().map(str::to_owned)),
         "plan_imagery" | "plan_imagery_batch" => {
             plan(app, conversation, &a, key, tool == "plan_imagery_batch")
         }
@@ -315,6 +317,7 @@ pub(crate) async fn execute(
                     && matches!(
                         job.state,
                         geod_task_engine::ledger::JobState::Downloading
+                            | geod_task_engine::ledger::JobState::Processing
                             | geod_task_engine::ledger::JobState::Paused
                             | geod_task_engine::ledger::JobState::Failed
                     )
@@ -400,7 +403,7 @@ pub(crate) async fn execute(
                 json!({"kind":"tiles3d","spec":spec})
             } else if kind=="online"{
                 let mut spec=json!({"outputs":a.get("outputFormats").cloned().unwrap_or(json!(["geojson","gpkg"])),"maxFeatures":a.get("maxFeatures").cloned().unwrap_or(json!(10000)),"pageSize":a.get("pageSize").cloned().unwrap_or(json!(500))});
-                for key in ["sourceUrl","onlineConnectionId","layer","sourceCrs"]{if let Some(value)=a.get(key){spec[key]=value.clone();}}
+                for key in ["sourceUrl","onlineConnectionId","layer","sourceCrs","targetCrs"]{if let Some(value)=a.get(key){spec[key]=value.clone();}}
                 if !bounds.is_null(){spec["bounds"]=bounds.clone();}
                 if let Some(b)=&boundary{spec["boundary"]=json!(b.geometry);}
                 json!({"kind":"online","spec":spec})
@@ -416,7 +419,7 @@ pub(crate) async fn execute(
                 } else {
                     json!({"type":"osm","id":"openstreetmap","name":title,"endpoint":url,"tags":a.get("tags").cloned().unwrap_or(json!([]))})
                 };
-                let mut spec = json!({"source":source,"bounds":bounds,"zoomLevels":a.get("zoomLevels").cloned().unwrap_or(json!([])),"outputs":a.get("outputFormats").cloned().unwrap_or(json!(["geojson","gpkg"])),"allowPartial":a.get("allowPartial").cloned().unwrap_or(json!(false))});
+                let mut spec = json!({"source":source,"targetCrs":a["targetCrs"],"bounds":bounds,"zoomLevels":a.get("zoomLevels").cloned().unwrap_or(json!([])),"outputs":a.get("outputFormats").cloned().unwrap_or(json!(["geojson","gpkg"])),"allowPartial":a.get("allowPartial").cloned().unwrap_or(json!(false))});
                 if let Some(b) = &boundary {
                     spec["boundary"] = json!(b.geometry);
                 }
@@ -550,7 +553,7 @@ fn compact_plan(
     p: &geod_task_engine::ledger::StoredPlan,
     permission: crate::WorkspacePermission,
 ) -> Value {
-    json!({"planId":p.plan_id,"planHash":p.plan.plan_hash,"source":p.plan.source_name,"bounds":p.plan.spec.bounds,"zoomLevels":p.plan.spec.zoom_levels,"outputFormats":p.plan.spec.output_formats,"totalTiles":p.plan.total_tiles,"requiredFreeDiskBytes":p.plan.required_free_disk_bytes,"permission":permission,"requiresPlanConfirmation":permission!=crate::WorkspacePermission::FullAccess,"outputLocation":"当前本机工作区中的新文件夹"})
+    json!({"planId":p.plan_id,"planHash":p.plan.plan_hash,"source":p.plan.source_name,"bounds":p.plan.spec.bounds,"zoomLevels":p.plan.spec.zoom_levels,"outputFormats":p.plan.spec.output_formats,"targetCrs":p.plan.spec.export_options.as_ref().and_then(|o|o.target_crs.as_ref()),"totalTiles":p.plan.total_tiles,"requiredFreeDiskBytes":p.plan.required_free_disk_bytes,"permission":permission,"requiresPlanConfirmation":permission!=crate::WorkspacePermission::FullAccess,"outputLocation":"当前本机工作区中的新文件夹"})
 }
 fn plan(
     app: &AppHandle,
@@ -701,16 +704,33 @@ fn attach_lookup(
     }
     Ok(value)
 }
+fn connector_registration(connector:&Value)->Value{
+    let enabled=connector["enabled"]==true;
+    let configured=["queryNames","headerNames","envNames"].iter().any(|key|connector[*key].as_array().is_some_and(|v|!v.is_empty()))||connector["oauth"]==true;
+    json!({"connectorId":connector["id"],"name":connector["name"],"url":connector["url"],"registered":true,"enabled":enabled,"status":if enabled{"enabled"}else{"notEnabled"},"authenticationConfigured":configured})
+}
 async fn discover(app: &AppHandle, conversation: &str, query: &str) -> Result<Value, AppError> {
     let installed = encode(extensions::extensions_list(app.state(), app.state())?)?;
+    let needle=query.trim().to_lowercase();
+    let terms:Vec<_>=needle.split_whitespace().collect();
+    let registered_apps:Vec<_>=installed["registeredApps"].as_array().into_iter().flatten().filter(|app|terms.is_empty()||terms.iter().any(|term|app.to_string().to_lowercase().contains(term))).collect();
+    let referenced:Vec<_>=registered_apps.iter().filter(|app|app["route"]=="bundledMcp").filter_map(|app|app["connectorId"].as_str()).collect();
+    let direct=|connector:&Value|connector["id"].as_str().is_some_and(|id|referenced.contains(&id))||terms.iter().any(|term|["id","name","url"].iter().any(|key|connector[*key].as_str().unwrap_or("").to_lowercase().contains(term)));
+    let has_direct=!terms.is_empty()&&installed["connectors"].as_array().into_iter().flatten().any(direct);
     let mut connectors = Vec::new();
     for connector in installed["connectors"]
         .as_array()
         .into_iter()
         .flatten()
-        .filter(|c| c["enabled"] == true)
     {
         let id = connector["id"].as_str().unwrap_or("");
+        if connector["enabled"]!=true{
+            let mut entry=connector_registration(connector);
+            entry["tools"]=json!([]);entry["availableTools"]=json!([]);entry["requiresUserReview"]=json!(true);
+            entry["next"]=json!("This connector is already saved but not enabled. Do not re-register or request its URL/key again. Enabling requires the user to confirm in the desktop; no tools are callable yet.");
+            connectors.push(entry);continue;
+        }
+        if has_direct&&!direct(connector){continue;}
         let result = extensions::mcp_tools(
             app.state(),
             app.clone(),
@@ -722,7 +742,10 @@ async fn discover(app: &AppHandle, conversation: &str, query: &str) -> Result<Va
         .await;
         if let Ok(mut list) = result {
             list["connectorId"] = json!(id);
+            list["url"]=connector["url"].clone();list["registered"]=json!(true);list["enabled"]=json!(true);list["status"]=json!("enabled");
             connectors.push(list);
+        }else{
+            let mut entry=connector_registration(connector);entry["status"]=json!("unavailable");entry["error"]=json!("CONNECTOR_UNAVAILABLE");entry["message"]=json!("工具发现失败，连接器仍已保存；请检查服务、认证与网络。");connectors.push(entry);
         }
     }
     if let Ok(list) = source_creator::source_creator_tools(app.state()) {
@@ -747,10 +770,7 @@ async fn discover(app: &AppHandle, conversation: &str, query: &str) -> Result<Va
         let tools:Vec<_>=definitions.as_array().unwrap().iter().filter(|t|t["function"]["name"].as_str().is_some_and(|n|n.starts_with(prefix))).map(|t|json!({"name":t["function"]["name"],"description":t["function"]["description"],"inputSchema":t["function"]["parameters"]})).collect();
         connectors.push(json!({"connectorId":id,"name":name,"tools":tools}));
     }
-    let needle = query.to_lowercase();
-    let terms: Vec<_> = needle.split_whitespace().collect();
-    let registered_apps:Vec<_>=installed["registeredApps"].as_array().into_iter().flatten().filter(|app|terms.is_empty()||terms.iter().any(|term|app.to_string().to_lowercase().contains(term))).collect();
-    let referenced:Vec<_>=registered_apps.iter().filter(|app|app["route"]=="bundledMcp"&&app["enabled"]==true).filter_map(|app|app["connectorId"].as_str()).collect();
+    for entry in &mut connectors{if entry.get("enabled").is_none(){entry["enabled"]=json!(true);entry["registered"]=json!(true);entry["status"]=json!("enabled");}}
     if !terms.is_empty() {
         connectors.retain(|c| {
             let haystack = c.to_string().to_lowercase();
@@ -758,6 +778,6 @@ async fn discover(app: &AppHandle, conversation: &str, query: &str) -> Result<Va
         });
     }
     Ok(
-        json!({"skills":installed["skills"].as_array().into_iter().flatten().filter(|s|s["enabled"]==true).collect::<Vec<_>>(),"connectors":connectors,"registeredApps":registered_apps,"desktopMapAvailable":false}),
+        json!({"skills":installed["skills"].as_array().into_iter().flatten().filter(|s|s["enabled"]==true).collect::<Vec<_>>(),"connectors":connectors,"registeredConnectors":installed["connectors"].as_array().into_iter().flatten().map(connector_registration).collect::<Vec<_>>(),"registeredApps":registered_apps,"desktopMapAvailable":false}),
     )
 }

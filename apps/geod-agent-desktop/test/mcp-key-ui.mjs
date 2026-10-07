@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';import {mkdirSync,writeFileSync} from 'node:fs';import {resolve,join} from 'node:path';import {pathToFileURL} from 'node:url';
+const {chromium}=await import(pathToFileURL('C:/Users/Administrator/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs').href);
+const output=resolve('../../artifacts/mcp-onboarding-20261007');mkdirSync(output,{recursive:true});const browser=await chromium.launch({channel:'msedge',headless:true});const checks=[],errors=[];
+try{for(const theme of ['light','dark']){const page=await browser.newPage({viewport:{width:680,height:720}});page.on('pageerror',e=>errors.push(e.message));await page.goto(`http://127.0.0.1:1420/test/mcp-key-harness.html?theme=${theme}`);
+ await page.getByRole('button',{name:'配置并连接'}).click();await page.getByRole('dialog').waitFor();const input=page.getByLabel('Web 服务 Key',{exact:true});assert.equal(await input.getAttribute('type'),'password');
+ await page.screenshot({path:join(output,`key-dialog-${theme}.png`)});
+ await page.getByRole('button',{name:'稍后配置'}).click();assert.equal(await page.getByRole('dialog').count(),0);await page.getByRole('button',{name:'配置并连接'}).click();assert.equal(await input.inputValue(),'');
+ await input.fill('a'.repeat(32));await page.getByRole('button',{name:'保存并测试'}).click();await page.getByRole('alert').waitFor();assert.equal(await input.inputValue(),'');
+ await input.fill('a'.repeat(32));await page.getByRole('button',{name:'保存并测试'}).click();await page.getByRole('status').waitFor();assert.equal(await page.getByRole('dialog').count(),0);assert(!(await page.locator('body').textContent()).includes('a'.repeat(32)));
+ assert.equal(await page.evaluate(()=>Object.values(localStorage).some(v=>v.includes('a'.repeat(32)))),false);
+ await page.setViewportSize({width:390,height:680});await page.getByRole('button',{name:'配置并连接'}).click();await page.getByRole('dialog').waitFor();assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:join(output,`key-dialog-narrow-${theme}.png`)});await page.close();checks.push(theme+': masked input, close/reopen, failed test retry, success and narrow layout');
+ }assert.deepEqual(errors,[]);writeFileSync(join(output,'ui-report.json'),JSON.stringify({passed:true,checks,errors,mockedTransport:true},null,2));console.log(JSON.stringify({passed:true,checks}));}finally{await browser.close();}

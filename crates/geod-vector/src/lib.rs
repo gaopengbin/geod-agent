@@ -100,6 +100,8 @@ pub enum OutputFormat {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Request {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_crs: Option<String>,
     pub source: Source,
     pub bounds: [f64; 4],
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -139,6 +141,8 @@ pub struct Asset {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Manifest {
+    #[serde(default = "default_crs")]
+    pub output_crs: String,
     pub schema_version: u32,
     pub plan_hash: String,
     pub source_name: String,
@@ -171,7 +175,13 @@ pub struct NetworkOptions {
     pub query: BTreeMap<String, String>,
     pub allow_local_http: bool,
 }
+fn default_crs()->String{"EPSG:4326".into()}
+pub trait VectorProjector: Send + Sync {
+    fn reproject<'a>(&'a self,path:&'a Path,target:&'a str,cancel:&'a AtomicBool)
+        ->std::pin::Pin<Box<dyn std::future::Future<Output=Result<()>>+Send+'a>>;
+}
 pub struct RunOptions {
+    pub projector: Option<Arc<dyn VectorProjector>>,
     pub output_dir: PathBuf,
     pub cache_dir: PathBuf,
     pub concurrency: usize,
@@ -182,6 +192,7 @@ pub struct RunOptions {
 impl RunOptions {
     pub fn new(output_dir: PathBuf, cache_dir: PathBuf) -> Self {
         Self {
+            projector: None,
             output_dir,
             cache_dir,
             concurrency: 12,
@@ -206,6 +217,12 @@ impl Source {
     }
 }
 pub fn plan(mut request: Request) -> Result<Plan> {
+    if let Some(crs)=&mut request.target_crs {
+        *crs=geod_core::crs::normalize(crs).map_err(|e|Error::InvalidPlan(e.message))?;
+        if crs!="EPSG:4326" && request.outputs != [OutputFormat::Gpkg] {
+            return Err(Error::InvalidPlan("自选矢量坐标系请使用 GeoPackage；GeoJSON 固定为 WGS84，PBF/MBTiles 保留源瓦片网格".into()));
+        }
+    }
     if let Some(boundary) = &mut request.boundary {
         request.bounds = boundary
             .normalize()
@@ -529,6 +546,7 @@ pub async fn run(
     let mut writer = FeatureWriter::new(stage.path(), &plan.request.outputs)?;
     let area = spatial::Area::for_request(&plan.request)?;
     let mut manifest = Manifest {
+        output_crs: plan.request.target_crs.clone().unwrap_or_else(default_crs),
         schema_version: 1,
         plan_hash: plan.plan_hash.clone(),
         source_name: plan.request.source.name().into(),
@@ -769,6 +787,13 @@ pub async fn run(
     status.phase = "packaging".into();
     progress(status.clone());
     let (count, preview_count, mut assets) = writer.finish(stage.path())?;
+    if manifest.output_crs != "EPSG:4326" {
+        status.phase="reprojecting".into();progress(status.clone());
+        let projector=options.projector.as_ref().ok_or_else(||Error::InvalidPlan("请先安装矢量转换技能".into()))?;
+        projector.reproject(&stage.path().join("features.gpkg"),&manifest.output_crs,&options.cancel).await?;
+        let item=assets.iter_mut().find(|a|a.kind=="gpkg").ok_or_else(||Error::InvalidData("坐标转换缺少 GeoPackage".into()))?;
+        *item=asset(stage.path(),"features.gpkg","gpkg")?;
+    }
     manifest.feature_count = count;
     manifest.preview_feature_count = preview_count;
     manifest.preview_truncated = preview_count < count;
@@ -981,7 +1006,7 @@ pub fn inspect(root: &Path) -> Result<Manifest> {
             }
             if entry.kind == "gpkg" {
                 let(count,srs):(u64,i32)=db.query_row("SELECT (SELECT count(*) FROM features),srs_id FROM gpkg_geometry_columns WHERE table_name='features'",[],|r|Ok((r.get(0)?,r.get(1)?)))?;
-                if count != manifest.feature_count || srs != 4326 {
+                if count != manifest.feature_count || srs != i32::from(geod_core::crs::epsg(&manifest.output_crs).map_err(|e|Error::InvalidData(e.message))?) {
                     return Err(Error::InvalidData(
                         "GeoPackage count or CRS mismatch".into(),
                     ));

@@ -1,0 +1,3487 @@
+{
+  "schemaVersion": 1,
+  "asOf": "2026-10-07",
+  "scope": "国内外地理数据发现、下载、子集、转换与成果交付需求；社区原始样本研究及当前GeoD开发代码审查。",
+  "method": "定向公开样本，非概率抽样。源问题与技术现状分开：问题来自原帖，当前可行方式查提供方或维护者原始文档。",
+  "stats": {
+    "totalCommunitySamples": 80,
+    "newCommunitySamples": 48,
+    "fullOriginalDiscussionBodies": 78,
+    "limitedOriginalTitleAndReplies": 1,
+    "communityHowTo": 1,
+    "chineseContextSamples": 14,
+    "englishContextSamples": 63,
+    "frenchContextSamples": 3,
+    "communityGroups": [
+      "GIS Stack Exchange",
+      "Esri Community",
+      "Stack Overflow",
+      "Dovetail Games 论坛",
+      "GitHub Issues 或 Discussions",
+      "Prospecting Australia",
+      "OpenStreetMap 社区",
+      "Copernicus Data Space",
+      "Cesium Community",
+      "地信网论坛",
+      "气象家园",
+      "小木虫",
+      "ECMWF Forum",
+      "NASA Earthdata Forum",
+      "GeoRezo",
+      "ESA STEP Forum",
+      "Reddit r/gis"
+    ],
+    "newPrimaryReferencePages": 17,
+    "totalPrimaryReferencePages": 26,
+    "expandedExaQueries": 26,
+    "expandedExaResultSlotsRequested": 268,
+    "expandedExaResultsReturned": 253,
+    "expandedExaUniqueUrls": 242,
+    "additionalWebQueries": 4
+  },
+  "capabilityScope": "已有仅指开发源码及仓库既有验收记录；本轮没有逐项实际下载测试，也没有部署或发布新能力。",
+  "limitations": [
+    "样本偏向可索引技术社区，不能据此推算国内外需求占比、市场规模或付费率。",
+    "D08仅问题标题及回复可核读，正文与确切日期不完整；不将回复断言用作当前官方政策。",
+    "历史已关闭的issue用于提取需求和验收风险，不表示当前工具仍有同一故障。",
+    "中文/英文/法文是问题语境，不推断作者国籍；研究区只按原文明确内容记录。",
+    "本报告未覆盖私密群、科研内网或足够可核读的知乎、小红书、V2EX样本。",
+    "检索候选与入选样本分开，排除推广数据售卖、AI生成问答、论文列表冒充需求、重复转载及内容被劫持的网站。",
+    "不记录论坛作者联系方式、完整帖子正文、账号凭据或访问密钥。"
+  ],
+  "baselineArtifacts": [
+    "2026-10-07-data-download-forums.md",
+    "2026-10-07-data-download-forum-cases.json"
+  ],
+  "cases": [
+    {
+      "id": "F01",
+      "url": "https://gis.stackexchange.com/questions/340605/mass-downloading-google-earth-historical-imagery",
+      "title": "Mass downloading Google Earth historical imagery",
+      "platform": "GIS Stack Exchange",
+      "date": "2019-11-03",
+      "topic": "历史影像",
+      "userNeed": "上传研究区后批量获取历年带坐标影像，而不是手工截图。",
+      "assessment": "已有 Wayback 目录和区域元数据；Google Earth 原帖需求不能直接等同于我们已覆盖。",
+      "questions": "数据年份、拍摄期次、用途及是否需要原始多波段。",
+      "priority": "P0",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "languageContext": "英文",
+      "researchRound": "首轮",
+      "researchPriority": "P0",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F02",
+      "url": "https://gis.stackexchange.com/questions/416014/batch-downloading-time-series-of-tiff-images-using-multi-polygons",
+      "title": "Batch downloading time series of TIFF images using multi-polygons",
+      "platform": "GIS Stack Exchange",
+      "date": "2021-11-10",
+      "topic": "批量时序",
+      "userNeed": "多个多边形逐年或逐月导出栅格，并避免超出 GEE 负载限制。",
+      "assessment": "已有多任务和范围输入；GEE 时序产品任务未接入。",
+      "questions": "逐区独立文件还是合并；时间粒度、分辨率。",
+      "priority": "范围外",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "languageContext": "英文",
+      "researchRound": "首轮",
+      "researchPriority": "P1",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "F03",
+      "url": "https://gis.stackexchange.com/questions/254815/simple-way-to-collect-the-sentinel-data-of-a-given-roi",
+      "title": "Simple way to collect the Sentinel data of a given ROI?",
+      "platform": "GIS Stack Exchange",
+      "date": "2017-09-09",
+      "topic": "原始遥感",
+      "userNeed": "只要指定区域、日期和波段的 Sentinel 数据，减少整景下载和手工裁剪。",
+      "assessment": "缺少 Sentinel 原始产品目录与分波段下载；现有 RGB 瓦片不能替代。",
+      "questions": "产品级别、波段、日期、分辨率、允许的云量。",
+      "priority": "范围外",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "languageContext": "英文",
+      "researchRound": "首轮",
+      "researchPriority": "P1",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "F04",
+      "url": "https://gis.stackexchange.com/questions/482312/download-all-landsat-tiles-for-a-specific-data-range-onto-my-computer-using-goog",
+      "title": "Download all Landsat tiles for a specific data range onto my computer using Google Earth Engine",
+      "platform": "GIS Stack Exchange",
+      "date": "2024-06-06",
+      "topic": "原始遥感",
+      "userNeed": "按区域和日期保存 Landsat 的每个原始产品及所有波段，不先合成。",
+      "assessment": "缺少 Landsat 产品适配；需保留原始产品与波段元数据。",
+      "questions": "保留整景还是裁剪；产品级别、时间范围。",
+      "priority": "范围外",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "languageContext": "英文",
+      "researchRound": "首轮",
+      "researchPriority": "P1",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "F05",
+      "url": "https://gis.stackexchange.com/questions/367192/downloading-all-images-in-time-interval-with-wms-getmap-request",
+      "title": "Downloading all images in time interval with WMS getmap request",
+      "platform": "GIS Stack Exchange",
+      "date": "2020-07-08",
+      "topic": "时序目录",
+      "userNeed": "请求时间区间后只得到一张合成图，实际想获得全部拍摄期次。",
+      "assessment": "需要产品目录逐项检索；WMS 图片响应本身不是完整产品清单。",
+      "questions": "每景、每日还是区间合成；原始数据或显示图片。",
+      "priority": "P1",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "languageContext": "英文",
+      "researchRound": "首轮",
+      "researchPriority": "P1",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F06",
+      "url": "https://community.esri.com/t5/arcgis-api-for-python-questions/using-api-doesn-t-return-all-data/td-p/1599976",
+      "title": "Solved: Using API doesn't return all data - Esri Community",
+      "platform": "Esri Community",
+      "date": "2025-03-27",
+      "topic": "矢量完整性",
+      "userNeed": "约 2.8 万条野火边界只下载到 2,000 条，并有 SHP 属性字段导出问题。",
+      "assessment": "已分页与保留属性，但当前最多 10,000 要素；不能完整覆盖原帖规模。",
+      "questions": "全量还是范围筛选；输出 GPKG、GeoJSON 或必须 SHP。",
+      "priority": "P0",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "languageContext": "英文",
+      "researchRound": "首轮",
+      "researchPriority": "P0",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F07",
+      "url": "https://stackoverflow.com/questions/72747040/arcgis-feature-layer-extract-all-records",
+      "title": "ARCGIS feature layer extract all records",
+      "platform": "Stack Overflow",
+      "date": "2022-06-24",
+      "topic": "矢量完整性",
+      "userNeed": "服务有约 9 万条记录，但一次响应只有 2,000 条。",
+      "assessment": "当前 10,000 要素硬上限；需流式全量导出和总数核验。",
+      "questions": "所需图层、字段与筛选条件。",
+      "priority": "P0",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "languageContext": "英文",
+      "researchRound": "首轮",
+      "researchPriority": "P0",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F08",
+      "url": "https://gis.stackexchange.com/questions/40445/download-dataset-from-arcgis-rest-service",
+      "title": "Download Dataset From ArcGIS REST Service",
+      "platform": "GIS Stack Exchange",
+      "date": "2012-11-06",
+      "topic": "在线服务发现",
+      "userNeed": "能浏览 ArcGIS 服务，却找不到原始要素的下载方式。",
+      "assessment": "已有 ArcGIS 图层发现及在线导出；大数据量仍受本机读取上限约束。",
+      "questions": "目标图层、属性、范围和所需数据类型。",
+      "priority": "P0",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "languageContext": "英文",
+      "researchRound": "首轮",
+      "researchPriority": "P0",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F09",
+      "url": "https://gis.stackexchange.com/questions/437456/how-do-i-get-the-rest-of-the-data-in-a-feature-service",
+      "title": "How do I get the rest of the data in a Feature Service?",
+      "platform": "GIS Stack Exchange",
+      "date": "2022-08-04",
+      "topic": "矢量完整性",
+      "userNeed": "服务只返回 1,000 条，目标超过 3 万条且无法更改服务端限制。",
+      "assessment": "有分页基础；要补分批落盘、检查点和稳定 ID 完整性核验。",
+      "questions": "完整数据还是特定范围；输出格式。",
+      "priority": "P0",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "languageContext": "英文",
+      "researchRound": "首轮",
+      "researchPriority": "P0",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F10",
+      "url": "https://forums.dovetailgames.com/threads/qgis-cannot-merge-layers.75853/",
+      "title": "Qgis: Cannot Merge Layers | Dovetail Games Forums",
+      "platform": "Dovetail Games 论坛",
+      "date": "2023-11-05",
+      "topic": "DEM 处理",
+      "userNeed": "两个州的高程数据格式不同，部分数据覆盖全州，下载后合并失败。",
+      "assessment": "可选技能能检查与重投影；原始 DEM 目录和通用多文件镶嵌流程未验收。",
+      "questions": "目标区域、像元大小、坐标系及输出格式。",
+      "priority": "P2",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "languageContext": "英文",
+      "researchRound": "首轮",
+      "researchPriority": "P2",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F11",
+      "url": "https://gis.stackexchange.com/questions/88354/qgis-clipping-and-reprojecting-srtm-data-creates-a-huge-file",
+      "title": "QGIS Clipping and reprojecting SRTM data creates a HUGE file",
+      "platform": "GIS Stack Exchange",
+      "date": "2014-03-03",
+      "topic": "栅格体积",
+      "userNeed": "约 23 MB 的 SRTM 数据在裁剪或重投影后膨胀到数百 GB。",
+      "assessment": "有检查、统计、重投影和规划基础；需补单位、像元数与临时磁盘预测。",
+      "questions": "输出 CRS 与像元单位；是否保持原始分辨率。",
+      "priority": "P1",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "languageContext": "英文",
+      "researchRound": "首轮",
+      "researchPriority": "P1",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F12",
+      "url": "https://github.com/qgis/QGIS/issues/39148",
+      "title": "Simple merge of 4 LIDAR tif tiles changes elevations · Issue #39148 · qgis/QGIS",
+      "platform": "GitHub Issues 或 Discussions",
+      "date": "2020-10-02",
+      "topic": "成果核验",
+      "userNeed": "合并后看到不同的高程最小最大值，怀疑数据被改变。",
+      "assessment": "可选栅格统计技能可诊断；维护者指出显示使用估算统计，不应直接判为数据损坏。",
+      "questions": "比较实际像元还是图层显示统计。",
+      "priority": "P1",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "languageContext": "英文",
+      "researchRound": "首轮",
+      "researchPriority": "P1",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F13",
+      "url": "https://www.prospectingaustralia.com/threads/help-lidar-driving-me-nuts.44334/",
+      "title": "Help! Lidar driving me nuts. | Prospecting Australia - Gold Prospecting & Fossicking Forum",
+      "platform": "Prospecting Australia",
+      "date": "2026-05-20",
+      "topic": "数据选择与显示",
+      "userNeed": "下载 DEM 后在 QGIS 里的显示不符合预期，不清楚 DEM 与 LiDAR 产品的区别。",
+      "assessment": "有 DEM 读取基础；LAS/LAZ 产品检索与处理未接入，不能只靠显示设置保证符合用途。",
+      "questions": "要裸地高程、地表高程还是点云；所需精度与展示方式。",
+      "priority": "P2",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "languageContext": "英文",
+      "researchRound": "首轮",
+      "researchPriority": "P2",
+      "productScope": "当前范围",
+      "scopeNote": "当前只借用 DEM 类型与显示诊断；不接入 LAS/LAZ 原始点云。"
+    },
+    {
+      "id": "F14",
+      "url": "https://github.com/gee-community/geemap/discussions/1800",
+      "title": "Using geemap.download_ee_image · gee-community/geemap · Discussion #1800 · GitHub",
+      "platform": "GitHub Issues 或 Discussions",
+      "date": null,
+      "topic": "处理进度",
+      "userNeed": "约 1.23 GB 的导出一直 0%；维护者解释前置计算仍未完成。",
+      "assessment": "本地任务已有下载、生成、核验阶段；GEE 云计算任务状态尚未接入。",
+      "questions": "是否等待原始精度计算；可以先生成低分辨率预览吗。",
+      "priority": "范围外",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "languageContext": "英文",
+      "researchRound": "首轮",
+      "researchPriority": "P1",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "F15",
+      "url": "https://github.com/gee-community/geemap/discussions/775",
+      "title": "Image too large to export · gee-community/geemap · Discussion #775 · GitHub",
+      "platform": "GitHub Issues 或 Discussions",
+      "date": null,
+      "topic": "GEE 导出限制",
+      "userNeed": "导出超过直接下载大小上限，想避免手工切块。",
+      "assessment": "需 GEE 授权、任务调度与分块导出适配；不能承诺已支持。",
+      "questions": "云端批处理还是切块下载；保持哪种分辨率和波段。",
+      "priority": "范围外",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "languageContext": "英文",
+      "researchRound": "首轮",
+      "researchPriority": "P2",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "F16",
+      "url": "https://gis.stackexchange.com/questions/366044/image-getdownloadurl-download-pixel-grid-dimension-limit",
+      "title": "image.getDownloadURL download pixel grid dimension limit",
+      "platform": "GIS Stack Exchange",
+      "date": "2020-06-25",
+      "topic": "GEE 导出限制",
+      "userNeed": "大范围栅格超过每边 10,000 像素的直接下载限制。",
+      "assessment": "官方限制仍有效；应分块或使用云端导出，不能静默降低精度。",
+      "questions": "目标像元大小、格式；是否允许改变精度。",
+      "priority": "范围外",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "languageContext": "英文",
+      "researchRound": "首轮",
+      "researchPriority": "P2",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "F17",
+      "url": "https://community.openstreetmap.org/t/using-qgis-but-buildings-not-all-downloading/4361",
+      "title": "Using Qgis but buildings not all downloading - Help and support - OpenStreetMap Community Forum",
+      "platform": "OpenStreetMap 社区",
+      "date": "2022-10-20",
+      "topic": "OSM 全量与属性",
+      "userNeed": "想下载整片城市建筑及高度，遇到范围太大、导出丢属性、浏览器崩溃。",
+      "assessment": "小范围 OSM 导出已有真实验收；城市级 PBF 离线提取、去重与高度单位核验需补。",
+      "questions": "建筑还是全部类型；高度缺失如何处理、输出字段。",
+      "priority": "P1",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "languageContext": "英文",
+      "researchRound": "首轮",
+      "researchPriority": "P1",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F18",
+      "url": "https://help.openstreetmap.org/questions/56122/overpass-query-roads-within-polygon/",
+      "title": "OpenStreetMap Help",
+      "platform": "OpenStreetMap 社区",
+      "date": null,
+      "topic": "地名歧义",
+      "userNeed": "按 Halle 地名查询道路超时，后发现同名地区导致查询了多个范围。",
+      "assessment": "可用问答卡澄清地区并保存明确范围；大范围查询策略需另处理。",
+      "questions": "哪个国家或行政区的 Halle。",
+      "priority": "P0",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "languageContext": "英文",
+      "researchRound": "首轮",
+      "researchPriority": "P0",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F19",
+      "url": "https://stackoverflow.com/questions/68784648/downloading-osm-data-for-large-area",
+      "title": "Downloading OSM data for large area",
+      "platform": "Stack Overflow",
+      "date": "2021-08-14",
+      "topic": "OSM 大范围",
+      "userNeed": "下载整个墨尔本道路网络时，在线导出与 Overpass 查询失败。",
+      "assessment": "现有小范围查询不足以证明城市级稳定；优先区域 PBF 或用户自有数据库。",
+      "questions": "只要道路还是其他对象；属性、范围和格式。",
+      "priority": "P1",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "languageContext": "英文",
+      "researchRound": "首轮",
+      "researchPriority": "P1",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F20",
+      "url": "https://gis.stackexchange.com/questions/377499/download-all-data-for-an-area-from-openstreetmap",
+      "title": "Download ALL data for an area from OpenStreetMap",
+      "platform": "GIS Stack Exchange",
+      "date": "2020-10-26",
+      "topic": "OSM 数据类型",
+      "userNeed": "想按行政区导出道路、商店、河流、公园等全部 OSM 对象。",
+      "assessment": "目前支持标签查询；通用全量区域提取和多图层输出需要补。",
+      "questions": "全量原始对象还是整理好的图层；哪些类别必须包含。",
+      "priority": "P1",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "languageContext": "英文",
+      "researchRound": "首轮",
+      "researchPriority": "P1",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F21",
+      "url": "https://forum.dataspace.copernicus.eu/t/request-for-sentinel2-download-unauthorized-in-python-httperror-401/234",
+      "title": "Request for Sentinel2 download unauthorized in python (HTTPERROR 401) - APIs - Copernicus Data Space Ecosystem | Community forum",
+      "platform": "Copernicus Data Space",
+      "date": "2024-01-10",
+      "topic": "提供方授权",
+      "userNeed": "产品目录能检索，但 Sentinel 下载返回 401。",
+      "assessment": "有本机凭据管理；CDSE 下载授权通道与刷新未作为产品接入。",
+      "questions": "采用哪个账号或授权连接；不在聊天中索取明文密码。",
+      "priority": "范围外",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "languageContext": "英文",
+      "researchRound": "首轮",
+      "researchPriority": "P1",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "F22",
+      "url": "https://forum.dataspace.copernicus.eu/t/401-error-message/4954",
+      "title": "\"401\" Error message - Sentinel-2 - Copernicus Data Space Ecosystem | Community forum",
+      "platform": "Copernicus Data Space",
+      "date": "2026-04-10",
+      "topic": "令牌过期与续传",
+      "userNeed": "Sentinel-2 下载到约 93% 出现 Token 过期，用户不清楚慢下载与失败原因。",
+      "assessment": "需提供方专属刷新、续传与文件一致性校验；现有瓦片恢复不等于大产品续传已支持。",
+      "questions": "可用授权连接；仅在需要重新授权时询问用户。",
+      "priority": "范围外",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "languageContext": "英文",
+      "researchRound": "首轮",
+      "researchPriority": "P1",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "F23",
+      "url": "https://forum.dataspace.copernicus.eu/t/download-process-stops-before-all-the-required-data-have-been-downloaded/3344",
+      "title": "Download process stops before all the required data have been downloaded - OData - Copernicus Data Space Ecosystem | Community forum",
+      "platform": "Copernicus Data Space",
+      "date": "2025-03-04",
+      "topic": "遥感目录完整性",
+      "userNeed": "一个月的批量 Sentinel 下载中途结束，网页可见的部分产品被遗漏。",
+      "assessment": "需目录分页、稳定产品清单和逐项成功失败账本；不是重复请求同一页。",
+      "questions": "日期、产品级别、区域及缺失产品处理。",
+      "priority": "范围外",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "languageContext": "英文",
+      "researchRound": "首轮",
+      "researchPriority": "P1",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "F24",
+      "url": "https://forum.dataspace.copernicus.eu/t/access-token-creation-failed-for-large-number-of-image-download/835",
+      "title": "\"Access token creation failed\" for large number of image download - OData - Copernicus Data Space Ecosystem | Community forum",
+      "platform": "Copernicus Data Space",
+      "date": "2024-07-02",
+      "topic": "长批次授权",
+      "userNeed": "约 5,000 景下载长时间运行后 refresh token 无效，反复中断。",
+      "assessment": "需集中管理提供方 token、长批次检查点；不能让每个下载线程独立刷新。",
+      "questions": "选择哪个授权连接；失效时暂停并提供重新授权入口。",
+      "priority": "范围外",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "languageContext": "英文",
+      "researchRound": "首轮",
+      "researchPriority": "P1",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "F25",
+      "url": "https://forum.dataspace.copernicus.eu/t/403-error-forbidden-get-while-retrieving-sentinel-2-images-from-the-s3-bucket/4749",
+      "title": "403 error (Forbidden get) while retrieving sentinel-2 images from the s3 bucket - S3 Access - Copernicus Data Space Ecosystem | Community forum",
+      "platform": "Copernicus Data Space",
+      "date": "2026-02-27",
+      "topic": "S3 产品读取",
+      "userNeed": "原本可运行的 eodata S3 分波段下载变成 403，重新生成 key 也未解决。",
+      "assessment": "尚无已验收 S3 产品读取适配；应区别签名、区域、权限、资源路径和限额错误。",
+      "questions": "所用 S3 连接、产品与波段；凭据通过本机授权界面输入。",
+      "priority": "范围外",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "languageContext": "英文",
+      "researchRound": "首轮",
+      "researchPriority": "P1",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "F26",
+      "url": "https://community.cesium.com/t/is-it-possible-to-download-3d-tiles-that-i-did-not-upload-via-rest-api/42691",
+      "title": "Is it possible to download 3D tiles (that I did not upload) via REST API? - Cesium ion - Cesium Community",
+      "platform": "Cesium Community",
+      "date": "2025-08-12",
+      "topic": "离线三维权限",
+      "userNeed": "希望发送范围后直接得到别人的全球三维资产或离线 glTF。",
+      "assessment": "技术下载能力不能推导资产导出权限；官方裁剪、归档、导出需分别核实。",
+      "questions": "资产归属、授权途径、输出用途和是否需要精确切网格。",
+      "priority": "P0",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "languageContext": "英文",
+      "researchRound": "首轮",
+      "researchPriority": "P0",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F27",
+      "url": "https://community.cesium.com/t/tiles-for-offline-terrain-server/40557",
+      "title": "Tiles for offline terrain server",
+      "platform": "Cesium Community",
+      "date": null,
+      "topic": "离线三维权限",
+      "userNeed": "想将 Google Photorealistic 3D Tiles 下载后自托管离线使用。",
+      "assessment": "Cesium 官方社区明确该数据不可离线使用；应解释限制并提供允许的替代数据。",
+      "questions": "接受哪种可离线的自有或获授权数据。",
+      "priority": "P0",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "languageContext": "英文",
+      "researchRound": "首轮",
+      "researchPriority": "P0",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F28",
+      "url": "https://community.cesium.com/t/render-the-gltf-3d-model-as-tileset-json/39886",
+      "title": "Render the GLTF 3d model as tileset.json - CesiumJS - Cesium Community",
+      "platform": "Cesium Community",
+      "date": "2025-04-09",
+      "topic": "三维依赖与预览",
+      "userNeed": "有离线 tileset.json，但三维模型无法显示。",
+      "assessment": "已有递归依赖下载、成果核验和 Cesium 预览；需核对资产许可、资源完整性及坐标。",
+      "questions": "是自有资产还是外部服务；缺失哪些依赖资源。",
+      "priority": "P0",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "languageContext": "英文",
+      "researchRound": "首轮",
+      "researchPriority": "P0",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F29",
+      "url": "https://community.cesium.com/t/downloading-terrain-data-for-offline-use/36833",
+      "title": "Downloading terrain data for offline use - Cesium ion - Cesium Community",
+      "platform": "Cesium Community",
+      "date": "2024-11-23",
+      "topic": "云端归档状态",
+      "userNeed": "用户将自己的 GeoTIFF 上传 Ion 后归档一直 0%，无法获取离线地形。",
+      "assessment": "尚无 Ion 官方归档任务管理；现有场景加载和下载其他 3D Tiles 不能替代。",
+      "questions": "已有上传资产、账号权限和目标离线格式。",
+      "priority": "P2",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "languageContext": "英文",
+      "researchRound": "首轮",
+      "researchPriority": "P2",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F30",
+      "url": "http://bbs.3s001.com/thread-242954-1-1.html",
+      "title": "关于下载谷歌影像的坐标系转换和纠正—ARCGIS—地信网论坛",
+      "platform": "地信网论坛",
+      "date": null,
+      "topic": "坐标偏移",
+      "userNeed": "影像标为 WGS84，却无法与道路矢量正确叠加。",
+      "assessment": "已验证特定 GCJ-02 预设校正；不能对所有偏移自动套用同一转换。",
+      "questions": "影像来源、矢量真实 CRS、是否有控制点。",
+      "priority": "P0",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "languageContext": "中文",
+      "researchRound": "首轮",
+      "researchPriority": "P0",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F31",
+      "url": "http://bbs.3s001.com/thread-361706-1-1.html",
+      "title": "按掩膜提取出现error010092：无效的输出范围—ARCGIS—地信网论坛",
+      "platform": "地信网论坛",
+      "date": "2022-07-20",
+      "topic": "范围与投影",
+      "userNeed": "下载全球 DEM 后自行定义投影，再按掩膜提取报无效范围。",
+      "assessment": "有输入与 CRS 检查；缺少 CRS 时应询问，不能猜测或仅改标签。",
+      "questions": "数据真实投影、掩膜 CRS 和来源说明。",
+      "priority": "P0",
+      "sourceType": "原始用户问题或故障",
+      "verification": "核读原文；未在本轮重现下载",
+      "languageContext": "中文",
+      "researchRound": "首轮",
+      "researchPriority": "P0",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "F32",
+      "url": "http://bbs.3s001.com/thread-355070-1-1.html",
+      "title": "ArcMap和ArcGISPro加载天地图服务—ARCGIS—地信网论坛",
+      "platform": "地信网论坛",
+      "date": "2021-12-19",
+      "topic": "国内服务认证",
+      "userNeed": "经验帖记录天地图 Key 类型和 WMTS 参数差异影响桌面加载。",
+      "assessment": "用户服务端 Key 的小范围影像加注记下载已验证；不能推断所有地方节点接口。",
+      "questions": "已有哪种 Key 和图层；凭据留在本机连接。",
+      "priority": "P0",
+      "sourceType": "经验说明",
+      "verification": "核读原文；未在本轮重现下载",
+      "languageContext": "中文",
+      "researchRound": "首轮",
+      "researchPriority": "P0",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "D01",
+      "url": "http://bbs.06climate.com/forum.php?mod=viewthread&tid=111784",
+      "title": "驱动WRF的ERA5数据下载",
+      "platform": "气象家园",
+      "date": "2026-06-11",
+      "topic": "气象与WRF",
+      "languageContext": "中文",
+      "userNeed": "需要2025年5—10月逐小时高空和地面ERA5，公共下载太慢，希望获得可用数据。",
+      "assessment": "ERA5提供方适配、变量与气压层选择、区域子集、批次调度；上游排队无法由Agent消除。",
+      "questions": "模拟范围、缓冲范围、时间、变量、气压层、GRIB或NetCDF。",
+      "priority": "范围外",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P1",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "D02",
+      "url": "http://bbs.06climate.com/forum.php?mod=viewthread&tid=108421",
+      "title": "ERA5驱动WRF问题",
+      "platform": "气象家园",
+      "date": "2023-07-14",
+      "topic": "气象与WRF",
+      "languageContext": "中文",
+      "userNeed": "黄河流域长期WRF研究不想下载全球ERA5，且不清楚地面、高空文件组织和缺文件原因。",
+      "assessment": "需要科研数据区域筛选和清单核验；WRF兼容性需专项验收。",
+      "questions": "模拟域及缓冲、逐小时变量和气压层、文件分组。",
+      "priority": "范围外",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P1",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "D03",
+      "url": "http://bbs.06climate.com/forum.php?mod=viewthread&tid=90176",
+      "title": "ERA5资料下载问题",
+      "platform": "气象家园",
+      "date": "2019-04-14",
+      "topic": "认证与环境",
+      "languageContext": "中文",
+      "userNeed": "Windows用户建立.cdsapirc后仍无法识别配置，不清楚隐藏扩展名和文件格式。",
+      "assessment": "本机凭据设置向导可以消除手工配置；CDS专用授权流程尚未接入。",
+      "questions": "是否已有CDS账号、数据条款是否接受；凭据通过本机安全入口填写。",
+      "priority": "范围外",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P1",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "D04",
+      "url": "http://bbs.3s001.com/thread-336979-1-1.html",
+      "title": "如何下载到有红外光数据的影像？",
+      "platform": "地信网论坛",
+      "date": "2020-09-01",
+      "topic": "原始遥感与植被",
+      "languageContext": "中文",
+      "userNeed": "小流域植被覆盖研究下载到RGB底图，却需要红光和近红外多波段影像。",
+      "assessment": "需要原始遥感产品检索与波段交付；RGB瓦片不能代替近红外。",
+      "questions": "研究区、时段、云量、产品级别、波段及分析用途。",
+      "priority": "范围外",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P1",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "D05",
+      "url": "http://bbs.3s001.com/thread-358323-1-1.html",
+      "title": "那位大神给一张30米的全国土地利用现状图",
+      "platform": "地信网论坛",
+      "date": "2022-04-13",
+      "topic": "土地覆盖",
+      "languageContext": "中文",
+      "userNeed": "新手寻找30米全国或贵州省土地利用栅格。",
+      "assessment": "可复用范围与栅格技能；需要专题目录、年份、分类体系和许可元数据。",
+      "questions": "全国还是贵州、年份、土地利用或土地覆盖、分类体系。",
+      "priority": "待评估",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P1",
+      "productScope": "相邻需求，待评估，不进入本轮承诺"
+    },
+    {
+      "id": "D06",
+      "url": "http://bbs.3s001.com/thread-277413-1-1.html",
+      "title": "洱海周边道路注记和行政区划SHP，80坐标系",
+      "platform": "地信网论坛",
+      "date": "2018-08-28",
+      "topic": "范围与坐标系",
+      "languageContext": "中文",
+      "userNeed": "需要洱海周边道路、注记和行政边界，交付SHP与西安80坐标系。",
+      "assessment": "已有矢量转换基础；缺失源CRS和地方转换参数不能凭名称猜测。",
+      "questions": "覆盖范围、数据时间、准确投影参数、是否有控制点或转换依据。",
+      "priority": "P0",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P0",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "D07",
+      "url": "http://bbs.3s001.com/thread-344918-1-1.html",
+      "title": "有偿求助：全国乡镇、行政村边界矢量地图",
+      "platform": "地信网论坛",
+      "date": "2021-03-16",
+      "topic": "行政边界供给",
+      "languageContext": "中文",
+      "userNeed": "寻找按乡镇组织、包含行政村边界的全国矢量地图。",
+      "assessment": "Agent可协助目录发现与处理；公开完整村界供给和使用权限不能保证。高德行政查询不返回乡镇街道边界。",
+      "questions": "乡镇或村级、地区、年份、用途、是否接受有许可的付费数据。",
+      "priority": "P2",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P2",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "D08",
+      "url": "https://muchong.com/t-13708167-1",
+      "title": "请问GF和SPOT卫星数据有免费下载的地方吗？",
+      "platform": "小木虫",
+      "date": null,
+      "topic": "高分与授权",
+      "languageContext": "中文",
+      "userNeed": "希望找到GF或SPOT卫星影像的免费下载渠道。",
+      "assessment": "按产品、年份和账号权益核查提供方；不承诺所有高分或SPOT可免费获取。",
+      "questions": "卫星、分辨率、产品级别、时期、范围、已有授权。",
+      "priority": "范围外",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "原页面问题标题及回复可读，提问正文与确切日期未完整显示；不采用回复中的免费范围结论",
+      "researchRound": "扩大调研",
+      "researchPriority": "P2",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "D09",
+      "url": "https://github.com/cnmetlab/cnmaps/issues/17",
+      "title": "高德地图部分区县出现类似拓扑错误的问题",
+      "platform": "GitHub Issues 或 Discussions",
+      "date": "2022-04-05",
+      "topic": "行政边界质量",
+      "languageContext": "中文",
+      "userNeed": "维护者发现部分区县边界组合拓扑异常，测试暂时跳过这些地区。",
+      "assessment": "边界交付需几何有效性、覆盖与来源检查；不能默认修复成权威界线。",
+      "questions": "边界来源与版本、用途、是否允许修复以及容差。",
+      "priority": "P0",
+      "sourceType": "维护者原始故障记录",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P0",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "D10",
+      "url": "https://github.com/xiangyuecn/AreaCity-JsSpider-StatsGov/issues/45",
+      "title": "ok_geo.csv多面与闭合环解析问题",
+      "platform": "GitHub Issues 或 Discussions",
+      "date": "2024-07-10",
+      "topic": "多格式与数据库",
+      "languageContext": "中文",
+      "userNeed": "用户将边界CSV导入MongoDB时，多面分隔和非闭合环导致空间索引失败。",
+      "assessment": "需要格式识别、规范几何转换和有效性核验；当前MongoDB连接不是已验收能力。",
+      "questions": "原CSV格式约定、目标格式或数据库、坐标系、是否允许修复。",
+      "priority": "P0",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P0",
+      "productScope": "当前范围",
+      "scopeNote": "借用多格式几何转换与有效性核验；不因此接入 MongoDB。"
+    },
+    {
+      "id": "D11",
+      "url": "https://github.com/xiangyuecn/AreaCity-JsSpider-StatsGov/issues/43",
+      "title": "几个镇街级数据调整",
+      "platform": "GitHub Issues 或 Discussions",
+      "date": "2024-05-08",
+      "topic": "行政区版本",
+      "languageContext": "中文",
+      "userNeed": "用户核查到地名错误、撤镇设街及区划变更未同步。",
+      "assessment": "计划和成果需要来源日期、区划版本与变更记录；只靠最新文件名不能验证。",
+      "questions": "指定年份、按当年区划还是现行区划、关联统计表。",
+      "priority": "P0",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P0",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "D12",
+      "url": "https://forum.ecmwf.int/t/request-size-has-changed-for-netcdf-files/12282",
+      "title": "Request size has changed for netcdf files",
+      "platform": "ECMWF Forum",
+      "date": "2025-03-27",
+      "topic": "气象请求与格式",
+      "languageContext": "英文",
+      "userNeed": "同样的ERA5-Land月数据在NetCDF格式突然超限，GRIB请求可接受。",
+      "assessment": "需按当前提供方约束拆任务，并在用户同意后选择原生GRIB与本机转换。",
+      "questions": "格式是否必须NetCDF、变量、时段、磁盘预算。",
+      "priority": "范围外",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P1",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "D13",
+      "url": "https://forum.ecmwf.int/t/cdsapi-era5-download-error/7193",
+      "title": "Cdsapi era5 download error",
+      "platform": "ECMWF Forum",
+      "date": "2024-10-24",
+      "topic": "气象批次调度",
+      "languageContext": "英文",
+      "userNeed": "按近两万个时间点逐次请求ERA5，提交后长期停在队列。",
+      "assessment": "合并合理批次、控制活动请求与持久化作业状态；不重复提交同一作业。",
+      "questions": "范围、变量、时间粒度和是否按月分文件。",
+      "priority": "范围外",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P1",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "D14",
+      "url": "https://forum.ecmwf.int/t/how-to-download-faster/1391",
+      "title": "How to Download Faster",
+      "platform": "ECMWF Forum",
+      "date": "2019-06-16",
+      "topic": "区域时序提取",
+      "languageContext": "英文",
+      "userNeed": "数千小区各自下载20年温度降水，每区等待数分钟，成本过高。",
+      "assessment": "共享区域和时间批次、下载后本机分区提取；避免每个面重复请求。",
+      "questions": "地区分布、年份、变量、分区统计或原始格网、允许的缓存范围。",
+      "priority": "范围外",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P1",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "D15",
+      "url": "https://forum.ecmwf.int/t/very-slow-era5-download/10610",
+      "title": "Very slow ERA5 download",
+      "platform": "ECMWF Forum",
+      "date": "2025-01-08",
+      "topic": "上游等待与失败",
+      "languageContext": "英文",
+      "userNeed": "多年气压层湿度数据由十分钟变成数小时，并出现服务器500错误。",
+      "assessment": "区分排队、上游故障和本机传输；保留检查点并按服务规则重试。",
+      "questions": "当前作业、数据集、时段、是否等待或暂停。",
+      "priority": "范围外",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P1",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "D16",
+      "url": "https://forum.ecmwf.int/t/severe-and-persistent-queue-delays-for-era5-hourly-data-pressure-levels-via-cds-api/14836",
+      "title": "Severe and persistent queue delays for ERA5 hourly data",
+      "platform": "ECMWF Forum",
+      "date": "2026-04-01",
+      "topic": "上游等待与失败",
+      "languageContext": "英文",
+      "userNeed": "已按天合并ERA5请求仍持续长时间排队，希望可诊断真实状态。",
+      "assessment": "后台记录上游作业和最近更新时间；不能承诺绕开上游容量限制。",
+      "questions": "是否接受等待、其他许可渠道、任务优先次序。",
+      "priority": "范围外",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P1",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "D17",
+      "url": "https://forum.earthdata.nasa.gov/viewtopic.php?t=5879",
+      "title": "LAADS DAAC HTTP Error 401: Unauthorized",
+      "platform": "NASA Earthdata Forum",
+      "date": "2024-08-22",
+      "topic": "认证与成果核验",
+      "languageContext": "英文",
+      "userNeed": "批量下载一年MYD06时保存的文件实际是HTML登录页，wget报401。",
+      "assessment": "NASA授权适配和重定向处理；下载后检测格式、产品ID和文件有效性。",
+      "questions": "产品与时间范围、已有Earthdata授权；凭据不进入聊天。",
+      "priority": "范围外",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P1",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "D18",
+      "url": "https://forum.earthdata.nasa.gov/viewtopic.php?t=7014",
+      "title": "Is there a way to download GPM_3IMERGHH faster?",
+      "platform": "NASA Earthdata Forum",
+      "date": "2025-07-10",
+      "topic": "降水长时序",
+      "languageContext": "英文",
+      "userNeed": "长时间跨度半小时IMERG子集预计需数百小时，HPC单次会话只有48小时。",
+      "assessment": "持久化任务与合理子集可减少操作负担；HPC端执行和上游子集性能另需适配。",
+      "questions": "空间、时间、变量、最终或近实时产品、执行位置。",
+      "priority": "范围外",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P1",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "D19",
+      "url": "https://forum.earthdata.nasa.gov/viewtopic.php?t=7085",
+      "title": "Access Issues with MODIS Data Post-Migration to Earthdata Cloud",
+      "platform": "NASA Earthdata Forum",
+      "date": "2025-08-01",
+      "topic": "服务迁移",
+      "languageContext": "英文",
+      "userNeed": "旧MODIS自动管线在数据迁移后出现404、401，不清楚新下载入口和授权。",
+      "assessment": "保存产品标识并重新发现资产链接；维护提供方目录与授权，避免硬编码旧URL。",
+      "questions": "产品集合版本、已有账号、原计划与文件清单。",
+      "priority": "范围外",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P1",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "D20",
+      "url": "https://forum.earthdata.nasa.gov/viewtopic.php?t=4151",
+      "title": "Authentication failure - using wget via HPC based Linux",
+      "platform": "NASA Earthdata Forum",
+      "date": "2023-04-19",
+      "topic": "大文件与科研数据",
+      "languageContext": "英文",
+      "userNeed": "超过1TB的MERRA-2数据在HPC下载时出现认证错误和重定向问题。",
+      "assessment": "需要大文件下载清单、资源身份与续传；不能把桌面瓦片验收外推为HPC管线。",
+      "questions": "必要变量和气压层、研究范围、时间、磁盘与执行环境。",
+      "priority": "范围外",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P2",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "D21",
+      "url": "https://forum.earthdata.nasa.gov/viewtopic.php?t=6769",
+      "title": "Earthdata download error",
+      "platform": "NASA Earthdata Forum",
+      "date": "2025-05-05",
+      "topic": "海温子集与恢复",
+      "languageContext": "英文",
+      "userNeed": "已生成时空海温子集但Windows客户端下载立即403，担心重置丢失数据。",
+      "assessment": "保存远端作业和成果链接身份，授权恢复后复用；核验子集含有效像元。",
+      "questions": "现有作业、授权状态、子集范围和是否保留已下载文件。",
+      "priority": "范围外",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P1",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "D22",
+      "url": "https://github.com/mercator-ocean/copernicus-marine-toolbox/issues/267",
+      "title": "Improve download performance of large time extents for small time chunks",
+      "platform": "GitHub Issues 或 Discussions",
+      "date": "2025-01-13",
+      "topic": "海洋时序与性能",
+      "languageContext": "英文",
+      "userNeed": "多年海流数据按天保存很慢，按月拆开再提取效率更好。",
+      "assessment": "接入官方Marine子集，按数据分块组织请求；该历史issue已关闭，不代表当前库仍有相同问题。",
+      "questions": "变量、深度、范围、时间频率、分文件方式。",
+      "priority": "范围外",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P2",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "D23",
+      "url": "https://github.com/pepijn-devries/CopernicusMarine/issues/141",
+      "title": "Best way to handle subset downloads around the dateline?",
+      "platform": "GitHub Issues 或 Discussions",
+      "date": "2026-03-04",
+      "topic": "跨日期变更线",
+      "languageContext": "英文",
+      "userNeed": "跨180度经线的海洋子集被截断，用户希望正确取得完整研究区。",
+      "assessment": "经度规范化、分区请求与合并核验；普通矩形bbox不能自动表达所有跨经线范围。",
+      "questions": "跨经线范围、经度表示、重投影和输出要求。",
+      "priority": "范围外",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P2",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "D24",
+      "url": "https://github.com/pepijn-devries/CopernicusMarine/issues/143",
+      "title": "cms_download_subset fails on Med climatology layer (5-dimension nv)",
+      "platform": "GitHub Issues 或 Discussions",
+      "date": "2026-03-06",
+      "topic": "多维数据发现",
+      "languageContext": "英文",
+      "userNeed": "海底温度气候态含额外时间边界维度，读取器假定四维导致发现失败。",
+      "assessment": "数据语义应读取实际维度与CF元数据，不能写死时间深度经纬四维；历史故障已关闭。",
+      "questions": "变量、气候态参考期、深度与维度含义。",
+      "priority": "范围外",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P2",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "D25",
+      "url": "https://github.com/pepijn-devries/CopernicusMarine/issues/102",
+      "title": "Lat/Lon values appear scrambled when downloading a subset of current data",
+      "platform": "GitHub Issues 或 Discussions",
+      "date": "2025-11-06",
+      "topic": "坐标与数值核验",
+      "languageContext": "英文",
+      "userNeed": "北海子集看起来是全区域缩放，坐标与格网内容不匹配。",
+      "assessment": "核对实际经纬坐标、维度长度、范围与样点；原维护者已修复当时版本。",
+      "questions": "范围、变量、库与产品版本、对照样点。",
+      "priority": "范围外",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P2",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "D26",
+      "url": "https://github.com/pepijn-devries/CopernicusMarine/issues/100",
+      "title": "Re-scaling variables?",
+      "platform": "GitHub Issues 或 Discussions",
+      "date": "2025-11-05",
+      "topic": "单位与编码",
+      "languageContext": "英文",
+      "userNeed": "海底温度读取为不合理的负万级数值，不清楚比例因子和偏移。",
+      "assessment": "处理scale_factor、add_offset、缺测和单位；历史库缺陷已修复，保留为验收场景。",
+      "questions": "变量、单位、数值范围与文件编码。",
+      "priority": "范围外",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P2",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "D27",
+      "url": "https://stackoverflow.com/questions/75489393/how-to-download-a-land-cover-image-using-geemap",
+      "title": "How to download a land cover image using geemap?",
+      "platform": "Stack Overflow",
+      "date": "2023-02-17",
+      "topic": "土地覆盖与合成",
+      "languageContext": "英文",
+      "userNeed": "Dynamic World按时间的集合与单张影像下载函数不匹配，不知如何导出。",
+      "assessment": "需要明确单期标签、概率还是时间合成，并接入GEE任务；不自动决定合成方式。",
+      "questions": "日期、单期或合成、标签或概率、输出分辨率。",
+      "priority": "范围外",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P1",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "D28",
+      "url": "https://gis.stackexchange.com/questions/402234/is-there-a-land-cover-type-image-collection-on-google-earth-engine-that-covers-t",
+      "title": "Land cover image collection covering 2000–2020",
+      "platform": "GIS Stack Exchange",
+      "date": "2021-06-23",
+      "topic": "数据年份与覆盖",
+      "languageContext": "英文",
+      "userNeed": "要2000—2020土地覆盖时序，整包超过40GB，可找到的集合年份不完整。",
+      "assessment": "先核对真实产品年份和分类体系；不能凭用户年份生成不存在的数据。",
+      "questions": "完整年序列是否必需、区域、分辨率、跨产品是否可接受。",
+      "priority": "范围外",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P1",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "D29",
+      "url": "https://georezo.net/forum/viewtopic.php?pid=376763",
+      "title": "Téléchargement automatique dalles LiDAR IGN",
+      "platform": "GeoRezo",
+      "date": "2026-03-05",
+      "topic": "点云分幅与批量",
+      "languageContext": "法文",
+      "userNeed": "已得到研究区所需IGN点云分幅名称，希望自动批量下载或加载QGIS。",
+      "assessment": "分幅索引与AOI相交，保存下载清单；LAS/LAZ专用下载和处理还需接入。",
+      "questions": "范围、点云或派生栅格、分类、输出与磁盘预算。",
+      "priority": "范围外",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P2",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "D30",
+      "url": "https://georezo.net/forum/viewtopic.php?pid=367589",
+      "title": "QGIS: Zonage LIDAR HD",
+      "platform": "GeoRezo",
+      "date": "2024-05-20",
+      "topic": "点云目录发现",
+      "languageContext": "法文",
+      "userNeed": "希望获得地理格式的分幅边界，在QGIS内选择需要的点云。",
+      "assessment": "可复用WFS目录读取；新增分幅元数据与点云成果合同。",
+      "questions": "范围、数据层、分幅目录版本。",
+      "priority": "范围外",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P2",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "D31",
+      "url": "https://georezo.net/forum/viewtopic.php?pid=377978",
+      "title": "Cartes.gouv.fr: télécharger les dalles LiDAR LAZ",
+      "platform": "GeoRezo",
+      "date": "2026-07-28",
+      "topic": "服务迁移与数据类型",
+      "languageContext": "法文",
+      "userNeed": "IGN入口迁移后只能找到TIF，找不到真正LAZ点云下载。",
+      "assessment": "区分点云和DEM派生产品，动态维护目录与数据入口；不能把TIF当LAZ交付。",
+      "questions": "原始点云或DEM、分类、范围和时期。",
+      "priority": "范围外",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P2",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "D32",
+      "url": "https://github.com/OvertureMaps/data/issues/508",
+      "title": "Why has the building Parquet file count doubled?",
+      "platform": "GitHub Issues 或 Discussions",
+      "date": "2026-03-22",
+      "topic": "云端矢量与版本",
+      "languageContext": "英文",
+      "userNeed": "加拿大建筑读取随发布版分区变化，需要理解数据分布与下载成本。",
+      "assessment": "使用空间过滤和固定发布版本，避免依赖分片编号；GeoParquet读取未形成现有专用流程。",
+      "questions": "发布版本、研究范围、必要字段、是否比较版本。",
+      "priority": "待评估",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P1",
+      "productScope": "相邻需求，待评估，不进入本轮承诺"
+    },
+    {
+      "id": "D33",
+      "url": "https://github.com/OvertureMaps/data/issues/113",
+      "title": "Tokyo Buildings missing from January release?",
+      "platform": "GitHub Issues 或 Discussions",
+      "date": "2024-01-20",
+      "topic": "云端矢量完整性",
+      "languageContext": "英文",
+      "userNeed": "下载231GB全球建筑却提不出东京，原来以对象ID前缀做空间筛选不可靠。",
+      "assessment": "按实际几何过滤、先小样验证再批量导出；当前全量矢量通道需扩展规模。",
+      "questions": "范围、产品版本、字段及输出格式。",
+      "priority": "待评估",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P1",
+      "productScope": "相邻需求，待评估，不进入本轮承诺"
+    },
+    {
+      "id": "D34",
+      "url": "https://github.com/esgf2-us/metagrid/issues/923",
+      "title": "Missing results in wget files for many small input4MIPs files",
+      "platform": "GitHub Issues 或 Discussions",
+      "date": "2026-05-13",
+      "topic": "气候目录完整性",
+      "languageContext": "英文",
+      "userNeed": "1610个小文件通过多页购物车生成清单后，部分重复、部分遗漏。",
+      "assessment": "稳定资源ID、目录全分页、数量与校验清单；ESGF专用连接器尚未接入。",
+      "questions": "项目、实验、情景、气体或变量、版本与预期文件数。",
+      "priority": "范围外",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P2",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "D35",
+      "url": "https://stackoverflow.com/questions/60232183/how-do-i-modify-subset-a-wget-script-to-specify-a-date-range-to-only-download-ce",
+      "title": "Subset a wget script to download certain CMIP6 years",
+      "platform": "Stack Overflow",
+      "date": "2020-02-14",
+      "topic": "气候时段筛选",
+      "languageContext": "英文",
+      "userNeed": "CMIP6脚本包含1850—2014，用户只要1980年后的分段文件，不会裁剪清单。",
+      "assessment": "按元数据时间筛选和时间交叠规则组织任务，不能只按文件名任意删行。",
+      "questions": "年份、模型、变量、实验、成员、日历与是否本机切时间。",
+      "priority": "范围外",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P2",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "D36",
+      "url": "https://forum.ecmwf.int/t/issues-with-api-for-downloading-cmip6-datasets/7329",
+      "title": "Issues with API for downloading CMIP6 datasets",
+      "platform": "ECMWF Forum",
+      "date": "2024-10-30",
+      "topic": "气候模型与组织",
+      "languageContext": "英文",
+      "userNeed": "多SSP、多变量、多模型请求太大，结果混在一起，希望按模型变量分文件。",
+      "assessment": "产品语义和目录组织需要保留模型、成员、情景、变量、网格和版本。",
+      "questions": "模型、情景、成员、变量、时段、目录和文件分组。",
+      "priority": "范围外",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P2",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "D37",
+      "url": "https://forum.step.esa.int/t/flood-map-using-grd/7231",
+      "title": "Flood Map using GRD",
+      "platform": "ESA STEP Forum",
+      "date": "2017-09-27",
+      "topic": "洪水与SAR处理",
+      "languageContext": "英文",
+      "userNeed": "要Houston洪水范围，知道Sentinel-1 GRD却不清楚处理和导出步骤。",
+      "assessment": "先接原始SAR检索；洪水提取、阈值与验证需独立分析技能。",
+      "questions": "事件日期、灾前灾后、极化、轨道、验证数据和输出。",
+      "priority": "范围外",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P2",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "D38",
+      "url": "https://forum.step.esa.int/t/sentinel-1a-slc-to-grd-product-for-flood-inundation-please-review-the-steps/15897",
+      "title": "Sentinel-1 SLC to GRD for flood inundation",
+      "platform": "ESA STEP Forum",
+      "date": "2019-06-11",
+      "topic": "产品级别与SAR处理",
+      "languageContext": "英文",
+      "userNeed": "部分日期只有SLC，希望理解是否及如何转为GRD再进行洪水制图。",
+      "assessment": "产品选择不能仅按日期自动替换；处理链需领域验证。",
+      "questions": "产品类型、是否必须所选日期、极化与轨道、处理需求。",
+      "priority": "范围外",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P2",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "D39",
+      "url": "https://forum.step.esa.int/t/terrain-correction-in-multi-temporal-dual-pol-s1-stack-masks-out-water-despite-nodatavalueatsea-set-to-false/44555",
+      "title": "Terrain correction masks water in multi-temporal S1 stack",
+      "platform": "ESA STEP Forum",
+      "date": "2025-05-19",
+      "topic": "SAR质量与缺测",
+      "languageContext": "英文",
+      "userNeed": "多时相S1处理后水体被当作NoData，下载成功但分析数据不正确。",
+      "assessment": "必须核验处理后掩膜与有效数据；当前基础栅格统计不足以验证SAR科学处理。",
+      "questions": "具体产品、处理参数、NoData设置与对照影像。",
+      "priority": "范围外",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P2",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "D40",
+      "url": "https://forum.step.esa.int/t/change-detection-using-sentinel-1-sar-grd-data/25207",
+      "title": "Change detection using Sentinel-1 SAR GRD data",
+      "platform": "ESA STEP Forum",
+      "date": "2020-09-04",
+      "topic": "变化检测",
+      "languageContext": "英文",
+      "userNeed": "希望验证多期S1变化检测流程以识别洪水。",
+      "assessment": "同轨道和一致处理的可比性需核验；不能把两张彩色底图差异作为洪水结论。",
+      "questions": "灾前灾后日期、轨道、极化、目标与验证方式。",
+      "priority": "范围外",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P2",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "D41",
+      "url": "https://gis.stackexchange.com/questions/367925/downloading-soilgrids-data-globally-using-r/368434",
+      "title": "Downloading SoilGrids data globally using R",
+      "platform": "GIS Stack Exchange",
+      "date": "2020-07-16",
+      "topic": "土壤与投影",
+      "languageContext": "英文",
+      "userNeed": "小范围示例可以下载，扩大全球后Homolosine转换失败。",
+      "assessment": "使用官方格网与投影规则，分块读取；土壤专用数据发现尚未接入。",
+      "questions": "土壤属性、深度、统计量、范围、分辨率和投影。",
+      "priority": "范围外",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P2",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "D42",
+      "url": "https://gis.stackexchange.com/questions/407408/downloading-the-global-soilgrids-data-using-python",
+      "title": "Downloading global SoilGrids using Python",
+      "platform": "GIS Stack Exchange",
+      "date": "2021-08-02",
+      "topic": "远程栅格与环境",
+      "languageContext": "英文",
+      "userNeed": "生态建模要全球土壤GeoTIFF，远程VRT路径和GDAL版本导致读取失败。",
+      "assessment": "固定可选技能环境与远程依赖核验；不是只下载主VRT文件。",
+      "questions": "属性、深度、范围、输出和依赖安装许可。",
+      "priority": "范围外",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P2",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "D43",
+      "url": "https://gis.stackexchange.com/questions/383755/downloading-soilgrids-data-from-wcs-in-r",
+      "title": "Downloading SoilGrids data from WCS in R",
+      "platform": "GIS Stack Exchange",
+      "date": "2021-01-07",
+      "topic": "WCS科学栅格",
+      "languageContext": "英文",
+      "userNeed": "曾可用的WCS土壤下载突然报错，不知是服务、投影还是环境问题。",
+      "assessment": "WCS能力发现、服务状态与远程栅格读取需独立接入和验收。",
+      "questions": "变量、深度、分位数、范围、服务返回错误。",
+      "priority": "范围外",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P2",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "D44",
+      "url": "https://github.com/ncss-tech/soilDB/issues/202",
+      "title": "Automate SoilGrids grids for arbitrary extents",
+      "platform": "GitHub Issues 或 Discussions",
+      "date": "2021-08-04",
+      "topic": "区域土壤读取",
+      "languageContext": "英文",
+      "userNeed": "维护者希望自动获取任意范围土壤格网，受本机GDAL权限、证书和安装版本影响。",
+      "assessment": "按需技能环境可以减少部署差异；服务选择和成果数值需验证。",
+      "questions": "研究范围、土壤属性、深度、统计量与投影。",
+      "priority": "范围外",
+      "sourceType": "维护者原始功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P2",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "D45",
+      "url": "https://www.reddit.com/r/gis/comments/1k6xl8m/getting_gis_data_from_france_into_cad/",
+      "title": "Getting GIS Data from France into CAD",
+      "platform": "Reddit r/gis",
+      "date": "2025-04-24",
+      "topic": "建筑设计与CAD",
+      "languageContext": "英文",
+      "userNeed": "在法国参赛的奥地利建筑师要地形和建筑高度，难以理解整省压缩GIS资料并转给Rhino或Archicad。",
+      "assessment": "按范围筛选与格式识别可复用；CAD交付、建筑高度和垂直基准需要专项流程。",
+      "questions": "城镇范围、CAD格式、二维或三维、单位、垂直基准和精度。",
+      "priority": "待评估",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P1",
+      "productScope": "相邻需求，待评估，不进入本轮承诺"
+    },
+    {
+      "id": "D46",
+      "url": "https://www.reddit.com/r/gis/comments/jvghnt/extract_useful_layers_from_osm_file_for_cad/",
+      "title": "Extract useful Layers from OSM File for CAD?",
+      "platform": "Reddit r/gis",
+      "date": "2020-11-16",
+      "topic": "建筑设计与CAD",
+      "languageContext": "英文",
+      "userNeed": "建筑学生希望按OSM分类提建筑和道路，并导出DXF用于图底关系分析。",
+      "assessment": "已有小范围OSM与矢量处理基础；分层DXF、关系和属性映射仍需真实CAD验收。",
+      "questions": "范围、道路或建筑类别、目标CAD格式、坐标系、图层组织。",
+      "priority": "待评估",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P1",
+      "productScope": "相邻需求，待评估，不进入本轮承诺"
+    },
+    {
+      "id": "D47",
+      "url": "https://www.reddit.com/r/gis/comments/1601yjo/efficient_methods_to_retrieve_building_locations/",
+      "title": "Retrieve building locations for 15-minute city analysis",
+      "platform": "Reddit r/gis",
+      "date": "2023-08-24",
+      "topic": "公共设施与POI",
+      "languageContext": "英文",
+      "userNeed": "城市规划用户要医院学校等设施位置，试过SHP和GML仍取不出需要字段。",
+      "assessment": "小范围OSM标签查询和本机矢量读取已有基础；全国全球覆盖、分类和完整性不能保证。",
+      "questions": "地区、设施类别、点位或建筑面、字段、数据时效。",
+      "priority": "P0",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P0",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "D48",
+      "url": "https://www.reddit.com/r/gis/comments/bzd8zf/estimating_population/",
+      "title": "Estimating population",
+      "platform": "Reddit r/gis",
+      "date": "2019-06-11",
+      "topic": "人口与区域统计",
+      "languageContext": "英文",
+      "userNeed": "要塞拉利昂、莱索托和海地分区人口估算，希望获得替代WorldPop的数据与合理方法。",
+      "assessment": "WorldPop目录与统计技能尚未形成专用接入；栅格人口估算不能替代实测人口普查。",
+      "questions": "统计年份、区划版本、人数或密度、空间分辨率、可接受的估算产品。",
+      "priority": "待评估",
+      "sourceType": "原始求助、故障或功能讨论",
+      "verification": "核读原始页面；本轮未重现下载",
+      "researchRound": "扩大调研",
+      "researchPriority": "P2",
+      "productScope": "相邻需求，待评估，不进入本轮承诺"
+    }
+  ],
+  "primaryReferences": [
+    {
+      "url": "https://developers.google.com/earth-engine/apidocs/ee-image-getdownloadurl",
+      "title": "ee.Image.getDownloadURL  |  Google Earth Engine  |  Google for Developers",
+      "id": "B01",
+      "researchRound": "首轮"
+    },
+    {
+      "url": "https://cesium.com/learn/ion/cesium-ion-archives-and-exports/",
+      "title": "Cesium ion Archives and Exports – Cesium",
+      "id": "B02",
+      "researchRound": "首轮"
+    },
+    {
+      "url": "https://dev.overpass-api.de/overpass-doc/en/preface/commons.html",
+      "title": "Commons",
+      "id": "B03",
+      "researchRound": "首轮"
+    },
+    {
+      "url": "https://developers.arcgis.com/rest/services-reference/enterprise/query-feature-service-layer/",
+      "title": "Query (Feature Service/Layer) | ArcGIS REST APIs | Esri Developer",
+      "id": "B04",
+      "researchRound": "首轮"
+    },
+    {
+      "url": "https://www.esri.com/arcgis-blog/products/arcgis-living-atlas/imagery/wayback-with-world-imagery-metadata",
+      "title": "Wayback with World Imagery Metadata",
+      "id": "B05",
+      "researchRound": "首轮"
+    },
+    {
+      "url": "https://www.esri.com/arcgis-blog/products/arcgis-living-atlas/imagery/wayback-export",
+      "title": "World Imagery Wayback Export",
+      "id": "B06",
+      "researchRound": "首轮"
+    },
+    {
+      "url": "https://documentation.dataspace.copernicus.eu/APIs/STAC.html",
+      "title": "STAC product catalogue – Documentation",
+      "id": "B07",
+      "researchRound": "首轮"
+    },
+    {
+      "url": "https://documentation.dataspace.copernicus.eu/APIs/Token.html",
+      "title": "Copernicus Data Space Ecosystem Token Generation – Documentation",
+      "id": "B08",
+      "researchRound": "首轮"
+    },
+    {
+      "url": "https://documentation.dataspace.copernicus.eu/notebook-samples/geo/odata_basics.html",
+      "title": "How to query CDSE Catalogue and download products – Documentation",
+      "id": "B09",
+      "researchRound": "首轮"
+    },
+    {
+      "id": "S01",
+      "title": "CDSAPI setup",
+      "url": "https://cds.climate.copernicus.eu/how-to-api",
+      "type": "官方",
+      "verifiedFinding": "CDS提供Python API，需要账号和数据集条款确认；新客户端仍处于孵化状态。",
+      "verification": "本轮核读原始文档；未执行提供方下载"
+    },
+    {
+      "id": "S02",
+      "title": "ERA5 NetCDF request constraints",
+      "url": "https://forum.ecmwf.int/t/limitation-change-on-netcdf-era5-requests/12477",
+      "type": "提供方公告",
+      "verifiedFinding": "ERA5原生为GRIB，NetCDF增加服务端转换工作；限制应以当前数据表单核查，不能固定套旧阈值。",
+      "verification": "本轮核读原始文档；未执行提供方下载"
+    },
+    {
+      "id": "S03",
+      "title": "NASA Harmony customization",
+      "url": "https://ladsweb.modaps.eosdis.nasa.gov/learn/using-harmony-tools-in-earthdata-search/",
+      "type": "官方",
+      "verifiedFinding": "对支持的数据集可在下载前做时间、空间或变量子集；不同集合支持不同工具。",
+      "verification": "本轮核读原始文档；未执行提供方下载"
+    },
+    {
+      "id": "S04",
+      "title": "Copernicus Marine subset API",
+      "url": "https://help.marine.copernicus.eu/en/articles/8283072-copernicus-marine-toolbox-api-subset",
+      "type": "官方",
+      "verifiedFinding": "官方工具支持按变量、空间、时间和深度取得子集。",
+      "verification": "本轮核读原始文档；未执行提供方下载"
+    },
+    {
+      "id": "S05",
+      "title": "Overture DuckDB data access",
+      "url": "https://docs.overturemaps.org/getting-data/duckdb/",
+      "type": "官方",
+      "verifiedFinding": "可远程查询GeoParquet并导出所需范围和字段；应固定发布版与模式。",
+      "verification": "本轮核读原始文档；未执行提供方下载"
+    },
+    {
+      "id": "S06",
+      "title": "SoilGrids access",
+      "url": "https://docs.isric.org/globaldata/soilgrids/SoilGrids_faqs_02.html",
+      "type": "官方",
+      "verifiedFinding": "WMS用于显示，WCS与WebDAV可取得数据；当前文档说明REST API临时暂停，没有恢复时间承诺。",
+      "verification": "本轮核读原始文档；未执行提供方下载"
+    },
+    {
+      "id": "S07",
+      "title": "WorldCover data access",
+      "url": "https://esa-worldcover.org/en/data-access",
+      "type": "官方",
+      "verifiedFinding": "提供2020和2021土地覆盖产品；算法版本不同，跨年差异含算法变化；有COG和分幅索引。",
+      "verification": "本轮核读原始文档；未执行提供方下载"
+    },
+    {
+      "id": "S08",
+      "title": "Dynamic World V1 catalog",
+      "url": "https://developers.google.com/earth-engine/datasets/catalog/GOOGLE_DYNAMICWORLD_V1",
+      "type": "官方",
+      "verifiedFinding": "近实时10米九类土地覆盖产品包含标签与概率，源自单景Sentinel-2；不是任意年度权威土地利用调查。",
+      "verification": "本轮核读原始文档；未执行提供方下载"
+    },
+    {
+      "id": "S09",
+      "title": "IGN LiDAR HD",
+      "url": "https://geoservices.ign.fr/lidarhd",
+      "type": "官方",
+      "verifiedFinding": "点云与地形、地表、高度派生产品分开发布；部分分幅因发布限制缺失。",
+      "verification": "本轮核读原始文档；未执行提供方下载"
+    },
+    {
+      "id": "S10",
+      "title": "高德行政区域查询",
+      "url": "https://lbs.amap.com/api/webservice/guide/api/district",
+      "type": "官方",
+      "verifiedFinding": "使用Web服务Key；不返回乡镇街道边界polyline，不能由该接口承诺全国村界。",
+      "verification": "本轮核读原始文档；未执行提供方下载"
+    },
+    {
+      "id": "S11",
+      "title": "中国海洋卫星数据服务系统",
+      "url": "https://osdds.nsoas.org.cn/",
+      "type": "官方",
+      "verifiedFinding": "有水色、动力环境、监视监测等目录和数据格式文档；能看到目录不代表本轮取得了产品。",
+      "verification": "本轮核读原始文档；未执行提供方下载"
+    },
+    {
+      "id": "S12",
+      "title": "ESGF user FAQ",
+      "url": "https://esgf.github.io/esgf-user-support/faq.html",
+      "type": "维护者文档",
+      "verifiedFinding": "可检查节点状态与副本，并按产品和节点提交诊断；旧FAQ不等于当前所有节点都支持同一认证方式。",
+      "verification": "本轮核读原始文档；未执行提供方下载"
+    },
+    {
+      "id": "S13",
+      "title": "earthaccess",
+      "url": "https://github.com/nsidc/earthaccess",
+      "type": "维护者仓库",
+      "verifiedFinding": "NASA数据检索、下载与流式读取的可复用Python库；仓库已迁移到earthaccess-dev组织，旧链接可重定向。",
+      "verification": "本轮核读原始文档；未执行提供方下载"
+    },
+    {
+      "id": "S14",
+      "title": "esgpull",
+      "url": "https://github.com/ESGF/esgf-download",
+      "type": "维护者仓库",
+      "verifiedFinding": "ESGF检索、查询与文件下载管理工具，可作为CMIP类技能候选。",
+      "verification": "本轮核读原始文档；未执行提供方下载"
+    },
+    {
+      "id": "S15",
+      "title": "WorldPop data acquisition tools",
+      "url": "https://github.com/wpgp/get_wp_global",
+      "type": "维护者仓库",
+      "verifiedFinding": "按数据版本、年份、国家和图层定位人口栅格并作人口数量汇总；需要核对选定数据集许可。",
+      "verification": "本轮核读原始文档；未执行提供方下载"
+    },
+    {
+      "id": "S16",
+      "title": "CLCD original paper",
+      "url": "https://essd.copernicus.org/articles/13/3907/2021/",
+      "type": "作者论文",
+      "verifiedFinding": "原始论文描述1990—2019年30米中国年度土地覆盖；不能用转载或售卖帖证明已有2025版。",
+      "verification": "本轮核读原始文档；未执行提供方下载"
+    },
+    {
+      "id": "S17",
+      "title": "PDAL documentation",
+      "url": "https://pdal.io/en/stable/",
+      "type": "维护者文档",
+      "verifiedFinding": "提供点云读取、查询、转换和过滤，可作为可选点云技能处理引擎。",
+      "verification": "本轮核读原始文档；未执行提供方下载"
+    }
+  ],
+  "searchInventory": [
+    {
+      "key": "cn_weather",
+      "query": "气象家园 forum 6tu 小木虫 求助 ERA5 中国气象数据网 逐小时 降水 数据 批量下载 下载失败 NetCDF",
+      "objective": "查找中文用户的原始论坛求助、故障帖和明确提问，优先气象家园、小木虫、GitHub Issues；需要日期、原帖URL和实际需求，排除AI问答正文、广告和资源合集。",
+      "requested": 12,
+      "results": [
+        {
+          "title": "去ECMWF 欧洲中心数据批量下载多个单文件,用python循环批量下载月平均的方法.-数据资料-气象家园_气象人自己的家园",
+          "url": "http://bbs.06climate.com/forum.php?mod=viewthread&tid=89682",
+          "published": "2019-03-22T00:00:00.000Z"
+        },
+        {
+          "title": "ERA5 hourly data on single levels from 1940 to present",
+          "url": "https://cds.climate.copernicus.eu/datasets/reanalysis-era5-single-levels?tab=overview",
+          "published": "N/A"
+        },
+        {
+          "title": "【教程来了】作业里ERA5 降水数据，你们下好了么？ - 和鲸社区",
+          "url": "https://www.heywhale.com/home/competition/forum/5f2a6d71b4ac2e002c164549",
+          "published": "N/A"
+        },
+        {
+          "title": "驱动WRF的ERA5数据下载-数据资料-气象家园_气象人自己的家园",
+          "url": "http://bbs.06climate.com/forum.php?mod=viewthread&tid=111784",
+          "published": "2026-06-11T00:00:00.000Z"
+        },
+        {
+          "title": "ERA-5多层次/陆面/单层次月/日（日资料持续更新）数据+GLDAS陆面数据分享-数据资料-气象家园_气象人自己的家园",
+          "url": "http://bbs.06climate.com/forum.php?mod=viewthread&tid=97787",
+          "published": "2020-11-04T00:00:00.000Z"
+        },
+        {
+          "title": "环境气象数据服务平台",
+          "url": "http://eia-data.com/",
+          "published": "2025-05-23T03:31:47.000Z"
+        },
+        {
+          "title": "era5批量下载 - CSDN文库",
+          "url": "https://wenku.csdn.net/answer/1iayzsrwcs",
+          "published": "2025-06-01T03:26:26.000Z"
+        },
+        {
+          "title": "全球地面气象观测历史数据集(下列检索条件都需填写)",
+          "url": "https://k.data.cma.cn/mekb/?datacode=A.0020.0002.S001&r=dataService%2Fcdcindex",
+          "published": "N/A"
+        },
+        {
+          "title": "ERA5逐时、逐日、逐月气象数据的手动下载与Python代码批量下载方法-阿里云开发者社区",
+          "url": "https://developer.aliyun.com/article/1405237",
+          "published": "N/A"
+        },
+        {
+          "title": "ERA5‑Land逐小时降水数据下载+QGIS后台QgsTask批量处理完整指南（水文洪涝仿真，河南省案例） - 技术栈",
+          "url": "https://jishuzhan.net/article/2093719706524635137",
+          "published": "2026-08-29T00:00:00.000Z"
+        },
+        {
+          "title": "ERA5-Land高分辨率再分析数据全变量下载完毕(~16TB)，内附CMIP6共享互助群！-腾讯云开发者社区-腾讯云",
+          "url": "https://cloud.tencent.cn/developer/article/1829808",
+          "published": "N/A"
+        },
+        {
+          "title": "ERA5逐时、逐日、逐月气象数据的手动下载与Python代码批量 ...",
+          "url": "https://blog.csdn.net/zhebushibiaoshifu/article/details/134937604",
+          "published": "N/A"
+        }
+      ]
+    },
+    {
+      "key": "cn_remote",
+      "query": "遥感论坛 地信网 小木虫 求助 高分影像 GF2 资源卫星 土地利用 数据 指定年份 批量下载 云量 订单 FTP",
+      "objective": "中文原始需求优先，采集数据类型、年份、区域、精度及下载或获取障碍；排除商业下载器推广和只给链接的教程。",
+      "requested": 12,
+      "results": [
+        {
+          "title": "请问GF和SPOT卫星数据有免费下载的地方吗？ - 地学 - 3S技术 -  小木虫论坛-学术科研互动平台",
+          "url": "https://muchong.com/t-13708167-1",
+          "published": "N/A"
+        },
+        {
+          "title": "高分、环境等国产遥感卫星影像的获取方法-阿里云开发者社区",
+          "url": "https://developer.aliyun.com/article/1150034",
+          "published": "N/A"
+        },
+        {
+          "title": "未来天玑|高分二号卫星数据服务与应用",
+          "url": "https://futurephecda.com/news/8640",
+          "published": "2025-03-07T00:00:00.000Z"
+        },
+        {
+          "title": "哨兵系列、Landsat7/Landsat8、Modis、土地利用数据急速下载—ARCGIS—地信网论坛",
+          "url": "http://bbs.3s001.com/thread-354582-3-1.html",
+          "published": "2021-12-04T00:00:00.000Z"
+        },
+        {
+          "title": "地理空间数据云下载遥感影像-腾讯云开发者社区-腾讯云",
+          "url": "https://cloud.tencent.com.cn/developer/article/2186558",
+          "published": "2022-12-05T00:00:00.000Z"
+        },
+        {
+          "title": "高分卫星、环境卫星、资源卫星等遥感影像下载-腾讯云开发者社区-腾讯云",
+          "url": "https://cloud.tencent.com/developer/article/2514795",
+          "published": "N/A"
+        },
+        {
+          "title": "高分GF与环境HJ系列国产卫星遥感影像免费批量下载方法-腾讯云开发者社区-腾讯云",
+          "url": "https://cloud.tencent.com/developer/article/1851225",
+          "published": "2021-07-22T00:00:00.000Z"
+        },
+        {
+          "title": "地理空间数据云",
+          "url": "https://gscloud.cn/sources/details/59977d8cbda548aaa5e7aae283149943?pid=424",
+          "published": "N/A"
+        },
+        {
+          "title": "[RS] 地理空间数据云 使用ftp批量下载影像（以批量下载Landsat8数据为例）_地理空间数据云批量下载-CSDN博客",
+          "url": "https://geodoer.blog.csdn.net/article/details/78938946",
+          "published": "N/A"
+        },
+        {
+          "title": "如何下载到有红外光数据的影像？—遥感系统(RS)—地信网论坛",
+          "url": "http://bbs.3s001.com/thread-336979-1-1.html",
+          "published": "2020-09-01T00:00:00.000Z"
+        },
+        {
+          "title": "遥感数据获取-探险家的数据窝 - 深度学习数据集平台",
+          "url": "https://www.dilitanxianjia.com/15334-2/",
+          "published": "2024-04-21T12:03:40.000Z"
+        },
+        {
+          "title": "高分GF、环境HJ遥感影像的下载方法_疯狂学习GIS的技术博客_51CTO博客",
+          "url": "https://blog.51cto.com/fkxxgis/7816684",
+          "published": "2023-10-11T00:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "key": "cn_vector",
+      "query": "地信网 麻辣GIS 论坛 求助 行政区划 历史边界 道路 POI 建筑轮廓 数据下载 坐标系 高德 百度",
+      "objective": "优先论坛用户原始提问和开源项目 Issues，要求具体地区或数据字段、目的与障碍；避免把平台渲染地图自动视为可导出原始矢量。",
+      "requested": 12,
+      "results": [
+        {
+          "title": "全国省市、区县、乡镇街道四级行政区划矢量边界数据下载，有开源长期维护可在线预览—会员交流室—地信网论坛",
+          "url": "http://bbs.3s001.com/thread-344212-1-1.html",
+          "published": "2021-02-23T00:00:00.000Z"
+        },
+        {
+          "title": "「GIS数据」行政边界矢量数据的获取——以山西省为例 | 麻辣GIS",
+          "url": "https://malagis.com/vector-data-acquisition-use-shanxi-province-as-example.html",
+          "published": "2019-06-10T00:00:00.000Z"
+        },
+        {
+          "title": "省市县行政区划边界下载—地理信息系统(GIS)—地信网论坛",
+          "url": "http://bbs.3s001.com/thread-317731-1-1.html",
+          "published": "2020-01-17T00:00:00.000Z"
+        },
+        {
+          "title": "数据下载-taptap开户历史地理研究中心 - taptap开户",
+          "url": "https://m.agreeh.com/CHGIS/sjxz.htm",
+          "published": "N/A"
+        },
+        {
+          "title": "求助大神。。云南省大理市洱海周边道路注记和新政区划的SHP图层数据，80坐标系的—地理信息系统(GIS)—地信网论坛",
+          "url": "http://bbs.3s001.com/thread-277413-1-1.html",
+          "published": "2018-08-28T00:00:00.000Z"
+        },
+        {
+          "title": "【有偿求助】！！！:全国乡镇、行政村边界矢量地图—ARCGIS—地信网论坛",
+          "url": "http://bbs.3s001.com/thread-344918-6-1.html",
+          "published": "2022-11-17T00:00:00.000Z"
+        },
+        {
+          "title": "全国行政区划矢量、2012-2022年各城市POI、道路、乡镇矢量地图、水系（shp格式）数据 - 经管之家",
+          "url": "https://bbs.pinggu.org/thread-11561284-1-1.html",
+          "published": "N/A"
+        },
+        {
+          "title": "2020年全国省市县行政区划边界矢量格式—地理信息系统(GIS)—地信网论坛",
+          "url": "http://bbs.3s001.com/thread-345428-12-1.html",
+          "published": "2021-03-31T00:00:00.000Z"
+        },
+        {
+          "title": "抓取省市县(区)三级行政区划境界线(geojson)说明及代码 - 代码先锋网",
+          "url": "https://www.codeleading.com/article/4102840229/",
+          "published": "N/A"
+        },
+        {
+          "title": "百度高德地图行政区域边界GeoJSON数据获取并绘制行政区域 - zhoulujun - 博客园",
+          "url": "https://www.cnblogs.com/zhoulujun/p/17301180.html",
+          "published": "2023-04-09T00:00:00.000Z"
+        },
+        {
+          "title": "POI脚本升级+行政区边界获取脚本-腾讯云开发者社区-腾讯云",
+          "url": "https://cloud.tencent.cn/developer/article/1931103",
+          "published": "2022-01-10T00:00:00.000Z"
+        },
+        {
+          "title": "2020-2022年最全各省、市矢量和栅格数据（土地利用、植被覆盖、土壤类型、人口密度、NPP、气象水文数据、路网、省市县乡镇区划边界、poi数据、河流水系、建筑轮廓）",
+          "url": "https://blog.csdn.net/m0_67175039/article/details/123086148",
+          "published": "N/A"
+        }
+      ]
+    },
+    {
+      "key": "climate",
+      "query": "ECMWF forum users cannot download ERA5 hourly weather data CDS API request too large queue timeout split year month variables area netcdf grib",
+      "objective": "Only first-hand ECMWF forum, GitHub issues or GIS Stack Exchange questions. Capture concrete dataset, time range, error and download workflow. Exclude tutorials.",
+      "requested": 12,
+      "results": [
+        {
+          "title": "Limitation change on netCDF ERA5 requests - ECMWF Forum",
+          "url": "https://forum.ecmwf.int/t/limitation-change-on-netcdf-era5-requests/12477",
+          "published": "N/A"
+        },
+        {
+          "title": "A new CDS soon to be launched - expect some disruptions",
+          "url": "https://forum.ecmwf.int/t/a-new-cds-soon-to-be-launched-expect-some-disruptions/1607?page=3",
+          "published": "N/A"
+        },
+        {
+          "title": "Request size has changed for netcdf files - C3S - ECMWF Forum",
+          "url": "https://forum.ecmwf.int/t/request-size-has-changed-for-netcdf-files/12282",
+          "published": "N/A"
+        },
+        {
+          "title": "Cdsapi era5 download error - API - Forum",
+          "url": "https://forum.ecmwf.int/t/cdsapi-era5-download-error/7193",
+          "published": "2024-10-24T11:24:46.000Z"
+        },
+        {
+          "title": "Request too large, item limit for ERA5-Land data",
+          "url": "https://forum.ecmwf.int/t/request-too-large-item-limit-for-era5-land-data/1488",
+          "published": "N/A"
+        },
+        {
+          "title": "Time to get request is becoming very high - C3S - Access and Login - Forum",
+          "url": "https://forum.ecmwf.int/t/time-to-get-request-is-becoming-very-high/1430",
+          "published": "2022-05-01T17:16:45.000Z"
+        },
+        {
+          "title": "Severe and persistent queue delays for ERA5 hourly data ...",
+          "url": "https://forum.ecmwf.int/t/severe-and-persistent-queue-delays-for-era5-hourly-data-pressure-levels-via-cds-api/14836",
+          "published": "N/A"
+        },
+        {
+          "title": "How to Download Faster - API - Forum",
+          "url": "https://forum.ecmwf.int/t/how-to-download-faster/1391",
+          "published": "2019-06-16T00:00:00.000Z"
+        },
+        {
+          "title": "Unable to download ERA5 data due to time-out - ECMWF Forum",
+          "url": "https://forum.ecmwf.int/t/unable-to-download-era5-data-due-to-time-out/2725",
+          "published": "2024-05-13T07:19:42.000Z"
+        },
+        {
+          "title": "FIXED: Major technical issue on the Climate Data Store - C3S - Announcements - Forum",
+          "url": "https://forum.ecmwf.int/t/fixed-major-technical-issue-on-the-climate-data-store/2906",
+          "published": "2024-06-03T08:14:59.000Z"
+        },
+        {
+          "title": "Very slow ERA5 download - API - Forum",
+          "url": "https://forum.ecmwf.int/t/very-slow-era5-download/10610",
+          "published": "2025-01-08T09:51:27.000Z"
+        },
+        {
+          "title": "ERA5-CDSAPI-Extremely Slow download - C3S - Datasets and Usage - Forum",
+          "url": "https://forum.ecmwf.int/t/era5-cdsapi-extremely-slow-download/6981",
+          "published": "2024-10-16T21:22:51.000Z"
+        }
+      ]
+    },
+    {
+      "key": "earthdata",
+      "query": "NASA Earthdata forum Earthdata Forum MODIS GPM SMAP data download authentication redirects 401 subset region NetCDF HDF batch user questions",
+      "objective": "Find original NASA Earthdata forum questions, issue reports or practitioner questions about products, variables, AOI and access failure. Prefer original date and exact URLs.",
+      "requested": 12,
+      "results": [
+        {
+          "title": "401 Error when Passing Credentials Resolved - Earthdata Forum",
+          "url": "https://forum.earthdata.nasa.gov/viewtopic.php?t=3604",
+          "published": "N/A"
+        },
+        {
+          "title": "LAADS DAAC HTTP Error 401: Unauthorized - Earthdata Forum",
+          "url": "https://forum.earthdata.nasa.gov/viewtopic.php?t=5879",
+          "published": "N/A"
+        },
+        {
+          "title": "Is there a way to download GPM_3IMERGHH faster? - Earthdata Forum",
+          "url": "https://forum.earthdata.nasa.gov/viewtopic.php?t=7014",
+          "published": "N/A"
+        },
+        {
+          "title": "Access Issues with MODIS Data Post-Migration to Earthdata Cloud - Earthdata Forum",
+          "url": "https://forum.earthdata.nasa.gov/viewtopic.php?t=7085",
+          "published": "N/A"
+        },
+        {
+          "title": "LAADS DAAC | NASA",
+          "url": "https://ladsweb.modaps.eosdis.nasa.gov/learn/how-to-use-laads-daac-post-processing-tools/",
+          "published": "N/A"
+        },
+        {
+          "title": "Can't download GPM IMERG files in Windows 11 using wget - Earthdata Forum",
+          "url": "https://forum.earthdata.nasa.gov/viewtopic.php?t=3938",
+          "published": "N/A"
+        },
+        {
+          "title": "Unable to batch download with wget or curl - Earthdata Forum",
+          "url": "https://forum.earthdata.nasa.gov/viewtopic.php?t=3502",
+          "published": "N/A"
+        },
+        {
+          "title": "Authentication failure - using wget via HPC based Linux - Earthdata Forum",
+          "url": "https://forum.earthdata.nasa.gov/viewtopic.php?t=4151",
+          "published": "N/A"
+        },
+        {
+          "title": "Python script DAACDataDownload authentication isse - Earthdata Forum",
+          "url": "https://forum.earthdata.nasa.gov/viewtopic.php?t=4024",
+          "published": "N/A"
+        },
+        {
+          "title": "LAADS DAAC | NASA",
+          "url": "https://ladsweb.modaps.eosdis.nasa.gov/learn/using-harmony-tools-in-earthdata-search/",
+          "published": "N/A"
+        },
+        {
+          "title": "Downloading IMERG late as netcdf - Earthdata Forum",
+          "url": "https://forum.earthdata.nasa.gov/viewtopic.php?t=2782",
+          "published": "N/A"
+        },
+        {
+          "title": "Earthdata download error - Earthdata Forum",
+          "url": "https://forum.earthdata.nasa.gov/viewtopic.php?t=6769",
+          "published": "N/A"
+        }
+      ]
+    },
+    {
+      "key": "ocean",
+      "query": "Copernicus Marine user forum issues download ocean data subset depth time variables bbox netcdf marine toolbox download too large slow",
+      "objective": "Find original discussion or GitHub issue with marine data extraction problems. Need actual variable, depth, time or spatial selection needs. Exclude marketing and general tutorials.",
+      "requested": 12,
+      "results": [
+        {
+          "title": "Improve download performance of large time extents for small time chunks · Issue #267 · mercator-ocean/copernicus-marine-toolbox",
+          "url": "https://github.com/mercator-ocean/copernicus-marine-toolbox/issues/267",
+          "published": "2025-01-13T00:00:00.000Z"
+        },
+        {
+          "title": "Issues downloading data using CopernicusMarine R ...",
+          "url": "https://gis.stackexchange.com/questions/480234/issues-downloading-data-using-copernicusmarine-r-package",
+          "published": "N/A"
+        },
+        {
+          "title": "Copernicus Marine Toolbox API - Subset | Copernicus Marine Help Center",
+          "url": "https://help.marine.copernicus.eu/en/articles/8283072-copernicus-marine-toolbox-api-subset",
+          "published": "N/A"
+        },
+        {
+          "title": "Copernicus Marine Toolbox CLI - Subset | Copernicus Marine Help Center",
+          "url": "https://help.marine.copernicus.eu/en/articles/7972861-copernicus-marine-toolbox-cli-subset",
+          "published": "N/A"
+        },
+        {
+          "title": "N/A",
+          "url": "https://toolbox-docs.marine.copernicus.eu/en/stable/usage/subset_using_polygons.html",
+          "published": "N/A"
+        },
+        {
+          "title": "Download Copernicus Marine data inside a polygon in Python | Copernicus Marine Help Center",
+          "url": "https://help.marine.copernicus.eu/en/articles/17225562-download-copernicus-marine-data-inside-a-polygon-in-python",
+          "published": "N/A"
+        },
+        {
+          "title": "N/A",
+          "url": "https://toolbox-docs.marine.copernicus.eu/en/stable/_sources/usage/subset-usage.rst.txt",
+          "published": "N/A"
+        },
+        {
+          "title": "How to download Copernicus Marine products? | Copernicus Marine Help Center",
+          "url": "https://help.marine.copernicus.eu/en/articles/4469993-how-to-download-copernicus-marine-products",
+          "published": "2026-06-11T11:33:30.000Z"
+        },
+        {
+          "title": "N/A",
+          "url": "https://toolbox-docs.marine.copernicus.eu/en/v2.5.0b0/_sources/usage/subset-split-on-usage.rst.txt",
+          "published": "N/A"
+        },
+        {
+          "title": "How to download data for specific depth levels in Python? | Copernicus Marine Help Center",
+          "url": "https://help.marine.copernicus.eu/en/articles/9521812-how-to-download-data-for-specific-depth-levels-in-python",
+          "published": "N/A"
+        },
+        {
+          "title": "Best way to handle subset downloads around the dateline?",
+          "url": "https://github.com/pepijn-devries/CopernicusMarine/issues/141",
+          "published": "2026-03-04T00:25:31.000Z"
+        },
+        {
+          "title": "N/A",
+          "url": "https://toolbox-docs.marine.copernicus.eu/en/v2.5.0b1/_sources/usage/subset-usage.rst.txt",
+          "published": "N/A"
+        }
+      ]
+    },
+    {
+      "key": "landcover",
+      "query": "GIS Stack Exchange land cover ESA WorldCover Dynamic World annual land use raster download entire country year compare classification resolution users questions",
+      "objective": "Original questions about locating and downloading land-cover data for a specific area/year, preserving classes and interpreting differences. Do not treat display imagery as scientific classification.",
+      "requested": 12,
+      "results": [
+        {
+          "title": "DATA | WORLDCOVER",
+          "url": "https://esa-worldcover.org/en/data-access",
+          "published": "N/A"
+        },
+        {
+          "title": "ESA-WorldCover/esa-worldcover-datasets",
+          "url": "https://github.com/ESA-WorldCover/esa-worldcover-datasets",
+          "published": "N/A"
+        },
+        {
+          "title": "ESA WorldCover 10m v200  |  Earth Engine Data Catalog  |  Google for Developers",
+          "url": "https://developers.google.com/earth-engine/datasets/catalog/ESA_WorldCover_v200",
+          "published": "N/A"
+        },
+        {
+          "title": "Global 10 m Land Use Land Cover Datasets: A Comparison of Dynamic World, World Cover and Esri Land Cover",
+          "url": "https://www.mdpi.com/2072-4292/14/16/4101",
+          "published": "2022-08-21T12:49:49.000Z"
+        },
+        {
+          "title": "Dynamic World V1 | Earth Engine Data Catalog",
+          "url": "https://developers.google.com/earth-engine/datasets/catalog/GOOGLE_DYNAMICWORLD_V1",
+          "published": "N/A"
+        },
+        {
+          "title": "Earth Engine Data Catalog - Google for Developers",
+          "url": "https://developers.google.com/earth-engine/datasets/catalog",
+          "published": "N/A"
+        },
+        {
+          "title": "Land Cover Products Explained | Spatial Workflow",
+          "url": "https://www.spatialworkflow.io/land-cover-products-explained/",
+          "published": "N/A"
+        },
+        {
+          "title": "Dynamic World - 10m global land cover dataset in Google ...",
+          "url": "https://dynamicworld.app/",
+          "published": "N/A"
+        },
+        {
+          "title": "WorldCover | WORLDCOVER",
+          "url": "https://esa-worldcover.org/en",
+          "published": "N/A"
+        },
+        {
+          "title": "How to download a land cover image using geemap?",
+          "url": "https://stackoverflow.com/questions/75489393/how-to-download-a-land-cover-image-using-geemap",
+          "published": "2023-02-17T21:30:27.000Z"
+        },
+        {
+          "title": "Download ESA WorldCover land cover data — get_esa_10m • paisaje",
+          "url": "https://manuelspinola.github.io/paisaje/reference/get_esa_10m.html",
+          "published": "N/A"
+        },
+        {
+          "title": "R/get_esa_10m.R",
+          "url": "https://github.com/ManuelSpinola/paisaje/blob/main/R/get_esa_10m.R",
+          "published": "N/A"
+        }
+      ]
+    },
+    {
+      "key": "regional",
+      "query": "QGIS forum IGN France LiDAR download tiles data users help Brazil INPE MapBiomas India Bhuvan satellite download Australia ELVIS elevation data questions",
+      "objective": "Find original practitioner questions outside US-centric imagery, in regional forums and project issues. Prefer clear data acquisition need, language, geography, URL and date; exclude general dataset announcements.",
+      "requested": 12,
+      "results": [
+        {
+          "title": "Forum GeoRezo / Téléchargement automatique dalles LiDAR IGN",
+          "url": "https://georezo.net/forum/viewtopic.php?pid=376763",
+          "published": "N/A"
+        },
+        {
+          "title": "Forum GeoRezo / QGIS: Zonage LIDAR HD",
+          "url": "https://georezo.net/forum/viewtopic.php?pid=367589",
+          "published": "2024-05-20T00:00:00.000Z"
+        },
+        {
+          "title": "Chargement des données Lidar HD IGN dans QGis | Blog SIG & Territoires",
+          "url": "https://www.sigterritoires.fr/index.php/chargement-des-donnees-lidar-hd-ign-dans-qgis/",
+          "published": "2023-07-20T07:00:00.000Z"
+        },
+        {
+          "title": "Batch download tiles – sigeo.cerege.fr",
+          "url": "https://sigeo.cerege.fr/?p=804",
+          "published": "2023-09-26T13:46:39.000Z"
+        },
+        {
+          "title": "Newton787/osgeo_qgis_plugin_mapbiomas_fogo",
+          "url": "https://github.com/Newton787/osgeo_qgis_plugin_mapbiomas_fogo",
+          "published": "N/A"
+        },
+        {
+          "title": "Forum GeoRezo / [Cartes.gouv.fr] Telecharger les dalles LIDAR (.laz)",
+          "url": "https://georezo.net/forum/viewtopic.php?pid=377978",
+          "published": "2026-07-28T00:00:00.000Z"
+        },
+        {
+          "title": "sameeeyy/PointCloudFR",
+          "url": "https://github.com/sameeeyy/PointCloudFR",
+          "published": "2025-01-10T00:00:00.000Z"
+        },
+        {
+          "title": "PointCloudFR 2.3.1 — QGIS Python Plugins Repository",
+          "url": "https://plugins.qgis.org/plugins/point_cloud_fr/version/2.3.1/",
+          "published": "N/A"
+        },
+        {
+          "title": "[Qgis-user] Public IGN / France services NOT epsg:3857 ?",
+          "url": "https://lists.osgeo.org/pipermail/qgis-user/2024-October/054919.html",
+          "published": "N/A"
+        },
+        {
+          "title": "bruno-portfolio/agrobr-qgis",
+          "url": "https://github.com/bruno-portfolio/agrobr-qgis",
+          "published": "2026-03-28T14:27:37.000Z"
+        },
+        {
+          "title": "Loading IGN France HD Lidar data | Blog GIS & Territories",
+          "url": "https://www.sigterritoires.fr/index.php/en/loading-ign-france-hd-lidar-data/",
+          "published": "2023-07-20T07:00:00.000Z"
+        },
+        {
+          "title": "Land, Vegetation, and Ice Sensor (LVIS)",
+          "url": "http://lvis.gsfc.nasa.gov/Data/DataUse.html",
+          "published": "N/A"
+        }
+      ]
+    },
+    {
+      "key": "cn_climate2",
+      "query": "小木虫 论坛 求助 中国 逐日 气象 站点 数据 下载 降水 温度 ERA5 数据",
+      "objective": "只找论坛原始求助和明确评论需求，优先 emuch.net 或 muchong.com；不收教程和AI生成问答。需要数据范围、年份、变量、站点和获取障碍。",
+      "requested": 10,
+      "results": [
+        {
+          "title": "求助，帮忙下点气象数据。 - 地学 - 大气科学 -  小木虫论坛-学术科研互动平台",
+          "url": "https://muchong.com/t-13033214-1",
+          "published": "N/A"
+        },
+        {
+          "title": "中国地面气候资料日值数据获取方式",
+          "url": "https://blog.csdn.net/envbox/article/details/138685186",
+          "published": "2024-05-10T14:54:23.000Z"
+        },
+        {
+          "title": "中国地面基本气象逐小时数据获取方式",
+          "url": "https://blog.csdn.net/envbox/article/details/138682393",
+          "published": "2024-05-10T13:22:34.000Z"
+        },
+        {
+          "title": "【公益项目】ERA5资料国内镜像-数据资料-气象家园_气象人自己的家园",
+          "url": "https://bbs.06climate.com/forum.php?mod=viewthread&tid=98415",
+          "published": "N/A"
+        },
+        {
+          "title": "ERA-5多层次/陆面/单层次月/日（日资料持续更新）数据+GLDAS陆面数据分享-数据资料-气象家园_气象人自己的家园",
+          "url": "http://bbs.06climate.com/forum.php?extra=&mod=viewthread&page=1&tid=97787",
+          "published": "2020-11-04T00:00:00.000Z"
+        },
+        {
+          "title": "驱动WRF的ERA5数据下载-数据资料-气象家园_气象人自己的家园",
+          "url": "http://bbs.06climate.com/forum.php?mod=viewthread&tid=111784",
+          "published": "2026-06-11T00:00:00.000Z"
+        },
+        {
+          "title": "ERA5逐时、逐日、逐月气象数据的手动下载与Python代码批量下载方法-阿里云开发者社区",
+          "url": "https://developer.aliyun.com/article/1405237",
+          "published": "N/A"
+        },
+        {
+          "title": "ERA5全球气象每小时、每日与每月数据：手动下载与Python批量下载-腾讯云开发者社区-腾讯云",
+          "url": "https://cloud.tencent.com/developer/article/2374699",
+          "published": "2023-12-26T00:00:00.000Z"
+        },
+        {
+          "title": "使用era5cli下载ERA5数据 - 风中飞舞",
+          "url": "https://blog.perillaroc.wang/post/2021/06/2021-06-22-download-era5-using-era5cli/",
+          "published": "2021-06-22T14:45:00.000Z"
+        },
+        {
+          "title": "【数据下载】ERA5 各高度层月平均数据下载",
+          "url": "https://blog.csdn.net/weixin_46921265/article/details/138275289",
+          "published": "2024-04-30T02:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "key": "cn_land2",
+      "query": "地信网 论坛 求助 土地利用 数据 2000 2010 2020 遥感 分辨率 下载",
+      "objective": "只找用户真实求助或原始故障帖子；记录希望获得的年份、分辨率、分类、区域和格式，不把广告或售卖数据统计当市场数据。",
+      "requested": 10,
+      "results": [
+        {
+          "title": "中国土地利用现状遥感监测数据1980-2020年 1km—地理信息系统(GIS)—地信网论坛",
+          "url": "http://bbs.3s001.com/thread-370519-1-1.html",
+          "published": "N/A"
+        },
+        {
+          "title": "30m土地利用数据—地理信息系统(GIS)—地信网论坛",
+          "url": "http://bbs.3s001.com/thread-363536-1-1.html",
+          "published": "2022-09-09T00:00:00.000Z"
+        },
+        {
+          "title": "中国土地利用遥感监测数据1980-2020精度1KM栅格网格数据：耕地林地草地水域居民地等 - 经管之家",
+          "url": "https://bbs.pinggu.org/thread-10882524-1-1.html",
+          "published": "2022-01-16T00:00:00.000Z"
+        },
+        {
+          "title": "全国1990-2020共七期土地利用1km栅格数据 - 经管之家",
+          "url": "https://bbs.pinggu.org/thread-10934674-1-1.html",
+          "published": "2022-03-08T00:00:00.000Z"
+        },
+        {
+          "title": "全国30米高精度土地利用现状土地利用类型遥感监测数据—地理信息系统(GIS)—地信网论坛",
+          "url": "http://bbs.3s001.com/thread-341827-6-1.html",
+          "published": "2021-01-25T00:00:00.000Z"
+        },
+        {
+          "title": "那位大神给一张30米的全国土地利用现状图—ARCGIS—地信网论坛",
+          "url": "http://bbs.3s001.com/thread-358323-1-1.html",
+          "published": "2022-04-13T00:00:00.000Z"
+        },
+        {
+          "title": "30米土地利用数据(1980-2018)二级分类—ARCGIS—地信网论坛",
+          "url": "http://bbs.3s001.com/thread-334738-76-1.html",
+          "published": "2022-05-23T00:00:00.000Z"
+        },
+        {
+          "title": "全国30米分辨率土地利用遥感监测空间分布数据（1985-2022逐年） - 经管之家",
+          "url": "https://bbs.pinggu.org/thread-11674376-1-1.html",
+          "published": "2023-12-12T00:00:00.000Z"
+        },
+        {
+          "title": "哨兵系列、Landsat7/Landsat8、Modis、土地利用数据急速下载—ARCGIS—地信网论坛",
+          "url": "http://bbs.3s001.com/thread-354582-9-1.html",
+          "published": "N/A"
+        },
+        {
+          "title": "中国土地利用遥感监测数据1000米分辨率-云社区-华为云",
+          "url": "https://bbs.huaweicloud.com/blogs/410639",
+          "published": "N/A"
+        }
+      ]
+    },
+    {
+      "key": "cn_meteo_forum",
+      "query": "气象家园 求助 数据下载 ERA5 GFS FNL WRF 历史 气象 数据 下载 不到",
+      "objective": "优先气象家园等中文气象论坛原帖，识别天气模拟前处理、历史数据目录和批量下载问题，排除教程与问答机器生成内容。",
+      "requested": 10,
+      "results": [
+        {
+          "title": "ERA5资料下载问题-编程作图-气象家园_气象人自己的家园",
+          "url": "http://bbs.06climate.com/forum.php?mod=viewthread&tid=90176",
+          "published": "N/A"
+        },
+        {
+          "title": "驱动WRF的ERA5数据下载-数据资料-气象家园_气象人自己的家园",
+          "url": "http://bbs.06climate.com/forum.php?mod=viewthread&tid=111784",
+          "published": "2026-06-11T00:00:00.000Z"
+        },
+        {
+          "title": "ERA5驱动WRF问题-专业气象研究-气象家园_气象人自己的家园",
+          "url": "http://bbs.06climate.com/forum.php?mod=viewthread&tid=108421",
+          "published": "2023-07-14T00:00:00.000Z"
+        },
+        {
+          "title": "地球系统数值模拟装置 科学数据共享平台",
+          "url": "https://earthlab.iap.ac.cn/upload/editor/file/20240702/147488914.pdf",
+          "published": "N/A"
+        },
+        {
+          "title": "baogang-luo/Meteorological-Data-Download-Guide",
+          "url": "https://github.com/baogang-luo/Meteorological-Data-Download-Guide",
+          "published": "N/A"
+        },
+        {
+          "title": "【复制即用】下载ERA-5数据的python脚本分享-腾讯云开发者社区-腾讯云",
+          "url": "https://cloud.tencent.com/developer/article/2208901",
+          "published": "2023-01-12T00:00:00.000Z"
+        },
+        {
+          "title": "yzhang318/meteorological-data-download-guide",
+          "url": "https://github.com/yzhang318/meteorological-data-download-guide",
+          "published": "N/A"
+        },
+        {
+          "title": "ERA-5多层次/陆面/单层次月/日（日资料持续更新）数据+GLDAS陆面数据分享-数据资料-气象家园_气象人自己的家园",
+          "url": "http://bbs.06climate.com/forum.php?mod=viewthread&tid=97787",
+          "published": "2020-11-04T00:00:00.000Z"
+        },
+        {
+          "title": "WRF | ERA5驱动所需要素下载以及注意事项-腾讯云开发者社区-腾讯云",
+          "url": "https://cloud.tencent.cn/developer/article/2461649?from=15425&frompage=seopage",
+          "published": "N/A"
+        },
+        {
+          "title": "jimeking88/Meteorological-Data-Download-Guide",
+          "url": "https://github.com/jimeking88/Meteorological-Data-Download-Guide",
+          "published": "N/A"
+        }
+      ]
+    },
+    {
+      "key": "cn_github",
+      "query": "GitHub issues cnmaps 中国 地图 边界 数据 下载 错误 数据缺失 POI 行政区划 日期",
+      "objective": "优先原始 GitHub issue 问题报告或中文用户讨论；采集下载、范围、行政区时间版本、坐标和字段问题，不收普通README。",
+      "requested": 10,
+      "results": [
+        {
+          "title": "高德地图部分区县出现类似拓扑错误的问题 · Issue #17 · cnmetlab/cnmaps",
+          "url": "https://github.com/cnmetlab/cnmaps/issues/17",
+          "published": "2022-04-05T13:20:51.000Z"
+        },
+        {
+          "title": "cnmetlab/cnmaps-data",
+          "url": "https://github.com/cnmetlab/cnmaps-data",
+          "published": "N/A"
+        },
+        {
+          "title": "裁剪地图无法显示市级边界",
+          "url": "https://github.com/cnmetlab/cnmaps/issues/114",
+          "published": "N/A"
+        },
+        {
+          "title": "对 shapely >= 2.0.* 版本的支持",
+          "url": "https://github.com/cnmetlab/cnmaps/issues/106",
+          "published": "N/A"
+        },
+        {
+          "title": "数据源说明 ",
+          "url": "https://cnmaps.readthedocs.io/zh-cn/latest/content/data-sources.html",
+          "published": "N/A"
+        },
+        {
+          "title": "版本日志 — cnmaps 2.1.0 文档",
+          "url": "https://cnmaps.readthedocs.io/zh-cn/stable/content/changelog.html",
+          "published": "N/A"
+        },
+        {
+          "title": "docs/source/content/usage.rst",
+          "url": "https://github.com/cnmetlab/cnmaps/blob/main/docs/source/content/usage.rst",
+          "published": "N/A"
+        },
+        {
+          "title": "版本日志 ",
+          "url": "https://cnmaps.readthedocs.io/zh-cn/latest/content/changelog.html",
+          "published": "N/A"
+        },
+        {
+          "title": "恭喜解决兼容性问题！！！ · Issue #159 · cnmetlab/cnmaps",
+          "url": "https://github.com/cnmetlab/cnmaps/issues/159",
+          "published": "2026-04-01T04:28:30.000Z"
+        },
+        {
+          "title": "centurylee/cnmaps",
+          "url": "https://github.com/centurylee/cnmaps",
+          "published": "N/A"
+        }
+      ]
+    },
+    {
+      "key": "marine2",
+      "query": "GitHub copernicusmarine issue download subset depth netcdf error large dataset incomplete time coordinates discussion",
+      "objective": "Original user bug report or question, not official usage manual. Need original URL, dataset variables, depth/time/spatial constraints and failure.",
+      "requested": 10,
+      "results": [
+        {
+          "title": "Issue #267 · mercator-ocean/copernicus-marine-toolbox",
+          "url": "https://github.com/mercator-ocean/copernicus-marine-toolbox/issues/267",
+          "published": "N/A"
+        },
+        {
+          "title": "cms_download_subset() fails on Med climatology layer (5-dimension nv) · Issue #143 · pepijn-devries/CopernicusMarine",
+          "url": "https://github.com/pepijn-devries/CopernicusMarine/issues/143",
+          "published": "2026-03-06T08:48:58.000Z"
+        },
+        {
+          "title": "Lat/Lon values appear scrambled when downloading a subset of current data",
+          "url": "https://github.com/pepijn-devries/CopernicusMarine/issues/102",
+          "published": "N/A"
+        },
+        {
+          "title": "Time subsetting failes on some systems · Issue #164 · pepijn-devries/CopernicusMarine",
+          "url": "https://github.com/pepijn-devries/CopernicusMarine/issues/164",
+          "published": "2026-03-25T12:39:42.000Z"
+        },
+        {
+          "title": "R/cms_download_subset.r",
+          "url": "https://github.com/pepijn-devries/CopernicusMarine/blob/master/R/cms_download_subset.r",
+          "published": "N/A"
+        },
+        {
+          "title": "Best way to handle subset downloads around the dateline?",
+          "url": "https://github.com/pepijn-devries/CopernicusMarine/issues/141",
+          "published": "2026-03-04T00:25:31.000Z"
+        },
+        {
+          "title": "N/A",
+          "url": "https://toolbox-docs.marine.copernicus.eu/en/v2.5.0b0/_sources/usage/subset-split-on-usage.rst.txt",
+          "published": "N/A"
+        },
+        {
+          "title": "Error: offset has wrong size",
+          "url": "https://github.com/pepijn-devries/CopernicusMarine/issues/186",
+          "published": "N/A"
+        },
+        {
+          "title": "Re-scaling variables?",
+          "url": "https://github.com/pepijn-devries/CopernicusMarine/issues/100",
+          "published": "N/A"
+        },
+        {
+          "title": "Copernicus Marine Toolbox CLI - Subset | Copernicus Marine Help Center",
+          "url": "https://help.marine.copernicus.eu/en/articles/7972861-copernicus-marine-toolbox-cli-subset",
+          "published": "N/A"
+        }
+      ]
+    },
+    {
+      "key": "landqa2",
+      "query": "GIS Stack Exchange question download annual land use land cover raster historical year province classification ESA WorldCover MODIS Dynamic World",
+      "objective": "Only original user questions, specifically time-series land cover downloading and class/format/temporal issues. Exclude dataset landing pages and research-paper comparisons.",
+      "requested": 10,
+      "results": [
+        {
+          "title": "Is there a land cover type image collection on Google Earth Engine that covers the period 2000-2020?",
+          "url": "https://gis.stackexchange.com/questions/402234/is-there-a-land-cover-type-image-collection-on-google-earth-engine-that-covers-t",
+          "published": "N/A"
+        },
+        {
+          "title": "ESA-WorldCover/esa-worldcover-datasets",
+          "url": "https://github.com/ESA-WorldCover/esa-worldcover-datasets",
+          "published": "N/A"
+        },
+        {
+          "title": "Download Land Cover or NDVI Data from ESA WorldCover or Sentinel-2 10m Land Use/Land Cover Time Series — get_esa_wc • greenSD",
+          "url": "https://billbillbilly.github.io/greenSD/reference/get_esa_wc.html",
+          "published": "N/A"
+        },
+        {
+          "title": "MODIS MCD12Q1 Land Cover and Land Use Time Series Global Mosaics 2001-2022 (500 m) | Zenodo",
+          "url": "https://zenodo.org/records/8338928",
+          "published": "2023-09-12T00:00:00.000Z"
+        },
+        {
+          "title": "MODIS annual landcover time series of Canada (25 classes) - Open Government Portal",
+          "url": "https://open.canada.ca/data/en/dataset/39518dfa-bb8d-8a04-b36b-50b4310527a2",
+          "published": "N/A"
+        },
+        {
+          "title": "Land cover (Global, National - Annual) - FAOSTAT - Datasets - \"FAO catalog\"",
+          "url": "https://data.apps.fao.org/catalog/dataset/c4b607a1-b4d3-45c4-a56c-b29b8bba8bbd",
+          "published": "N/A"
+        },
+        {
+          "title": "R/get_esa_10m.R",
+          "url": "https://github.com/ManuelSpinola/paisaje/blob/main/R/get_esa_10m.R",
+          "published": "N/A"
+        },
+        {
+          "title": "Help center - Land Cover Combined – MODIS/ESA",
+          "url": "https://whisp-help.earthmap.org/datasets/land-useland-cover/land-cover-combined-modisesa",
+          "published": "N/A"
+        },
+        {
+          "title": "Global mosaics of the standard MODIS land cover type data | JR's collection of GIS data for the Centre for Ecosystem Science",
+          "url": "https://ces-unsw-edu-au.github.io/cesdata/docs/landcover/global/Modis-MCD12Q1-v6-LandCover",
+          "published": "N/A"
+        },
+        {
+          "title": "ESRI-2020-LC | JR's collection of GIS data for the Centre for Ecosystem Science",
+          "url": "https://ces-unsw-edu-au.github.io/cesdata/docs/landcover/global/ESRI-2020-Land-Cover",
+          "published": "N/A"
+        }
+      ]
+    },
+    {
+      "key": "cn_poi",
+      "query": "地信网论坛 求助 POI数据 历史 2015 2020 商铺 道路 建筑轮廓 下载 全国 城市",
+      "objective": "找真实求助帖，保留用户所需数据年代、城市、属性、用途和障碍；排除售卖广告、推广有奖、资源合集及爬虫教程。",
+      "requested": 10,
+      "results": [
+        {
+          "title": "全国poi矢量数据免费分享—ARCGIS—地信网论坛",
+          "url": "http://bbs.3s001.com/thread-330419-8-1.html",
+          "published": "2020-06-21T00:00:00.000Z"
+        },
+        {
+          "title": "2020、2018、2016、2014、2012年全国主要城市POI数据集",
+          "url": "https://bbs.pinggu.org/thread-11170478-1-1.html",
+          "published": "N/A"
+        },
+        {
+          "title": "【数据】2014-2025年OSM来源POI数据 - 经管之家",
+          "url": "https://bbs.pinggu.org/thread-16348614-1-1.html",
+          "published": "N/A"
+        },
+        {
+          "title": "2020年最新全国城市道路数据集—地理信息系统(GIS)—地信网论坛",
+          "url": "http://bbs.3s001.com/thread-349295-5-1.html",
+          "published": "2021-09-03T00:00:00.000Z"
+        },
+        {
+          "title": "全国-城市-建筑轮廓-矢量-SHP—ARCGIS—地信网论坛",
+          "url": "http://bbs.3s001.com/thread-349297-1-1.html",
+          "published": "N/A"
+        },
+        {
+          "title": "POI数据+村级区划代码及经纬度+道路分层级矢+水系数据量数据+乡镇级矢量数据 - 经管之家",
+          "url": "https://bbs.pinggu.org/thread-11992156-1-1.html",
+          "published": "N/A"
+        },
+        {
+          "title": "OSM上的中国大陆最新矢量数据—会员交流室—地信网论坛",
+          "url": "http://bbs.3s001.com/thread-293474-1-1.html",
+          "published": "N/A"
+        },
+        {
+          "title": "POI数据集 - 经管之家",
+          "url": "https://bbs.pinggu.org/thread-11021617-1-1.html",
+          "published": "2022-05-09T00:00:00.000Z"
+        },
+        {
+          "title": "2020-2022年最全各省、市矢量和栅格数据（土地利用、植被覆盖、土壤类型、人口密度、NPP、气象水文数据、路网、省市县乡镇区划边界、poi数据、河流水系、建筑轮廓）",
+          "url": "https://blog.csdn.net/m0_67175039/article/details/123086148",
+          "published": "N/A"
+        },
+        {
+          "title": "618重磅福利！任意城市POI / 高精度DEM免费赠送—地理信息系统(GIS)—地信网论坛",
+          "url": "http://bbs.3s001.com/thread-297107-1-1.html",
+          "published": "2019-06-19T00:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "key": "cn_land3",
+      "query": "小木虫 求助 土地利用 土地覆盖 数据下载 分辨率 30米 2000 2010 研究区域",
+      "objective": "只要中文原始科研提问，优先 muchong.com 和 bbs.3s001.com；不收价格广告和教程，准确记录需求而不采信回复的未经验证数据来源。",
+      "requested": 10,
+      "results": [
+        {
+          "title": "全国30m地表覆盖土地覆盖数据2000、2010、2020年 - 众鲤数据网",
+          "url": "https://zldatas.com/2961.html",
+          "published": "2023-03-23T00:00:00.000Z"
+        },
+        {
+          "title": "GLC30_2000_2010_2020_30m | 地信遥感数据汇",
+          "url": "https://www.gisrsdata.com/pages/d0563c/",
+          "published": "2022-04-04T00:00:00.000Z"
+        },
+        {
+          "title": "【数据集】中国逐年30mCLCD土地利用公开数据下载与GEE调用（附下载链接）_土地利用数据下载-CSDN博客",
+          "url": "https://blog.csdn.net/2301_80199200/article/details/146570466",
+          "published": "2025-03-27T00:00:00.000Z"
+        },
+        {
+          "title": "2000年中国30m土地利用覆盖数据-探险家的数据窝 - 深度学习数据集平台",
+          "url": "http://www.dilitanxianjia.com/13494/",
+          "published": "2023-11-01T08:23:50.000Z"
+        },
+        {
+          "title": "【数据分享】2025年武大CLCD更新！！连续41年全国1985-2025年30m土地利用/土地覆盖数据tiff（全国/分省）_arcgis_拙笔初梦-DAMO开发者矩阵",
+          "url": "https://damodev.csdn.net/6a4328cb10ee7a33f28432c2.html",
+          "published": "2026-01-12T00:00:00.000Z"
+        },
+        {
+          "title": "最新！中国2000-2025年30米地表覆盖数据（无套路网盘分享）_人工智能_梅如你-DAMO开发者矩阵",
+          "url": "https://damodev.csdn.net/6a43209b10ee7a33f2841b3f.html",
+          "published": "2025-12-31T00:00:00.000Z"
+        },
+        {
+          "title": "【数据分享】1985-2023年30米分辨率土地覆盖数据（全国/分省/分市）_小鲨鱼-LFSJXY-DAMO开发者矩阵",
+          "url": "https://devpress.csdn.net/v1/article/detail/141596533",
+          "published": "N/A"
+        },
+        {
+          "title": "资源环境科学与数据平台",
+          "url": "https://www.resdc.cn/DOI/DOI.aspx?DOIID=128",
+          "published": "N/A"
+        },
+        {
+          "title": "中国1km国土空间格局数据集（2000、2010、2020年）",
+          "url": "https://www.selectdataset.com/dataset/0a1d6dbf93c429a07eb58dd90140ec6d",
+          "published": "2024-07-30T11:23:26.000Z"
+        },
+        {
+          "title": "武汉大学30m土地利用数据 - CSDN文库",
+          "url": "https://wenku.csdn.net/answer/6qnxw9szrc",
+          "published": "2025-03-25T01:52:23.000Z"
+        }
+      ]
+    },
+    {
+      "key": "cn_marine",
+      "query": "小木虫 地信网 气象家园 求助 海洋 水深 海表温度 海流 海色 数据下载 风云卫星 HDF",
+      "objective": "找中文原始论坛需求或故障，关注变量、深度、时间、研究范围、格式及账号流程；排除AI回答和营销文章。",
+      "requested": 10,
+      "results": [
+        {
+          "title": "风云卫星遥感数据服务网",
+          "url": "https://data.nsmc.org.cn/DataPortal/cn/home/index.html",
+          "published": "N/A"
+        },
+        {
+          "title": "中国海洋卫星数据服务系统",
+          "url": "https://osdds.nsoas.org.cn/",
+          "published": "N/A"
+        },
+        {
+          "title": "风云卫星遥感数据服务网站",
+          "url": "http://img.nsmc.org.cn/PORTAL/NSMC/DATASERVICE/OperatingGuide/UserManual_Website_20250415_cn.pdf",
+          "published": "N/A"
+        },
+        {
+          "title": "海洋预报大数据网",
+          "url": "https://g.hyyb.org/archive/ppt/HyybData/HyybData.html",
+          "published": "N/A"
+        },
+        {
+          "title": "CMEMS全球海洋产品数据–超级详细下载教程【python】-夜雨聆风",
+          "url": "https://www.yeyulingfeng.com/532810.html",
+          "published": "N/A"
+        },
+        {
+          "title": "如何获取实时更新的全球海洋数据集？ - CSDN文库",
+          "url": "https://wenku.csdn.net/answer/2esx04xh99",
+          "published": "2025-11-03T15:17:39.000Z"
+        },
+        {
+          "title": "推荐一个超好用的海洋GIS数据下载平台（国内的！） | 麻辣GIS",
+          "url": "https://malagis.com/recommend-marine-gis-data-platform-ocean-cloud.html",
+          "published": "2026-06-09T00:00:00.000Z"
+        },
+        {
+          "title": "风云三号H星应用先行数据集",
+          "url": "https://data.nsmc.org.cn/FY3H/html/FY3HAPPDATASET.html",
+          "published": "N/A"
+        },
+        {
+          "title": "全球海流流场-海洋环境类-天气API-星图地球数据云",
+          "url": "https://datacloud.geovisearth.com/support/meteorological/globeOceanCurrentField",
+          "published": "N/A"
+        },
+        {
+          "title": "风云三号F星应用先行数据集",
+          "url": "https://satellite.nsmc.org.cn/FY3F/html/FY3FAPPDATASET.html",
+          "published": "N/A"
+        }
+      ]
+    },
+    {
+      "key": "cn_vector_issues",
+      "query": "GitHub issues AreaCity JsSpider StatsGov GeoJSON 边界 数据 下载 乡镇 村 行政区划 数据 缺失",
+      "objective": "只要 issue 或 discussions 的用户具体需求，记录最新区划、细粒度边界、拓扑或格式问题；排除README和被网站篡改的转载。",
+      "requested": 10,
+      "results": [
+        {
+          "title": "ok_geo.csv导出的数据的polygon数据为什么不是闭合的，而且里面的  ;    来分割数据，是分割成什么了？ · Issue #45 · xiangyuecn/AreaCity-JsSpider-StatsGov",
+          "url": "https://github.com/xiangyuecn/AreaCity-JsSpider-StatsGov/issues/45",
+          "published": "2024-07-10T11:23:36.000Z"
+        },
+        {
+          "title": "Releases · xiangyuecn/AreaCity-JsSpider-StatsGov · GitHub",
+          "url": "https://github.com/xiangyuecn/AreaCity-JsSpider-StatsGov/releases",
+          "published": "N/A"
+        },
+        {
+          "title": "xiangyuecn/AreaCity-JsSpider-StatsGov",
+          "url": "https://github.com/xiangyuecn/AreaCity-JsSpider-StatsGov",
+          "published": "N/A"
+        },
+        {
+          "title": "几个镇街级数据调整 · Issue #43 · xiangyuecn/AreaCity-JsSpider-StatsGov",
+          "url": "https://github.com/xiangyuecn/AreaCity-JsSpider-StatsGov/issues/43",
+          "published": "2024-05-08T07:55:02.000Z"
+        },
+        {
+          "title": "提个个人建议 - 直筒子市等缺少第三级区级优先把下级提上来做区级，比较人性化点",
+          "url": "https://github.com/xiangyuecn/AreaCity-JsSpider-StatsGov/issues/9",
+          "published": "N/A"
+        },
+        {
+          "title": "希望大大在ok_data_level3、ok_data_level4中：加入geo字段方便定位解析出城市、加入拼音速记码方便拼音前缀搜索 · Issue #10 · xiangyuecn/AreaCity-JsSpider-StatsGov",
+          "url": "https://github.com/xiangyuecn/AreaCity-JsSpider-StatsGov/issues/10",
+          "published": "2020-02-24T01:09:49.000Z"
+        },
+        {
+          "title": "2021.220321.220428",
+          "url": "https://github.com/xiangyuecn/AreaCity-JsSpider-StatsGov/releases/tag/2021.220321.220428",
+          "published": "N/A"
+        },
+        {
+          "title": "1_2_抓取民政部城市信息.js 按照里面的程序执行得出的数据只有省市 · Issue #21 · xiangyuecn/AreaCity-JsSpider-StatsGov",
+          "url": "https://github.com/xiangyuecn/AreaCity-JsSpider-StatsGov/issues/21",
+          "published": "2021-07-20T13:58:12.000Z"
+        },
+        {
+          "title": "有误的地名 · Issue #34 · xiangyuecn/AreaCity-JsSpider-StatsGov",
+          "url": "https://github.com/xiangyuecn/AreaCity-JsSpider-StatsGov/issues/34",
+          "published": "2022-12-23T06:42:34.000Z"
+        },
+        {
+          "title": "cnbattle/AreaCity-JsSpider-StatsGov",
+          "url": "https://github.com/cnbattle/AreaCity-JsSpider-StatsGov",
+          "published": "N/A"
+        }
+      ]
+    },
+    {
+      "key": "international_buildings",
+      "query": "GitHub Overture Maps buildings download bounding box country parquet geoparquet duckdb issue missing data huge files QGIS",
+      "objective": "First-hand issues and original questions about extracting real building/transport/place features, AOI and storage costs. Exclude product announcements.",
+      "requested": 10,
+      "results": [
+        {
+          "title": "Why has the building Parquet file count doubled?",
+          "url": "https://github.com/OvertureMaps/data/issues/508",
+          "published": "N/A"
+        },
+        {
+          "title": "OvertureMaps/overturemaps-py",
+          "url": "https://github.com/overturemaps/overturemaps-py",
+          "published": "2024-04-05T14:19:17.000Z"
+        },
+        {
+          "title": "DuckDB | Overture Documentation",
+          "url": "https://docs.overturemaps.org/getting-data/duckdb/",
+          "published": "N/A"
+        },
+        {
+          "title": "Search code, repositories, users, issues, pull requests...",
+          "url": "https://github.com/OvertureMaps/data/discussions/91",
+          "published": "N/A"
+        },
+        {
+          "title": "Tokyo Buildings missing from January release?",
+          "url": "https://github.com/OvertureMaps/data/issues/113",
+          "published": "N/A"
+        },
+        {
+          "title": "GeoParquet Downloader (Overture, Source & Custom Cloud)",
+          "url": "https://plugins.qgis.org/plugins/qgis_plugin_gpq_downloader/",
+          "published": "N/A"
+        },
+        {
+          "title": "QGIS - Overture Documentation",
+          "url": "https://docs.overturemaps.org/examples/QGIS/",
+          "published": "N/A"
+        },
+        {
+          "title": "skills/spatial/references/overture.md",
+          "url": "https://github.com/duckdb/duckdb-skills/blob/main/skills/spatial/references/overture.md",
+          "published": "N/A"
+        },
+        {
+          "title": "N/A",
+          "url": "https://docs.overturemaps.org/llms-full.txt",
+          "published": "N/A"
+        },
+        {
+          "title": "2-accessing-data.md",
+          "url": "https://github.com/OvertureMaps/workshop/blob/main/2-accessing-data.md",
+          "published": "N/A"
+        }
+      ]
+    },
+    {
+      "key": "hazards",
+      "query": "STEP ESA forum Sentinel-1 SAR flood mapping download orbit polarization terrain correction DEM data questions",
+      "objective": "Original user questions about choosing and acquiring SAR input for flood/disaster analysis. Need scenario, missing product or metadata, not only algorithm tutorials.",
+      "requested": 10,
+      "results": [
+        {
+          "title": "SENTINEL-1",
+          "url": "https://step.esa.int/docs/tutorials/tutorial_s1floodmapping.pdf",
+          "published": "N/A"
+        },
+        {
+          "title": "Tutorial on flooding events detection using Sentinel-1 imagery and the SNAP S1 Toolbox - Show Room - STEP Forum",
+          "url": "https://forum.step.esa.int/t/tutorial-on-flooding-events-detection-using-sentinel-1-imagery-and-the-snap-s1-toolbox/32940",
+          "published": "2021-10-06T14:54:41.000Z"
+        },
+        {
+          "title": "S1 Pre-processing chain and parameter setting - Microwave Toolbox - STEP Forum",
+          "url": "https://forum.step.esa.int/t/s1-pre-processing-chain-and-parameter-setting/3808",
+          "published": "2016-11-21T14:56:39.000Z"
+        },
+        {
+          "title": "Flood mapping using Snappy",
+          "url": "http://step.esa.int/docs/tutorials/Performing%20SAR%20processing%20in%20Python%20using%20snappy.pdf",
+          "published": "N/A"
+        },
+        {
+          "title": "Radiometric & Geometric Correction Workflow - Page 2 - Microwave Toolbox - STEP Forum",
+          "url": "https://forum.step.esa.int/t/radiometric-geometric-correction-workflow/2540?page=2",
+          "published": "2016-06-24T21:41:22.000Z"
+        },
+        {
+          "title": "Flood Map using GRD - Microwave Toolbox",
+          "url": "https://forum.step.esa.int/t/flood-map-using-grd/7231",
+          "published": "2017-09-27T22:44:45.000Z"
+        },
+        {
+          "title": "Sentinel-1A SLC to GRD Product for flood inundation_Please review the steps - Microwave Toolbox - STEP Forum",
+          "url": "https://forum.step.esa.int/t/sentinel-1a-slc-to-grd-product-for-flood-inundation-please-review-the-steps/15897",
+          "published": "2019-06-11T11:46:21.000Z"
+        },
+        {
+          "title": "Sentinel-1A GRD product - Page 2 - Microwave Toolbox - STEP Forum",
+          "url": "https://forum.step.esa.int/t/sentinel-1a-grd-product/291?page=2",
+          "published": "2016-06-02T12:39:19.000Z"
+        },
+        {
+          "title": "Terrain Correction in Multi-Temporal Dual-Pol S1 Stack Masks Out Water Despite <nodataValueAtSea> Set to False - Problem Reports - STEP Forum",
+          "url": "https://forum.step.esa.int/t/terrain-correction-in-multi-temporal-dual-pol-s1-stack-masks-out-water-despite-nodatavalueatsea-set-to-false/44555",
+          "published": "2025-05-19T14:42:35.000Z"
+        },
+        {
+          "title": "Change detection using Sentinel-1 SAR GRD data - Microwave Toolbox - STEP Forum",
+          "url": "https://forum.step.esa.int/t/change-detection-using-sentinel-1-sar-grd-data/25207",
+          "published": "2020-09-04T07:01:31.000Z"
+        }
+      ]
+    },
+    {
+      "key": "research_global",
+      "query": "ResearchGate discussion where download free historical high resolution satellite imagery urban change land use soil population data georeferenced",
+      "objective": "Original question/discussion from researchers with specified area/time/data quality requirements. No study papers, marketing or generic resource roundups.",
+      "requested": 10,
+      "results": [
+        {
+          "title": "(PDF) Downloading FREE satellite Images - ResearchGate",
+          "url": "https://www.researchgate.net/publication/339616743_Downloading_FREE_satellite_Images",
+          "published": "2020-01-01T00:00:00.000Z"
+        },
+        {
+          "title": "Global 0.05° Grid-Based Dataset of Keyhole Imagery with Spatio-Temporal Indicators (1960–1984)",
+          "url": "https://exa.ai/library/publication/nxhjqsltzn7",
+          "published": "2026-02-17T00:00:00.000Z"
+        },
+        {
+          "title": "Using Cold War-Era Satellite Imagery to Inform Historic Land Cover Classification",
+          "url": "https://exa.ai/library/publication/ybgjwbsr8s8",
+          "published": "2020-08-28T00:00:00.000Z"
+        },
+        {
+          "title": "Remote sensing Nakuru's urban growth (1) | ERDAS IMAGINE | gregorhd",
+          "url": "https://gregorhd.github.io/nakuru-pt1/",
+          "published": "2021-08-30T00:00:00.000Z"
+        },
+        {
+          "title": "(PDF) Integrated usage of historical geospatial data and ...",
+          "url": "https://www.researchgate.net/publication/360973892_Integrated_usage_of_historical_geospatial_data_and_modern_satellite_images_reveal_long-term_land_usecover_changes_in_BursaTurkey_1858-2020",
+          "published": "2022-05-31T00:00:00.000Z"
+        },
+        {
+          "title": "GIS Data Collection for Social Scientists: Acquiring Raster Data using Imagery Databases",
+          "url": "https://spatialturn.github.io/DataCollection/instructor/imagery.html",
+          "published": "N/A"
+        },
+        {
+          "title": "Declassified satellite imagery (KH-9): analysing the impact of mass tourism on the St Catherine region, South Sinai    | EAMENA Project",
+          "url": "https://eamena.org/article/declassified-satellite-imagery-kh-9-analysing-impact-mass-tourism-st-catherine-region-south",
+          "published": "N/A"
+        },
+        {
+          "title": "Monitoring Urban Growth and Change Detection in Built-up ...",
+          "url": "https://www.researchgate.net/publication/371720530_Monitoring_Urban_Growth_and_Change_Detection_in_Built-up_Areas_with_High-Resolution_Satellite_Imageries",
+          "published": "2023-06-19T00:00:00.000Z"
+        },
+        {
+          "title": "Open High-Resolution Satellite Imagery: The WorldStrat Dataset -- With Application to Super-Resolution",
+          "url": "https://exa.ai/library/publication/y7cgdhcxz2k",
+          "published": "2022-07-13T00:00:00.000Z"
+        },
+        {
+          "title": "(PDF) Applications of GIS and Very High-Resolution RS Data ...",
+          "url": "https://www.researchgate.net/publication/258379134_Applications_of_GIS_and_Very_High-Resolution_RS_Data_for_Urban_Land_Use_Change_Studies_in_Mongolia",
+          "published": "2011-12-27T00:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "key": "cmip6",
+      "query": "ESGF forum GitHub issue CMIP6 download wget expired certificate missing files model scenario variable monthly data subset",
+      "objective": "Original requests and failures for climate-projection data download, including model/scenario/variable dimensions and incomplete bulk downloads. Exclude generic instructions.",
+      "requested": 10,
+      "results": [
+        {
+          "title": "ESGF/esgf-wget",
+          "url": "https://github.com/ESGF/esgf-wget",
+          "published": "2020-05-11T14:33:38.000Z"
+        },
+        {
+          "title": "Issues with API for downloading CMIP6 datasets - API - Forum",
+          "url": "https://forum.ecmwf.int/t/issues-with-api-for-downloading-cmip6-datasets/7329",
+          "published": "2024-10-30T16:30:56.000Z"
+        },
+        {
+          "title": "Handling large amounts of datasets and files",
+          "url": "https://github.com/ESGF/esgf-wget/issues/2",
+          "published": "N/A"
+        },
+        {
+          "title": "\"Unknown error\" while downloading wget files #641 - GitHub",
+          "url": "https://github.com/esgf2-us/metagrid/issues/641",
+          "published": "N/A"
+        },
+        {
+          "title": "FAQs — ESGF User Support 0.0.0 documentation",
+          "url": "https://esgf.github.io/esgf-user-support/faq.html",
+          "published": "N/A"
+        },
+        {
+          "title": "How do I modify/subset a wget script to specify a date range to only download certain years into different scripts?",
+          "url": "https://stackoverflow.com/questions/60232183/how-do-i-modify-subset-a-wget-script-to-specify-a-date-range-to-only-download-ce",
+          "published": "2020-02-14T19:06:23.000Z"
+        },
+        {
+          "title": "Unknow error when trying to generate \"wget script\"",
+          "url": "https://github.com/esgf2-us/metagrid/issues/935",
+          "published": "N/A"
+        },
+        {
+          "title": "Missing results in wget files, when retrieving large number of (small) files from input4mips",
+          "url": "https://github.com/esgf2-us/metagrid/issues/923",
+          "published": "N/A"
+        },
+        {
+          "title": "_posts/2015-02-09-getcert.jar-cannot-be-retrieved.markdown",
+          "url": "https://github.com/ESGF/esgf-swt/blob/master/_posts/2015-02-09-getcert.jar-cannot-be-retrieved.markdown",
+          "published": "N/A"
+        },
+        {
+          "title": "ductran27/GCM-downloader",
+          "url": "https://github.com/ductran27/GCM-downloader",
+          "published": "N/A"
+        }
+      ]
+    },
+    {
+      "key": "cn_hydro",
+      "query": "论坛 求助 下载 逐日 降水 径流 水文 站点 数据 流域",
+      "objective": "寻找中国用户原始求助问题，特别是水文站实测径流、逐日降水的下载、权限、批量和格式问题。排除售卖广告、资源合集、AI生成答案；优先气象家园、小木虫、地信网、知乎可公开核读原文。",
+      "requested": 8,
+      "results": [
+        {
+          "title": "逐日降水数据-经管之家(原经济论坛)-经济、管理、金融、统计在线教育和咨询网站",
+          "url": "https://s.pinggu.org/search-558908.html",
+          "published": "N/A"
+        },
+        {
+          "title": "【数据分享】1979—2025年我国乡镇级的逐日、逐月和逐年河流径流量数据（Shp/Excel格式） - 技术栈",
+          "url": "https://jishuzhan.net/article/2082097766691119106",
+          "published": "2026-07-28T00:00:00.000Z"
+        },
+        {
+          "title": "数据分享：1961-2017年中国0.25°×0.25° 逐日地表水文数据集(VIC-CN05.1)_arcgis_sky",
+          "url": "https://damodev.csdn.net/688086dabb9d8e0ecec2a4cf.html",
+          "published": "N/A"
+        },
+        {
+          "title": "1979-2024全国逐日径流量数据集（GloFAS)_arcgis_树谷-胡老师-魔乐社区",
+          "url": "https://modelers.csdn.net/69a799057bbde9200b9d43f7.html",
+          "published": "2026-01-14T00:00:00.000Z"
+        },
+        {
+          "title": "径流数据集",
+          "url": "https://blog.csdn.net/weixin_46080995/article/details/142370695",
+          "published": "2024-09-19T14:00:35.000Z"
+        },
+        {
+          "title": "CHM_PRE V2中国大陆高精度网格降水数据集 - 水文资料、站点数据与科研应用 | 科研数据共享平台",
+          "url": "https://data.cuger.cn/article/chm-pre-v2/",
+          "published": "2026-05-21T00:00:00.000Z"
+        },
+        {
+          "title": "中国站点尺度天然径流量估算数据集-云社区-华为云",
+          "url": "https://bbs.huaweicloud.cn/blogs/409820",
+          "published": "2023-08-30T00:00:00.000Z"
+        },
+        {
+          "title": "首页 - -生态科学数据中心",
+          "url": "https://eco.gssdc.cn/metadata?af=%E8%BE%93%E6%B2%99%E7%8E%87&current_page=1",
+          "published": "N/A"
+        }
+      ]
+    },
+    {
+      "key": "cn_poi_questions",
+      "query": "site:github.com/issues 高德 POI 数据 下载 数量 限制 坐标",
+      "objective": "寻找真实中文 issue，用户需要按范围批量下载 POI 或道路，但出现数量限制、重复、缺漏、GCJ02 坐标问题。排除README、推广和代码搜索结果。",
+      "requested": 8,
+      "results": [
+        {
+          "title": "About Projects",
+          "url": "https://docs.github.com/issues/planning-and-tracking-with-projects/learning-about-projects/about-projects",
+          "published": "N/A"
+        }
+      ]
+    },
+    {
+      "key": "global_social",
+      "query": "site:reddit.com/r/gis downloading geospatial data buildings population soil flood data problem",
+      "objective": "Find original public user discussions requesting GIS dataset downloads for population, soil, water or floods; emphasize practical format, coverage, cost and licensing obstacles. Exclude promotional posts and paper listings. Use only accessible original discussions.",
+      "requested": 8,
+      "results": []
+    },
+    {
+      "key": "global_soil_population",
+      "query": "SoilGrids WorldPop download data raster large area error forum GIS StackExchange Github issue",
+      "objective": "Find original user questions or bug reports on downloading SoilGrids or WorldPop population raster by polygon, year or resolution; prioritize GIS Stack Exchange and official repo issue trackers. Exclude general tutorials and commercial marketing.",
+      "requested": 8,
+      "results": [
+        {
+          "title": "Downloading SoilGrids data globally using R",
+          "url": "https://gis.stackexchange.com/questions/367925/downloading-soilgrids-data-globally-using-r/368434",
+          "published": "N/A"
+        },
+        {
+          "title": "SoilGrids access – SoilGrids Documentation",
+          "url": "https://docs.isric.org/globaldata/soilgrids/SoilGrids_faqs_02.html",
+          "published": "N/A"
+        },
+        {
+          "title": "WebDAV: R - terra – SoilGrids Documentation",
+          "url": "https://docs.isric.org/globaldata/soilgrids/webdav_from_R_terra.html",
+          "published": "N/A"
+        },
+        {
+          "title": "Downloading the global SoilGrids data using Python",
+          "url": "https://gis.stackexchange.com/questions/407408/downloading-the-global-soilgrids-data-using-python",
+          "published": "N/A"
+        },
+        {
+          "title": "Downloading SoilGrids data from WCS in R",
+          "url": "https://gis.stackexchange.com/questions/383755/downloading-soilgrids-data-from-wcs-in-r",
+          "published": "2021-01-07T21:18:25.000Z"
+        },
+        {
+          "title": "`fetchSoilGrids` -- can we automate download of arbitrary extent grids?",
+          "url": "https://github.com/ncss-tech/soilDB/issues/202",
+          "published": "N/A"
+        },
+        {
+          "title": "wpgp/get_wp_global",
+          "url": "https://github.com/wpgp/get_wp_global",
+          "published": "N/A"
+        },
+        {
+          "title": "Global soil data — soil_world • geodata",
+          "url": "https://rspatial.github.io/geodata/reference/soil_grids.html",
+          "published": "N/A"
+        }
+      ]
+    }
+  ],
+  "fallbackWebSearches": [
+    {
+      "query": "site:reddit.com/r/gis download WorldPop",
+      "purpose": "补读人口原始需求"
+    },
+    {
+      "query": "site:reddit.com/r/gis download data buildings",
+      "purpose": "补读建筑与CAD、POI原始需求"
+    },
+    {
+      "query": "site:github.com POI issues 200 高德",
+      "purpose": "寻找中文POI求助；返回主要为项目README，未计为需求样本"
+    },
+    {
+      "query": "site:muchong.com 求助 径流 数据",
+      "purpose": "寻找中文水文原始需求；未取得足够符合条件原帖"
+    }
+  ],
+  "exclusionExamples": [
+    {
+      "url": "https://bbs.pinggu.org/thread-11170478-1-1.html",
+      "reason": "数据售卖/推广，不是原始求助"
+    },
+    {
+      "url": "https://wenku.csdn.net/answer/6qnxw9szrc",
+      "reason": "生成式问答，不作独立用户证据"
+    },
+    {
+      "url": "https://damodev.csdn.net/6a4328cb10ee7a33f28432c2.html",
+      "reason": "CLCD年份转载/分享不能证明作者发布的实际产品版本"
+    },
+    {
+      "url": "https://github.com/intake/pystac-client",
+      "reason": "未取得原文，非本轮核验的可复用库证据"
+    },
+    {
+      "url": "https://www.reddit.com/r/gis/comments/otw53g/",
+      "reason": "能读到搜索节选，后续原页获取超时；不纳入80个已核读页面样本"
+    },
+    {
+      "url": "https://www.reddit.com/r/gis/comments/e3vt04/",
+      "reason": "能读到搜索节选，后续原页获取超时；不纳入80个已核读页面样本"
+    }
+  ],
+  "proposedAcceptance": [
+    {
+      "id": "A01",
+      "topic": "含歧义需求",
+      "prompt": "下载朝阳的历史影像",
+      "passCondition": "在任何有成本的执行前确认朝阳所属地区、时期、用途；不给未经选择的默认期次。",
+      "evidenceIds": [
+        "F01",
+        "D04",
+        "D11"
+      ],
+      "status": "当前范围建议验收，未执行",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "A02",
+      "topic": "近红外产品",
+      "prompt": "这个小流域要算植被覆盖，给我较新影像",
+      "passCondition": "询问日期、云量与分析要求；候选产品有真实红光/近红外和元数据；RGB底图不得作为完成。",
+      "evidenceIds": [
+        "D04",
+        "F03",
+        "F04"
+      ],
+      "status": "仅保留调研观察，不进入当前验收计划",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "A03",
+      "topic": "土地覆盖年份",
+      "prompt": "贵州30米土地利用，要2010和2020能对比的",
+      "passCondition": "确认产品和分类体系；两期有效覆盖、年份与版本可核验；说明算法变化和可比性。",
+      "evidenceIds": [
+        "D05",
+        "D28"
+      ],
+      "status": "仅保留调研观察，不进入当前验收计划",
+      "productScope": "相邻需求，待评估，不进入本轮承诺"
+    },
+    {
+      "id": "A04",
+      "topic": "全量矢量",
+      "prompt": "把有28000条记录的服务完整保存成GeoPackage",
+      "passCondition": "源ID、预期数和落盘数核对，无静默截断；中断续传结果一致；当前10k上限下应明确未支持。",
+      "evidenceIds": [
+        "F06",
+        "F07",
+        "D34"
+      ],
+      "status": "当前范围建议验收，未执行",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "A05",
+      "topic": "CSV入库",
+      "prompt": "把这份多面边界CSV转换后导入我的PostGIS",
+      "passCondition": "识别格式与CRS；环/多面合法、属性保存；目标库权限与写入确认具备；MongoDB不借用PostGIS支持声明。",
+      "evidenceIds": [
+        "D10"
+      ],
+      "status": "当前范围建议验收，未执行",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "A06",
+      "topic": "设施交付",
+      "prompt": "把研究区里的学校和医院给我，包含名字和经纬度",
+      "passCondition": "映射实际标签，读回属性；报告缺失、重复和来源时间；不保证开放数据收录全量真实设施。",
+      "evidenceIds": [
+        "D47"
+      ],
+      "status": "当前范围建议验收，未执行",
+      "productScope": "当前范围"
+    },
+    {
+      "id": "A07",
+      "topic": "CAD交付",
+      "prompt": "只要这个城镇的地形和建筑，给Rhino用",
+      "passCondition": "确认DXF等格式、坐标、米制单位与高度基准；在真实CAD读回图层和高程；不把GIS文件改扩展名。",
+      "evidenceIds": [
+        "D45",
+        "D46"
+      ],
+      "status": "仅保留调研观察，不进入当前验收计划",
+      "productScope": "相邻需求，待评估，不进入本轮承诺"
+    },
+    {
+      "id": "A08",
+      "topic": "WRF数据",
+      "prompt": "黄河流域2025年5—10月逐小时ERA5用于WRF",
+      "passCondition": "确认模拟域/缓冲、变量与气压层；每个批次和时刻清单齐全；保存GRIB/NetCDF与来源请求；不能只交地面RGB。",
+      "evidenceIds": [
+        "D01",
+        "D02",
+        "D14"
+      ],
+      "status": "仅保留调研观察，不进入当前验收计划",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "A09",
+      "topic": "云端排队",
+      "prompt": "气象数据半天没动，帮我看是否卡住",
+      "passCondition": "读回已有远端作业状态，不重复提交；显示排队/生成/传输；未知比例显示活动状态而非伪造进度。",
+      "evidenceIds": [
+        "D13",
+        "D15",
+        "D16"
+      ],
+      "status": "仅保留调研观察，不进入当前验收计划",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "A10",
+      "topic": "错误成果",
+      "prompt": "下载的MODIS打不开，继续原任务",
+      "passCondition": "识别HTML/JSON错误页，不能记成功；授权恢复使用原清单；真实HDF/NetCDF可打开并匹配产品ID。",
+      "evidenceIds": [
+        "D17",
+        "D19"
+      ],
+      "status": "仅保留调研观察，不进入当前验收计划",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "A11",
+      "topic": "海洋维度",
+      "prompt": "北海2020年9月表层海流，要uo和vo",
+      "passCondition": "确认深度与日期；读回坐标、维度、单位、scale/offset、有效像元；切片对应实际范围。",
+      "evidenceIds": [
+        "D22",
+        "D24",
+        "D25",
+        "D26"
+      ],
+      "status": "仅保留调研观察，不进入当前验收计划",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "A12",
+      "topic": "跨经线",
+      "prompt": "给我180度附近完整海洋研究区",
+      "passCondition": "显式处理跨经线分块，合并后无缺口或重复边缘；范围与经度规范一致。",
+      "evidenceIds": [
+        "D23"
+      ],
+      "status": "仅保留调研观察，不进入当前验收计划",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "A13",
+      "topic": "点云分幅",
+      "prompt": "按这份面文件下法国LiDAR原始点云",
+      "passCondition": "发现真正LAZ而非DEM；相交分幅与清单核对，分类和CRS读取；有缺失分幅则报告。",
+      "evidenceIds": [
+        "D29",
+        "D30",
+        "D31"
+      ],
+      "status": "仅保留调研观察，不进入当前验收计划",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "A14",
+      "topic": "人口与土壤",
+      "prompt": "统计这三个行政区的人口和0—5厘米土壤黏粒",
+      "passCondition": "确认年份、区划版本、人数/密度、土层、统计量；人口与土壤的聚合方法分开；保留产品与来源。",
+      "evidenceIds": [
+        "D41",
+        "D48"
+      ],
+      "status": "仅保留调研观察，不进入当前验收计划",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "A15",
+      "topic": "气候模型",
+      "prompt": "下载两个SSP情景、3个模型的逐日降水",
+      "passCondition": "确认成员、版本、网格和日历；模型/情景/变量分别组织，清单完整，无重复与缺失。",
+      "evidenceIds": [
+        "D34",
+        "D35",
+        "D36"
+      ],
+      "status": "仅保留调研观察，不进入当前验收计划",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "A16",
+      "topic": "SAR洪水",
+      "prompt": "下载这次洪水前后数据，输出淹没范围",
+      "passCondition": "确认事件时段、极化/轨道/级别；先核验输入产品；分析需经过已验收技能，并报告验证与不确定性。",
+      "evidenceIds": [
+        "D37",
+        "D38",
+        "D39",
+        "D40"
+      ],
+      "status": "仅保留调研观察，不进入当前验收计划",
+      "productScope": "当前范围外，仅保留调研观察"
+    },
+    {
+      "id": "A17",
+      "topic": "图源与历史时期",
+      "prompt": "下载这个区域指定时期的历史服务影像",
+      "passCondition": "查询服务实际可用版本，确认地区/时期；区分版本日与拍摄元数据；不能替用户静默选择。",
+      "evidenceIds": [
+        "F01",
+        "F05"
+      ],
+      "productScope": "当前范围",
+      "status": "当前范围建议验收，未执行"
+    },
+    {
+      "id": "A18",
+      "topic": "瓦片成果交付",
+      "prompt": "按这个边界下载影像，拼接裁剪成GeoTIFF",
+      "passCondition": "计划匹配用户范围和格式；瓦片与成果核验，读回地理范围；保持用户压缩选择。",
+      "evidenceIds": [
+        "F11",
+        "F30",
+        "F31"
+      ],
+      "productScope": "当前范围",
+      "status": "当前范围建议验收，未执行"
+    },
+    {
+      "id": "A19",
+      "topic": "二维三维操作",
+      "prompt": "查看已授权三维成果，再切回二维地图",
+      "passCondition": "工具发现完整，真实加载并读回图层/场景；相机、图层和视图切换可执行；权限按数据来源检查。",
+      "evidenceIds": [
+        "F26",
+        "F27",
+        "F28",
+        "F29"
+      ],
+      "productScope": "当前范围",
+      "status": "当前范围建议验收，未执行"
+    },
+    {
+      "id": "A20",
+      "topic": "后台阶段与成果目录",
+      "prompt": "下载100%后还在处理，查看进度并打开目录",
+      "passCondition": "真实显示下载/拼接/裁剪/核验阶段，后台不持续占聊天；完成后可打开实际成果目录。",
+      "evidenceIds": [
+        "F11",
+        "F12"
+      ],
+      "productScope": "当前范围",
+      "status": "当前范围建议验收，未执行"
+    },
+    {
+      "id": "A21",
+      "topic": "多区域任务管理",
+      "prompt": "用这几个边界分别下载，可以取消其中一项",
+      "passCondition": "先确认分组方式；卡片绑定原回答，任务命名清楚；独立取消/恢复和成果归属可核验。",
+      "evidenceIds": [
+        "D06",
+        "D11"
+      ],
+      "productScope": "当前范围",
+      "status": "当前范围建议验收，未执行"
+    }
+  ],
+  "productScopeCorrection": {
+    "date": "2026-10-07",
+    "authority": "用户明确原始遥感下载不在当前产品范围",
+    "currentScope": "地图服务与瓦片、历史服务、已接DEM/三维、矢量/在线服务/数据库输入及成果整理",
+    "excludedFromCurrentRoadmap": "原始卫星景、多波段、SAR及科研平台下载处理；其他新领域仅观察或待评估",
+    "priorityMeaning": "priority 为当前范围筛选后的建议，researchPriority 保留原跨领域研究排序"
+  },
+  "scopeClassificationCounts": {
+    "当前范围": 27,
+    "相邻需求，待评估，不进入本轮承诺": 6,
+    "当前范围外，仅保留调研观察": 47
+  }
+}

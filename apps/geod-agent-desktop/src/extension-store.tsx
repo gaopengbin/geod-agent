@@ -3,14 +3,19 @@ import { t, localize } from "./i18n";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Button } from "@/components/motion/button/base";
-import { CircleAlert, Loader2, Network, Plus, PuzzlePiece, Trash as Trash2, X } from "./icons";
+import { CircleAlert, Loader2, Network, Plus, PuzzlePiece, X } from "./icons";
 import { api, desktopAvailable, errorMessage, type ExtensionOverview, type McpToolList, type OnlineSkillCandidate, type RegistryMcpItem, type RemoteSkillStage, type SkillSourceCandidate } from "./api";
+import {AMAP_MCP_URL,mcpProvider,providerSetupProposal} from './mcp-provider-presets';
+import {McpKeyDialog} from './mcp-key-dialog';
+import {ConnectorActions} from './connector-actions';
 import { SOURCE_CREATOR_ID, sourceCreatorContent, sourceCreatorSummary } from "./builtin-skills";
 import { dataInputTools } from "./data-input-tools";
 import { usePageWidth } from "./use-page-width";
 import {McpOAuthPanel} from "./mcp-oauth-panel";
 import { MemoryPanel } from "./memory-panel";
 import { PluginPanel } from "./plugin-panel";
+import {GisSkills} from "./gis-skills";
+import {RtkOutputComponent} from "./rtk-output-component";
 
 const gdalToolLabels: Record<string, string> = {
   raster_info: "栅格信息", raster_stats: "栅格统计", raster_convert: "栅格转换", raster_reproject: "栅格重投影",
@@ -36,6 +41,7 @@ export function ExtensionStorePage({ active, conversationId }: { active: boolean
   const [skillPreview, setSkillPreview] = useState("");
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
+  const [credentialSetup,setCredentialSetup]=useState<string|null>(null);
   const [transport,setTransport]=useState<"http"|"stdio">("http");
   const [command,setCommand]=useState("");
   const [processArgs,setProcessArgs]=useState("[]");
@@ -138,6 +144,7 @@ export function ExtensionStorePage({ active, conversationId }: { active: boolean
   }
 
   async function addConnector(label: string, address: string) {
+    if(mcpProvider(address.trim())){setCredentialSetup(address.trim());return;}
     setItems(await api.mcpAdd(label.trim(), address.trim()));
     setName(""); setUrl("");
   }
@@ -155,7 +162,7 @@ export function ExtensionStorePage({ active, conversationId }: { active: boolean
         let args:unknown;try{args=JSON.parse(processArgs);}catch{throw new Error("启动参数应为 JSON 文本数组");}
         if(!Array.isArray(args)||args.some(value=>typeof value!=="string"))throw new Error("启动参数应为 JSON 文本数组");
         setItems(await api.mcpAdd(name.trim(),"",{command:command.trim(),args,env:object(processEnv,"环境变量")}));
-      } else {setItems(await api.mcpAdd(name.trim(),url.trim(),{headers:object(httpHeaders,"请求头")}));}
+       } else {if(mcpProvider(url.trim())){setCredentialSetup(url.trim());return;}setItems(await api.mcpAdd(name.trim(),url.trim(),{headers:object(httpHeaders,"请求头")}));}
       setName("");setUrl("");setCommand("");setProcessArgs("[]");setProcessEnv("{}");setHttpHeaders("{}");setShowCustomConnector(false);
     });
   }
@@ -192,6 +199,7 @@ export function ExtensionStorePage({ active, conversationId }: { active: boolean
 
   return <section ref={page.ref} className={`extension-store ${detailOpen ? "has-details" : ""} ${page.compact ? "page-compact" : ""}`} aria-label={t("技能与连接器")} hidden={!active} aria-busy={loading || busy}>
       <header className="extension-page-title"><div><h1>{t("技能与连接器")}</h1><p>{t("管理 Agent 可调用的技能和工具")}</p></div></header>
+      {credentialSetup&&<McpKeyDialog proposal={providerSetupProposal(credentialSetup,'provider-setup')} conversationId={conversationId} onClose={()=>setCredentialSetup(null)} onConnected={(connector,tools)=>{void api.extensionsList().then(setItems).catch(e=>setError(errorMessage(e)));setDetails(tools);setPendingEnable(connector.id);setShowCustomConnector(false);}}/>}
       <header className="extension-store-head">
         <nav className="extension-store-tabs" aria-label={t("扩展类别")}>
           <Button variant="ghost" size="sm" className={tab === "skills" ? "active" : ""} aria-pressed={tab === "skills"} onClick={() => setTab("skills")}><PuzzlePiece size={17} />{t("技能 ")}<span>{items.skills.length}</span></Button>
@@ -214,6 +222,8 @@ export function ExtensionStorePage({ active, conversationId }: { active: boolean
         {loading && <div className="extension-page-loading" role="status"><Loader2 size={17} className="extension-spin" />{t("正在读取已添加的技能与连接器…")}</div>}
         {tab === "plugins" ? <PluginPanel active={active&&tab==="plugins"} conversationId={conversationId} onChanged={()=>void api.extensionsList().then(setItems).catch(e=>setError(errorMessage(e)))}/> : tab === "memory" ? <MemoryPanel active={active&&tab==="memory"} conversationId={conversationId}/> : tab === "skills" ? <>
           {showSkillLink && <form className="extension-skill-link-form" onSubmit={inspectSkillLink}><input value={skillLink} onChange={event => setSkillLink(event.target.value)} placeholder={t("https://skills.sh/... 或 GitHub / SKILL.md 链接")} aria-label={t("检查 Skill 链接")} type="url" required /><Button size="sm" variant="outline" type="submit" disabled={busy || !skillLink.trim()}>{t("检查链接")}</Button><Button size="icon" variant="ghost" aria-label={t("收起 Skill 链接")} onClick={() => setShowSkillLink(false)}><X size={17} /></Button></form>}
+          <GisSkills active={active&&tab==="skills"} revision={JSON.stringify(items.skills.map(s=>[s.id,s.enabled]))} onChanged={async()=>setItems(await api.extensionsList())}/>
+          <RtkOutputComponent active={active&&tab==="skills"}/>
           <section className="extension-catalog-section" aria-labelledby="extension-saved-skills-title"><div className="extension-catalog-heading"><h3 id="extension-saved-skills-title">{t("我的 Skills ")}<span>{items.skills.length}</span></h3></div>{items.skills.length ? <div className="extension-connector-grid">{items.skills.map(skill => <article className="extension-tile" key={skill.id}><div className="extension-tile-top"><span className="extension-tile-icon"><PuzzlePiece size={18} /></span><strong>{skill.id === SOURCE_CREATOR_ID ? t("图源 Creator") : skill.name}</strong><span className={skill.enabled ? "extension-status enabled" : "extension-status"}>{skill.enabled ? t("已启用") : t("未启用")}</span></div><p className="extension-tile-description">{skill.id===SOURCE_CREATOR_ID?t(skill.description):skill.description || skill.sourceUrl || t("Skill 指令")}</p><div className="extension-tile-actions">{skill.id === SOURCE_CREATOR_ID && <Button variant="ghost" size="sm" onClick={() => { setSkillReview(null); setBuiltinPreview(current => !current); }}>{t("查看指令")}</Button>}<Button variant={skill.enabled ? "secondary" : "outline"} size="sm" disabled={busy || !desktopAvailable} onClick={() => void run(async () => { if (skill.enabled) setItems(await api.skillSetEnabled(skill.id, false)); else await reviewSavedSkill(skill); })}>{skill.enabled ? t("停用") : skill.sourceUrl ? t("检查并启用") : t("启用")}</Button></div></article>)}</div> : <p className="extension-empty-inline">{t("还没有 Skill。可以搜索、粘贴链接或导入本地文件夹。")}</p>}</section>
           <section className="extension-catalog-section" aria-labelledby="extension-find-skills-title"><div className="extension-catalog-heading"><h3 id="extension-find-skills-title">{t("发现 Skills")}</h3><p>{t("获取后先检查指令内容，再决定是否启用。")}</p></div>{skillResults.length || skillSources.length ? <div className="extension-connector-grid">{[...skillResults, ...skillSources].map(item => <article className="extension-tile" key={item.id}><div className="extension-tile-top"><span className="extension-tile-icon"><PuzzlePiece size={18} /></span><strong>{item.name}</strong></div><p className="extension-tile-description">{item.source}</p><div className="extension-tile-actions"><Button size="sm" variant="outline" disabled={busy} onClick={() => void run(() => stageSkill(item.id))}>{t("获取并检查")}</Button></div></article>)}</div> : <p className="extension-empty-inline">{t("搜索所需能力，或使用上方入口添加 Skill。")}</p>}</section>
         </> : <>
@@ -230,17 +240,21 @@ export function ExtensionStorePage({ active, conversationId }: { active: boolean
               <article className="extension-tile" key={connector.id} aria-busy={connectorProgress?.id === connector.id}>
                 <div className="extension-tile-top"><span className="extension-tile-icon">{connector.transport === "gdalStdio" || connector.transport === "stdio" ? <PuzzlePiece size={18} /> : <Network size={18} />}</span><strong>{connector.name}</strong><span className={connector.enabled ? "extension-status enabled" : "extension-status"}>{connector.enabled ? t("已启用") : t("未启用")}</span></div>
                 <p className="extension-tile-description">{connector.transport === "embedded" ? t("内置 · {0}", {"0": connector.url}) : connector.transport === "gdalStdio" ? t("本机 · 当前对话工作区") : connector.transport==="stdio"?t("本机 · {0} · {1} 个参数", {"0": connector.command, "1": connector.argumentCount??0}):connector.url}</p>
-                {!!connector.headerNames?.length && <p className="extension-credential-label">{t("已保存认证 · ")}{connector.headerNames.join("、")}</p>}
-                {connectorProgress?.id === connector.id && <div className="extension-tile-progress"><Loader2 size={17} className="extension-spin" /><span><span role="status">{connector.transport === "gdalStdio" ? t("正在启动 GDAL 并读取工具") : t("正在连接并读取工具")}</span><span aria-hidden="true"> · {elapsedSeconds} {t(" 秒")}</span>{connector.transport === "gdalStdio" && <small>{t("首次运行可能需要准备本机依赖，最长约 2 分钟")}</small>}</span></div>}
+                {!!connector.queryNames?.length&&<p className="extension-credential-label">{t("已保存认证 · ")}{connector.queryNames.join("、")}</p>}{!!connector.headerNames?.length && <p className="extension-credential-label">{t("已保存认证 · ")}{connector.headerNames.join("、")}</p>}
+                {connectorProgress?.id === connector.id && <div className="extension-tile-progress"><Loader2 size={17} className="extension-spin" /><span><span role="status">{connector.transport === "gdalStdio" ? t("正在启动 GDAL 并读取工具") : t("正在连接并读取工具")}</span><span aria-hidden="true"> · {elapsedSeconds} {t(" 秒")}</span>{connector.transport === "gdalStdio" && <small>{t("GIS 组件从技能页单独安装，运行时使用本机缓存")}</small>}</span></div>}
                 {connectorError?.id === connector.id && <p className="extension-tile-error" role="alert"><CircleAlert size={16} />{connectorError.message}</p>}
-                <div className="extension-tile-actions"><Button variant="ghost" size="sm" disabled={busy} onClick={() => void inspectConnector(connector, false)}>{connectorProgress?.id === connector.id && connectorProgress.mode === "inspect" ? t("读取中…") : t("查看工具")}</Button><Button variant={connector.enabled ? "secondary" : "outline"} size="sm" disabled={busy} onClick={() => void (connector.enabled ? run(async () => setItems(await api.mcpSetEnabled(connector.id, false))) : inspectConnector(connector, true))}>{connectorProgress?.id === connector.id && connectorProgress.mode === "enable" ? t("正在测试…") : connector.enabled ? t("停用") : t("测试并启用")}</Button>{connector.transport==="http"&&<Button size="sm" variant="ghost" disabled={busy} onClick={()=>{setDetails(null);setDatabasePreview(false);setOauthConnectorId(connector.id);}}>{connector.oauth?t("重新授权"):t("浏览器授权")}</Button>}{connector.transport!=="embedded"&&<Button variant="ghost" size="icon" aria-label={t("移除 {0}", {"0": connector.name})} disabled={busy} onClick={()=>void run(async()=>{setItems(await api.mcpRemove(connector.id));if(oauthConnectorId===connector.id)setOauthConnectorId(null);if(details?.connectorId===connector.id){setDetails(null);setPendingEnable(null);}})}><Trash2 size={15}/></Button>}</div>
+                <ConnectorActions connector={connector} busy={busy} progress={connectorProgress?.id===connector.id?connectorProgress.mode:undefined}
+                  onInspect={()=>void inspectConnector(connector,false)} onToggle={()=>void(connector.enabled?run(async()=>setItems(await api.mcpSetEnabled(connector.id,false))):inspectConnector(connector,true))}
+                  onKey={mcpProvider(connector.url)?()=>setCredentialSetup(connector.url):undefined}
+                  onAuth={connector.transport==='http'&&connector.url!==AMAP_MCP_URL?()=>{setDetails(null);setDatabasePreview(false);setOauthConnectorId(connector.id);}:undefined}
+                  onRemove={connector.transport!=='embedded'?()=>void run(async()=>{setItems(await api.mcpRemove(connector.id));if(oauthConnectorId===connector.id)setOauthConnectorId(null);if(details?.connectorId===connector.id){setDetails(null);setPendingEnable(null);}}):undefined}/>
               </article>
             )}</div>
           </section>
           <section className="extension-catalog-section" aria-labelledby="extension-discover-title">
-            <div className="extension-catalog-heading"><h3 id="extension-discover-title">{t("发现连接器")}</h3><p>{t("公开目录仅展示无需额外鉴权的 HTTP 服务，添加前请核对来源。")}</p></div>
-            {(!items.connectors.some(item => item.transport === "gdalStdio") || results.length > 0) ? <div className="extension-connector-grid">
-              {!items.connectors.some(item => item.transport === "gdalStdio") && <article className="extension-tile"><div className="extension-tile-top"><span className="extension-tile-icon"><PuzzlePiece size={18} /></span><strong>{t("GDAL 地理处理")}</strong><span className="extension-status">{t("本机")}</span></div><p className="extension-tile-description">{t("查看、统计、转换、裁剪和处理工作区中的栅格与矢量文件")}</p><div className="extension-tile-actions"><Button size="sm" variant="outline" disabled={busy || !conversationId} onClick={() => void run(async () => setItems(await api.mcpAddGdal()))}><Plus size={16} />{t("添加")}</Button></div></article>}
+            <div className="extension-catalog-heading"><h3 id="extension-discover-title">{t("发现连接器")}</h3><p>{t("搜索公开 HTTP 服务或官方服务预设，添加前请核对来源和认证要求。")}</p></div>
+            {(results.length > 0) ? <div className="extension-connector-grid">
+
               {results.map(item => <article className="extension-tile" key={item.name}><div className="extension-tile-top"><span className="extension-tile-icon"><Network size={18} /></span><strong>{item.title}</strong><span className="extension-status">MCP</span></div><p className="extension-tile-description">{item.description || item.url}</p><div className="extension-tile-actions"><Button size="sm" variant="outline" disabled={busy || items.connectors.some(connector => connector.url === item.url)} onClick={() => void run(() => addConnector(item.title.slice(0, 80), item.url))}>{items.connectors.some(connector => connector.url === item.url) ? t("已添加") : <><Plus size={16} />{t("添加")}</>}</Button></div></article>)}
             </div> : <p className="extension-empty-inline">{t("输入关键词搜索公开 MCP 服务，或添加自定义地址。")}</p>}
           </section>

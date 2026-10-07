@@ -17,6 +17,13 @@ use tauri::{ipc::Channel, AppHandle, State};
 use tauri_plugin_opener::OpenerExt;
 use uuid::Uuid;
 pub mod credit_history;
+mod account_profile;
+
+#[tauri::command]
+pub async fn account_profile(state: State<'_, ServiceState>, account_id: String) -> Result<Value, ServiceError> {
+    let profile = account_profile::account_profile(state, account_id).await?;
+    serde_json::to_value(profile).map_err(|_| error("PROFILE_RESPONSE", "账号资料响应无效"))
+}
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]

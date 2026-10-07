@@ -579,7 +579,7 @@
     "type": "function",
     "function": {
       "name": "plan_imagery",
-      "description": "Calculate a local imagery plan. Bounds are optional only when the user attached a GeoJSON boundary in the desktop app. This does not approve or start a download. Select zoom using exactly one of: zoom for one level, zoomLevels for explicit multiple levels, or paired zoomMin/zoomMax for an inclusive range. GeoTIFF uses bounded-memory streaming BigTIFF. Supply boundaryId to explicitly select one saved range; for multiple regions use plan_imagery_batch.",
+      "description": "Calculate a local imagery plan. Bounds are optional only when the user attached a GeoJSON boundary in the desktop app. This does not approve or start a download. Select zoom using exactly one of: zoom for one level, zoomLevels for explicit multiple levels, or paired zoomMin/zoomMax for an inclusive range. GeoTIFF uses bounded-memory streaming BigTIFF. Default to uncompressed GeoTIFF and no pyramid for fast export; select compression or pyramids only when the user requests them. Supply boundaryId to explicitly select one saved range; for multiple regions use plan_imagery_batch.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -646,16 +646,32 @@
           "exportOptions": {
             "type": "object",
             "properties": {
+              "targetCrs": {
+                "type": "string",
+                "description": "Explicit user-selected target EPSG CRS, or the saved conversation default. Never infer it. Ask with an interactive card when missing. GeoTIFF/PNG/JPEG can be reprojected by the optional raster conversion skill; non-native output images include world files. MBTiles/tile GeoPackage/raw tiles only support EPSG:3857."
+              },
+              "resampling": {
+                "type": "string",
+                "enum": [
+                  "nearest",
+                  "bilinear",
+                  "cubic"
+                ],
+                "description": "Nearest by default preserves pixel values; state this in coordinate options. A user can request bilinear/cubic."
+              },
               "compression": {
                 "type": "string",
                 "enum": [
                   "none",
                   "lzw",
                   "deflate"
-                ]
+                ],
+                "default": "none",
+                "description": "Default none for fast export; only choose LZW or DEFLATE when the user requests compression."
               },
               "buildPyramid": {
-                "type": "boolean"
+                "type": "boolean",
+                "default": false
               },
               "generateSidecars": {
                 "type": "boolean"
@@ -795,7 +811,7 @@
     "type": "function",
     "function": {
       "name": "extensions_list",
-      "description": "Discover enabled desktop Skills and MCP connector tools. Pass an optional query to find relevant tools when the list is large. Read Skill instructions with skill_read when relevant, or invoke a listed MCP tool with mcp_call. A connected MCP service is not automatically authorized as an imagery download source.",
+      "description": "Read the current account's saved connector inventory including disabled connectors, plus tool schemas for enabled connectors and enabled Skills. registeredConnectors lists saved configurations independently of query filtering or network discovery. registered=true and enabled=false means already added but not enabled, never not connected or absent. Report the latest returned state, not stale conversation claims. Disabled connectors are not probed or callable; use mcp_connect with their connectorId to prepare an enable-review card, without requesting the URL/key again. Enabling requires actual user confirmation. Query filters relevant schemas. A connector never authorizes imagery downloads by itself.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -899,7 +915,7 @@
     "type": "function",
     "function": {
       "name": "mcp_registry_search",
-      "description": "Search the official MCP Registry for public remote Streamable HTTP connectors that do not require authentication. Search by the capability requested by the user. Results are candidates, not trusted or enabled connectors.",
+      "description": "Find public Streamable HTTP connectors in the official MCP Registry or verified official provider presets. Search by the requested capability or provider name. Amap and Mapbox have verified official presets which work even when the Registry is unavailable. Results identify their source; credentials are entered through a local form. On REGISTRY_UNAVAILABLE do not repeatedly vary keywords in the same turn: explain the network failure, use an available official provider preset, or wait for the user. Candidates are not trusted or enabled connectors.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -918,10 +934,16 @@
     "type": "function",
     "function": {
       "name": "mcp_connect",
-      "description": "Stage and test one exact MCP Registry candidate returned by mcp_registry_search in this conversation, or an exact HTTPS/loopback MCP URL explicitly provided by the user in this turn. The desktop lists its tools. If not already enabled, the user confirms in the conversation card before mcp_call. Do not choose an unrelated connector or infer authorization for imagery downloads.",
+      "description": "Prepare an existing account connector by connectorId or its exact saved URL; saved targets reuse credentials without needing a new user URL confirmation. For a search result use its exact candidateId (registryName is also accepted). New URLs require direct human input or an accepted task question. Never invent IDs. Registry results can already include a saved connectorId: reuse it. Do not re-register or ask again for an existing address/key. New credentials belong only in the local form. If requiresLocalConfiguration is returned, explain the card and stop retrying. A successful preparation displays the enabling review card; only an actual human click enables tools. Amap's verified preset uses Streamable HTTP at /mcp; do not offer an unverified /sse alternative. Do not infer download authorization.",
       "parameters": {
         "type": "object",
         "properties": {
+          "connectorId": {
+            "type": "string"
+          },
+          "candidateId": {
+            "type": "string"
+          },
           "registryName": {
             "type": "string"
           },
@@ -998,7 +1020,7 @@
     "type": "function",
     "function": {
       "name": "mcp_result_read",
-      "description": "Read the next page of a large MCP result using executionId and nextOffset returned by mcp_call or the prior page. Pages are consecutive slices of the same saved result and do not call the MCP service again. If nextOffset is non-null, the result is incomplete; continue reading before claiming to have reviewed the full response.",
+      "description": "Read a saved non-geometry MCP page with its executionId and nextOffset. Coordinate-heavy results instead return bulkData metadata and exact field references; do not page through coordinates. Use mcp_result_export and local tools to process the complete saved data. A summary is not evidence that the complete result was reviewed.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -1012,6 +1034,93 @@
         "required": [
           "executionId",
           "offset"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "mcp_result_export",
+      "description": "Materialize the complete original saved MCP JSON or one exact jsonPointer field as a JSON file in this conversation workspace. Use executionId from a bulkData result; an empty or omitted jsonPointer exports the whole original receipt. Pointers can traverse JSON encoded in MCP content[].text. Returns a relativePath, byte count and SHA256, never inline coordinates. All points and their original coordinate system are unchanged; inspect source metadata before spatial processing. Requires current workspace Full Access; no overwrite, no upstream request. Use local scripts/tools with the returned file rather than reading the whole coordinate file into model context.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "executionId": {
+            "type": "string"
+          },
+          "jsonPointer": {
+            "type": "string",
+            "maxLength": 2048
+          }
+        },
+        "required": [
+          "executionId"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "ask_user",
+      "description": "Resolve missing or ambiguous user requirements with an interactive question card before planning or executing. Ask about source, scope, time, resolution, output format, merge/split or consequential alternatives as needed. Inspect facts first and do not repeat given requirements. If the user explicitly delegated this choice or said not to ask, do not call: select feasible options and explain assumptions. The app adds custom text; omit Other options. No option is automatically accepted. Never request passwords, API keys or other secrets here.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "questions": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 3,
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "Unique stable question ID."
+                },
+                "header": {
+                  "type": "string",
+                  "description": "Short tab label, e.g. Period or Comparison."
+                },
+                "question": {
+                  "type": "string"
+                },
+                "options": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 5,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "label": {
+                        "type": "string"
+                      },
+                      "description": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "label",
+                      "description"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "header",
+                "question"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "questions"
         ],
         "additionalProperties": false
       }
@@ -1136,7 +1245,8 @@
             "enum": [
               "mvt",
               "osm",
-              "tiles3d"
+              "tiles3d",
+              "online"
             ]
           },
           "name": {
@@ -1145,6 +1255,27 @@
           "sourceUrl": {
             "type": "string",
             "description": "MVT XYZ template or 3D root tileset.json. Omit for default OSM Overpass endpoint."
+          },
+          "onlineConnectionId": {
+            "type": "string",
+            "description": "Saved authenticated WFS/ArcGIS/OGC feature connection."
+          },
+          "layer": {
+            "type": "string"
+          },
+          "sourceCrs": {
+            "type": "string",
+            "description": "Known source CRS only; do not guess."
+          },
+          "maxFeatures": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "pageSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000
           },
           "connectionId": {
             "type": "string",
@@ -1208,6 +1339,10 @@
               ],
               "additionalProperties": false
             }
+          },
+          "targetCrs": {
+            "type": "string",
+            "description": "Explicit EPSG target chosen by the user or saved conversation default. Ask if unspecified. GeoJSON only EPSG:4326; other CRS requires GPKG only. PBF/MBTiles preserve original tile grids; 3D Tiles preserves its native scene coordinates."
           },
           "allowPartial": {
             "type": "boolean"
@@ -1742,7 +1877,7 @@
     "type": "function",
     "function": {
       "name": "plan_imagery_batch",
-      "description": "Plan imagery for multiple saved ranges. mode merge creates one GeoTIFF clipped to the union; split creates a separate named plan/output folder per region. Requires actual boundaryIds from this conversation. Returns each plan and any per-region errors; never treat partial success as all completed. Native capacity limits apply. Does not start downloads: fullAccess may call jobs_start per plan when user requested execution; confirmEach waits for the plan controls. Select zoom using exactly one of: zoom for one level, zoomLevels for explicit multiple levels, or paired zoomMin/zoomMax for an inclusive range. GeoTIFF uses bounded-memory streaming BigTIFF. Supply boundaryId to explicitly select one saved range; for multiple regions use plan_imagery_batch.",
+      "description": "Plan imagery for multiple saved ranges. mode merge creates one GeoTIFF clipped to the union; split creates a separate named plan/output folder per region. Requires actual boundaryIds from this conversation. Returns each plan and any per-region errors; never treat partial success as all completed. Native capacity limits apply. Does not start downloads: fullAccess may call jobs_start per plan when user requested execution; confirmEach waits for the plan controls. Select zoom using exactly one of: zoom for one level, zoomLevels for explicit multiple levels, or paired zoomMin/zoomMax for an inclusive range. GeoTIFF uses bounded-memory streaming BigTIFF. Default to uncompressed GeoTIFF and no pyramid for fast export; select compression or pyramids only when the user requests them. Supply boundaryId to explicitly select one saved range; for multiple regions use plan_imagery_batch.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -1816,16 +1951,32 @@
           "exportOptions": {
             "type": "object",
             "properties": {
+              "targetCrs": {
+                "type": "string",
+                "description": "Explicit user-selected target EPSG CRS, or the saved conversation default. Never infer it. Ask with an interactive card when missing. GeoTIFF/PNG/JPEG can be reprojected by the optional raster conversion skill; non-native output images include world files. MBTiles/tile GeoPackage/raw tiles only support EPSG:3857."
+              },
+              "resampling": {
+                "type": "string",
+                "enum": [
+                  "nearest",
+                  "bilinear",
+                  "cubic"
+                ],
+                "description": "Nearest by default preserves pixel values; state this in coordinate options. A user can request bilinear/cubic."
+              },
               "compression": {
                 "type": "string",
                 "enum": [
                   "none",
                   "lzw",
                   "deflate"
-                ]
+                ],
+                "default": "none",
+                "description": "Default none for fast export; only choose LZW or DEFLATE when the user requests compression."
               },
               "buildPyramid": {
-                "type": "boolean"
+                "type": "boolean",
+                "default": false
               },
               "generateSidecars": {
                 "type": "boolean"

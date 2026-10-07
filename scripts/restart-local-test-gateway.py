@@ -1,25 +1,42 @@
-"""Back up the current development ledger, verify its PID, then restart locally."""
+"""Preserve the actual development ledger and restart its verified listening process."""
 from pathlib import Path
-import json, os, sqlite3, subprocess, sys, tempfile, datetime
+import datetime, json, os, sqlite3, subprocess, sys
+import psutil
+
+from windows_detached_process import independent_entrypoint
+if independent_entrypoint(__file__,sys.argv[1:],label='development-gateway'):
+    raise SystemExit(0)
+
 root=Path(__file__).resolve().parents[1]
 logs=Path(os.environ['LOCALAPPDATA'])/'GeoD Agent/dev-logs'
-pid=int((logs/'local-gateway.pid').read_text())
-probe=subprocess.run(['powershell','-NoProfile','-Command',f'Get-CimInstance Win32_Process -Filter "ProcessId={pid}" | Select-Object ProcessId,CommandLine | ConvertTo-Json -Compress'],capture_output=True,text=True,check=True)
-process=json.loads(probe.stdout)
-if process['ProcessId']!=pid or 'local-desktop-gateway.mjs' not in process['CommandLine']:
-    raise SystemExit('Recorded PID is not the GeoD local test gateway')
+script=(root/'services/geod-agent-model-gateway/dev/local-desktop-gateway.mjs').resolve()
+pids={c.pid for c in psutil.net_connections(kind='tcp') if c.pid and c.laddr and c.laddr.ip=='127.0.0.1' and c.laddr.port==43123 and c.status=='LISTEN'}
+matches=[]
+for pid in pids:
+    process=psutil.Process(pid)
+    command=process.cmdline()
+    if len(command)>1 and Path(command[1]).resolve()==script:
+        matches.append(process)
+if len(matches)!=1:
+    raise SystemExit('Expected exactly one verified GeoD local test gateway on port 43123')
+process=matches[0]
+created=process.create_time()
+source=process.environ().get('GEOD_LOCAL_GATEWAY_DB_PATH')
 target=logs/'local-gateway.sqlite'
-sources=sorted(Path(tempfile.gettempdir()).glob('geod-desktop-gateway-*/gateway.sqlite'),key=lambda p:p.stat().st_mtime,reverse=True)
-if not target.exists() and sources:
-    with sqlite3.connect(sources[0].as_uri()+'?mode=ro',uri=True) as source,sqlite3.connect(target) as destination:
-        source.backup(destination)
-    print('Current local test ledger retained using SQLite backup')
-if target.exists():
+if not source:
+    raise SystemExit('Gateway ledger path unavailable; refusing to replace an unverified ledger')
+source=Path(source).resolve()
+with sqlite3.connect(source.as_uri()+'?mode=ro',uri=True) as ledger:
+    if ledger.execute("SELECT COUNT(*) FROM model_generations WHERE state IN ('reserved','streaming')").fetchone()[0]:
+        raise SystemExit('A model request is still active; finish it before restarting')
+    if source!=target.resolve():
+        with sqlite3.connect(target) as destination:
+            ledger.backup(destination)
     backup=logs/('local-gateway-backup-'+datetime.datetime.now().strftime('%Y%m%d-%H%M%S')+'.sqlite')
-    with sqlite3.connect(target.as_uri()+'?mode=ro',uri=True) as source:
-        if source.execute("SELECT COUNT(*) FROM model_generations WHERE state IN ('reserved','streaming')").fetchone()[0]:
-            raise SystemExit('A model request is still active; finish it before restarting')
-        with sqlite3.connect(backup) as destination: source.backup(destination)
-    print('Existing local test ledger backed up before restart')
-subprocess.run(['taskkill','/PID',str(pid),'/F'],stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,check=True)
+    with sqlite3.connect(backup) as destination:
+        ledger.backup(destination)
+assert process.create_time()==created and Path(process.cmdline()[1]).resolve()==script
+process.terminate()
+process.wait(timeout=10)
 subprocess.run([sys.executable,'-X','utf8',str(root/'services/geod-agent-model-gateway/dev/start-local-gateway.py'),'--existing-config'],check=True)
+print(json.dumps({'developmentGatewayRestartRequested':True,'ledgerPreserved':True}))

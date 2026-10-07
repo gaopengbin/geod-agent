@@ -1,5 +1,36 @@
 # Third-party notices
 
+## Proj4js, WKT parser and MGRS
+
+GeoD uses Proj4js 2.22.0, wkt-parser 1.5.6 and mgrs 1.0.0 to display exported
+rasters in their actual coordinate systems. Definitions are supplied by the
+native GIS conversion worker; map previews do not fetch a remote CRS registry.
+Upstream: https://github.com/proj4js/proj4js
+
+Copyright (c) 2014, Mike Adair, Richard Greenwood, Didier Richard, Stephen Irons,
+Olivier Terral and Calvin Metcalf (Proj4js and wkt-parser)
+
+Copyright (c) 2012, Mike Adair, Richard Greenwood, Didier Richard, Stephen Irons,
+Olivier Terral, Calvin Metcalf (mgrs)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
 ## Cesium MCP Bridge and contracts
 
 The three-dimensional scene uses the unmodified published packages
@@ -100,7 +131,7 @@ the installer. Audio inference runs locally. Only transcript text is passed
 to the selected AI model. FFmpeg is used solely for development fixtures
 and is not included in this runtime.
 
-## Application-local Python and GIS dependencies
+## Application-local Python and optional GIS skills
 
 Document extraction also bundles unmodified pypdf 6.19.0 under BSD-3-Clause.
 Its wheel checksum is pinned in `vendor/document-runtime.lock.json`, and its
@@ -122,16 +153,19 @@ in msoffcrypto-tool 6.0.0. Original and modified source hashes are recorded in
 the generated runtime manifest. Password verification and payload integrity
 verification remain enabled; unmodified upstream license files are retained.
 
-The release includes the unmodified Python 3.13.11 Windows embeddable package
-from python.org, under its bundled `gdal-runtime/LICENSE.txt`. Its pinned
-official archive digest and complete resource hashes ship in
-`gdal-runtime/manifest.json`. The application-local dependencies include
-GDAL MCP 1.1.3, GeoPandas, pyogrio, rasterio, Fiona, Shapely, NumPy, pandas,
-pyproj and FastMCP. Exact dependency versions and archive hashes are pinned
-in `vendor/gdal-runtime-1.1.3.lock`; package license files remain in their
-distributed `.dist-info` and bundled library directories. GeoD owns the
-input/output adapters and Windows reflection-storage fix. Users do not
-need to install Python, uv, or download these dependencies at runtime.
+
+The base installer includes CPython 3.13.11 from python.org under the Python
+Software Foundation license. Its license and pinned file hashes remain in
+python-runtime/LICENSE.txt and python-runtime/manifest.json.
+
+GIS packages are separately installed, hash-pinned components. The vector
+component contains GeoPandas, Pyogrio, PyProj, Shapely and Pandas; the raster
+component contains Rasterio. NumPy and shared dependencies are cached once.
+Each component retains distribution license files and metadata. Versions and
+archive hashes are recorded in vendor/gis-components.json; original accepted
+wheel pins are recorded in vendor/gdal-runtime-1.1.3.lock. These packages are
+not installed into the user's system Python. The bundled skill MCP adapter is
+GeoD code and does not require a separate FastMCP runtime.
 
 The source files under `src/components/agents/`, beUI files under
 `src/components/motion/`, and their supporting files in `src/lib/hooks/` and
@@ -221,41 +255,6 @@ WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
 ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-## Local scan recognition
-
-Scanned PDF and image text uses RapidOCR 3.9.2 with its bundled PP-OCRv6
-small detection/recognition and PP-OCRv4 orientation models, ONNX Runtime
-1.30.0 CPU, and pypdfium2 5.13.0 / PDFium for rendering. Sources:
-https://github.com/RapidAI/RapidOCR,
-https://github.com/microsoft/onnxruntime,
-https://github.com/pypdfium2-team/pypdfium2.
-
-Dependencies and archive hashes are fixed in `vendor/ocr-runtime.lock`.
-The complete package and dependency license files, including the PDFium
-third-party notices, remain in `ocr-runtime/` with the portable packages.
-The runtime uses the existing application-local Python interpreter; it
-does not install into the user's Python environment or download OCR
-models while reading files.
-
-## Binary Office documents
-
-Legacy Word, Excel and PowerPoint use Apache POI 5.5.1 from the maintained
-Apache Tika 3.3.2 application distribution (Apache-2.0), with a private
-Eclipse Temurin OpenJDK JRE 21.0.12.1+1 (GPL-2.0 with the Classpath Exception).
-Sources: https://tika.apache.org/download.html, https://poi.apache.org/,
-https://github.com/adoptium/temurin21-binaries/releases/tag/jdk-21.0.12.1%2B1.
-
-Archive pins are in `vendor/legacy-office-runtime.lock.json`. Full Tika
-LICENSE/NOTICE and Java `legal/` licenses are retained in
-`legacy-office-runtime/`, including their dependency notices. The application
-reads stored content; it does not launch Office, execute macros, recalculate
-formulas or install Java into the user's system.
-
-Windows 10 or later uses the operating system Universal CRT. The private
-Java runtime omits the archive's redundant app-local `ucrtbase.dll`; it does
-not replace, configure, or install the Windows runtime. See
-https://learn.microsoft.com/en-us/cpp/windows/universal-crt-deployment.
-
 Some imported component references originated from
 [Phosphor Icons](https://github.com/phosphor-icons/react); their notice is
 retained below.
@@ -281,3 +280,15 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## RTK (optional component)
+
+RTK 0.40.0 is downloaded separately from the official release and verified
+against the pinned archive and executable SHA-256 values in vendor/rtk-runtime.json.
+It is not included in the desktop installer. GeoD invokes its unmodified stdin
+pipe filters; original user commands are executed by the existing engine.
+
+Upstream: https://github.com/rtk-ai/rtk/tree/v0.40.0
+
+The tagged LICENSE is Apache License 2.0. The complete license is retained in
+vendor/rtk-0.40.0-LICENSE.txt and installed alongside the optional executable.

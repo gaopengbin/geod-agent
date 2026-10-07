@@ -5,7 +5,7 @@ const permissionPrefix = "【本轮本机权限状态】\n";
 const permissionEnd = "\n【权限状态结束】\n";
 
 /** Refresh native permission on every model round, preserving the user's request and URLs. */
-export function workspacePermissionContext(messages: AgentMessage[], permission: WorkspaceSettings["permission"]): AgentMessage[] {
+export function workspacePermissionContext(messages: AgentMessage[], permission: WorkspaceSettings["permission"], outputCrs?: string | null): AgentMessage[] {
   const current = messages.map(message => ({ ...message }));
   const latest = [...current].reverse().find(message => message.role === "user");
   if (!latest) throw new Error("当前请求缺少用户消息。请重新发送请求。");
@@ -14,11 +14,11 @@ export function workspacePermissionContext(messages: AgentMessage[], permission:
     const end = request.indexOf(permissionEnd);
     if (end >= 0) request = request.slice(end + permissionEnd.length);
   }
-  const state = JSON.stringify({ permission, canStartWithoutPlanConfirmation: permission === "fullAccess" });
+  const state = JSON.stringify({ permission, canStartWithoutPlanConfirmation: permission === "fullAccess", outputCrs: outputCrs ?? null });
   const instruction = permission === "fullAccess"
-    ? "当前对话为完全访问。用户要求下载或执行时，生成或核对计划后继续调用 jobs_start，不等待计划卡片确认，不沿用旧消息中的逐次确认状态。仅要求规划、预览或估算时不启动任务。执行结果以本机工具返回为准。"
+    ? "当前对话为完全访问。用户要求下载或执行时，生成或核对计划后继续调用 jobs_start，不等待计划卡片确认，不沿用旧消息中的逐次确认状态。仅要求规划、预览或估算时不启动任务。执行结果以本机工具返回为准。完全访问不代表用户授权代选参数。任何影响结果的需求不明确时，先通过 ask_user 询问并等待回答，不能擅自决定范围、时期、缩放、格式、合并方式或降级方案；只有用户明确要求不要询问或在相应范围内授权你决定时，才自行选择并说明假设。已经明确的要求和工具能查询的事实不用重复问。"
     : "当前对话为逐次确认。生成计划后等待用户在右侧任务面板确认，不自动调用 jobs_start。聊天里的任务入口可打开对应任务。";
-  latest.content = permissionPrefix + state + "\n" + instruction + "\n下载由本机后台执行。启动本轮用户要求的全部计划后结束本轮；批量任务需逐个启动成功计划，不能只启动第一个。查询到任务仍在运行时报告一次当前状态，不反复调用 jobs_get/jobs_events 等待完成。" + permissionEnd + request;
+  latest.content = permissionPrefix + state + "\n" + instruction + "\noutputCrs 是用户明确选择的当前会话默认成果坐标系；非空时沿用，当前请求单次指定可覆盖但不改写默认。为空且本次未指定时，通过询问卡片确认，不擅自默认。需要查看本轮新更改时查询 workspace_status。\n下载由本机后台执行。启动本轮用户要求的全部计划后结束本轮；批量任务需逐个启动成功计划，不能只启动第一个。查询到任务仍在运行时报告一次当前状态，不反复调用 jobs_get/jobs_events 等待完成。" + permissionEnd + request;
   return current;
 }
 
@@ -88,7 +88,7 @@ const labels: Record<string, string> = {
   jobs_get: "检查任务状态",
   jobs_events: "读取任务进度",
   artifacts_inspect: "核验成果文件",
-  extensions_list: "检查已启用扩展",
+  extensions_list: "检查技能与连接器",
   attachment_list: "查看对话文档",
   attachment_read: "读取文档内容",
   workspace_gis_files_list: "查找工作区数据文件",
@@ -103,6 +103,7 @@ const labels: Record<string, string> = {
   skill_read: "读取 Skill 指令",
   mcp_call: "调用 MCP 工具",
   mcp_result_read: "读取 MCP 结果",
+  mcp_result_export: "保存本机数据文件",
   data_download_plan: "规划数据下载",
   data_download_start: "启动后台数据下载",
   data_download_list: "查看数据任务",
@@ -150,12 +151,13 @@ export function sourceRegistrationDraft(args: Record<string, unknown>): SourceRe
 }
 
 export function userProvidedUrl(message: string, url: string): boolean {
-  return (message.match(/https?:\/\/[^\s<>"'“”]+/giu) ?? [])
+  return (message.match(/https?:\/\/[^\s<>"'“”，。；、]+/giu) ?? [])
     .some(candidate => candidate.replace(/[，。；、）)\]}]+$/u, "") === url);
 }
 
 export function toolDisplay(name: string, output: unknown): Pick<DisplayMessage, "content" | "toolName" | "toolStatus" | "sourceDraft" | "extensionProposal"> {
   const data = output && typeof output === "object" ? output as Record<string, unknown> : {};
+  if (name === "ask_user") return { toolName: name, toolStatus: data.error ? "attention" : "success", content: data.knownFacts ? "补充需求 · 已查明本机配置，无需重复询问" : data.error ? "补充需求 · 已取消或未完成" : "补充需求 · 已收到你的选择" };
   const title = name === "mcp_call" && data.kind === "builtin"
     ? ({ search_sources: "搜索网络图源", inspect_source: "检查图源服务", lookup_boundary: "查询行政边界", lookup_boundaries: "查询多个行政区域", lookup_neighbors: "查询相邻区域" }[String(data.toolName)] ?? "调用图源工具")
     : labels[name] ?? name;
@@ -171,7 +173,8 @@ export function toolDisplay(name: string, output: unknown): Pick<DisplayMessage,
   if (name === "source_configure") return { toolName: name, toolStatus: "success", content: `${title} · 已保存 ${String(data.name ?? data.id ?? "")}` };
   if (name === "mcp_connect" || name === "gdal_connect" || name === "workspace_skill_import" || name === "skill_connect") {
     const proposal = data.extensionProposal as DisplayMessage["extensionProposal"];
-    if (proposal) return { toolName: name, toolStatus: "attention", content: `${title} · ${proposal.name}，等待确认启用`, extensionProposal: proposal };
+    if (proposal) return { toolName: name, toolStatus: "attention", content: `${title} · ${proposal.name}，${proposal.requiresKey?'等待本机填写 Key':'等待确认启用'}`, extensionProposal: proposal };
+    if(data.requiresLocalConfiguration)return {toolName:name,toolStatus:'attention',content:`${title} · 等待本机配置，请打开已有配置卡`};
     return { toolName: name, toolStatus: "success", content: `${title} · ${String(data.connectorId ?? "已接入")}` };
   }
   if (name === "mcp_registry_search" || name === "skill_catalog_search" || name === "skill_source_inspect") return { toolName: name, toolStatus: "success", content: `${title} · ${Array.isArray(data.candidates) ? data.candidates.length : 0} 个候选` };
@@ -205,13 +208,16 @@ export function toolDisplay(name: string, output: unknown): Pick<DisplayMessage,
       const boundary = data.result as { found?: boolean; name?: string; reason?: string; collectedAt?: string } | undefined;
       return { toolName: name, toolStatus: boundary?.found ? "success" : "attention", content: boundary?.found ? `${title} · ${boundary.name}，数据采集于 ${boundary.collectedAt}` : `${title} · ${boundary?.reason ?? "未找到边界"}` };
     }
-    const result = data.result as { error?: string; message?: string; paged?: boolean } | undefined;
+    const result = data.result as { error?: string; message?: string; paged?: boolean; bulkData?: boolean; isError?:boolean } | undefined;
     if (result?.error) return { toolName: name, toolStatus: "attention", content: `${title} · ${result.message ?? (result.error === "MCP_RESULT_TOO_LARGE" ? "返回内容超过本机处理上限，请缩小查询范围" : result.error)}` };
-    return { toolName: name, toolStatus: "success", content: `${title} · ${String(data.toolName ?? "已完成")}${result?.paged ? "，正在分段读取" : ""}` };
+    if(result?.isError)return {toolName:name,toolStatus:"attention",content:`${title} · 服务返回错误`};
+    return { toolName: name, toolStatus: "success", content: `${title} · ${String(data.toolName ?? "已完成")}${result?.bulkData ? "，完整坐标保存在本机" : result?.paged ? "，正在分段读取" : ""}` };
   }
   if (name === "mcp_result_read") {
-    const page = data.result as { offset?: number; totalChars?: number; complete?: boolean } | undefined;
+    const page = data.result as { offset?: number; totalChars?: number; complete?: boolean; bulkData?:boolean } | undefined;
+    if(page?.bulkData)return {toolName:name,toolStatus:"success",content:`${title} · 完整坐标保存在本机`};
     return { toolName: name, toolStatus: "success", content: `${title} · ${page?.complete ? "已读完" : "继续读取"} ${page?.offset ?? 0}/${page?.totalChars ?? "?"}` };
   }
+  if(name==="mcp_result_export")return {toolName:name,toolStatus:data.saved===true?"success":"attention",content:`${title} · ${data.saved===true?String(data.relativePath??"已保存"):"未保存"}`};
   return { toolName: name, toolStatus: "success", content: `${title} · 已完成` };
 }

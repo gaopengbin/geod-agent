@@ -1,6 +1,7 @@
 import { api, errorMessage, type AgentMessage, type AgentToolCall, type Generation, type ImageAttachment, type DocumentAttachment } from "./api";
 import { modelMessagesWithoutArtifactPaths } from "./model-artifacts";
 import { guardedCodexTurn } from "./codex-liveness";
+import {runtimeCompatibilityFailure} from "./app-error";
 
 export interface CodexTokenUsage { inputTokens: number; outputTokens: number; cachedInputTokens: number; modelContextWindow: number | null }
 export type CodexEvent =
@@ -22,7 +23,7 @@ export interface CodexHooks {
   onModel: (generationId: string, messages: AgentMessage[]) => void | Promise<void>;
   onGeneration: (generation: Generation) => void;
   onRequest: (request: Extract<CodexEvent, { type: "request" }>) => Promise<unknown>;
-  execute: (call: AgentToolCall, executionId: string, context: AgentMessage[]) => Promise<{ result: unknown }>;
+  execute: (call: AgentToolCall, executionId: string, context: AgentMessage[], requestId:string) => Promise<{ result: unknown }>;
 }
 
 /** Codex owns the turn loop; this adapter only fulfils requests from that loop. */
@@ -54,14 +55,14 @@ export async function runCodexTurn(runId: string, conversationId: string, input:
       } else if (event.type === "tool") {
         await checkpoint;
         const call: AgentToolCall = { id: event.callId, type: "function", function: { name: event.tool, arguments: JSON.stringify(event.arguments) } };
-        const output = await hooks.execute(call, `codex:${conversationId}`, context);
+        const output = await hooks.execute(call, `codex:${conversationId}`, context,event.requestId);
         context = [...context, { role: "assistant", content: null, tool_calls: [call] }, { role: "tool", tool_call_id: call.id, content: JSON.stringify(output.result) }];
         await respond(event.requestId, output);
       }
     } catch (cause) {
       if (event.type === "request" || event.type === "tool") await respond(event.requestId, null, errorMessage(cause)).catch(() => {});
       callbacksError = cause;
-      if (event.type !== "request" && event.type !== "tool") await api.codexCommand(runId, { type: "interrupt" }).catch(() => {});
+      if ((event.type !== "request" && event.type !== "tool") || runtimeCompatibilityFailure(cause)) await api.codexCommand(runId, { type: "interrupt" }).catch(() => {});
     }
   };
   try {

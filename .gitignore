@@ -3,6 +3,7 @@ target/
 node_modules/
 dist/
 artifacts/
+.dev-cache/
 .vite/
 .turbo/
 *.tsbuildinfo
@@ -27,6 +28,7 @@ infra/postgis-test/.secrets/
 apps/geod-agent-desktop/src-tauri/resources/codex/
 apps/geod-agent-desktop/src-tauri/resources/pgedge/
 apps/geod-agent-desktop/src-tauri/resources/gdal/
+apps/geod-agent-desktop/src-tauri/resources/python/
 apps/geod-agent-desktop/src-tauri/resources/documents/
 apps/geod-agent-desktop/src-tauri/resources/dbhub/
 apps/geod-agent-desktop/src-tauri/resources/audio/

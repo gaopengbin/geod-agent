@@ -280,7 +280,13 @@ pub fn plan(
     if spec.export_options.as_ref().is_some_and(|options| options.jpeg_quality == 0 || options.jpeg_quality > 100) {
         return Err(PlanError::new("INVALID_SPEC", "JPEG quality must be between 1 and 100"));
     }
-    if let Some(options) = &spec.export_options {
+    if let Some(options) = &mut spec.export_options {
+        if let Some(crs) = &mut options.target_crs {
+            *crs = geod_core::crs::normalize(crs).map_err(|e|PlanError::new(e.code,e.message))?;
+            if crs != "EPSG:3857" && spec.output_formats.iter().any(|f|matches!(f,OutputFormat::Mbtiles | OutputFormat::GeoPackage | OutputFormat::Tiles)) {
+                return Err(PlanError::new("OUTPUT_CRS_FORMAT_CONFLICT", "瓦片容器固定为 EPSG:3857；请使用 GeoTIFF、PNG 或 JPEG，或重新确认坐标系"));
+            }
+        }
         if options.elevation_encoding.is_some() && (spec.output_formats != [OutputFormat::GeoTiff] || !options.overlay_sources.is_empty()) {
             return Err(PlanError::new("INVALID_DEM_OUTPUT", "Elevation requires GeoTIFF only, without annotation overlays"));
         }
@@ -337,7 +343,7 @@ pub fn plan(
     }
     let required_free_disk_bytes =
         geod_core::imagery::required_free_disk_bytes_for_outputs(total_tiles, source.tile_size,
-            spec.output_formats.len(), spec.output_formats.contains(&OutputFormat::GeoTiff)
+            spec.output_formats.len() + if spec.export_options.as_ref().and_then(|o|o.target_crs.as_deref()).is_some_and(|c|c!="EPSG:3857"){8}else{0}, spec.output_formats.contains(&OutputFormat::GeoTiff)
                 && spec.export_options.as_ref().is_some_and(|options| options.build_pyramid))
             .map_err(|cause| PlanError::new(cause.code, cause.message))?;
 

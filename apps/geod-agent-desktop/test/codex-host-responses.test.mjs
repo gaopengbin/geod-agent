@@ -3,7 +3,24 @@ import assert from 'node:assert/strict';
 import {mkdtempSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
-import {createHost,sendGeneration} from '../src-tauri/codex-host.mjs';
+import {createHost,sendGeneration,assertModelCompletion} from '../src-tauri/codex-host.mjs';
+
+test('reasoning-only and output-limited responses cannot complete or execute partial tool calls',()=>{
+ for(const result of [{reasoning:'Leg 3 (',content:null,toolCalls:[]},{content:'partial',toolCalls:[],finishReason:'length'},{content:null,toolCalls:[{id:'partial',function:{name:'workspace_status',arguments:'{'}}],finishReason:'length'}]){
+  const chunks=[];assert.throws(()=>sendGeneration({write:chunk=>chunks.push(chunk),end(){}},{state:'settled',inputTokens:10,outputTokens:8192,result},'incomplete'),error=>['MODEL_EMPTY_RESPONSE','MODEL_OUTPUT_LIMIT'].includes(error.code));assert.equal(chunks.length,0);
+ }
+ assert.doesNotThrow(()=>assertModelCompletion({content:'完成',toolCalls:[],finishReason:'stop'}));
+ assert.doesNotThrow(()=>assertModelCompletion({content:null,toolCalls:[{}],finishReason:'tool_calls'}));
+});
+
+test('actual Core stops on reasoning-only output without retrying the same model request',{skip:!process.env.GEOD_CODEX_EXE,timeout:60000},async()=>{
+ const home=mkdtempSync(join(tmpdir(),'geod-reasoning-only-'));let listener,models=0,tools=0;
+ const host=await createHost({codex:process.env.GEOD_CODEX_EXE,home,toolsFile:resolve('src-tauri/codex-tools.json'),capabilities:{model:'deepseek-flash',contextWindow:128000,inputModalities:['text']},receive:fn=>{listener=fn;return()=>{};},emit:event=>{
+  if(event.type==='model'){models++;listener({type:'delta',requestId:event.requestId,part:'reasoning',text:'Leg 3 ('});listener({type:'response',requestId:event.requestId,value:{state:'settled',generationId:event.generationId,inputTokens:20,outputTokens:8192,result:{content:null,reasoning:'Leg 3 (',toolCalls:[],finishReason:'length'}}});}
+  if(event.type==='tool')tools++;
+ }});
+ try{const result=await host.turn({conversationId:'incomplete-proof',workspace:home,permission:'fullAccess',input:'Respond briefly.',history:[]},'incomplete-run');assert.equal(result.status,'failed');assert.equal(models,1);assert.equal(tools,0);assert.match(result.error.message,/模型输出达到/);}finally{await host.close();}
+});
 
 test('actual Core treats explicit sponsor budget and changed-route rejection as terminal',{skip:!process.env.GEOD_CODEX_EXE,timeout:60000},async()=>{
   for(const code of ['SPONSOR_QUOTA_EXCEEDED','SPONSOR_CHANGED']){

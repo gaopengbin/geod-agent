@@ -20,6 +20,9 @@ import { SCHEDULE_FOCUS, consumeScheduleFocus } from "./schedule-navigation";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { UiTooltip } from "./ui-tooltip";
 import { AgentPanel, type AgentMainView } from "./agent-panel";
+import { useGeoDAuth } from "./geod-auth";
+import { LoginScreen } from "./login-screen";
+import { GeoDLogin } from "./geod-login";
 import { AIChannelsPage } from "./ai-channels-page";
 import { MapView } from "./openlayers-map-view";
 import { SourcePage } from "./source-page";
@@ -37,6 +40,8 @@ const emptyTileGrids: PlanTileGrid[] = [];
 
 export function App() {
   useLocale();
+  const auth = useGeoDAuth();
+  const loginRequired = !auth.ready || auth.status.state !== "connected";
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     const stored = localStorage.getItem("geod-agent-theme");
     return stored === "light" || stored === "dark" ? stored : "light";
@@ -343,11 +348,11 @@ export function App() {
   return <div className="app-shell">
     <header className="app-header custom-titlebar" onMouseDown={handleTitlebarMouseDown}>
       <div className="brand"><img src="/geod-symbol.png" alt="" /><strong>GeoD <span>Agent</span></strong></div>
-      <WorkspaceSidebarToggle layout={layout}/>
-      {focusedConversation && mainView === "conversation" && <Button variant="ghost" size="sm" className="empty-map-entry" onClick={revealMap}><MapTrifold size={16}/>{t("地图选范围")}</Button>}
-      <WorkspaceControls layout={layout} focused={focusedConversation || mainView !== "conversation"} tasksOpen={resultsOpen} onTasksChange={setResultsOpen}/>
+      {!loginRequired && <WorkspaceSidebarToggle layout={layout}/>}
+      {!loginRequired && focusedConversation && mainView === "conversation" && <Button variant="ghost" size="sm" className="empty-map-entry" onClick={revealMap}><MapTrifold size={16}/>{t("地图选范围")}</Button>}
+      {!loginRequired && <WorkspaceControls layout={layout} focused={focusedConversation || mainView !== "conversation"} tasksOpen={resultsOpen} onTasksChange={setResultsOpen}/>}
       <div className="header-right">
-        {desktopAvailable&&<MessageCenter accountId={accountId} desktop={desktopAvailable}/>}
+        {desktopAvailable&&!loginRequired&&<MessageCenter accountId={accountId} desktop={desktopAvailable}/>}
         {!desktopAvailable && <UiTooltip content={t("浏览器仅用于界面预览，本机操作请使用桌面应用。")} side="bottom"><span className="preview-label">{t("界面预览")}</span></UiTooltip>}
         {desktopAvailable && <div className="window-controls">
           <UiTooltip content={t("最小化")} side="bottom"><button type="button" aria-label={t("最小化")} onClick={() => void getCurrentWindow().minimize()}><Minus size={16} /></button></UiTooltip>
@@ -356,8 +361,9 @@ export function App() {
         </div>}
       </div>
     </header>
-    <div ref={layout.ref} style={layout.style} {...layout.attributes} onKeyDown={event => { if (event.key === "Escape") layout.setSidebarExpanded(false); }} className={`workspace ai-workspace resizable-workspace ${layout.dragging ? "panels-resizing" : ""} ${mainView !== "conversation" ? "management-page" : ""} ${focusedConversation ? "new-chat" : ""} ${resultsOpen ? "results-open" : ""}`}>
-      <AgentPanel onAccountChange={setAccountId} onBackgroundSnapshots={setTaskSnapshots} ledgerJobs={jobs} onOpenJob={item => void selectJob(item)} onWorkspaceChange={setWorkspaceState} onConversationChange={setMapConversationId} registeredSource={registeredSource} onOpenSources={(draft, originConversationId) => { setSourceDraft(draft ?? null); setSourceReviewConversationId(originConversationId ?? null); setMainView("sources"); }} onOpenNetwork={() => setNetworkDialogOpen(true)} onOpenCache={() => setCacheManagerOpen(true)} onToggleTheme={() => setTheme(current => current === "light" ? "dark" : "light")} onEmptyConversationChange={setEmptyConversation} mainView={mainView} onMainViewChange={view => { setMainView(view); if (view === "conversation") { setSourceDraft(null); setSourceReviewConversationId(null); } }} theme={theme} onSelectConversation={(planIds, conversationId) => void selectConversationPlan(planIds, conversationId)} conversationTasks={tasks} onTaskGroupSelect={openTaskGroup} selectedJob={job} onJobStarted={(started,originConversationId) => {
+    {loginRequired && <LoginScreen theme={theme} onNetwork={() => setNetworkDialogOpen(true)} onLanguage={() => setLanguageDialogOpen(true)} onTheme={() => setTheme(current => current === "light" ? "dark" : "light")}><GeoDLogin auth={auth}/></LoginScreen>}
+    <div hidden={loginRequired} ref={layout.ref} style={layout.style} {...layout.attributes} onKeyDown={event => { if (event.key === "Escape") layout.setSidebarExpanded(false); }} className={`workspace ai-workspace resizable-workspace ${layout.dragging ? "panels-resizing" : ""} ${mainView !== "conversation" ? "management-page" : ""} ${focusedConversation ? "new-chat" : ""} ${resultsOpen ? "results-open" : ""}`}>
+      <AgentPanel auth={auth} onAccountChange={setAccountId} onBackgroundSnapshots={setTaskSnapshots} ledgerJobs={jobs} onOpenJob={item => void selectJob(item)} onWorkspaceChange={setWorkspaceState} onConversationChange={setMapConversationId} registeredSource={registeredSource} onOpenSources={(draft, originConversationId) => { setSourceDraft(draft ?? null); setSourceReviewConversationId(originConversationId ?? null); setMainView("sources"); }} onOpenNetwork={() => setNetworkDialogOpen(true)} onOpenCache={() => setCacheManagerOpen(true)} onToggleTheme={() => setTheme(current => current === "light" ? "dark" : "light")} onEmptyConversationChange={setEmptyConversation} mainView={mainView} onMainViewChange={view => { setMainView(view); if (view === "conversation") { setSourceDraft(null); setSourceReviewConversationId(null); } }} theme={theme} onSelectConversation={(planIds, conversationId) => void selectConversationPlan(planIds, conversationId)} conversationTasks={tasks} onTaskGroupSelect={openTaskGroup} selectedJob={job} onJobStarted={(started,originConversationId) => {
         if(taskScope.current.conversationId===originConversationId)void selectJob(started);
         void refreshJobs().catch(cause => setError(errorMessage(cause)));
       }} onPlanned={(created,originConversationId) => {

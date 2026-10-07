@@ -100,7 +100,7 @@ fn parse_error(code: &str) -> AppError {
         "ATTACHMENT_FORMAT"=>err("ATTACHMENT_FORMAT", "支持 PDF、Office、文本和扫描图片"),
         "ATTACHMENT_TEXT_ENCODING"=>err("ATTACHMENT_TEXT_ENCODING", "不支持文档声明的文本编码，请另存为 UTF-8 后添加"),
         "ATTACHMENT_OFFICE_RUNTIME"=>err("ATTACHMENT_OFFICE_RUNTIME", "内置 Office 解析环境缺失，请修复应用"),
-        "ATTACHMENT_OCR_RUNTIME"=>err("ATTACHMENT_OCR_RUNTIME", "内置扫描识别环境缺失，请修复应用"),
+        "ATTACHMENT_LEGACY_REMOVED"=>err("ATTACHMENT_LEGACY_REMOVED", "旧版 Office 解析已移除，请另存为 DOCX、XLSX 或 PPTX 后添加"),
         "ATTACHMENT_PASSWORD_REQUIRED"=>err("ATTACHMENT_PASSWORD_REQUIRED", "请输入文档密码以继续读取"),
         "ATTACHMENT_PASSWORD_INCORRECT"=>err("ATTACHMENT_PASSWORD_INCORRECT", "文档密码不正确，请重试"),
         "ATTACHMENT_PASSWORD_INPUT"=>err("ATTACHMENT_PASSWORD_INPUT", "文档密码格式无效"),
@@ -115,32 +115,22 @@ pub(crate) async fn document_attachment_add(app: AppHandle, conversation_id: Str
     let owner=owner(&app)?;let root=folder(&app,&owner,&conversation_id)?;
     let name=name.chars().filter(|c|!c.is_control()&&!matches!(c,'/'|'\\')).take(160).collect::<String>();
     let extension=name.rsplit_once('.').map(|(_,ext)|ext.to_ascii_lowercase()).unwrap_or_default();
-    if !["pdf","doc","xls","ppt","docx","xlsx","pptx","txt","md","csv","json","xml","log","png","jpg","jpeg","webp","bmp","tif","tiff"].contains(&extension.as_str()){return Err(parse_error("ATTACHMENT_FORMAT"));}
+    if matches!(extension.as_str(),"doc"|"xls"|"ppt"){return Err(parse_error("ATTACHMENT_LEGACY_REMOVED"));}
+    if !["pdf","docx","xlsx","pptx","txt","md","csv","json","xml","log"].contains(&extension.as_str()){return Err(parse_error("ATTACHMENT_FORMAT"));}
     if base64.len()>MAX_BYTES*4/3+8{return Err(err("ATTACHMENT_LIMIT", "单个文档不能超过 32 MB"));}
     let bytes=STANDARD.decode(base64).map_err(|_|err("ATTACHMENT_INPUT", "文档附件数据无效"))?;
     if bytes.is_empty()||bytes.len()>MAX_BYTES{return Err(err("ATTACHMENT_LIMIT", "文档为空或超过 32 MB"));}
     let id=Uuid::new_v4().to_string();let file=root.join(format!("{id}.attachment"));
     let metadata=(bytes.len(),format!("{:x}",Sha256::digest(&bytes)));
     let parser=parser_root(&app)?;
-    let scans=matches!(extension.as_str(),"pdf"|"png"|"jpg"|"jpeg"|"webp"|"bmp"|"tif"|"tiff");
-    let ocr=if scans{let handle=app.clone();Some(tauri::async_runtime::spawn_blocking(move||crate::ocr_runtime::root(&handle)).await.map_err(|_|parse_error("ATTACHMENT_OCR_RUNTIME"))??)}else{None};
-    let legacy=matches!(extension.as_str(),"doc"|"xls"|"ppt");
-    let office=if legacy{let handle=app.clone();Some(tauri::async_runtime::spawn_blocking(move||crate::legacy_office_runtime::root(&handle)).await.map_err(|_|parse_error("ATTACHMENT_OFFICE_RUNTIME"))??)}else{None};
     fs::write(&file,bytes).map_err(|_|err("ATTACHMENT_STORAGE", "无法保存文档附件"))?;
     let parsed=async {
-        let temporary=if legacy{Some(tempfile::tempdir().map_err(|_|err("ATTACHMENT_STORAGE","无法准备文档解析位置"))?)}else{None};
-        let mut command=if let Some(root)=office{
-            let mut command=crate::legacy_office_runtime::command(&root,temporary.as_ref().unwrap().path());
-            #[cfg(debug_assertions)]eprintln!("Office reader resource path: {}",root.display());
-            command.arg(crate::legacy_office_runtime::java_path(&file)).arg(&extension);command
-        }else{
-            let mut command=crate::python_runtime::command(include_str!("attachment_worker.py"))?;
-            command.arg(&file).arg(&extension).arg(parser);if let Some(root)=ocr{command.arg(root);}command
-        };
-        command.arg("--password-stdin").stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(if legacy{Stdio::piped()}else{Stdio::null()}).kill_on_drop(true);
+        let mut command=crate::python_runtime::command(include_str!("attachment_worker.py"))?;
+        command.arg(&file).arg(&extension).arg(parser);
+        command.arg("--password-stdin").stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).kill_on_drop(true);
         // Passwords stay in this local pipe; never use argv, environment or a file.
         let request=serde_json::to_vec(&json!({"password":password})).map_err(|_|parse_error("ATTACHMENT_PASSWORD_INPUT"))?;
-        let output=tokio::time::timeout(Duration::from_secs(if scans{180}else{60}),async{
+        let output=tokio::time::timeout(Duration::from_secs(60),async{
             let mut child=command.spawn()?;
             if let Some(mut input)=child.stdin.take(){input.write_all(&request).await?;}
             child.wait_with_output().await
@@ -148,12 +138,7 @@ pub(crate) async fn document_attachment_add(app: AppHandle, conversation_id: Str
             .map_err(|_|err("ATTACHMENT_TIMEOUT", "文档解析超时，请拆分后添加"))?
             .map_err(|_|err("ATTACHMENT_RUNTIME", "无法启动内置文档解析环境"))?;
         if output.stdout.len()>MAX_TEXT_BYTES as usize{return Err(parse_error("ATTACHMENT_CONTENT_LIMIT"));}
-        let value:Value=serde_json::from_slice(&output.stdout).map_err(|_|{
-            if legacy{
-                #[cfg(debug_assertions)]eprintln!("Office reader process failure: {:?}; {}",output.status,String::from_utf8_lossy(&output.stderr));
-                err("ATTACHMENT_OFFICE_RUNTIME","内置 Office 解析环境启动失败，请修复应用")
-            }else{parse_error("ATTACHMENT_DOCUMENT_INVALID")}
-        })?;
+        let value:Value=serde_json::from_slice(&output.stdout).map_err(|_|parse_error("ATTACHMENT_DOCUMENT_INVALID"))?;
         if !output.status.success()||value["ok"]!=true{return Err(parse_error(value["error"].as_str().unwrap_or("")));}
         let text=value["text"].as_str().ok_or_else(||parse_error("ATTACHMENT_DOCUMENT_INVALID"))?;
         if services::current_user_id(&app.state::<services::ServiceState>()).map_err(|e|err(e.code,&e.message))?!=owner{

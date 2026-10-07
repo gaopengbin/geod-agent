@@ -1,0 +1,6 @@
+.dialog.mcp-key-dialog { width:min(480px,calc(100vw - 32px)); }
+.mcp-key-dialog .dialog-body { display:grid; gap:18px; }
+.mcp-key-endpoint { display:grid; gap:6px; padding:12px 14px; border:1px solid var(--border); border-radius:10px; background:var(--app-subtle); font-size:13px; }
+.mcp-key-endpoint span { color:var(--app-soft-text); overflow-wrap:anywhere; }
+.mcp-key-help { margin:0; font-size:12px; line-height:1.7; color:var(--app-soft-text); }
+.mcp-key-help a { color:var(--primary); text-decoration:underline; text-underline-offset:3px; }

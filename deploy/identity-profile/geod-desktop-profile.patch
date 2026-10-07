@@ -1,0 +1,362 @@
+diff --git a/app/api/account/route.ts b/app/api/account/route.ts
+index 21d43c5..6bf692c 100644
+--- a/app/api/account/route.ts
++++ b/app/api/account/route.ts
+@@ -1,3 +1,8 @@
+-import { accountSessionResponse } from "@/lib/accounts/http";
++import { accountSessionResponse, accountErrorResponse, accountJson } from "../../../lib/accounts/http";
++import { updateAccountNickname } from "../../../lib/accounts/nickname";
+ export const runtime = "nodejs";
+ export const GET = accountSessionResponse;
++export async function PATCH(request: Request) {
++  try { return accountJson({ user: await updateAccountNickname(request) }); }
++  catch (error) { return accountErrorResponse(error); }
++}
+diff --git a/lib/accounts/avatar.ts b/lib/accounts/avatar.ts
+index b4d9023..098be3d 100644
+--- a/lib/accounts/avatar.ts
++++ b/lib/accounts/avatar.ts
+@@ -5,6 +5,7 @@ import sharp from "sharp";
+ import { AccountError } from "./errors";
+ import { hasActiveAccountSession, publicUser, requireAccount } from "./service";
+ import { accountDirectory, accountTransaction, type StoredUser } from "./store";
++import { requireGeoDProfile } from "./geod-profile";
+ 
+ export const ACCOUNT_AVATAR_PRESETS = ["summit", "orbit", "globe", "coast", "terrain", "compass"] as const;
+ const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+@@ -93,7 +94,8 @@ export async function uploadAccountAvatar(request: Request) {
+ }
+ 
+ export async function readAccountAvatar(request: Request) {
+-  const user = await requireAccount(request);
++  const profile = request.headers.has("authorization") ? await requireGeoDProfile(request) : null;
++  const user = profile ? { id: profile.accountId, avatar: profile.avatar } : await requireAccount(request);
+   if (user.avatar?.kind !== "upload") throw new AccountError(404, "AVATAR_NOT_FOUND", "No uploaded avatar is set.");
+   try { return await readFile(avatarPath(user.id, user.avatar.version)); }
+   catch (error) {
+diff --git a/lib/accounts/http.ts b/lib/accounts/http.ts
+index f01d9b9..027add5 100644
+--- a/lib/accounts/http.ts
++++ b/lib/accounts/http.ts
+@@ -3,6 +3,7 @@ import { accountErrorResponse } from "./errors";
+ import { getAccountQuota } from "./quota";
+ import { authRequired, getAccountForRequest } from "./service";
+ import { isBillingAdmin } from "./billing-access";
++import { requireGeoDProfile } from "./geod-profile";
+ 
+ export { accountErrorResponse };
+ export function accountJson(value: unknown, init: ResponseInit = {}) {
+@@ -11,6 +12,7 @@ export function accountJson(value: unknown, init: ResponseInit = {}) {
+ }
+ export async function accountSessionResponse(request: Request) {
+   try {
++    if (request.headers.has("authorization")) return accountJson({ profile: await requireGeoDProfile(request) });
+     const user = await getAccountForRequest(request);
+     if (!user) return accountJson({ user: null, authRequired: authRequired() });
+     const [quota, storage] = await Promise.all([getAccountQuota(user.id), getAccountStorage(user.id)]);
+diff --git a/lib/accounts/service.ts b/lib/accounts/service.ts
+index 0926489..b7e929d 100644
+--- a/lib/accounts/service.ts
++++ b/lib/accounts/service.ts
+@@ -4,10 +4,11 @@ import path from "node:path";
+ import { SIGNUP_CREDITS, IMAGE_CREDITS } from "./credit-policy";
+ import { migrateAccountCredits } from "./quota";
+ import { AccountError } from "./errors";
++import { createDefaultNickname } from "./nickname-policy";
+ import { accountDirectory, accountTransaction, type AccountStore, type StoredSession, type StoredUser } from "./store";
+ 
+ export { AccountError } from "./errors";
+-export interface AccountUser { id: string; email: string; createdAt: string; phone?: string; emailVerifiedAt?: string; phoneVerifiedAt?: string; avatar?: StoredUser["avatar"] }
++export interface AccountUser { id: string; email: string; createdAt: string; phone?: string; emailVerifiedAt?: string; phoneVerifiedAt?: string; avatar?: StoredUser["avatar"]; nickname?: string }
+ export const SESSION_COOKIE = "geostyle_session";
+ export const SESSION_MAX_AGE = 7 * 24 * 60 * 60;
+ const passwordOptions = { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
+@@ -54,7 +55,7 @@ async function verifyPassword(password: string, hash?: string) {
+   const actual = await derive(password, valid ? parts![1] : "00000000000000000000000000000000");
+   return Boolean(valid && timingSafeEqual(actual, Buffer.from(parts![2], "hex")));
+ }
+-export function publicUser(user: StoredUser): AccountUser { return { id: user.id, email: user.email, createdAt: user.createdAt, ...(user.phone ? { phone: user.phone } : {}), ...(user.emailVerifiedAt ? { emailVerifiedAt: user.emailVerifiedAt } : {}), ...(user.phoneVerifiedAt ? { phoneVerifiedAt: user.phoneVerifiedAt } : {}), ...(user.avatar ? { avatar: user.avatar } : {}) }; }
++export function publicUser(user: StoredUser): AccountUser { return { id: user.id, email: user.email, createdAt: user.createdAt, ...(user.phone ? { phone: user.phone } : {}), ...(user.emailVerifiedAt ? { emailVerifiedAt: user.emailVerifiedAt } : {}), ...(user.phoneVerifiedAt ? { phoneVerifiedAt: user.phoneVerifiedAt } : {}), ...(user.avatar ? { avatar: user.avatar } : {}), ...(user.nickname ? { nickname: user.nickname } : {}) }; }
+ function sessionToken(request: Request) {
+   return request.headers.get("cookie")?.split(";").map((part) => part.trim()).find((part) => part.startsWith(`${SESSION_COOKIE}=`))?.slice(SESSION_COOKIE.length + 1);
+ }
+@@ -155,6 +156,7 @@ export async function registerAccount(input: { email: unknown; password: unknown
+     const invite = store.invites.find((entry) => entry.tokenHash === tokenHash && entry.email === email && !entry.usedAt && !entry.revokedAt && Date.parse(entry.expiresAt) > Date.now());
+     if (!invite || store.users.some((entry) => entry.email === email)) throw new AccountError(400, "INVITE_INVALID", "The invitation is invalid, expired, used, or belongs to another email.");
+     const user: StoredUser = { id: `user-${randomUUID()}`, email, passwordHash, createdAt: new Date().toISOString(), creditVersion: 1, purchasedCredits: 0, quotaLimit: invite.creditVersion === 1 ? invite.quotaLimit : invite.quotaLimit * IMAGE_CREDITS, concurrentLimit: 2, storageLimit: 512 * 1024 * 1024, projectLimit: 100 };
++    user.nickname = createDefaultNickname(store.users);
+     store.users.push(user); invite.usedAt = user.createdAt;
+     return { user: publicUser(user), ...addSession(store, user.id) };
+   });
+diff --git a/lib/accounts/store.ts b/lib/accounts/store.ts
+index 0f63c07..6051e2c 100644
+--- a/lib/accounts/store.ts
++++ b/lib/accounts/store.ts
+@@ -2,8 +2,10 @@ import { randomUUID } from "node:crypto";
+ import { mkdir, open, readFile, rename, stat, unlink } from "node:fs/promises";
+ import path from "node:path";
+ import { AccountError } from "./errors";
++import { assignMissingNicknames } from "./nickname-policy";
+ 
+ export interface StoredUser {
++  nickname?: string;
+   creditVersion?: 1; purchasedCredits?: number; creditMigration?: { at: string; creationLimit: number };
+   phone?: string; emailVerifiedAt?: string; phoneVerifiedAt?: string;
+   avatar?: { kind: "preset"; id: string } | { kind: "upload"; version: string };
+@@ -118,8 +120,12 @@ export async function accountTransaction<T>(operation: (store: AccountStore) =>
+   const release = await acquireStoreLock();
+   try {
+     const store = await readStore();
++    // Backfill legacy accounts once under the existing lock. A successful read
++    // persists only this migration; failed operations never commit it.
++    const nicknameMigration = assignMissingNicknames(store.users) ? JSON.stringify(store) : null;
+     const result = await operation(store);
+-    if (!readOnly) await atomicWrite(path.join(accountDirectory(), "store.json"), JSON.stringify(store));
++    const content = readOnly ? nicknameMigration : JSON.stringify(store);
++    if (content !== null) await atomicWrite(path.join(accountDirectory(), "store.json"), content);
+     return result;
+   } finally { await release(); }
+ }
+diff --git a/lib/accounts/verification.ts b/lib/accounts/verification.ts
+index 3287caf..fcdee5d 100644
+--- a/lib/accounts/verification.ts
++++ b/lib/accounts/verification.ts
+@@ -1,6 +1,7 @@
+ import { randomInt, randomUUID, timingSafeEqual } from "node:crypto";
+ import { AccountError } from "./errors";
+ import { accountTransaction, type StoredUser } from "./store";
++import { createDefaultNickname } from "./nickname-policy";
+ import { addSession, hashPassword, hasActiveAccountSession, normalizeEmail, publicUser, requireAccount, verificationDigest } from "./service";
+ import { sendVerification, verificationChannels, type VerificationChannel } from "./tencent-verification";
+ 
+@@ -84,7 +85,7 @@ export async function verifyAccountCode(input: Record<string, unknown>, request:
+     const passwordHash = purpose === "bind" ? undefined : await hashPassword(input.password as string);
+     const verifiedAt = new Date(now).toISOString();
+     if (!user) {
+-      user = { id: `user-${randomUUID()}`, email: target, passwordHash: passwordHash!, createdAt: verifiedAt, creditVersion: 1, purchasedCredits: 0, quotaLimit: 50, concurrentLimit: 2, storageLimit: 512 * 1024 * 1024, projectLimit: 100 } satisfies StoredUser;
++      user = { id: `user-${randomUUID()}`, email: target, nickname: createDefaultNickname(store.users), passwordHash: passwordHash!, createdAt: verifiedAt, creditVersion: 1, purchasedCredits: 0, quotaLimit: 50, concurrentLimit: 2, storageLimit: 512 * 1024 * 1024, projectLimit: 100 } satisfies StoredUser;
+       store.users.push(user);
+     }
+     if (purpose === "reset") { user.passwordHash = passwordHash!; store.sessions = store.sessions.filter(session => session.userId !== user.id); }
+diff --git a/lib/accounts/geod-profile.ts b/lib/accounts/geod-profile.ts
+new file mode 100644
+index 0000000..3b47548
+--- /dev/null
++++ b/lib/accounts/geod-profile.ts
+@@ -0,0 +1,18 @@
++import { AccountError } from "./errors";
++import { GEOD_AGENT_SCOPE, GEOD_DESKTOP_CLIENT, resolveGeoDAccessToken } from "./geod-oauth";
++import { accountTransaction } from "./store";
++
++/** Read-only account identity for an authorized first-party desktop client. */
++export async function requireGeoDProfile(request: Request) {
++  const header = request.headers.get("authorization") ?? "";
++  const raw = /^Bearer ([A-Za-z0-9_-]{43})$/i.exec(header)?.[1];
++  const active = raw && await resolveGeoDAccessToken(raw);
++  if (request.method !== "GET" || !active || active.clientId !== GEOD_DESKTOP_CLIENT || active.scope !== GEOD_AGENT_SCOPE) {
++    throw new AccountError(401, "AUTH_REQUIRED", "Sign in to GeoD to continue.");
++  }
++  return accountTransaction(store => {
++    const user = store.users.find(item => item.id === active.userId && !item.disabled);
++    if (!user) throw new AccountError(401, "AUTH_REQUIRED", "Sign in to GeoD to continue.");
++    return { accountId: user.id, email: user.email, nickname: user.nickname ?? null, avatar: user.avatar ?? null };
++  }, true);
++}
+diff --git a/lib/accounts/geod-profile.test.ts b/lib/accounts/geod-profile.test.ts
+new file mode 100644
+index 0000000..bad8412
+--- /dev/null
++++ b/lib/accounts/geod-profile.test.ts
+@@ -0,0 +1,130 @@
++import { createHash } from "node:crypto";
++import { mkdtemp, readFile, rm } from "node:fs/promises";
++import { tmpdir } from "node:os";
++import path from "node:path";
++import sharp from "sharp";
++import { beforeEach, afterEach, expect, it, vi } from "vitest";
++import { GET as profileGet } from "../../app/api/account/session/route";
++import { PATCH as nicknamePatch } from "../../app/api/account/route";
++import { GET as avatarGet, POST as avatarPost, PUT as avatarPut, DELETE as avatarDelete } from "../../app/api/account/avatar/route";
++import { createInvite, registerAccount, sessionCookie } from "./service";
++import { exchangeAuthorizationCode, issueAuthorizationCode, revokeGeoDToken } from "./geod-oauth";
++import { accountTransaction } from "./store";
++
++let directory = "";
++const origin = "https://geod.test";
++beforeEach(async () => {
++  directory = await mkdtemp(path.join(tmpdir(), "geod-profile-test-"));
++  vi.stubEnv("GEOSTYLE_ACCOUNT_DIR", directory);
++  vi.stubEnv("GEOSTYLE_SESSION_SECRET", "isolated-profile-test-secret-over-thirty-two-characters");
++  vi.stubEnv("GEOSTYLE_PUBLIC_ORIGIN", origin);
++});
++afterEach(async () => {
++  vi.unstubAllEnvs();
++  if (!path.resolve(directory).startsWith(path.join(tmpdir(), "geod-profile-test-"))) throw Error("Invalid cleanup path");
++  await rm(directory, { recursive: true, force: true });
++});
++async function account(email = "profile@example.test") {
++  const invite = await createInvite(email);
++  const registered = await registerAccount({ email, inviteCode: invite.inviteCode, password: "test-only-profile-password" }, new Request(origin));
++  const verifier = "v".repeat(64), redirectUri = "http://127.0.0.1:52341/oauth/callback";
++  const code = await issueAuthorizationCode(registered.user.id, { clientId: "geod-agent-desktop", redirectUri, challenge: createHash("sha256").update(verifier).digest("base64url"), state: "s".repeat(32) });
++  const tokens = await exchangeAuthorizationCode({ clientId: "geod-agent-desktop", redirectUri, code, verifier });
++  return { ...registered, tokens };
++}
++function request(token: string, endpoint = "session", method = "GET", body?: BodyInit) {
++  return new Request(`${origin}/api/account/${endpoint}`, { method, headers: { authorization: `Bearer ${token}`, origin }, ...(body ? { body } : {}) });
++}
++it("returns only desktop profile fields and preserves the existing cookie account response", async () => {
++  const user = await account();
++  const preset = await avatarPut(new Request(`${origin}/api/account/avatar`, { method: "PUT", headers: { origin, cookie: sessionCookie(user.token), "content-type": "application/json" }, body: JSON.stringify({ presetId: "coast" }) }));
++  expect(preset.status).toBe(200);
++  const result = await profileGet(request(user.tokens.access_token));
++  expect(result.status).toBe(200);
++  expect(result.headers.get("cache-control")).toBe("no-store");
++  expect(user.user.nickname).toMatch(/^geod[a-z0-9]{6}$/);
++  expect(await result.json()).toEqual({ profile: { accountId: user.user.id, email: user.user.email, nickname: user.user.nickname, avatar: { kind: "preset", id: "coast" } } });
++  const cookie = await profileGet(new Request(`${origin}/api/account/session`, { headers: { cookie: sessionCookie(user.token) } }));
++  expect((await cookie.json()).user.id).toBe(user.user.id);
++});
++
++function nicknameRequest(cookie: string, body: unknown, requestOrigin = origin, bearer?: string) {
++  return new Request(`${origin}/api/account`, { method: "PATCH", headers: { origin: requestOrigin, cookie, "content-type": "application/json", ...(bearer ? { authorization: `Bearer ${bearer}` } : {}) }, body: JSON.stringify(body) });
++}
++it("persists website nickname edits and returns the same value to desktop OAuth clients", async () => {
++  const first = await account(), other = await account("nickname-other@example.test");
++  const before = await accountTransaction(store => structuredClone(store), true);
++  const result = await nicknamePatch(nicknameRequest(sessionCookie(first.token), { nickname: "  老高 🌍  " }));
++  expect(result.status).toBe(200);
++  expect((await result.json()).user.nickname).toBe("老高 🌍");
++  expect((await (await profileGet(request(first.tokens.access_token))).json()).profile.nickname).toBe("老高 🌍");
++  expect((await (await profileGet(request(other.tokens.access_token))).json()).profile.nickname).toBe(other.user.nickname);
++  const after = await accountTransaction(store => structuredClone(store), true);
++  const owner = after.users.find(user => user.id === first.user.id)!;
++  expect(owner.nickname).toBe("老高 🌍");
++  owner.nickname = first.user.nickname;
++  expect(after).toEqual(before);
++  expect((await nicknamePatch(nicknameRequest(sessionCookie(first.token), { nickname: " " }))).status).toBe(200);
++  const resetName = (await (await profileGet(request(first.tokens.access_token))).json()).profile.nickname;
++  expect(resetName).toMatch(/^geod[a-z0-9]{6}$/);
++  expect(resetName).not.toBe(first.user.nickname);
++  expect(resetName).not.toBe(other.user.nickname);
++  expect((await (await profileGet(request(first.tokens.access_token))).json()).profile.nickname).toBe(resetName);
++});
++it("assigns old accounts a persistent default once without overwriting custom names or committing read-only mutations", async () => {
++  const first = await account(), custom = await account("custom-nickname@example.test");
++  await accountTransaction(store => {
++    delete store.users.find(user => user.id === first.user.id)!.nickname;
++    store.users.find(user => user.id === custom.user.id)!.nickname = "已设置的昵称";
++  });
++  await accountTransaction(store => { store.users.find(user => user.id === first.user.id)!.email = "read-only@example.test"; }, true);
++  const saved = JSON.parse(await readFile(path.join(directory, "store.json"), "utf8"));
++  const legacy = saved.users.find((user: { id: string }) => user.id === first.user.id);
++  expect(legacy.nickname).toMatch(/^geod[a-z0-9]{6}$/);
++  expect(legacy.email).toBe(first.user.email);
++  const firstRead = await profileGet(request(first.tokens.access_token));
++  expect((await firstRead.json()).profile.nickname).toBe(legacy.nickname);
++  const secondRead = await profileGet(request(first.tokens.access_token));
++  expect((await secondRead.json()).profile.nickname).toBe(legacy.nickname);
++  expect((await (await profileGet(request(custom.tokens.access_token))).json()).profile.nickname).toBe("已设置的昵称");
++});
++it("enforces nickname limits and website session ownership, rejecting token writes and cross-origin requests", async () => {
++  const first = await account();
++  const cookie = sessionCookie(first.token);
++  for (const nickname of ["a".repeat(41), "a\nb", "a\u0000b", 12, {}, undefined]) {
++    expect((await nicknamePatch(nicknameRequest(cookie, { nickname }))).status).toBe(400);
++  }
++  expect((await nicknamePatch(nicknameRequest(cookie, { nickname: "Allowed", id: "another-user" }))).status).toBe(400);
++  expect((await nicknamePatch(nicknameRequest(cookie, { nickname: "Allowed" }, "https://other.test"))).status).toBe(403);
++  expect((await nicknamePatch(nicknameRequest("", { nickname: "Allowed" }, origin, first.tokens.access_token))).status).toBe(401);
++  expect((await nicknamePatch(nicknameRequest(cookie, { nickname: "Allowed" }, origin, first.tokens.access_token))).status).toBe(401);
++  expect((await nicknamePatch(nicknameRequest(cookie, { nickname: "🌍".repeat(40) }))).status).toBe(200);
++  await accountTransaction(store => { store.sessions = []; });
++  expect((await nicknamePatch(nicknameRequest(cookie, { nickname: "Revoked" }))).status).toBe(401);
++});
++it("serves uploaded bytes through the real OAuth grant and cannot choose another account's avatar", async () => {
++  const first = await account(), other = await account("other@example.test");
++  const png = await sharp({ create: { width: 100, height: 80, channels: 4, background: "#087e8b" } }).png().toBuffer();
++  const upload = await avatarPost(new Request(`${origin}/api/account/avatar`, { method: "POST", headers: { origin, cookie: sessionCookie(first.token), "content-type": "image/png" }, body: new Uint8Array(png) }));
++  expect(upload.status).toBe(200);
++  const response = await avatarGet(request(first.tokens.access_token, "avatar"));
++  expect(response.status).toBe(200);
++  expect(await sharp(Buffer.from(await response.arrayBuffer())).metadata()).toMatchObject({ format: "webp", width: 256, height: 256 });
++  const attempted = new Request(`${origin}/api/account/avatar?accountId=${first.user.id}`, { headers: { authorization: `Bearer ${other.tokens.access_token}` } });
++  expect((await avatarGet(attempted)).status).toBe(404);
++  expect((await avatarDelete(request(first.tokens.access_token, "avatar", "DELETE"))).status).toBe(401);
++});
++it("rejects malformed, revoked, expired and disabled grants without cookie fallback", async () => {
++  const first = await account();
++  expect((await profileGet(request("invalid"))).status).toBe(401);
++  const cookieAndBadBearer = new Request(`${origin}/api/account/session`, { headers: { cookie: sessionCookie(first.token), authorization: "Bearer invalid" } });
++  expect((await profileGet(cookieAndBadBearer)).status).toBe(401);
++  await revokeGeoDToken(first.tokens.refresh_token);
++  expect((await profileGet(request(first.tokens.access_token))).status).toBe(401);
++  const expired = await account("expired@example.test");
++  await accountTransaction(store => { for (const grant of (store as unknown as { geodOAuthGrants: { userId: string; accessExpiresAt: number }[] }).geodOAuthGrants) if (grant.userId === expired.user.id) grant.accessExpiresAt = 0; });
++  expect((await profileGet(request(expired.tokens.access_token))).status).toBe(401);
++  const disabled = await account("disabled@example.test");
++  await accountTransaction(store => { store.users.find(user => user.id === disabled.user.id)!.disabled = true; });
++  expect((await avatarGet(request(disabled.tokens.access_token, "avatar"))).status).toBe(401);
++});
+diff --git a/lib/accounts/nickname.ts b/lib/accounts/nickname.ts
+new file mode 100644
+index 0000000..4715494
+--- /dev/null
++++ b/lib/accounts/nickname.ts
+@@ -0,0 +1,27 @@
++import { AccountError } from "./errors";
++import { assertSameOrigin, hasActiveAccountSession, publicUser, readAccountJson, requireAccount } from "./service";
++import { accountTransaction } from "./store";
++import { createDefaultNickname } from "./nickname-policy";
++
++/** Nicknames are edited only through the website's signed-in browser session. */
++export async function updateAccountNickname(request: Request) {
++  assertSameOrigin(request);
++  if (request.headers.has("authorization")) throw new AccountError(401, "AUTH_REQUIRED", "Use the GeoD website to edit your profile.");
++  const user = await requireAccount(request);
++  const input = await readAccountJson(request);
++  if (Object.keys(input).some(key => key !== "nickname") || (typeof input.nickname !== "string" && input.nickname !== null)) {
++    throw new AccountError(400, "INVALID_NICKNAME", "Use a nickname of up to 40 characters.");
++  }
++  const raw = input.nickname ?? "";
++  const nickname = raw.trim();
++  if (/[\u0000-\u001f\u007f-\u009f]/u.test(raw) || [...nickname].length > 40) {
++    throw new AccountError(400, "INVALID_NICKNAME", "Use a nickname of up to 40 characters without line breaks.");
++  }
++  return accountTransaction(store => {
++    const current = store.users.find(item => item.id === user.id && !item.disabled);
++    if (!current || !hasActiveAccountSession(store, request, user.id)) throw new AccountError(401, "AUTH_REQUIRED", "Sign in again to continue.");
++    if (nickname) current.nickname = nickname;
++    else current.nickname = createDefaultNickname(store.users);
++    return publicUser(current);
++  });
++}
+diff --git a/lib/accounts/nickname-policy.ts b/lib/accounts/nickname-policy.ts
+new file mode 100644
+index 0000000..9af6320
+--- /dev/null
++++ b/lib/accounts/nickname-policy.ts
+@@ -0,0 +1,23 @@
++import { randomInt } from "node:crypto";
++import type { StoredUser } from "./store";
++
++/** Generate once and persist; clients never invent their own account nickname. */
++export function createDefaultNickname(users: readonly Pick<StoredUser, "nickname">[]) {
++  const existing = new Set(users.map(user => user.nickname?.toLowerCase()).filter(Boolean));
++  for (let attempt = 0; attempt < 100; attempt++) {
++    const nickname = `geod${randomInt(36 ** 6).toString(36).padStart(6, "0")}`;
++    if (!existing.has(nickname)) return nickname;
++  }
++  throw new Error("Could not allocate an account nickname");
++}
++
++export function assignMissingNicknames(users: StoredUser[]) {
++  let changed = false;
++  for (const user of users) {
++    if (!user.nickname?.trim()) {
++      user.nickname = createDefaultNickname(users);
++      changed = true;
++    }
++  }
++  return changed;
++}

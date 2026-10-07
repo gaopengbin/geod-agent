@@ -9,8 +9,8 @@ mod mcp_interaction;
 mod image_inputs;
 mod attachment_inputs;
 mod audio_inputs;
-mod ocr_runtime;
-mod legacy_office_runtime;
+mod gis_components;
+mod rtk_runtime;
 mod sql_mcp;
 mod sql_connections;
 mod sql_tls;
@@ -45,6 +45,7 @@ mod agent_memory;
 mod terrain_protocol;
 mod execution_receipts;
 mod python_runtime;
+mod export_crs;
 mod agent_tasks;
 mod conversation_files;
 mod desktop_settings;
@@ -121,6 +122,8 @@ fn open_store(state: &AppState) -> Result<TaskStore, AppError> {
 struct WorkspaceSettings {
     directory: String,
     permission: WorkspacePermission,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    output_crs: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -185,6 +188,7 @@ fn read_workspace(
             .to_string_lossy()
             .into_owned(),
         permission: WorkspacePermission::ConfirmEach,
+        output_crs: None,
     })
 }
 
@@ -254,11 +258,9 @@ fn workspace_set(
     if !path.is_dir() {
         return Err(workspace_error("WORKSPACE_INVALID", "请选择本机文件夹"));
     }
-    let settings = WorkspaceSettings {
-        directory: path.to_string_lossy().into_owned(),
-        permission,
-    };
     let file = workspace_file(&state, &services, &conversation_id)?;
+    let output_crs = if file.exists() { serde_json::from_slice::<WorkspaceSettings>(&fs::read(&file).map_err(|e|workspace_error("STORAGE_ERROR",e.to_string()))?).map_err(|e|workspace_error("STORAGE_ERROR",e.to_string()))?.output_crs } else { None };
+    let settings = WorkspaceSettings { directory: path.to_string_lossy().into_owned(), permission, output_crs };
     ensure_workspace_binding(&file, &path)?;
     fs::write(
         file,
@@ -267,6 +269,15 @@ fn workspace_set(
     )
     .map_err(|cause| workspace_error("STORAGE_ERROR", cause.to_string()))?;
     Ok(settings)
+}
+
+#[tauri::command]
+fn workspace_set_output_crs(app:AppHandle,state:State<'_,AppState>,services:State<'_,services::ServiceState>,conversation_id:String,crs:Option<String>)->Result<WorkspaceSettings,AppError>{
+    let mut workspace=read_workspace(&app,&state,&services,&conversation_id)?;
+    workspace.output_crs=crs.as_deref().map(export_crs::normalize).transpose()?;
+    let file=workspace_file(&state,&services,&conversation_id)?;
+    fs::write(file,serde_json::to_vec(&workspace).map_err(|e|workspace_error("STORAGE_ERROR",e.to_string()))?).map_err(|e|workspace_error("STORAGE_ERROR",e.to_string()))?;
+    Ok(workspace)
 }
 
 #[tauri::command]
@@ -610,7 +621,7 @@ fn plans_create(
     state: State<'_, AppState>,
     services: State<'_, services::ServiceState>,
     conversation_id: String,
-    spec: TaskSpec,
+    mut spec: TaskSpec,
     tool_execution_id: String,
 ) -> Result<StoredPlan, AppError> {
     let workspace = read_workspace(&app, &state, &services, &conversation_id)?;
@@ -628,6 +639,9 @@ fn plans_create(
             code: "SOURCE_UNAUTHORIZED",
             message: "请先配置图源".into(),
         })?;
+    let options=spec.export_options.get_or_insert_with(Default::default);
+    let crs=options.target_crs.as_ref().or(workspace.output_crs.as_ref()).ok_or_else(||workspace_error("OUTPUT_CRS_REQUIRED","请通过选项卡询问成果坐标系；仅用户明确设置的会话默认可以沿用"))?;
+    options.target_crs=Some(export_crs::validate(crs,true)?);
     let stored = store.create_plan_for_tool_execution(&tool_execution_id, spec, &source.descriptor, Utc::now())?;
     imagery_recovery::bind_created_plan(&state, &owner, &conversation_id, Path::new(&workspace.directory), &stored.plan_id)?;
     Ok(stored)
@@ -774,7 +788,7 @@ fn start_job_with_approval(
         tauri::async_runtime::spawn(async move {
             if let Ok(mut store) = TaskStore::open(&db_path) {
                 let _ = store
-                    .run_job_with_control_proxy_and_overlays(
+                    .run_job_with_projector(
                         &job_id,
                         &source.descriptor,
                         &source.endpoint,
@@ -786,6 +800,7 @@ fn start_job_with_approval(
                             .as_deref()
                             .map(geod_core::imagery::ProxyRoute::Http)
                             .unwrap_or(geod_core::imagery::ProxyRoute::Direct),
+                        Some(&export_crs::Projector),
                     )
                     .await;
             }
@@ -810,6 +825,7 @@ fn jobs_cancel(state: State<'_, AppState>, job_id: String) -> Result<Job, AppErr
         job.state,
         geod_task_engine::ledger::JobState::Queued
             | geod_task_engine::ledger::JobState::Downloading
+            | geod_task_engine::ledger::JobState::Processing
             | geod_task_engine::ledger::JobState::Paused
     ) {
         return Err(AppError {
@@ -848,6 +864,7 @@ fn jobs_pause(state: State<'_, AppState>, job_id: String) -> Result<Job, AppErro
         job.state,
         geod_task_engine::ledger::JobState::Queued
             | geod_task_engine::ledger::JobState::Downloading
+            | geod_task_engine::ledger::JobState::Processing
     ) {
         return Err(AppError {
             code: "JOB_STATE_CONFLICT",
@@ -929,6 +946,7 @@ fn jobs_resume(state: State<'_, AppState>, job_id: String) -> Result<Job, AppErr
         job.state,
         geod_task_engine::ledger::JobState::Queued
             | geod_task_engine::ledger::JobState::Downloading
+            | geod_task_engine::ledger::JobState::Processing
     ) {
         return Err(AppError {
             code: "JOB_STATE_CONFLICT",
@@ -946,7 +964,7 @@ fn jobs_resume(state: State<'_, AppState>, job_id: String) -> Result<Job, AppErr
     tauri::async_runtime::spawn(async move {
         if let Ok(mut store) = TaskStore::open(&db_path) {
             let _ = store
-                .run_job_with_control_proxy_and_overlays(
+                .run_job_with_projector(
                     &job_id,
                     &source.descriptor,
                     &source.endpoint,
@@ -958,6 +976,7 @@ fn jobs_resume(state: State<'_, AppState>, job_id: String) -> Result<Job, AppErr
                         .as_deref()
                         .map(geod_core::imagery::ProxyRoute::Http)
                         .unwrap_or(geod_core::imagery::ProxyRoute::Direct),
+                    Some(&export_crs::Projector),
                 )
                 .await;
         }
@@ -1013,6 +1032,31 @@ fn artifacts_inspect(state: State<'_, AppState>, job_id: String) -> Result<Manif
     open_store(&state)?
         .inspect_job_artifact(&job_id)
         .map_err(Into::into)
+}
+
+pub(crate) fn open_output_directory(app: &AppHandle, workspace: &str, output: &str) -> Result<(), AppError> {
+    let root = fs::canonicalize(workspace).map_err(|_| workspace_error("WORKSPACE_INVALID", "工作区文件夹不存在"))?;
+    let directory = fs::canonicalize(output).map_err(|_| workspace_error("OUTPUT_NOT_FOUND", "成果目录不存在，可能已被移动或删除"))?;
+    if !directory.is_dir() || directory == root || !directory.starts_with(&root) {
+        return Err(workspace_error("WORKSPACE_DENIED", "成果目录不在此任务的工作区中"));
+    }
+    app.opener().open_path(directory.to_string_lossy().into_owned(), None::<&str>)
+        .map_err(|cause| workspace_error("OUTPUT_OPEN_FAILED", cause.to_string()))
+}
+
+#[tauri::command]
+fn artifact_open_directory(app: AppHandle, state: State<'_, AppState>, services: State<'_, services::ServiceState>,
+    conversation_id: String, job_id: String) -> Result<(), AppError> {
+    let workspace = read_workspace(&app, &state, &services, &conversation_id)?;
+    let owner = services::current_user_id(&services).map_err(|e| workspace_error(e.code, e.message))?;
+    let store = open_store(&state)?;
+    let job = store.get_job(&job_id)?.ok_or_else(|| workspace_error("JOB_NOT_FOUND", "任务不存在"))?;
+    imagery_recovery::assert_plan_owner(&state, &owner, &conversation_id, Path::new(&workspace.directory), &job.plan_id)?;
+    if !matches!(job.state, geod_task_engine::ledger::JobState::Completed | geod_task_engine::ledger::JobState::Partial) {
+        return Err(workspace_error("OUTPUT_NOT_READY", "成果尚未生成"));
+    }
+    let stored = store.get_plan(&job.plan_id)?.ok_or_else(|| workspace_error("PLAN_NOT_FOUND", "计划不存在"))?;
+    open_output_directory(&app, &workspace.directory, &stored.plan.spec.output_directory)
 }
 
 #[derive(Serialize)]
@@ -1183,6 +1227,7 @@ struct ArtifactRaster {
     path: String,
     bounds: [f64; 4],
     crs: String,
+    crs_definition: Option<String>,
     width: u32,
     height: u32,
     sha256: String,
@@ -1209,6 +1254,7 @@ fn verified_artifact_raster(db_path: &Path, job_id: &str, asset_id: Option<&str>
         resource_id: String::new(),
         job_id: job_id.into(), asset_id: asset.id.clone(), name: manifest.name,
         path: path.to_string_lossy().into_owned(), bounds: asset.bounds, crs: asset.crs.clone(),
+        crs_definition: asset.crs_definition.clone(),
         width: asset.width.unwrap_or_default(), height: asset.height.unwrap_or_default(), sha256: asset.sha256.clone(),
         elevation_encoding: plan.plan.spec.export_options.as_ref().and_then(|o|o.elevation_encoding),
     })
@@ -1339,6 +1385,12 @@ async fn osm_basemap_tile(app: AppHandle, z: u8, x: u32, y: u32) -> Result<Strin
     Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
 }
 
+#[tauri::command]
+fn desktop_runtime_capabilities() -> serde_json::Value {
+    serde_json::json!({"version": env!("CARGO_PKG_VERSION"), "ipcContract": 1, "exportCrs": true,
+        "exportOptions": ["targetCrs", "resampling"], "conversationOutputCrs": true})
+}
+
 pub fn run() {
     let daemon = background_runtime::is_daemon();
     let mut context = tauri::generate_context!();
@@ -1391,6 +1443,7 @@ pub fn run() {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
             network::initialize(data_dir.join("network-settings.json"));
+            rtk_runtime::initialize(data_dir.clone());
             source_creator::initialize(data_dir.join("wayback"));
             let db_path = data_dir.join("agent-tasks.sqlite");
             TaskStore::open(&db_path).map_err(|error| {
@@ -1444,6 +1497,7 @@ pub fn run() {
             }
             if matches!(invoke.message.command(), "background_status" | "background_stop" | "background_start") { return handlers(invoke); }
             let commands: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool = tauri::generate_handler![
+            desktop_runtime_capabilities,
             desktop_settings::desktop_settings_get,
             desktop_settings::desktop_autostart_set,
             desktop_settings::desktop_update_preferences,
@@ -1503,6 +1557,7 @@ pub fn run() {
             data_jobs::data_download_cancel,
             data_jobs::data_download_discard,
             data_jobs::data_download_inspect,
+            data_jobs::data_download_open_directory,
             data_jobs::data_download_preview,
             data_asset_protocol::data_asset_unregister,
             schedules::schedules_create,
@@ -1516,6 +1571,7 @@ pub fn run() {
             workspace_get,
             workspace_default,
             workspace_set,
+            workspace_set_output_crs,
             workspace_open_directory,
             output_directory_suggest,
             workspace_boundaries_list,
@@ -1566,11 +1622,13 @@ pub fn run() {
             jobs_active,
             jobs_events,
             artifacts_inspect,
+            artifact_open_directory,
             artifact_preview,
             artifact_raster,
             osm_basemap_tile,
             map_preview_tile,
             services::auth_status,
+            services::account_profile,
             services::auth_begin,
             services::auth_logout,
             services::agent_generate,
@@ -1616,6 +1674,8 @@ pub fn run() {
             extensions::skill_set_enabled,
             extensions::skill_read,
             extensions::mcp_add,
+            extensions::mcp_query_credentials_set,
+            extensions::mcp_header_credentials_set,
             extensions::mcp_remove,
             mcp_oauth::mcp_oauth_start,
             mcp_interaction::mcp_request_open_browser,
@@ -1643,10 +1703,20 @@ pub fn run() {
             mcp_oauth::mcp_oauth_cancel,
             mcp_oauth::mcp_oauth_disconnect,
             extensions::mcp_add_gdal,
+            gis_components::gis_skills_list,
+            gis_components::gis_install_prepare,
+            gis_components::gis_install_cancel,
+            gis_components::gis_skill_install,
+            rtk_runtime::rtk_status,
+            rtk_runtime::rtk_install,
+            rtk_runtime::rtk_set_enabled,
+            rtk_runtime::rtk_install_cancel,
             extensions::mcp_set_enabled,
             extensions::mcp_tools,
             extensions::mcp_call,
             extensions::mcp_result_read,
+            extensions::mcp_embedded_result_save,
+            extensions::mcp_result_export,
             extensions::mcp_registry_search,
         ];
             commands(invoke)
@@ -1692,6 +1762,7 @@ mod workspace_tests {
         fs::write(&file, serde_json::to_vec(&WorkspaceSettings {
             directory: fs::canonicalize(&first).unwrap().to_string_lossy().into_owned(),
             permission: WorkspacePermission::ConfirmEach,
+            output_crs: None,
         }).unwrap()).unwrap();
         assert!(ensure_workspace_binding(&file, &fs::canonicalize(&first).unwrap()).is_ok());
         assert_eq!(ensure_workspace_binding(&file, &fs::canonicalize(&second).unwrap()).unwrap_err().code, "WORKSPACE_IMMUTABLE");

@@ -23,6 +23,17 @@ test("fresh native permission overrides stale history, survives compaction and p
   assert.equal(pendingPlanLabel(null), "计划已生成");
 });
 
+test("native conversation CRS defaults replace stale model context without changing the request", () => {
+  const original = [{role:"user",content:"这次导出 EPSG:32650"}];
+  const first = workspacePermissionContext(original,"fullAccess","EPSG:4490");
+  assert.match(first.at(-1).content,/"outputCrs":"EPSG:4490"/);
+  assert.match(first.at(-1).content,/单次指定可覆盖但不改写默认/);
+  const cleared = workspacePermissionContext(first,"fullAccess",null);
+  assert.match(cleared.at(-1).content,/"outputCrs":null/);
+  assert(!cleared.at(-1).content.includes('"outputCrs":"EPSG:4490"'));
+  assert(cleared.at(-1).content.endsWith(original[0].content));
+});
+
 test("detailed administrative geometry stays local and version survives the model reply", () => {
   const boundary = { name: "北京市-AreaCity-20260403.geojson", bounds: [115.4,39.4,117.5,41.1], polygonCount: 1,
     geometry: { polygons: [[Array.from({ length: 15_482 }, () => [116.4,39.9])]] } };

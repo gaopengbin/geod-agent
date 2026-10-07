@@ -1,0 +1,489 @@
+[
+  {
+    "name": "raster_convert",
+    "description": "Convert raster format with compression, tiling, and overview generation. USE WHEN: Need to change format (e.g. GeoTIFF to COG), apply compression to reduce file size, create tiled output for performance, or build overviews for faster display at multiple scales. Common use cases: create Cloud-Optimized GeoTIFFs (COG) for web serving, compress large rasters, or prepare data for GIS software. REQUIRES: uri (source raster path), output (destination file path). OPTIONAL: options (ConversionOptions) with driver (GTiff, COG, PNG, JPEG, etc.), compression (lzw, deflate, zstd, jpeg, packbits, none), tiled (bool, default True), blockxsize/blockysize (tile dimensions, default 256x256), photometric (RGB, YCBCR), overviews (list of levels like [2, 4, 8, 16]), overview_resampling (nearest, bilinear, cubic, average, mode), creation_options (dict of driver-specific options). OUTPUT: ConversionResult with ResourceRef (output file URI, path, size, driver, metadata), driver name, compression method used, size_bytes, and overviews_built list. SIDE EFFECTS: Creates new file at output path. NOTE: COG driver automatically creates optimized cloud-friendly GeoTIFFs.",
+    "inputSchema": {
+      "properties": {
+        "uri": {
+          "type": "string"
+        },
+        "output": {
+          "type": "string"
+        },
+        "options": {
+          "anyOf": [
+            {
+              "description": "Options for raster format conversion.",
+              "properties": {
+                "driver": {
+                  "default": "GTiff",
+                  "description": "Output driver (GTiff, COG, PNG, JPEG, etc.)",
+                  "type": "string"
+                },
+                "compression": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "jpeg",
+                        "lzw",
+                        "packbits",
+                        "deflate",
+                        "ccittrle",
+                        "ccittfax3",
+                        "ccittfax4",
+                        "lzma",
+                        "none",
+                        "zstd",
+                        "lerc",
+                        "lerc_deflate",
+                        "lerc_zstd",
+                        "webp",
+                        "jpeg2000"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "description": "Compression method (lowercase). See reference://compression/available/all for full list with guidance. Common options: deflate (universal, lossless), lzw (GeoTIFF, categorical), zstd (modern, fast, GDAL 3.4+), jpeg (lossy, RGB only), none (no compression). Driver compatibility varies - deflate works with most formats."
+                },
+                "tiled": {
+                  "default": true,
+                  "description": "Create tiled output (improves performance for large rasters)",
+                  "type": "boolean"
+                },
+                "blockxsize": {
+                  "default": 256,
+                  "description": "Tile width in pixels (must be multiple of 16)",
+                  "minimum": 16,
+                  "type": "integer"
+                },
+                "blockysize": {
+                  "default": 256,
+                  "description": "Tile height in pixels (must be multiple of 16)",
+                  "minimum": 16,
+                  "type": "integer"
+                },
+                "photometric": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "description": "Photometric interpretation (RGB, YCBCR, MINISBLACK, etc.)"
+                },
+                "overviews": {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "type": "array"
+                },
+                "overview_resampling": {
+                  "default": "average",
+                  "description": "Resampling method for overviews",
+                  "type": "string"
+                },
+                "creation_options": {
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
+                  },
+                  "description": "Additional driver-specific creation options",
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "uri",
+        "output"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "raster_info",
+    "description": "Inspect raster metadata using Python-native Rasterio. USE WHEN: Need to understand raster properties before processing, verify CRS and spatial extent, check band count and data types, inspect nodata values, or examine overview levels for multi-resolution data. REQUIRES: uri (path or URI to raster file, supports file://, /vsi paths). OPTIONAL: band (1-based band index for overview introspection). OUTPUT: RasterInfo with driver (e.g. 'GTiff'), CRS (e.g. 'EPSG:4326'), width/height (pixels), count (number of bands), dtype (e.g. 'uint8'), transform (6-element affine: [a, b, c, d, e, f]), bounds (minx, miny, maxx, maxy), nodata value, overview_levels (list), and tags (metadata dict). SIDE EFFECTS: None (read-only operation, no file modification).",
+    "inputSchema": {
+      "properties": {
+        "uri": {
+          "type": "string"
+        },
+        "band": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "uri"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "raster_reproject",
+    "description": "Reproject raster to new coordinate reference system with explicit resampling method (ADR-0011 requirement). USE WHEN: Coordinate system doesn't match target projection OR data needs different spatial reference for analysis, overlay, or web serving. Common scenarios: convert lat/lon (EPSG:4326) to Web Mercator (EPSG:3857) for web maps, transform to local UTM zone for accurate area/distance calculations, or align multiple rasters to common projection for analysis. REQUIRES: uri (source raster path), output (destination file path), dst_crs (e.g. 'EPSG:3857', 'EPSG:4326', 'EPSG:32610'), resampling (nearest for categorical data, bilinear/cubic for continuous data). OPTIONAL: src_crs (override source CRS if missing/incorrect), resolution (target pixel size as [x, y] list in destination units),width/height (explicit output dimensions in pixels), bounds (crop to extent in destination CRS as [left, bottom, right, top]),nodata (override nodata value for output). OUTPUT: ReprojectionResult with ResourceRef (output file URI/path/size/metadata), src_crs used, dst_crs, resampling method, output transform (6-element affine), width/height in pixels, and bounds in destination CRS. SIDE EFFECTS: Creates new file at output path. NOTE: Resampling method is REQUIRED per ADR-0011 to prevent unintentional data corruption (no defaults). Choose carefully: nearest preserves exact values but creates blocky appearance, bilinear/cubic create smooth output but may introduce new values.",
+    "inputSchema": {
+      "properties": {
+        "uri": {
+          "type": "string"
+        },
+        "output": {
+          "type": "string"
+        },
+        "dst_crs": {
+          "type": "string"
+        },
+        "resampling": {
+          "type": "string"
+        },
+        "src_crs": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "resolution": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "width": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "height": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "nodata": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "uri",
+        "output",
+        "dst_crs",
+        "resampling"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "raster_stats",
+    "description": "Compute comprehensive statistics for raster bands including min/max/mean/std/median/percentiles and optional histogram. USE WHEN: Need to analyze data distribution, find outliers, understand value ranges, validate data quality, or generate histograms for visualization. Useful before processing to understand data characteristics. REQUIRES: uri (path to raster file). OPTIONAL: params (RasterStatsParams) with bands (list of 1-based indices, None=all bands), include_histogram (bool, default False), histogram_bins (2-1024, default 256), percentiles (list like [25, 50, 75]), sample_size (integer, for large rasters sample random pixels instead of reading all). OUTPUT: RasterStatsResult with total_pixels and per-band BandStatistics containing min, max, mean, std, median, percentile_25, percentile_75, valid_count, nodata_count, and optional histogram (list of HistogramBin with min_value/max_value/count). SIDE EFFECTS: None (read-only, computes in-memory). NOTE: Large rasters may require sampling to avoid memory issues.",
+    "inputSchema": {
+      "properties": {
+        "uri": {
+          "type": "string"
+        },
+        "params": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "bands": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "uri"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "vector_buffer",
+    "description": "Create buffer zones around vector geometries for proximity analysis. USE WHEN: Need to create zones of influence, analyze proximity, identify areas within distance of features, or create coverage areas. Common scenarios: Service area analysis (500m from transit stops), environmental buffers (wetland protection zones), proximity analysis (schools within 1km). REQUIRES: uri (source vector path), output (destination file path), distance (buffer distance in CRS units). OPTIONAL: resolution (segments per quadrant, 4-64, default 16). Higher resolution = smoother circles but slower performance. OUTPUT: VectorBufferResult with ResourceRef (output file URI/path/size/metadata), feature_count, buffer_distance applied, resolution used, bounds. SIDE EFFECTS: Creates new file at output path. Output geometry type is Polygon. SUPPORTS: Shapefile, GeoPackage, GeoJSON and other OGR formats. IMPORTANT: Distance in CRS units - meters for projected (UTM, State Plane), degrees for geographic (EPSG:4326). For metric buffers on lat/lon data, reproject to projected CRS first. Uses shapely for geometry operations. No reflection required - distance is user-specified.",
+    "inputSchema": {
+      "properties": {
+        "uri": {
+          "type": "string"
+        },
+        "output": {
+          "type": "string"
+        },
+        "distance": {
+          "type": "number"
+        },
+        "resolution": {
+          "default": 16,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "uri",
+        "output",
+        "distance"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "vector_clip",
+    "description": "Clip vector dataset by bounding box or mask geometry for spatial subsetting. USE WHEN: Need to extract features within specific area, subset large datasets, or prepare data for localized analysis. Common scenarios: Clip to study area extent, extract features within city boundary, subset regional data to project area. REQUIRES: uri (source vector path), output (destination file path). ONE OF: bounds=[minx, miny, maxx, maxy] (bounding box) OR mask=<path> (clip geometry). OUTPUT: VectorClipResult with ResourceRef (output file URI/path/size/metadata), feature_count (features in output), geometry_type, bounds, clip_method used. SIDE EFFECTS: Creates new file at output path. SUPPORTS: Shapefile, GeoPackage, GeoJSON and other OGR formats. NOTE: Features intersecting clip boundary are split. Empty geometries removed. Uses pyogrio and shapely for performance. No reflection required - spatial operations are straightforward with user-defined extents.",
+    "inputSchema": {
+      "properties": {
+        "uri": {
+          "type": "string"
+        },
+        "output": {
+          "type": "string"
+        },
+        "bounds": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "mask": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "uri",
+        "output"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "vector_convert",
+    "description": "Convert vector dataset to different format with encoding control. USE WHEN: Need to migrate between formats (Shapefile ↔ GeoPackage ↔ GeoJSON), fix encoding issues, or prepare data for specific software requirements. Common scenarios: Shapefile to GeoPackage for single-file portability and UTF-8, GeoJSON to Shapefile for desktop GIS, GeoPackage to GeoJSON for web applications. REQUIRES: uri (source vector path), output (destination file path with extension). OPTIONAL: driver (auto-detected from extension: .shp, .gpkg, .geojson, .kml, .gml), encoding (UTF-8 default, ISO-8859-1 for legacy compatibility). OUTPUT: VectorConvertResult with ResourceRef (output file URI/path/size/metadata), src_driver, dst_driver, feature_count, geometry_type, encoding used. SIDE EFFECTS: Creates new file at output path. SUPPORTS: ESRI Shapefile, GeoPackage, GeoJSON, KML, GML and other OGR formats. NOTE: Uses pyogrio backend for performance. GeoPackage recommended for modern workflows (single file, UTF-8 native, no field name limits, efficient spatial indexing). No reflection required - format/compression choices covered by existing resources.",
+    "inputSchema": {
+      "properties": {
+        "uri": {
+          "type": "string"
+        },
+        "output": {
+          "type": "string"
+        },
+        "driver": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "encoding": {
+          "default": "UTF-8",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uri",
+        "output"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "vector_info",
+    "description": "Inspect vector dataset metadata using Python-native pyogrio (or fiona fallback). USE WHEN: Need to understand vector dataset properties before processing, verify CRS and spatial extent, check geometry types (Point, LineString, Polygon), examine attribute fields and types, or validate feature count. Common scenarios: verify Shapefile structure, check GeoJSON CRS, inspect GeoPackage layers, or validate CSV with geometry. REQUIRES: uri (path to vector file or dataset). OPTIONAL: None. OUTPUT: VectorInfo with path, driver (e.g. 'ESRI Shapefile', 'GeoJSON', 'GPKG'), crs (e.g. 'EPSG:4326'), layer_count (number of layers), geometry_types (list like ['Point', 'MultiPolygon']), feature_count (number of features/records), fields (list of tuples with field name and type like [('name', 'str'), ('pop', 'int')]), bounds (spatial extent as (minx, miny, maxx, maxy) or None). SIDE EFFECTS: None (read-only operation, metadata only - features not loaded). NOTE: Uses pyogrio backend for performance (falls back to fiona if unavailable). Both backends support Shapefile, GeoPackage, GeoJSON, KML, and other OGR formats.",
+    "inputSchema": {
+      "properties": {
+        "uri": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "uri"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "vector_reproject",
+    "description": "Reproject vector dataset to new coordinate reference system. USE WHEN: Vector CRS doesn't match target projection OR data needs different spatial reference for analysis, overlay, or web serving. Common scenarios: convert lat/lon (EPSG:4326) to Web Mercator (EPSG:3857) for web maps, transform to local UTM zone for accurate area/distance calculations, or align multiple datasets to common projection for spatial analysis. REQUIRES: uri (source vector path), output (destination file path), dst_crs (e.g. 'EPSG:3857', 'EPSG:4326', 'EPSG:32610'). OPTIONAL: src_crs (override source CRS if missing/incorrect). OUTPUT: VectorReprojectResult with ResourceRef (output file URI/path/size/metadata), src_crs used, dst_crs, feature_count, geometry_type, and bounds in destination CRS. SIDE EFFECTS: Creates new file at output path. SUPPORTS: Shapefile, GeoPackage, GeoJSON, KML, GML and other OGR formats. NOTE: Uses pyogrio backend for performance. Reflection middleware will prompt for CRS selection justification (why this projection? what properties to preserve?) if not previously justified for this CRS.",
+    "inputSchema": {
+      "properties": {
+        "uri": {
+          "type": "string"
+        },
+        "output": {
+          "type": "string"
+        },
+        "dst_crs": {
+          "type": "string"
+        },
+        "src_crs": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "uri",
+        "output",
+        "dst_crs"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "vector_simplify",
+    "description": "Simplify vector geometries to reduce complexity and file size for web display or generalization. USE WHEN: Need to reduce vertex count, optimize for web mapping, create generalized representations, or reduce file size while preserving shape. Common scenarios: Web map optimization (reduce vertices for faster rendering), multi-scale mapping (create simplified versions for zoom levels), file size reduction (large detailed datasets). REQUIRES: uri (source vector path), output (destination file path), tolerance (simplification distance in CRS units - larger = more simplified). OPTIONAL: method (douglas-peucker default, or visvalingam), preserve_topology (True default - ensures valid geometries). OUTPUT: VectorSimplifyResult with ResourceRef (output file URI/path/size/metadata), feature_count, tolerance applied, method used, preserve_topology flag, bounds. SIDE EFFECTS: Creates new file at output path. Reduces vertex count. SUPPORTS: Shapefile, GeoPackage, GeoJSON and other OGR formats. METHODS: Douglas-Peucker (fast, standard) removes points based on perpendicular distance; Visvalingam-Whyatt (slower, preserves shape) removes points based on area. TOLERANCE: Measured in CRS units - for EPSG:4326 use 0.0001-0.01 degrees, for projected CRS use 10-1000 meters depending on scale. Higher tolerance = more simplification. Uses shapely for geometry operations. No reflection required - tolerance is user-specified based on use case.",
+    "inputSchema": {
+      "properties": {
+        "uri": {
+          "type": "string"
+        },
+        "output": {
+          "type": "string"
+        },
+        "tolerance": {
+          "type": "number"
+        },
+        "method": {
+          "type": "string",
+          "enum": [
+            "douglas-peucker"
+          ],
+          "default": "douglas-peucker"
+        },
+        "preserve_topology": {
+          "default": true,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "uri",
+        "output",
+        "tolerance"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "store_justification",
+    "description": "Store an epistemic justification for later use. This tool is called after generating a methodological justification via a prompt. The stored justification allows subsequent tool calls to proceed without re-justification. REQUIRES: tool_name (name of the tool this justification is for), domain (crs_datum, resampling, hydrology, aggregation), prompt_name (name of the prompt that generated this), prompt_args (dict of arguments used in the prompt), justification (the generated justification as dict with intent/alternatives/choice/confidence). OUTPUT: Confirmation message with cache key.",
+    "inputSchema": {
+      "properties": {
+        "tool_name": {
+          "type": "string"
+        },
+        "domain": {
+          "type": "string"
+        },
+        "prompt_name": {
+          "type": "string"
+        },
+        "prompt_args": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "justification": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
+      "required": [
+        "tool_name",
+        "domain",
+        "prompt_name",
+        "prompt_args",
+        "justification"
+      ],
+      "type": "object"
+    }
+  }
+]

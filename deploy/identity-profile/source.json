@@ -1,0 +1,21 @@
+{
+  "source": "G:\\code\\GIS-AI\\geostyle-oauth-release-20260928",
+  "baseCommit": "e9133eb3b33fd0d043b2a8f6033c54b3568bfd3b",
+  "filesSha256": {
+    "app/api/account/route.ts": "df6551f8e1768ff7ac1476b594501e70527266dd92a6bab7cd29fd3330d14fcc",
+    "lib/accounts/avatar.ts": "e8d91cdcf286775ed895e76aa476201dc9dd62e70933a637965f3af20ab5523e",
+    "lib/accounts/http.ts": "846aab4febe60d32fe6ff0f074c0a6283741194faacd56b2fde6536a35e1a30d",
+    "lib/accounts/service.ts": "cc7347c9a73b3b8eb4e36a4f4ba1a8544c1299d2ccccdd75f41a2861a362f372",
+    "lib/accounts/store.ts": "e5d16b916b930ab58879fdb549f16b7f5f564913161bb22a0d7876d8263c9f26",
+    "lib/accounts/geod-profile.ts": "6bb8a4062078a9130f98a6475a8c994717c38b0e2b0f621bfe8ccbb1c0f77b8a",
+    "lib/accounts/geod-profile.test.ts": "a50a040e4c391b42505d30f495b6e0533c5b06b80e7d0985321eb80e14362e46",
+    "lib/accounts/nickname.ts": "1322a6ec2884c161aa9bf9429e2aff2d23d1d1f1dc60907b454139cfb524daf4",
+    "lib/accounts/nickname-policy.ts": "83aedddf69eaae4fd668696de24925fd355cd9b58d68c7e3c6cba242f5dc19d5",
+    "lib/accounts/verification.ts": "d9870ffa24d743893459929d4c7d026424a1096b1daf39edbf09d210fa5a3cd4"
+  },
+  "patchAppliesToBase": true,
+  "deployed": true,
+  "sourceCommit": "b6fcd801a2c2168036d7edef34c66c05fc15a01d",
+  "productionRelease": "geod-profile-20261007-132810-a32b2fc9d2c2",
+  "productionVerification": "G:\\code\\geod-agent\\artifacts\\account-avatar-20261007\\production-deployment.json"
+}

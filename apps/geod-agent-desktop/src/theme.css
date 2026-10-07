@@ -231,12 +231,6 @@ body { background: var(--background); color: var(--app-text); font: 14px/1.5 var
 .geod-prompt-input textarea:focus-visible { outline: none !important; box-shadow: none; }
 .field input:focus, .field select:focus { border-color: var(--app-blue); box-shadow: none; }
 .geod-prompt-input textarea::placeholder, .field input::placeholder { color: var(--app-faint-text); }
-.agent-auth-landing { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 12px; padding: clamp(24px, 5vw, 42px); color: var(--app-soft-text); overflow-y: auto; }
-.agent-auth-mark { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 10px; background: var(--app-blue-soft); color: var(--app-blue); margin-bottom: 8px; }
-.agent-auth-landing h3 { margin: 0; color: var(--app-text); font-size: 21px; letter-spacing: -.025em; }
-.agent-auth-landing p { max-width: 390px; margin: 0; color: var(--app-soft-text); font-size: 14px; line-height: 1.7; }
-.agent-auth-note { max-width: 390px; margin-top: 6px; padding: 10px 12px; border-left: 2px solid var(--app-blue); background: var(--app-subtle); color: var(--app-soft-text); font-size: 14px; line-height: 1.6; }
-.agent-auth-landing > button { min-width: 150px; margin-top: 9px; }
 .agent-account > div, .agent-chat-actions button, .agent-account > button:not(.beui-button) { color: var(--app-soft-text); }
 .agent-account > div svg { color: var(--app-success); }
 .agent-usage { background: var(--app-blue-soft); color: var(--app-soft-text); }
@@ -371,6 +365,7 @@ body { background: var(--background); color: var(--app-text); font: 14px/1.5 var
 .check-row input:checked { background: var(--app-blue); border-color: var(--app-blue); }
 .state-pill { background: var(--muted); color: var(--app-soft-text); }
 .state-downloading, .state-processing, .state-verifying { background: var(--app-blue-soft); color: var(--app-blue-text); }
+.task-processing-hint { color: var(--app-soft-text); font-size: 12px; line-height: 1.6; margin: 8px 0 0; }
 .state-paused { background: var(--app-blue-soft); color: var(--app-blue-text); }
 .state-completed { background: var(--app-success-soft); color: var(--app-success); }
 .state-failed, .state-partial { background: var(--app-warning-soft); color: var(--app-warning); }
@@ -537,6 +532,8 @@ body { background: var(--background); color: var(--app-text); font: 14px/1.5 var
 .conversation-account-trigger strong { font-size: 13px; font-weight: 500; }
 .conversation-account-trigger small { font-size: 12px; color: var(--app-faint-text); }
 .account-avatar { display: grid; place-items: center; width: 30px; height: 30px; flex: none; border-radius: 50%; background: var(--app-selected); color: var(--app-soft-text); }
+.account-avatar img { display: block; width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
+.conversation-account-trigger strong, .account-menu-identity strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .conversation-account-menu { width: min(260px, calc(100vw - 24px)); padding: 6px; border: 1px solid var(--app-line); background: var(--app-surface); box-shadow: var(--app-popover-shadow); }
 .account-menu-identity { display: flex; gap: 9px; padding: 8px; align-items: center; border-bottom: 1px solid var(--app-line); }
 .account-menu-identity > div { display: grid; gap: 2px; min-width: 0; }
@@ -602,8 +599,6 @@ body { background: var(--background); color: var(--app-text); font: 14px/1.5 var
 .agent-start .geod-prompt-input { min-height: 154px; padding: 12px; border-radius: 18px; background: var(--app-surface); box-shadow: 0 12px 32px var(--app-shadow); }
 .agent-start .geod-prompt-input textarea { min-height: 92px; }
 .agent-start .agent-attachment { max-width: 100%; margin: 0 0 10px; }
-.agent-start-auth { display: flex; align-items: center; justify-content: center; gap:12px; margin-top: 18px; color: var(--app-faint-text); font-size: 14px; text-align: center; }
-.agent-start-auth button { flex: none; }
 
 
 .agent-recovery-note { display: flex; align-items: center; gap: 10px; margin: 12px auto; width: min(100% - 32px, 760px); color: var(--text-muted, #667085); font-size: 14px; }
@@ -712,6 +707,7 @@ body { background: var(--background); color: var(--app-text); font: 14px/1.5 var
 .extension-tile-icon { display: grid; flex: none; width: 28px; height: 28px; place-items: center; border-radius: 8px; background: var(--app-subtle); color: var(--app-soft-text); }
 .extension-tile-top strong { min-width: 0; flex: 1; overflow: hidden; color: var(--app-text); font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .extension-tile-description { display: -webkit-box; overflow: hidden; min-height: 20px; margin: 7px 0 6px; color: var(--app-soft-text); font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.rtk-output-tile .extension-tile-description { display: block; overflow: visible; -webkit-line-clamp: unset; }
 .extension-tile-progress { display: flex; align-items: flex-start; gap: 8px; margin: 5px 0 9px; color: var(--app-blue-text); font-size: 14px; line-height: 1.45; }
 .extension-tile-progress svg { flex: none; margin-top: 2px; }
 .extension-tile-progress small { display: block; color: var(--app-soft-text); font-size: 14px; }
@@ -720,7 +716,8 @@ body { background: var(--background); color: var(--app-text); font: 14px/1.5 var
 .extension-spin { animation: extension-spin 1s linear infinite; }
 @keyframes extension-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .extension-spin { animation-duration: 2.5s; } }
-.extension-tile-actions { display: flex; justify-content: flex-end; gap: 3px; margin-top: auto; }
+.extension-tile-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; min-width: 0; margin-top: auto; padding-top: 8px; }
+.extension-tile-actions .extension-management-trigger { width: 32px; height: 32px; }
 .extension-details { margin-top: 12px; padding: 12px 15px 15px; border: 1px solid var(--app-blue-line); border-radius: 10px; background: var(--app-surface); }
 .extension-details-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 14px; }
 .extension-details > p { margin: 10px 0; color: var(--app-soft-text); font-size: 14px; line-height: 1.5; }

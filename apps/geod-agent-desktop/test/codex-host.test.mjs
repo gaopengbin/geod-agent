@@ -88,7 +88,7 @@ test('real Codex returns job tool results to the model instead of injecting a ho
  const sessions=join(home,'sessions');const rollout=readdirSync(sessions,{recursive:true}).find(name=>String(name).endsWith('.jsonl'));
  const contexts=readFileSync(join(sessions,rollout),'utf8').trim().split('\n').map(line=>JSON.parse(line)).filter(item=>item.type==='turn_context').map(item=>item.payload);
  assert.deepEqual(contexts.map(item=>item.sandbox_policy.type),['read-only','workspace-write','read-only'],'Switching permission changes the actual reused thread for every turn');
- assert.deepEqual(contexts.map(item=>item.approval_policy),['on-request','never','on-request']);
+ assert.deepEqual(contexts.map(item=>item.approval_policy),['on-request',{granular:{sandbox_approval:false,rules:false,skill_approval:false,request_permissions:false,mcp_elicitations:true}},'on-request']);
  console.log(JSON.stringify({engine:'Codex 0.159.2',model:'fixture',threadId:first.threadId,modelCalls,calls,profile:home}));
  } finally { await host.close(); }
 });

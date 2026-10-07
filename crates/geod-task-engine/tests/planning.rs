@@ -47,6 +47,25 @@ fn now() -> chrono::DateTime<Utc> {
 }
 
 #[test]
+fn output_crs_changes_approval_hash_and_rejects_fixed_tile_formats() {
+    use geod_core::imagery::{ExportOptions, RasterResampling};
+    let mut request = spec();
+    request.export_options = Some(ExportOptions { target_crs: Some("epsg:04326".into()), ..Default::default() });
+    let wgs = plan(request.clone(), &source(), now()).unwrap();
+    assert_eq!(wgs.spec.export_options.as_ref().unwrap().target_crs.as_deref(), Some("EPSG:4326"));
+    let options = request.export_options.as_mut().unwrap();
+    options.target_crs = Some("EPSG:4490".into());
+    assert_ne!(wgs.plan_hash, plan(request.clone(), &source(), now()).unwrap().plan_hash);
+    request.export_options.as_mut().unwrap().target_crs = Some("EPSG:4326".into());
+    request.export_options.as_mut().unwrap().resampling = RasterResampling::Bilinear;
+    assert_ne!(wgs.plan_hash, plan(request.clone(), &source(), now()).unwrap().plan_hash);
+    for format in [OutputFormat::Mbtiles, OutputFormat::GeoPackage, OutputFormat::Tiles] {
+        request.output_formats = vec![format];
+        assert!(plan(request.clone(), &source(), now()).is_err());
+    }
+}
+
+#[test]
 fn plans_legacy_grid_and_normalizes_sets() {
     let mut request = spec();
     request.zoom_levels = vec![1, 0, 1];

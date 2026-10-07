@@ -75,6 +75,7 @@ async fn server(
 }
 fn request(url: String) -> Request {
     Request {
+        target_crs: None,
         source: Source::Mvt {
             id: "test".into(),
             name: "Test source".into(),

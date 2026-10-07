@@ -2,7 +2,9 @@ import { DATA_DOWNLOAD_TOOLS } from './data-download-tools.mjs';
 import { MAINTENANCE_TOOLS } from './maintenance-tools.mjs';
 import { DATA_CONNECTION_TOOLS } from './data-connection-tools.mjs';
 import { AGENT_TASK_TOOLS } from './agent-task-tools.mjs';
+import { USER_INPUT_TOOLS } from './user-input-tools.mjs';
 export const RANGE_TOOLS = [
+  ...USER_INPUT_TOOLS,
   ...AGENT_TASK_TOOLS,
   ...DATA_DOWNLOAD_TOOLS,
   ...MAINTENANCE_TOOLS,
@@ -18,7 +20,7 @@ export const RANGE_TOOLS = [
 
 export function withRangeTools(tools) {
   return [...tools, ...RANGE_TOOLS].map(tool => ['plan_imagery', 'plan_imagery_batch'].includes(tool.function.name) ? { ...tool, function: { ...tool.function,
-    description: tool.function.description + ' Select zoom using exactly one of: zoom for one level, zoomLevels for explicit multiple levels, or paired zoomMin/zoomMax for an inclusive range. GeoTIFF uses bounded-memory streaming BigTIFF. Supply boundaryId to explicitly select one saved range; for multiple regions use plan_imagery_batch.',
+    description: tool.function.description + ' Select zoom using exactly one of: zoom for one level, zoomLevels for explicit multiple levels, or paired zoomMin/zoomMax for an inclusive range. GeoTIFF uses bounded-memory streaming BigTIFF. Default to uncompressed GeoTIFF and no pyramid for fast export; select compression or pyramids only when the user requests them. Supply boundaryId to explicitly select one saved range; for multiple regions use plan_imagery_batch.',
     parameters: { ...tool.function.parameters,
       required: tool.function.parameters.required.filter(name => name !== 'zoom'),
       properties: { ...tool.function.parameters.properties,
@@ -28,7 +30,9 @@ export function withRangeTools(tools) {
         overlaySourceIds: { type: 'array', items: { type: 'string' }, maxItems: 4, description: 'Registered annotation source IDs in bottom-to-top order. Composites pixels into outputs; requires the same pixel size and available zooms. Authentication is resolved locally.' },
         outputFormats: { type: 'array', items: { type: 'string', enum: ['geotiff', 'mbtiles', 'png', 'jpeg', 'gpkg', 'tiles'] }, minItems: 1 },
         exportOptions: { type: 'object', properties: {
-          compression: { type: 'string', enum: ['none', 'lzw', 'deflate'] }, buildPyramid: { type: 'boolean' },
+          targetCrs: {type:'string',description:'Explicit user-selected target EPSG CRS, or the saved conversation default. Never infer it. Ask with an interactive card when missing. GeoTIFF/PNG/JPEG can be reprojected by the optional raster conversion skill; non-native output images include world files. MBTiles/tile GeoPackage/raw tiles only support EPSG:3857.'},
+          resampling: {type:'string',enum:['nearest','bilinear','cubic'],description:'Nearest by default preserves pixel values; state this in coordinate options. A user can request bilinear/cubic.'},
+          compression: { type: 'string', enum: ['none', 'lzw', 'deflate'], default: 'none', description: 'Default none for fast export; only choose LZW or DEFLATE when the user requests compression.' }, buildPyramid: { type: 'boolean', default: false },
           generateSidecars: { type: 'boolean' }, jpegQuality: { type: 'integer', minimum: 1, maximum: 100 },
           elevationEncoding: { type: 'string', enum: ['terrarium'], description: 'Only for a Terrarium elevation source: produces one-band Float32 GeoTIFF in metres, NoData -9999. Requires outputFormats [geotiff] and no annotation overlays.' },
         }, additionalProperties: false },

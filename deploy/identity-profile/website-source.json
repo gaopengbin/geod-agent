@@ -1,0 +1,18 @@
+{
+  "source": "C:\\Users\\Administrator\\.codex\\worktrees\\geod-account-profile\\tif-downloader",
+  "baseCommit": "74b1478613bd0119537f7c0d9c3b24654c4ae31c",
+  "filesSha256": {
+    "website/src/lib/account.ts": "f75c0a0a3944a767a4306b288e35ad2bc960b6a9631167a3f3f8bc457c37a0ba",
+    "website/src/app/dashboard/NicknameSettings.tsx": "3fd379f237f7e09d1b05c035357b62e02d704fcf74e574577fc0b75caa8bb109",
+    "website/src/app/dashboard/AccountDashboard.tsx": "5700281627e204256aa55e2768bd75df6115028012296aa65226b9abaec2532d",
+    "website/src/app/dashboard/dashboard.module.css": "a2f1793354f50747c06a30f4407bd978be6191a73f6f0671135d03717aadbae6",
+    "website/src/app/_components/Header/AccountMenu.tsx": "d75fac286e585658f55b256da169d1d036c94ecd7e41b9fda0621d59075f8208",
+    "website/src/app/_components/Header/styles.module.css": "696bd016ec9be9131dd350cb2b23f1ac0e2377fedc5e896961a928ac6d2216d1"
+  },
+  "archive": "G:\\code\\geod-agent\\artifacts\\account-avatar-20261007\\geod-website-profile-defaults-20261007.tar.gz",
+  "archiveSha256": "892fdfeda7bb2ba06fc1cf2d5306338aa4d82b0c4ac9942c57941ad87963b5ce",
+  "deployed": true,
+  "sourceCommit": "88319db2997ff7fc79d154a97b18db0a689509be",
+  "productionRelease": "geod-profile-20261007-132810-a32b2fc9d2c2",
+  "productionVerification": "G:\\code\\geod-agent\\artifacts\\account-avatar-20261007\\production-deployment.json"
+}

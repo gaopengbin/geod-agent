@@ -132,7 +132,7 @@ mod tests {
     fn fixture() -> (tempfile::TempDir,AppState,WorkspaceSettings,StoredPlan,Job) {
         let dir=tempfile::tempdir().unwrap();
         let state=AppState{db_path:dir.path().join("test.sqlite"),workspace_dir:dir.path().into(),running_jobs:Arc::new(Mutex::new(HashMap::new())),schedule_gate:Mutex::new(())};
-        let workspace=WorkspaceSettings{directory:dir.path().to_string_lossy().into_owned(),permission:WorkspacePermission::ConfirmEach};
+        let workspace=WorkspaceSettings{directory:dir.path().to_string_lossy().into_owned(),permission:WorkspacePermission::ConfirmEach,output_crs:None};
         let endpoint:HttpSource=serde_json::from_value(serde_json::json!({"id":"recovery-source","name":"Recovery fixture","attribution":"","license":"","urlTemplate":"https://tiles.example.org/{z}/{x}/{y}.png","scheme":"XYZ","tileSize":256,"networkPolicy":"PublicHttps","minIntervalMs":0})).unwrap();
         let mut store=open_store(&state).unwrap();let source=store.save_source(endpoint,0,22,false,Utc::now()).unwrap();
         let spec:TaskSpec=serde_json::from_value(serde_json::json!({"schemaVersion":"0.1","kind":"imagery","sourceId":source.id,"bounds":[-1,1,1,2],"zoomLevels":[1],"outputFormats":["geotiff","mbtiles"],"outputDirectory":dir.path().join("original").to_string_lossy(),"limits":{"maxTiles":100,"maxDecodedRgbaBytes":100000000}})).unwrap();

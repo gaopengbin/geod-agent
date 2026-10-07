@@ -53,5 +53,22 @@ test("registered App queries return only their configured native fallback and re
   const installed={skills:[],connectors:[connector],registeredApps:[app,unavailable]};
   const actual=await discoverExtensions(installed,'asdk_app_notes_qa',async()=>list);assert.deepEqual(actual.connectors[0].tools,list.tools);assert.equal(actual.registeredApps[0].connectorId,connector.id);
   const missing=await discoverExtensions(installed,'connector_calendar_qa',async()=>list);assert.equal(missing.connectors.length,0);assert.equal(missing.registeredApps[0].route,'unavailable');
-  const off=await discoverExtensions({...installed,connectors:[{...connector,enabled:false}],registeredApps:[{...app,enabled:false}]},'asdk_app_notes_qa',async()=>{throw new Error('Should not discover disabled transport')});assert.equal(off.connectors.length,0);
+  const off=await discoverExtensions({...installed,connectors:[{...connector,enabled:false}],registeredApps:[{...app,enabled:false}]},'asdk_app_notes_qa',async()=>{throw new Error('Should not discover disabled transport')});assert.equal(off.connectors.length,1);assert.equal(off.connectors[0].enabled,false);assert.deepEqual(off.connectors[0].tools,[]);
+});
+
+test('saved Amap is visible as not enabled, without probing it or exposing credentials',async()=>{
+ const amap={id:'saved-amap',name:'高德地图 MCP',url:'https://mcp.amap.com/mcp',enabled:false,queryNames:['key'],private:true};
+ for(const query of ['', 'amap', '高德']){
+  let probed=0;const result=await discoverExtensions({skills:[],connectors:[amap]},query,async()=>{probed++;throw new Error('Must not probe a disabled connector');});
+  assert.equal(probed,0);assert.equal(result.connectors[0].registered,true);assert.equal(result.connectors[0].enabled,false);assert.equal(result.connectors[0].status,'notEnabled');assert.equal(result.connectors[0].authenticationConfigured,true);assert.deepEqual(result.connectors[0].tools,[]);assert.match(result.connectors[0].next,/Do not re-add/);assert.equal(result.registeredConnectors[0].connectorId,amap.id);assert(!JSON.stringify(result).includes('queryNames'));
+ }
+ const filtered=await discoverExtensions({skills:[],connectors:[amap]},'raster',async()=>{throw new Error('Must not probe');});assert.equal(filtered.connectors.length,0);assert.equal(filtered.registeredConnectors[0].status,'notEnabled');
+ const isolated=await discoverExtensions({skills:[],connectors:[amap,connector]},'高德',async()=>{throw new Error('Must not probe unrelated transports for a direct saved-connector query');});assert.equal(isolated.connectors.length,1);assert.equal(isolated.connectors[0].status,'notEnabled');
+});
+test('refresh reflects enabling and disabling; an enabled transport failure is not lost registration',async()=>{
+ const amap={id:'saved-amap',name:'高德地图 MCP',url:'https://mcp.amap.com/mcp',enabled:true};
+ const tools={connectorId:amap.id,name:amap.name,tools:[{name:'maps_geo',inputSchema:{type:'object'}}]};
+ const enabled=await discoverExtensions({skills:[],connectors:[amap]},'高德',async()=>tools);assert.equal(enabled.connectors[0].enabled,true);assert.equal(enabled.connectors[0].tools[0].name,'maps_geo');
+ const offline=await discoverExtensions({skills:[],connectors:[amap]},'高德',async()=>{throw new Error('Offline');});assert.equal(offline.connectors[0].registered,true);assert.equal(offline.connectors[0].enabled,true);assert.equal(offline.connectors[0].status,'unavailable');
+ const disabled=await discoverExtensions({skills:[],connectors:[{...amap,enabled:false}]},'高德',async()=>{throw new Error('Must not probe');});assert.equal(disabled.connectors[0].enabled,false);assert.deepEqual(disabled.connectors[0].tools,[]);
 });

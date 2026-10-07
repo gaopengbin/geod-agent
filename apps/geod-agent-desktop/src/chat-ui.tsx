@@ -18,6 +18,10 @@ import {ImageAttachments} from "./image-attachments";
 import {DocumentAttachments} from "./document-attachments";
 import { collapsePollingHistory, type BackgroundSnapshot } from "./background-jobs";
 import { groupWorkRecords, isTurnWork, uniqueDisplayMessages, type TurnWork } from "./chat-work";
+import {UserInputRequest} from './user-input-request';
+import type {UserInputDraft} from './user-input-records';
+import {McpKeyDialog} from './mcp-key-dialog';
+import {mcpProvider} from './mcp-provider-presets';
 
 function PollingHistory({ item }: { item: DisplayMessage }) {
   const [open, setOpen] = useState(false);
@@ -57,8 +61,13 @@ function WorkDetailSection({ label, content }: { label: string; content: string 
 }
 
 function WorkDetails({ item }: { item: DisplayMessage }) {
-  if (item.monitorTrace) return <div className="agent-work-reasoning agent-work-content geod-message-body">{item.monitorTrace.map(entry => <ReactMarkdown key={entry.id} remarkPlugins={[remarkGfm]}>{entry.content}</ReactMarkdown>)}</div>;
-  if (item.itemType === "reasoning") return <div className="agent-work-reasoning agent-work-content geod-message-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{item.details}</ReactMarkdown></div>;
+  if (item.monitorTrace || item.itemType === "reasoning") return <ScrollArea className="agent-work-reasoning-area" viewportProps={{ "aria-label": t(item.monitorTrace ? "执行记录详情" : "模型思考详情") }}>
+    <div className="agent-work-reasoning agent-work-content geod-message-body">
+      {item.monitorTrace
+        ? item.monitorTrace.map(entry => <ReactMarkdown key={entry.id} remarkPlugins={[remarkGfm]}>{entry.content}</ReactMarkdown>)
+        : <ReactMarkdown remarkPlugins={[remarkGfm]}>{item.details}</ReactMarkdown>}
+    </div>
+  </ScrollArea>;
   const sections: { label: string; content: string }[] = [];
   if (item.itemType === "commandExecution") sections.push({ label: "命令", content: item.content });
   if (item.details) {
@@ -77,10 +86,18 @@ function WorkDetails({ item }: { item: DisplayMessage }) {
 }
 
 function workTitle(item: DisplayMessage) {
+  if(item.itemType==='reasoning'&&item.toolStatus==='attention')return t('思考已停止');
    if (item.itemType === "commandExecution") return t("运行命令");
   // A native MCP server may be named by its local connection ID.
   if (item.itemType === "mcpToolCall" && /^[a-f0-9-]{36} · /i.test(item.content)) return item.content.replace(/^[a-f0-9-]{36} · /i, "MCP 工具 · ");
   return localize(item.content);
+}
+
+function TurnOutcomeCard({item,onContinue,canContinue}:{item:DisplayMessage;onContinue?:()=>void;canContinue:boolean}) {
+  const outcome=item.turnOutcome!;
+  return <section className="agent-turn-outcome" role="status" aria-label={t(outcome.status==='interrupted'?'本轮已停止':'本轮未完成')}>
+    <CircleAlert size={17}/><div><strong>{t(outcome.status==='interrupted'?'本轮已停止':'本轮未完成')}</strong><p>{localize(outcome.message)}</p>{onContinue&&<Button variant="outline" size="sm" disabled={!canContinue} onClick={onContinue}>{t('继续处理')}<ArrowRight size={15}/></Button>}</div>
+  </section>;
 }
 
 function WorkRecord({ item, active }: { item: DisplayMessage; active: boolean }) {
@@ -134,10 +151,13 @@ function activeWorkId(entries: ReturnType<typeof groupWorkRecords>, busy: boolea
   return undefined;
 }
 
-function ExtensionReview({ proposal, busy, onApprove }: { proposal: ExtensionProposal; busy: boolean; onApprove: (proposal: ExtensionProposal) => void }) {
+function ExtensionReview({ proposal, busy, onApprove,onConfigured,conversationId }: { proposal: ExtensionProposal; busy: boolean; onApprove: (proposal: ExtensionProposal) => void;onConfigured?:(old:ExtensionProposal,next:ExtensionProposal)=>void;conversationId:string }) {
+  // A saved setup card stays in the transcript; only its button opens the credential form.
+  const [configureOpen,setConfigureOpen]=useState(false);
   const [preview, setPreview] = useState("");
   const [previewError, setPreviewError] = useState("");
   const [loading, setLoading] = useState(false);
+  const credentialLabel=mcpProvider(proposal.detail)?.label??'服务凭据';
   async function showPreview() {
     setLoading(true);
     setPreviewError("");
@@ -155,19 +175,30 @@ function ExtensionReview({ proposal, busy, onApprove }: { proposal: ExtensionPro
     {proposal.kind === "skill" && <Button type="button" size="sm" variant="ghost" disabled={loading} onClick={() => void showPreview()}>{loading ? t("正在读取…") : t("查看完整 SKILL.md")}</Button>}
     {previewError && <small role="alert">{previewError}</small>}
     {preview && <pre className="agent-skill-preview">{preview}</pre>}
-    <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => onApprove(proposal)}>{t("确认启用")}<ArrowRight size={16} /></Button>
+    {proposal.requiresKey?<><small>{t('在本机填写 {0}。关闭后可随时重新打开。',{'0':t(credentialLabel)})}</small><Button type="button" size="sm" variant="outline" onClick={()=>setConfigureOpen(true)}>{t('配置并连接')}<ArrowRight size={16}/></Button>{configureOpen&&<McpKeyDialog proposal={proposal} conversationId={conversationId} onClose={()=>setConfigureOpen(false)} onConnected={(connector,tools)=>onConfigured?.(proposal,{...proposal,id:connector.id,detail:connector.url,requiresKey:false,toolNames:tools.tools.slice(0,8).map(tool=>tool.name)})}/>}</>:<Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => onApprove(proposal)}>{t("确认启用")}<ArrowRight size={16} /></Button>}
   </div>;
 }
 
-export function ChatTranscript({ conversationId, messages, busy, activity, activeTurnId, onReviewSource, onApproveExtension, backgroundJobs = {}, onOpenJob, afterEntry, planTitles = {}, children }: { conversationId: string; messages: DisplayMessage[]; busy: boolean; activity: string; activeTurnId?: string | null; onReviewSource: (draft: SourceRegistrationDraft) => void; onApproveExtension: (proposal: ExtensionProposal) => void; backgroundJobs?: Record<string, BackgroundSnapshot>; onOpenJob?: (jobId: string) => void; afterEntry?: (id: string) => ReactNode; planTitles?: Record<string, string>; children?: ReactNode }) {
+export function ChatTranscript({ conversationId, messages, busy, activity, activeTurnId, onReviewSource, onApproveExtension, onConfigureExtension, backgroundJobs = {}, onOpenJob, afterEntry, planTitles = {}, children, openInputId, onOpenInput, onInputReply, onInputDraft, canAnswerInput, onContinueTurn, canContinueTurn=true }: { conversationId: string; messages: DisplayMessage[]; busy: boolean; activity: string; activeTurnId?: string | null; onReviewSource: (draft: SourceRegistrationDraft) => void; onApproveExtension: (proposal: ExtensionProposal) => void; onConfigureExtension?:(old:ExtensionProposal,next:ExtensionProposal)=>void; backgroundJobs?: Record<string, BackgroundSnapshot>; onOpenJob?: (jobId: string) => void; afterEntry?: (id: string) => ReactNode; planTitles?: Record<string, string>; children?: ReactNode;openInputId?:string|null;onOpenInput?:(id:string|null)=>void;onInputReply?:(id:string,value:unknown)=>Promise<void>;onInputDraft?:(id:string,value:UserInputDraft)=>void;canAnswerInput?:(id:string)=>boolean;onContinueTurn?:()=>void;canContinueTurn?:boolean }) {
   const entries = groupWorkRecords(collapsePollingHistory(uniqueDisplayMessages(messages)));
-  const liveWorkId = activeWorkId(entries, busy, activeTurnId);
-  const hasLiveWork = entries.some(entry => isTurnWork(entry) && entry.id === liveWorkId);
-  return <MessageScroller key={conversationId} className="agent-messages" viewportClassName="agent-messages-viewport" contentClassName="agent-messages-content" label={t("GeoD Agent 工作记录")} busy={busy}>
+  const executionActive = busy || !!activeTurnId;
+  const liveWorkId = activeWorkId(entries, executionActive, activeTurnId);
+  const activityLabel = localize(activity) || t("正在处理…");
+  let resumableOutcome:string|undefined;
+  for(let index=messages.length-1;index>=0;index--){
+    const item=messages[index];
+    if(item.role==='user'||item.role==='assistant'&&item.phase==='final')break;
+    if(item.turnOutcome){resumableOutcome=item.id;break;}
+  }
+  return <><MessageScroller key={conversationId} className="agent-messages" viewportClassName="agent-messages-viewport" contentClassName="agent-messages-content" label={t("GeoD Agent 工作记录")} busy={executionActive}>
     <motion.div className="agent-transcript-stage" initial={{ opacity: 0, x: 24, scale: 0.985 }} animate={{ opacity: 1, x: 0, scale: 1 }} transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}>
     {messages.length ? <MessageGroup spacing="default" className="geod-message-group">
       {entries.map(item => <Fragment key={item.id}>{isTurnWork(item)
         ? <WorkRecords key={`work-${conversationId}-${item.id}`} group={item} active={item.id === liveWorkId} activity={activity}/>
+        : item.turnOutcome
+        ? <TurnOutcomeCard item={item} onContinue={item.id===resumableOutcome?onContinueTurn:undefined} canContinue={canContinueTurn&&!executionActive}/>
+        : item.userInput
+        ? <UserInputRequest record={item.userInput} open={openInputId===item.id} onOpen={open=>onOpenInput?.(open?item.id:null)} onReply={value=>onInputReply?.(item.id,value)??Promise.resolve()} onDraft={value=>onInputDraft?.(item.id,value)} disabled={canAnswerInput?!canAnswerInput(item.id):false}/>
         : item.monitorTrace
         ? <PollingHistory key={item.id} item={item}/>
         : item.backgroundJob
@@ -179,7 +210,7 @@ export function ChatTranscript({ conversationId, messages, busy, activity, activ
         : item.role === "tool"
           ? <motion.div className={`agent-step ${item.toolStatus === "attention" ? "attention" : ""} ${item.toolStatus === "running" ? "agent-step-running" : ""}`} key={item.id} role="status" initial={busy ? { opacity: 0, x: -22, y: 8, scale: 0.96 } : false} animate={{ opacity: 1, x: 0, y: 0, scale: 1 }} transition={{ type: "spring", stiffness: 370, damping: 27, mass: 0.7 }}>
               <span className="agent-step-icon">{item.toolStatus === "running" ? <MessageTyping label={t("正在调用工具")} /> : item.toolStatus === "attention" ? <CircleAlert size={17} /> : <CheckCircle2 size={17} />}</span>
-              <div className="agent-step-content"><span>{item.content}</span>{item.sourceDraft && <div className="agent-source-review"><strong>{item.sourceDraft.source.name}</strong><span>{item.sourceDraft.source.urlTemplate}</span><small>{t("已整理图源配置。请核对服务地址和参数。")}</small><Button type="button" size="sm" variant="outline" onClick={() => onReviewSource(item.sourceDraft!)}>{t("查看配置")}<ArrowRight size={16} /></Button></div>}{item.extensionProposal && <ExtensionReview proposal={item.extensionProposal} busy={busy} onApprove={onApproveExtension} />}</div>
+              <div className="agent-step-content"><span>{item.content}</span>{item.sourceDraft && <div className="agent-source-review"><strong>{item.sourceDraft.source.name}</strong><span>{item.sourceDraft.source.urlTemplate}</span><small>{t("已整理图源配置。请核对服务地址和参数。")}</small><Button type="button" size="sm" variant="outline" onClick={() => onReviewSource(item.sourceDraft!)}>{t("查看配置")}<ArrowRight size={16} /></Button></div>}{item.extensionProposal && <ExtensionReview proposal={item.extensionProposal} busy={busy} onApprove={onApproveExtension} conversationId={conversationId} onConfigured={onConfigureExtension} />}</div>
             </motion.div>
           : <motion.article className={`agent-work-entry ${item.phase === "progress" ? "progress" : "final"} ${busy && messages.at(-1)?.id === item.id ? "is-live" : ""} ${item.streaming ? "is-streaming" : ""}`} key={item.id} initial={busy ? { opacity: 0, y: 24, scale: 0.975, filter: "blur(5px)" } : false} animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }} transition={{ type: "spring", stiffness: 310, damping: 28, mass: 0.85 }}>
               {item.phase !== "progress" && <div className="agent-work-label"><Bot size={17} /><span>GeoD Agent</span></div>}
@@ -188,9 +219,8 @@ export function ChatTranscript({ conversationId, messages, busy, activity, activ
             </motion.article>}{afterEntry?.(item.id)}</Fragment>)}
     </MessageGroup> : <div className="agent-welcome"><Bot size={28} /><h3>{t("描述你要获取的影像")}</h3><p>{t("也可以直接说需要什么 Skill 或 MCP 能力，Agent 会查找并准备接入。")}</p></div>}
     {children}
-    <AnimatePresence mode="popLayout">
-      {busy && !hasLiveWork && !messages.at(-1)?.streaming && messages.at(-1)?.toolStatus !== "running" && <motion.div key="agent-running" layout="position" className="agent-step agent-step-running" role="status" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}><span className="agent-step-icon"><MessageTyping label={t("正在处理")} /></span><span>{localize(activity)}</span></motion.div>}
-    </AnimatePresence>
     </motion.div>
-  </MessageScroller>;
+  </MessageScroller>
+    {executionActive && <div className="agent-live-status" role="status" aria-label={t("当前执行状态")} aria-live="polite" aria-atomic="true"><span className="agent-live-status-icon" aria-hidden="true"><MessageTyping/></span><span>{activityLabel}</span></div>}
+  </>;
 }

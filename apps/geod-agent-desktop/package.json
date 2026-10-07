@@ -1,7 +1,7 @@
 {
   "name": "geod-agent-desktop",
   "private": true,
-  "version": "0.2.3",
+  "version": "0.2.4",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 1420",
@@ -20,6 +20,8 @@
     "@tauri-apps/api": "^2.10.1",
     "@tauri-apps/plugin-dialog": "^2.7.0",
     "cesium": "^1.146.0",
+    "cesium-mcp-bridge": "file:vendor/cesium-mcp-bridge-1.146.0.tgz",
+    "cesium-mcp-contracts": "file:vendor/cesium-mcp-contracts-0.7.0.tgz",
     "clsx": "^2.1.1",
     "dompurify": "^3.3.3",
     "lucide-react": "^0.528.0",
@@ -28,14 +30,13 @@
     "ol": "^10.5.0",
     "openlayers-mcp-bridge": "file:vendor/openlayers-mcp-bridge-0.2.0.tgz",
     "openlayers-mcp-protocol": "file:vendor/openlayers-mcp-protocol-0.2.0.tgz",
+    "proj4": "2.22.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.0.0",
-    "zod": "^3.25.76",
-    "cesium-mcp-bridge": "file:vendor/cesium-mcp-bridge-1.146.0.tgz",
-    "cesium-mcp-contracts": "file:vendor/cesium-mcp-contracts-0.7.0.tgz"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.4",

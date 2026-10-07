@@ -358,6 +358,11 @@ pub(crate) fn data_download_plan(
     if idempotency_key.is_empty() || idempotency_key.len() > 160 {
         return Err(workspace_error("DATA_PLAN_INVALID", "任务幂等标识无效"));
     }
+    match &mut request {
+        DataRequest::Vector(spec)=>{let crs=spec.target_crs.as_ref().or(workspace.output_crs.as_ref()).ok_or_else(||workspace_error("OUTPUT_CRS_REQUIRED","请通过选项卡确认成果坐标系"))?;spec.target_crs=Some(crate::export_crs::validate(crs,false)?);},
+        DataRequest::Online(spec)=>{let crs=spec.target_crs.as_ref().or(workspace.output_crs.as_ref()).ok_or_else(||workspace_error("OUTPUT_CRS_REQUIRED","请通过选项卡确认成果坐标系"))?;spec.target_crs=Some(crate::export_crs::validate(crs,false)?);},
+        _=>{}
+    }
     if let DataRequest::Tiles3d(spec) = &mut request {
         if let Some(id) = &spec.connection_id {
             let connection = crate::data_credentials::bind(&state, &owner, id)?;
@@ -653,7 +658,7 @@ fn finished_state(manifest: &Value) -> &'static str {
 
 fn persist_progress(path: &Path, id: &str, p: DataProgress) {
     if let Ok(db) = open_data_db(path) {
-        let status = if matches!(p.phase.as_str(), "packaging" | "verifying") {
+        let status = if matches!(p.phase.as_str(), "packaging" | "verifying" | "reprojecting") {
             "verifying"
         } else {
             "downloading"
@@ -677,7 +682,7 @@ async fn execute(
     let report = |p: DataProgress| {
         if let Ok(mut last) = last.lock() {
             if last.elapsed() >= Duration::from_millis(200)
-                || matches!(p.phase.as_str(), "completed" | "verifying" | "packaging")
+                || matches!(p.phase.as_str(), "completed" | "verifying" | "packaging" | "reprojecting")
             {
                 persist_progress(path, &task.id, p);
                 *last = Instant::now();
@@ -690,6 +695,7 @@ async fn execute(
             let plan = geod_vector::plan(request.clone()).map_err(|e| e.to_string())?;
             let mut options =
                 geod_vector::RunOptions::new(PathBuf::from(&task.output_dir), cache.to_path_buf());
+            options.projector = Some(Arc::new(crate::export_crs::Projector));
             options.network.proxy = proxy;
             options.cancel = control.vector.clone();
             let manifest = geod_vector::run(&plan, options, |p| {
@@ -822,6 +828,7 @@ fn verified_files(task: &DataTask) -> Result<Value, AppError> {
                 manifest.assets.iter().any(|asset| asset.kind == kind)
             });
             if manifest.plan_hash != plan.plan_hash
+                || manifest.output_crs != plan.request.target_crs.as_deref().unwrap_or("EPSG:4326")
                 || manifest.bounds != plan.request.bounds
                 || !has_outputs
             {
@@ -864,6 +871,21 @@ pub(crate) fn data_download_inspect(
     task.manifest = Some(verified(&task)?);
     Ok(task)
 }
+#[tauri::command]
+pub(crate) fn data_download_open_directory(
+    app: AppHandle, state: State<'_, AppState>, services: State<'_, services::ServiceState>,
+    conversation_id: String, task_id: String,
+) -> Result<(), AppError> {
+    let workspace = read_workspace(&app, &state, &services, &conversation_id)?;
+    let db = open_data_db(&state.db_path)?;
+    let task = get(&db, &owner(&services)?, &conversation_id, &task_id)?;
+    check_binding(&db, &task, &workspace.directory)?;
+    if !matches!(task.status.as_str(), "completed" | "partial") {
+        return Err(workspace_error("OUTPUT_NOT_READY", "成果尚未生成"));
+    }
+    crate::open_output_directory(&app, &workspace.directory, &task.output_dir)
+}
+
 #[tauri::command]
 pub(crate) fn data_download_preview(
     app: AppHandle,

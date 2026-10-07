@@ -224,11 +224,13 @@ pub enum ExtraOutput { Png, Jpeg, GeoPackage, Tiles }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "lowercase")]
-pub enum TiffCompression { None, #[default] Lzw, Deflate }
+pub enum TiffCompression { #[default] None, Lzw, Deflate }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExportOptions {
+    #[serde(default, skip_serializing_if = "Option::is_none")] pub target_crs: Option<String>,
+    #[serde(default, skip_serializing_if = "RasterResampling::is_nearest")] pub resampling: RasterResampling,
     /// Explicitly export verified cached tiles; never make a tile network request.
     #[serde(default, skip_serializing_if = "is_false")] pub cache_only: bool,
     /// A recovery plan keeps previously verified pixels even after the normal
@@ -247,10 +249,23 @@ pub struct OverlaySourceRef { pub source_id: String, pub config_revision: String
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub enum ElevationEncoding { Terrarium }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum RasterResampling { #[default] Nearest, Bilinear, Cubic }
+impl RasterResampling { fn is_nearest(&self)->bool{*self==Self::Nearest} }
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectedRaster { pub width: u32, pub height: u32, pub geo_transform: [f64; 6], pub crs_definition: String }
+/// The optional application-owned runtime runs before atomic publication.
+pub trait RasterProjector: Send + Sync {
+    fn reproject<'a>(&'a self, path: &'a Path, bounds: [f64; 4], options: &'a ExportOptions,
+        cancelled: &'a AtomicBool, paused: Option<&'a AtomicBool>)
+        -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<ProjectedRaster, CoreError>> + Send + 'a>>;
+}
 fn default_jpeg_quality() -> u8 { 90 }
 fn is_false(value: &bool) -> bool { !*value }
 impl Default for ExportOptions {
-    fn default() -> Self { Self { cache_only: false, reuse_verified_cache: false, compression: TiffCompression::Lzw, build_pyramid: false, generate_sidecars: false, jpeg_quality: 90, overlay_sources: Vec::new(), elevation_encoding: None } }
+    fn default() -> Self { Self { target_crs: None, resampling: RasterResampling::Nearest, cache_only: false, reuse_verified_cache: false, compression: TiffCompression::None, build_pyramid: false, generate_sidecars: false, jpeg_quality: 90, overlay_sources: Vec::new(), elevation_encoding: None } }
 }
 
 /// An app-owned cache directory lets a previously approved job resume after
@@ -456,6 +471,10 @@ pub struct Asset {
     pub bytes: u64,
     pub sha256: String,
     pub crs: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub crs_definition: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub geo_transform: Option<[f64; 6]>,
     pub bounds: [f64; 4],
     #[serde(skip_serializing_if = "Option::is_none")]
     pub width: Option<u32>,
@@ -703,6 +722,12 @@ pub async fn fetch_preview_tile(source: &HttpSource, zoom: u8, x: u32, y: u32, p
 
 fn validate_request(request: &ImageryRequest, source: &HttpSource) -> Result<(), CoreError> {
     validate_source(source)?;
+    if let Some(crs) = &request.export_options.target_crs {
+        if crate::crs::normalize(crs)? != *crs { return Err(CoreError::new("INVALID_OUTPUT_CRS", "坐标系需要标准 EPSG 编号")); }
+        if crs != "EPSG:3857" && (request.output_mbtiles || request.extra_outputs.iter().any(|f|matches!(f, ExtraOutput::GeoPackage | ExtraOutput::Tiles))) {
+            return Err(CoreError::new("OUTPUT_CRS_FORMAT_CONFLICT", "MBTiles、瓦片 GeoPackage 和原始瓦片固定使用 EPSG:3857；请另选 GeoTIFF、PNG 或 JPEG"));
+        }
+    }
     if source.elevation_encoding.is_some() && source.elevation_encoding!=request.export_options.elevation_encoding {
         return Err(CoreError::new("INVALID_DEM_OUTPUT","An elevation source must produce its declared height encoding"));
     }
@@ -1249,6 +1274,8 @@ fn asset(
         mime_type: mime.into(),
         bytes: fs::metadata(&file).map_err(io_error)?.len(),
         sha256: sha256_file(&file)?,
+        geo_transform: None,
+        crs_definition: None,
         crs: if grid.is_some() {
             "EPSG:3857"
         } else {
@@ -1281,6 +1308,23 @@ pub async fn fetch_bundle_with_cancel(
     fetch_bundle_with_progress(request, source, cancelled, |_, _| Ok(())).await
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BundleStage { Downloading, Processing, Reprojecting }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BundleProgress {
+    Stage(BundleStage),
+    Tiles { completed: u64, total: u64 },
+}
+
+fn tile_callback<F: FnMut(u64, u64) -> Result<(), CoreError>>(mut callback: F)
+    -> impl FnMut(BundleProgress) -> Result<(), CoreError> {
+    move |progress| match progress {
+        BundleProgress::Tiles { completed, total } => callback(completed, total),
+        BundleProgress::Stage(_) => Ok(()),
+    }
+}
+
 pub async fn fetch_bundle_with_progress<F>(
     request: &ImageryRequest,
     source: &HttpSource,
@@ -1298,7 +1342,8 @@ where
         None,
         ProxyRoute::Environment,
         DownloadOptions::default(),
-        on_tile,
+        tile_callback(on_tile),
+        None,
     )
     .await
 }
@@ -1321,7 +1366,8 @@ where
         Some(cache),
         ProxyRoute::Environment,
         DownloadOptions::default(),
-        on_tile,
+        tile_callback(on_tile),
+        None,
     )
     .await
 }
@@ -1403,9 +1449,29 @@ where
         Some(cache),
         proxy,
         options,
-        on_tile,
+        tile_callback(on_tile),
+        None,
     )
     .await
+}
+
+/// Native workers receive actual phase changes, including raster export after
+/// the final tile. The tile-only APIs retain their existing callback contract.
+pub async fn fetch_bundle_with_cache_control_proxy_progress<F>(
+    request: &ImageryRequest, source: &HttpSource, cancelled: &AtomicBool,
+    paused: &AtomicBool, cache: &TileCacheConfig, proxy: ProxyRoute<'_>, on_progress: F,
+) -> Result<Manifest, CoreError>
+where F: FnMut(BundleProgress) -> Result<(), CoreError> {
+    fetch_bundle_internal(request, source, cancelled, Some(paused), Some(cache),
+        proxy, DownloadOptions::default(), on_progress, None).await
+}
+
+pub async fn fetch_bundle_with_projector_progress<F>(request: &ImageryRequest, source: &HttpSource,
+    cancelled: &AtomicBool, paused: &AtomicBool, cache: &TileCacheConfig, proxy: ProxyRoute<'_>,
+    on_progress: F, projector: Option<&dyn RasterProjector>) -> Result<Manifest, CoreError>
+where F: FnMut(BundleProgress) -> Result<(), CoreError> {
+    fetch_bundle_internal(request, source, cancelled, Some(paused), Some(cache), proxy,
+        DownloadOptions::default(), on_progress, projector).await
 }
 
 async fn fetch_bundle_internal<F>(
@@ -1416,12 +1482,17 @@ async fn fetch_bundle_internal<F>(
     cache_config: Option<&TileCacheConfig>,
     proxy: ProxyRoute<'_>,
     options: DownloadOptions,
-    mut on_tile: F,
+    mut on_progress: F,
+    projector: Option<&dyn RasterProjector>,
 ) -> Result<Manifest, CoreError>
 where
-    F: FnMut(u64, u64) -> Result<(), CoreError>,
+    F: FnMut(BundleProgress) -> Result<(), CoreError>,
 {
     validate_request(request, source)?;
+    let reproject = request.export_options.target_crs.as_deref().is_some_and(|crs| crs != "EPSG:3857");
+    if reproject && projector.is_none() {
+        return Err(CoreError::new("GIS_SKILL_NOT_INSTALLED", "请先安装栅格转换技能，再导出指定坐标系"));
+    }
     if !(1..=100).contains(&options.concurrency) {
         return Err(CoreError::new(
             "INVALID_SPEC",
@@ -1435,7 +1506,7 @@ where
     fs::create_dir_all(parent).map_err(io_error)?;
     let total_tiles: u64 = request.grids.iter().map(|grid| grid.tile_count).sum();
     let required_disk = required_free_disk_bytes_for_outputs(total_tiles, source.tile_size,
-        usize::from(request.output_geotiff) + usize::from(request.output_mbtiles) + request.extra_outputs.len(),
+        usize::from(request.output_geotiff) + usize::from(request.output_mbtiles) + request.extra_outputs.len() + if reproject { 8 } else { 0 },
         request.output_geotiff && request.export_options.build_pyramid)?;
     ensure_disk_budget(parent, required_disk)?;
     let mut cache = cache_config
@@ -1491,7 +1562,7 @@ where
     }
     for overlay in &request.overlays { manifest.provenance.push(Provenance { source: overlay.name.clone(), attribution: overlay.attribution.clone(), retrieved_at: Utc::now().to_rfc3339() }); }
     if request.export_options.elevation_encoding.is_some() {
-        fs::write(stage.path().join("elevation-info.json"), br#"{"encoding":"terrarium","outputType":"Float32","bands":1,"units":"metre","noData":-9999,"crs":"EPSG:3857","preview":"grayscale elevation from -1000 to 5000 metres"}"#).map_err(io_error)?;
+        fs::write(stage.path().join("elevation-info.json"), serde_json::to_vec(&serde_json::json!({"encoding":"terrarium","outputType":"Float32","bands":1,"units":"metre","noData":-9999,"sourceCrs":"EPSG:3857","crs":request.export_options.target_crs.as_deref().unwrap_or("EPSG:3857"),"preview":"grayscale elevation from -1000 to 5000 metres"})).map_err(io_error)?).map_err(io_error)?;
         manifest.assets.push(asset(stage.path(),"elevation-info".into(),"elevation-info.json".into(),"metadata","application/json",None,AssetFootprint { bounds: request.bounds, dimensions:None })?);
     }
     if let Some(boundary) = &request.boundary {
@@ -1549,6 +1620,7 @@ where
     let cooldown = Mutex::new(Instant::now());
     let cooldown_ref = &cooldown;
     for grid in &request.grids {
+        on_progress(BundleProgress::Stage(BundleStage::Downloading))?;
         let mut spool = if request.output_geotiff || request.extra_outputs.iter().any(|f| matches!(f, ExtraOutput::Png | ExtraOutput::Jpeg)) {
             Some(raster_export::TileSpool::new(parent)?)
         } else {
@@ -1675,7 +1747,7 @@ where
                         params![grid.zoom, x, tms_y, bytes]).map_err(io_error)?;
             }
             completed_tiles += 1;
-            on_tile(completed_tiles, total_tiles)?;
+            on_progress(BundleProgress::Tiles { completed: completed_tiles, total: total_tiles })?;
         }
         if let Some(spool) = spool {
             let crop = crop_pixels(request.bounds, grid, source.tile_size);
@@ -1684,6 +1756,7 @@ where
             if request.extra_outputs.contains(&ExtraOutput::Png) { outputs.push(("png", "image/png")); }
             if request.extra_outputs.contains(&ExtraOutput::Jpeg) { outputs.push(("jpg", "image/jpeg")); }
             for (extension, mime) in outputs {
+            on_progress(BundleProgress::Stage(BundleStage::Processing))?;
             let filename = format!("imagery-z{}.{}", grid.zoom, extension);
             let path = stage.path().join(&filename);
             let check = || check_download_control(cancelled, paused, started, request.deadline);
@@ -1694,7 +1767,11 @@ where
                 _ => raster_export::write_streaming_tiff(&path, &spool, grid, &crop,
                     source.tile_size, request.boundary.as_ref(), request.export_options.compression, request.export_options.build_pyramid, check)?,
             };
-            manifest.assets.push(asset(
+            let projected = if reproject {
+                on_progress(BundleProgress::Stage(BundleStage::Reprojecting))?;
+                Some(projector.unwrap().reproject(&path, crop.bounds, &request.export_options, cancelled, paused).await?)
+            } else { None };
+            let mut output_asset = asset(
                 stage.path(),
                 if extension == "tif" { format!("imagery-z{}", grid.zoom) } else { format!("imagery-z{}-{extension}", grid.zoom) },
                 filename,
@@ -1705,13 +1782,24 @@ where
                     bounds: crop.bounds,
                     dimensions: Some((crop.width, crop.height)),
                 },
-            )?);
-            if request.export_options.generate_sidecars {
-                for path in raster_export::write_sidecars(&path, grid, &crop, source.tile_size)? {
+            )?;
+            if let Some(projected) = projected {
+                output_asset.crs = request.export_options.target_crs.clone().unwrap();
+                output_asset.width = Some(projected.width); output_asset.height = Some(projected.height);
+                output_asset.geo_transform = Some(projected.geo_transform);
+                output_asset.crs_definition = Some(projected.crs_definition);
+            }
+            manifest.assets.push(output_asset);
+            if request.export_options.generate_sidecars || (reproject && extension != "tif") {
+                let paths = if reproject { vec![path.with_extension("prj"), path.with_extension(match extension {"png"=>"pgw","jpg"=>"jgw",_=>"tfw"})] }
+                    else { raster_export::write_sidecars(&path, grid, &crop, source.tile_size)? };
+                for path in paths {
                     let filename = path.file_name().unwrap().to_string_lossy().into_owned();
                     if !manifest.assets.iter().any(|asset| asset.path == filename) {
-                        manifest.assets.push(asset(stage.path(), format!("sidecar-{filename}"), filename, "metadata", "text/plain", Some(grid),
-                            AssetFootprint { bounds: crop.bounds, dimensions: None })?);
+                        let mut metadata=asset(stage.path(), format!("sidecar-{filename}"), filename, "metadata", "text/plain", Some(grid),
+                            AssetFootprint { bounds: crop.bounds, dimensions: None })?;
+                        if reproject { metadata.crs=request.export_options.target_crs.clone().unwrap(); }
+                        manifest.assets.push(metadata);
                     }
                 }
             }
@@ -1750,6 +1838,7 @@ where
             manifest.quality.missing_tiles
         ));
     }
+    on_progress(BundleProgress::Stage(BundleStage::Processing))?;
     if let Some(conn) = mbtiles {
         conn.execute_batch("COMMIT").map_err(io_error)?;
         let integrity: String = conn
@@ -1927,11 +2016,13 @@ pub fn inspect_bundle(root: &Path) -> Result<Manifest, CoreError> {
             let keys = decoder
                 .get_tag_u16_vec(Tag::GeoKeyDirectoryTag)
                 .map_err(|_| CoreError::new("ARTIFACT_INCOMPLETE", "GeoTIFF CRS tag is missing"))?;
-            if item.crs != "EPSG:3857"
-                || keys.len() < 8
+            let code = crate::crs::epsg(&item.crs).map_err(|_|CoreError::new("ARTIFACT_INCOMPLETE", "无效的成果坐标系"))?;
+            let model = keys.get(4..).unwrap_or_default().chunks_exact(4).find(|key|key[0]==1024).map(|key|key[3]);
+            let crs_key = if model == Some(2) { 2048 } else { 3072 };
+            if keys.len() < 8
                 || !keys[4..]
                     .chunks_exact(4)
-                    .any(|key| key == [3072, 0, 1, 3857])
+                    .any(|key| key == [crs_key, 0, 1, code])
             {
                 return Err(CoreError::new(
                     "ARTIFACT_INCOMPLETE",
@@ -1964,6 +2055,15 @@ pub fn inspect_bundle(root: &Path) -> Result<Manifest, CoreError> {
                     "Invalid GeoTIFF footprint",
                 ));
             }
+            if let Some(transform) = item.geo_transform {
+                if !transform.iter().all(|v|v.is_finite()) || transform[0]<=0.0 || transform[4]>=0.0 || transform[1]!=0.0 || transform[3]!=0.0
+                    || (tie[3]-transform[2]).abs()>1e-7 || (tie[4]-transform[5]).abs()>1e-7
+                    || (scale[0]-transform[0]).abs()>1e-7 || (scale[1]+transform[4]).abs()>1e-7 {
+                    return Err(CoreError::new("ARTIFACT_INCOMPLETE", "转换后的 GeoTIFF 定位与清单不一致"));
+                }
+                continue;
+            }
+            if item.crs != "EPSG:3857" { return Err(CoreError::new("ARTIFACT_INCOMPLETE", "转换成果缺少目标网格记录")); }
             let radius = 6_378_137.0;
             let mercator_x = |longitude: f64| longitude.to_radians() * radius;
             let mercator_y = |latitude: f64| {

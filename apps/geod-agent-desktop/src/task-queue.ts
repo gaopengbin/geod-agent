@@ -46,7 +46,7 @@ export function taskEnded(task: QueueTask) { return ["discarded", "completed", "
 export function canTaskAction(task: QueueTask, action: TaskAction) {
   if (action === "start" || action === "discard") return !task.job && task.state === "pending";
   if (action === "restore") return !task.job && task.state === "discarded";
-  return !!task.job && ["queued", "downloading", "paused"].includes(task.job.state);
+  return !!task.job && ["queued", "downloading", "processing", "paused"].includes(task.job.state);
 }
 export function buildTaskQueue(plans: StoredPlan[], jobs: Job[], activeIds: string[], discarded: string[], snapshots: Record<string, { job: Job | null; workerActive?: boolean; completedTiles?: number; connectionError?: string }> = {}): QueueTask[] {
   return [...plans].reverse().map(stored => {
@@ -79,7 +79,7 @@ export async function runTaskBatch(api: TaskApi, store: Store, account: string, 
           return null;
         }
         if (action === "cancel") {
-          if (!existing || !["queued", "downloading", "paused"].includes(existing.state)) throw new Error("当前状态不支持取消，请刷新任务。");
+          if (!existing || !["queued", "downloading", "processing", "paused"].includes(existing.state)) throw new Error("当前状态不支持取消，请刷新任务。");
           return api.jobsCancel(existing.jobId);
         }
         assertPlanAvailable(store, account, conversation, stored.planId);

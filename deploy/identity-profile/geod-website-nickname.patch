@@ -1,0 +1,177 @@
+diff --git a/website/src/app/_components/Header/AccountMenu.tsx b/website/src/app/_components/Header/AccountMenu.tsx
+index 0ce75bc..f4bd9d6 100644
+--- a/website/src/app/_components/Header/AccountMenu.tsx
++++ b/website/src/app/_components/Header/AccountMenu.tsx
+@@ -68,7 +68,7 @@ export default function AccountMenu({ user, onLoggedOut, alignToTrigger = false
+     {open && <div id="geod-account-menu" className={`${styles.accountPanel} ${alignToTrigger ? styles.alignedAccountPanel : ""}`}>
+       <div className={styles.accountIdentity}>
+         <Avatar user={user} size={42} />
+-        <div><strong>GeoD 账号</strong><span title={user.email}>{user.email}</span></div>
++        <div><strong title={user.nickname}>{user.nickname || "GeoD 账号"}</strong><span title={user.email}>{user.email}</span></div>
+       </div>
+       <div className={styles.accountActions}>
+         <a href="/dashboard" onClick={() => setOpen(false)}><LayoutDashboard size={17} aria-hidden="true" />个人控制台</a>
+diff --git a/website/src/app/_components/Header/styles.module.css b/website/src/app/_components/Header/styles.module.css
+index 2d6eb1b..bd6285d 100644
+--- a/website/src/app/_components/Header/styles.module.css
++++ b/website/src/app/_components/Header/styles.module.css
+@@ -18,6 +18,7 @@
+ .accountIdentity { display: flex; align-items: center; gap: 12px; padding: 4px 4px 15px; border-bottom: 1px solid #e8eaed; }
+ .accountIdentity div { display: grid; min-width: 0; gap: 2px; }
+ .accountIdentity strong { color: #202124; font-size: 14px; }
++.accountIdentity strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+ .accountIdentity span { overflow: hidden; color: #5f6368; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+ .accountActions { display: grid; gap: 4px; padding-top: 10px; }
+ .accountActions a, .accountActions .logoutAction { display: flex; align-items: center; justify-content: flex-start; gap: 11px; width: 100%; min-height: 40px; padding: 9px 10px; border-radius: 10px; color: #3c4043; background: transparent; font-size: 13px; font-weight: 600; text-decoration: none; }
+diff --git a/website/src/app/dashboard/AccountDashboard.tsx b/website/src/app/dashboard/AccountDashboard.tsx
+index d298dfc..3e7a7ea 100644
+--- a/website/src/app/dashboard/AccountDashboard.tsx
++++ b/website/src/app/dashboard/AccountDashboard.tsx
+@@ -16,12 +16,13 @@ import Avatar from "../_components/Avatar";
+ import Logo from "../_components/Logo";
+ import AccountMenu from "../_components/Header/AccountMenu";
+ import AvatarSettings from "./AvatarSettings";
++import NicknameSettings from "./NicknameSettings";
+ import styles from "./dashboard.module.css";
+ 
+ const navigation = [
+   { id: "overview", label: "工作台总览", icon: LayoutDashboard, description: "选择产品开始工作，管理你的 GeoD 账号。" },
+   { id: "products", label: "我的产品", icon: Package, description: "在浏览器、桌面或 Agent 中，使用适合你的 GeoD 工具。" },
+-  { id: "profile", label: "个人资料", icon: UserRound, description: "查看账号信息，设置在 GeoD 中显示的头像。" },
++  { id: "profile", label: "个人资料", icon: UserRound, description: "查看账号信息，设置在 GeoD 中显示的头像和昵称。" },
+   { id: "security", label: "账号安全", icon: ShieldCheck, description: "管理登录密码，查看当前账号的有效会话。" },
+ ] as const;
+ type Section = typeof navigation[number]["id"];
+@@ -154,7 +155,7 @@ export default function AccountDashboard() {
+         <div className={styles.sidebarFooter}>
+           <div className={styles.workspaceNote}><ShieldCheck size={17} aria-hidden="true" /><span>一个账号，连接 GeoD 产品</span></div>
+           {user && <>
+-            <div className={styles.sidebarIdentity}><Avatar user={user} size={32} /><div><strong>GeoD 账号</strong><span title={user.email}>{user.email}</span></div></div>
++            <div className={styles.sidebarIdentity}><Avatar user={user} size={32} /><div><strong title={user.nickname}>{user.nickname || "GeoD 账号"}</strong><span title={user.email}>{user.email}</span></div></div>
+             <Button variant="ghost" className={styles.logout} size="sm" disabled={busy} onClick={() => void logout()}><LogOut size={16} aria-hidden="true" />{busy ? "正在处理…" : "退出登录"}</Button>
+           </>}
+         </div>
+@@ -202,7 +203,8 @@ export default function AccountDashboard() {
+                 <section className={styles.card} aria-labelledby="account-heading"><div className={styles.cardHeading}><h2 id="account-heading">账号信息</h2><span className={styles.badge}><Check size={14} aria-hidden="true" />已登录</span></div>
+                   <dl className={styles.accountDetails}><div><dt>邮箱</dt><dd>{user.email}</dd></div><div><dt>验证状态</dt><dd>{user.emailVerifiedAt ? "邮箱已验证" : "邮箱未验证"}</dd></div><div><dt>加入时间</dt><dd>{dateLabel(user.createdAt)}</dd></div></dl>
+                 </section>
+-                <AvatarSettings user={user} onChange={updatedUser => setAccount(current => current ? { ...current, user: updatedUser } : current)} />
++                <NicknameSettings key={user.id} user={user} onChange={updatedUser => setAccount(current => current?.user?.id === updatedUser.id ? { ...current, user: updatedUser } : current)} />
++                <AvatarSettings key={user.id} user={user} onChange={updatedUser => setAccount(current => current?.user?.id === updatedUser.id ? { ...current, user: updatedUser } : current)} />
+               </div>}
+ 
+               {section === "security" && <div className={styles.securityGrid}>
+diff --git a/website/src/app/dashboard/dashboard.module.css b/website/src/app/dashboard/dashboard.module.css
+index adb8d11..25a960a 100644
+--- a/website/src/app/dashboard/dashboard.module.css
++++ b/website/src/app/dashboard/dashboard.module.css
+@@ -32,7 +32,7 @@
+ .pageHead { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 28px; }
+ .pageHead h1 { margin: 0 0 7px; font-size: 26px; line-height: 1.35; font-weight: 650; letter-spacing: -.025em; }
+ .pageHead p { margin: 0; color: #5f6368; font-size: 13px; line-height: 1.7; }
+-.refreshButton { flex: none; height: 36px; color: #3c4043; border-color: #dce3eb; }
++.refreshButton { position: relative; flex: none; height: 36px; color: #3c4043; border-color: #dce3eb; }
+ .sectionContent { animation: contentEnter .22s ease-out; }
+ .card, .metric, .quickProduct, .productCard { border: 1px solid #e1e6ee; border-radius: 16px; background: #fff; }
+ .card { padding: 24px; }
+@@ -84,6 +84,9 @@
+ .productCard p { flex: 1; margin: 0 0 26px; color: #5f6368; font-size: 13px; line-height: 1.8; }
+ .productButton { align-self: flex-start; padding: 0 16px; border-color: #dce3eb; font-size: 12px; }
+ .profileContent { max-width: 960px; }
++.nicknameCard { margin-top: 22px; }
++.nicknameForm { max-width: 520px; }
++.sidebarIdentity strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+ .accountDetails { display: grid; grid-template-columns: 1.7fr 1fr 1fr; gap: 24px; margin: 23px 0 0; }
+ .accountDetails div { min-width: 0; }
+ .accountDetails dt { margin-bottom: 7px; color: #70757a; font-size: 12px; }
+@@ -154,7 +157,7 @@
+   .pageHead h1 { font-size: 23px; }
+   .pageHead p { font-size: 12px; }
+   .refreshButton { width: 34px; height: 34px; padding: 0; }
+-  .refreshButton > span { position: absolute; width: 1px; height: 1px; clip: rect(0, 0, 0, 0); white-space: nowrap; }
++  .refreshButton > span { position: absolute; top: 50%; left: 50%; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+   .welcome { align-items: flex-start; flex-direction: column; padding: 22px; gap: 20px; }
+   .welcome h2 { font-size: 20px; }
+   .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
+diff --git a/website/src/lib/account.ts b/website/src/lib/account.ts
+index 516d49f..575f7ed 100644
+--- a/website/src/lib/account.ts
++++ b/website/src/lib/account.ts
+@@ -1,7 +1,7 @@
+ import { safeAccountDestination } from "./account-return-to";
+ 
+ export type GeoDAccount = {
+-  user: { id: string; email: string; createdAt: string; emailVerifiedAt?: string; phone?: string; phoneVerifiedAt?: string; avatar?: { kind: "preset"; id: string } | { kind: "upload"; version: string } } | null;
++  user: { id: string; email: string; createdAt: string; nickname?: string; emailVerifiedAt?: string; phone?: string; phoneVerifiedAt?: string; avatar?: { kind: "preset"; id: string } | { kind: "upload"; version: string } } | null;
+   authRequired: boolean;
+   quota?: { remaining: number; giftRemaining?: number; purchasedRemaining?: number; unit?: string };
+   storage?: { count: number; usedBytes: number; maxBytes: number };
+@@ -18,6 +18,7 @@ export class AccountError extends Error {
+ export function accountErrorText(reason: unknown): string {
+   const messages: Record<string, string> = {
+     INVALID_EMAIL: "请输入有效的邮箱地址。",
++    INVALID_NICKNAME: "昵称最多 40 个字符，不能包含换行或控制字符。",
+     INVALID_PASSWORD: "当前账号服务要求密码为 12–128 个字符。",
+     INVALID_CREDENTIALS: "邮箱或密码不正确，请检查后重试。",
+     ACCOUNT_ALREADY_REGISTERED: "该邮箱已注册，请直接登录或找回密码。",
+diff --git a/website/src/app/dashboard/NicknameSettings.tsx b/website/src/app/dashboard/NicknameSettings.tsx
+new file mode 100644
+index 0000000..cdb7fb0
+--- /dev/null
++++ b/website/src/app/dashboard/NicknameSettings.tsx
+@@ -0,0 +1,55 @@
++"use client";
++
++import { useEffect, useRef, useState, type FormEvent } from "react";
++import { Button } from "@/components/motion/button/base";
++import { AccountError, accountErrorText, accountRequest, type GeoDAccount } from "@/lib/account";
++import { notifyAccountChanged } from "@/lib/account-events";
++import styles from "./dashboard.module.css";
++
++type User = NonNullable<GeoDAccount["user"]>;
++
++export default function NicknameSettings({ user, onChange }: { user: User; onChange: (user: User) => void }) {
++  const saved = user.nickname ?? "";
++  const previous = useRef(saved);
++  const [draft, setDraft] = useState(saved);
++  const [busy, setBusy] = useState(false);
++  const [error, setError] = useState("");
++  const [notice, setNotice] = useState("");
++  const normalized = draft.trim();
++  const invalid = Array.from(normalized).length > 40 || /[\u0000-\u001f\u007f-\u009f]/.test(draft);
++  useEffect(() => {
++    const old = previous.current;
++    setDraft(current => current === old ? saved : current);
++    previous.current = saved;
++  }, [saved]);
++
++  async function save(event: FormEvent) {
++    event.preventDefault();
++    if (busy || invalid || normalized === saved) return;
++    setBusy(true); setError(""); setNotice("");
++    try {
++      const result = await accountRequest<{ user: User }>("/api/account", "PATCH", { nickname: normalized });
++      if (result.user.id !== user.id) throw new AccountError("AUTH_REQUIRED", "Account changed");
++      onChange(result.user);
++      setDraft(result.user.nickname ?? "");
++      setNotice(normalized ? "昵称已保存，GeoD Agent 会在同步账号时更新。" : "已恢复默认昵称，GeoD Agent 会在同步账号时更新。");
++      notifyAccountChanged();
++    } catch (reason) { setError(accountErrorText(reason)); }
++    finally { setBusy(false); }
++  }
++
++  return <section className={`${styles.card} ${styles.nicknameCard}`} aria-labelledby="nickname-heading">
++    <div className={styles.cardHeading}><h2 id="nickname-heading">我的昵称</h2></div>
++    <p className={styles.cardDescription}>用于官网和 GeoD Agent 的账号显示。</p>
++    <form className={`${styles.form} ${styles.nicknameForm}`} onSubmit={event => void save(event)}>
++      <div className={styles.field}>
++        <label htmlFor="account-nickname">昵称</label>
++        <input id="account-nickname" name="nickname" autoComplete="nickname" placeholder="设置你的昵称" value={draft} disabled={busy} aria-invalid={invalid || undefined} aria-describedby="nickname-help" onChange={event => { setDraft(event.target.value); setError(""); setNotice(""); }} />
++        <span id="nickname-help" className={styles.fieldHint}>{invalid ? "昵称不能超过 40 个字符，且不能包含换行。" : "最多 40 个字符；留空将生成 geod 开头的默认昵称。"}</span>
++      </div>
++      {error && <p className={styles.error} role="alert">{error}</p>}
++      {notice && <p className={styles.notice} role="status">{notice}</p>}
++      <Button type="submit" className={styles.saveButton} disabled={busy || invalid || normalized === saved}>{busy ? "正在保存…" : "保存昵称"}</Button>
++    </form>
++  </section>;
++}

@@ -22,7 +22,7 @@ export function collapsePollingHistory(messages: DisplayMessage[]): DisplayMessa
 
 const runningStates = new Set<JobState>(["queued", "downloading", "processing", "verifying"]);
 const terminalStates = new Set<JobState>(["completed", "partial", "failed", "cancelled"]);
-export const backgroundStateLabels: Record<JobState | "interrupted", string> = { queued: "排队中", downloading: "下载中", processing: "处理影像", verifying: "核验成果", completed: "已完成", partial: "部分完成", paused: "已暂停", failed: "失败", cancelled: "已取消", interrupted: "已中断" };
+export const backgroundStateLabels: Record<JobState | "interrupted", string> = { queued: "排队中", downloading: "下载中", processing: "生成成果", verifying: "核验成果", completed: "已完成", partial: "部分完成", paused: "已暂停", failed: "失败", cancelled: "已取消", interrupted: "已中断" };
 export const backgroundRunning = (state?: JobState | "interrupted") => !!state && state !== "interrupted" && runningStates.has(state);
 
 /** A running native job hands control back to the user instead of spending model rounds polling. */

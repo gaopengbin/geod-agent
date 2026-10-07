@@ -117,7 +117,7 @@ export function MapView({ conversationId, bounds, boundary, tileGrids, completed
         let layer = map.getLayers().getArray().find(item => item.get("id") === id);
         if (layer && layer.get("sha256") !== raster.sha256) { map.removeLayer(layer); layer = undefined; }
         if (!layer) {
-          const source = artifactRasterSource(raster.resourceId, !!raster.elevationEncoding);
+          const source = artifactRasterSource(raster.resourceId, !!raster.elevationEncoding, raster.crs, raster.crsDefinition);
           layer = new WebGLTileLayer({ source, zIndex:750, opacity: typeof args.opacity === "number" ? args.opacity : 1, properties: {
             id, name: typeof args.name === "string" ? args.name : raster.name,
             jobId:raster.jobId, assetId:raster.assetId, sha256:raster.sha256, geodStatus:"loading", kind:"downloaded-geotiff",

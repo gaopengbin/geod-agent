@@ -8,8 +8,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { canTaskAction, taskEnded, type QueueTask, type TaskAction } from "./task-queue";
 import type { WorkspaceSettings } from "./api";
 import { errorMessage } from "./app-error";
+import { TaskProgressBar, generatingArtifacts } from "./task-progress";
 
-const taskStateLabels: Record<string, string> = { scheduled: "已设定时", pending: "待确认", discarded: "已丢弃", queued: "排队中", downloading: "下载中", paused: "已暂停", processing: "处理中", verifying: "核验中", completed: "已完成", partial: "部分完成", failed: "失败", cancelled: "已取消", interrupted: "已中断" };
+const taskStateLabels: Record<string, string> = { scheduled: "已设定时", pending: "待确认", discarded: "已丢弃", queued: "排队中", downloading: "下载中", paused: "已暂停", processing: "生成成果", verifying: "核验中", completed: "已完成", partial: "部分完成", failed: "失败", cancelled: "已取消", interrupted: "已中断" };
 export function TaskQueueView({ tasks, selectedId, permission, working, externalErrors = false, focusPlanIds = [], onClearFocus, onSelect, onAction }: {
   tasks: QueueTask[]; selectedId?: string; permission?: WorkspaceSettings["permission"] | null; working: boolean;
   focusPlanIds?: string[]; onClearFocus?: () => void;
@@ -58,7 +59,7 @@ export function TaskQueueView({ tasks, selectedId, permission, working, external
         <UiTooltip content={t("{0} · {1} · 计划 {2} · {3}；范围 {4}", {"0": task.title ?? task.stored.plan.sourceName, "1": task.stored.plan.sourceName, "2": scoped.length - scoped.indexOf(task), "3": new Date(task.stored.plan.createdAt).toLocaleString(getLocale(), {hour12: false}), "4": task.stored.plan.spec.bounds.map(n => n.toFixed(4)).join(", ")})} side="left"><Button variant="ghost" size="sm" className="task-queue-select" whileHover={undefined} whileTap={undefined} aria-current={selectedId === task.stored.planId ? "true" : undefined} onClick={() => onSelect(task)}>
           <span className="task-queue-row-head"><span aria-hidden="true" className={`task-queue-state-dot state-${task.state}`} /><strong>{task.title ?? task.stored.plan.sourceName}</strong><span className={`task-queue-state state-${task.state}`}>{task.state === "pending" && permission === "fullAccess" ? t("待执行") : localize(taskStateLabels[task.state] ?? task.state)}</span></span>
           <span className="task-queue-row-meta"><span className="task-queue-row-description">Z{task.stored.plan.spec.zoomLevels.join(", ")} · {task.stored.plan.spec.outputFormats.map(outputFormatLabel).join(" + ")} · {task.completedTiles !== undefined ? `${task.completedTiles.toLocaleString(getLocale())}/` : ""}{task.stored.plan.totalTiles.toLocaleString(getLocale())} {t(" 瓦片")}</span><ChevronDown size={14}/></span>
-          {task.job && !taskEnded(task) && task.completedTiles !== undefined && <span className="task-queue-progress"><span style={{ width: `${Math.min(100, task.completedTiles / Math.max(1, task.stored.plan.totalTiles) * 100)}%` }} /></span>}
+          {task.job && !taskEnded(task) && (task.completedTiles !== undefined || generatingArtifacts(task.state)) && <TaskProgressBar className="task-queue-progress" state={task.state} percent={(task.completedTiles ?? 0) / Math.max(1, task.stored.plan.totalTiles) * 100}/>}
           {task.connectionError && <span className="task-queue-sync">{t("状态同步中…")}</span>}
         </Button></UiTooltip>
       </div>)}
