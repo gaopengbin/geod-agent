@@ -56,6 +56,34 @@ do not receive another new-user gift.
 The grant and its wallet lot commit in one SQLite transaction, with a unique
 `(account, kind)` key. Device changes, simultaneous logins, service restarts,
 policy version changes and repeated balance reads cannot replenish the gift.
+The default total recipient limit is **100** (`GEOD_AGENT_WELCOME_MAX_RECIPIENTS=100`).
+Every historical welcome grant counts across policy versions. The slot check,
+credit lot, grant receipt and decision audit commit under one immediate SQLite
+transaction; simultaneous gateway processes cannot exceed the limit. Exhaustion
+creates no balance and leaves existing balances available. This does not reset
+on restart, consumption of the gift, device changes or a new policy ID.
+
+`geod_credit_grants` retains each account, amount, policy, grant ID and timestamp.
+`geod_welcome_decisions` records successful grants and the first quota denial or
+existing-wallet exclusion per account/state. Repeated requests do not flood the
+audit. Historical receipts are backfilled with their original timestamps;
+unknown historical quota snapshots remain null. Wallet/status responses include
+`welcomeCreditStatus` (limit/issued/remaining/available); the wallet contains only
+its authenticated account's `welcomeCreditDecision` and grant receipts.
+
+Operators can read or export the persisted records locally, without granting
+credit or exposing other accounts via the client API:
+
+```sh
+node welcome-credit-report.mjs /absolute/path/to/wallet.sqlite
+node welcome-credit-report.mjs /absolute/path/to/wallet.sqlite --csv > welcome-credits.csv
+```
+
+The report reads a consistent, read-only snapshot. Set the same
+`GEOD_AGENT_WELCOME_MAX_RECIPIENTS` when using a nondefault limit. Preserve the
+wallet database when deploying; using a new empty database would lose the
+cumulative grant count and all balances.
+
 Hosted model requests reserve and settle this balance from trusted provider
 usage. Uncertain responses retain their reservation. Personal keys and
 sponsored requests retain their independent funding. Gifts are recorded

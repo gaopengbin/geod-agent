@@ -1,6 +1,12 @@
 import {PaymentError} from './alipay-payment-candidate.mjs';
 
 export const WELCOME_CREDITS = 20_000;
+export const WELCOME_MAX_RECIPIENTS = 100;
+export function readWelcomeRecipientLimit(value = WELCOME_MAX_RECIPIENTS) {
+  if (!/^(0|[1-9][0-9]{0,6})$/.test(String(value)) || Number(value) > 1_000_000)
+    throw new PaymentError('WELCOME_CREDIT_CONFIG_INVALID', 'Invalid welcome recipient limit');
+  return Number(value);
+}
 const NANO_CNY_PER_CREDIT = 1_000_000n;
 
 // A server policy, never a desktop-provided claim or amount. Unlimited testing
@@ -18,5 +24,6 @@ export function readWelcomeCreditPolicy(env, {quotaEnforced, payment} = {}) {
   const policyId = env.GEOD_AGENT_WELCOME_POLICY_ID || 'geod-agent-welcome-v1';
   if (!/^[a-zA-Z0-9._-]{1,120}$/.test(policyId))
     throw new PaymentError('WELCOME_CREDIT_CONFIG_INVALID', 'Invalid welcome credit policy version');
-  return Object.freeze({policyId, creditNanoCny: String(BigInt(credits) * NANO_CNY_PER_CREDIT)});
+  return Object.freeze({policyId, creditNanoCny: String(BigInt(credits) * NANO_CNY_PER_CREDIT),
+    maxRecipients: readWelcomeRecipientLimit(env.GEOD_AGENT_WELCOME_MAX_RECIPIENTS)});
 }

@@ -11,14 +11,14 @@ import {createPaymentLedgerCandidate} from '../payment-ledger-candidate.mjs';
 import {readWelcomeCreditPolicy} from '../welcome-credit-policy.mjs';
 import {fixture} from './helpers/payment-fixture.mjs';
 
-async function host({credits='20000',quotaMode='enforced',contextWindow=128000}={}){
+async function host({credits='20000',quotaMode='enforced',contextWindow=128000,maxRecipients='100'}={}){
   const root=mkdtempSync(join(tmpdir(),'geod-welcome-credit-'));
   const secret=randomBytes(32).toString('hex');
   const sessions=new Map(),deviceA=randomBytes(32).toString('base64url'),deviceB=randomBytes(32).toString('base64url'),other=randomBytes(32).toString('base64url');
   sessions.set(deviceA,{userId:'new-agent-account'});sessions.set(deviceB,{userId:'new-agent-account'});sessions.set(other,{userId:'another-account'});
   const environment={GEOD_AGENT_GATEWAY_SECRET:secret,DEEPSEEK_API_KEY:'isolated-protocol-fixture',GEOD_IDENTITY_ORIGIN:'http://127.0.0.1:41000',
     DEEPSEEK_BASE_URL:'http://127.0.0.1:41001',GEOD_AGENT_DB_PATH:join(root,'model.sqlite'),GEOD_AGENT_QUOTA_MODE:quotaMode,
-    GEOD_AGENT_CONTEXT_WINDOW:String(contextWindow),GEOD_AGENT_MAX_OUTPUT_TOKENS:'256',GEOD_AGENT_WELCOME_CREDITS:credits};
+    GEOD_AGENT_CONTEXT_WINDOW:String(contextWindow),GEOD_AGENT_MAX_OUTPUT_TOKENS:'256',GEOD_AGENT_WELCOME_CREDITS:credits,GEOD_AGENT_WELCOME_MAX_RECIPIENTS:maxRecipients};
   let calls=0,upstream='ok',usage={prompt_tokens:10000,completion_tokens:100,prompt_cache_hit_tokens:8000};
   const fetchImpl=async(url,options)=>{
     if(url.endsWith('/api/geod/oauth/introspect')){
@@ -56,6 +56,20 @@ test('new authenticated Agent wallets receive 20,000 Credits without opening che
     assert.equal(wallet.grants[0].creditNanoCny,'20000000000');assert.equal(h.calls,0);
     assert.equal((await h.request('/v1/payments/orders',{method:'POST',value:{requestKey:'no-cash',productId:'ai-credit-10'}})).status,409);
     assert.equal((await h.request('/v1/payments/alipay/notify',{method:'POST',value:{}})).status,409);
+  }finally{await h.close();}
+});
+
+test('HTTP wallets report exhausted slots without issuing credit or calling the model',async()=>{
+  const h=await host({maxRecipients:'1'});try{
+    assert.equal((await h.request('/v1/payments/wallet')).data.grants.length,1);
+    const denied=(await h.request('/v1/payments/wallet',{token:h.other})).data;
+    assert.equal(denied.availableNanoCny,'0');assert.deepEqual(denied.grants,[]);
+    assert.equal(denied.welcomeCreditDecision.state,'quota-exhausted');
+    assert.deepEqual(denied.welcomeCreditStatus,{limit:1,issued:1,remaining:0,available:false});
+    await h.restart();assert.equal((await h.request('/v1/payments/status',{token:h.other})).data.welcomeCreditStatus.remaining,0);
+    const result=await h.request('/api/agent/generations',{method:'POST',token:h.other,value:{generationId:randomUUID(),conversationId:'quota-check',messages:[{role:'user',content:'isolated'}]}});
+    assert.equal(result.status,409);assert.equal(h.calls,0);
+    assert.equal((await h.request('/v1/payments/wallet',{token:h.deviceB})).data.grants.length,1);
   }finally{await h.close();}
 });
 
