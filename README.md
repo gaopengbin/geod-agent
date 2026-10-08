@@ -11,6 +11,14 @@
 
 GeoD Agent 是独立的 Windows 桌面应用。描述区域、数据类型和用途，核对图源、范围与输出参数，由你的电脑完成下载、拼接、裁剪和文件核验。模型负责理解需求与组织工具调用；影像瓦片不经 GeoD 模型服务器中转。
 
+## 真实操作演示
+
+[![观看 GeoD Agent 完整演示（3 分 52 秒）](docs/images/demo-poster-20261008-v6.jpg)](https://geod.laogao.xyz/agent#demo)
+
+**[点击观看完整视频](https://geod.laogao.xyz/agent#demo)** · [直接播放 / 下载 MP4](https://geod.laogao.xyz/geod-site/agent/geod-agent-demo-20261008-v6.mp4)
+
+从空白会话开始，通过 AI 对话配置图源、准备 MCP 接入、确认输出参数、下载影像、查看成果并创建定时任务。中文配音与字幕；思考与等待加速呈现。视频为当前开发版实录，功能以实际安装版本为准。
+
 ## 版本状态
 
 | 版本 | 状态 | 入口 |

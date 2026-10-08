@@ -11,6 +11,14 @@
 
 GeoD Agent is an independent Windows desktop application. Describe an area, data type and purpose, review the source and output parameters, then let your computer download, mosaic, crop and verify the files. Models organize the task and invoke tools; imagery tiles do not pass through the GeoD model server.
 
+## Product demo
+
+[![Watch the complete GeoD Agent demo (3:52)](docs/images/demo-poster-20261008-v6.jpg)](https://geod.laogao.xyz/en/agent#demo)
+
+**[Watch the complete demo](https://geod.laogao.xyz/en/agent#demo)** · [Play / download MP4](https://geod.laogao.xyz/geod-site/agent/geod-agent-demo-20261008-v6.mp4)
+
+Start from an empty conversation: configure imagery sources, prepare an MCP connection, confirm output parameters, download imagery, inspect results and create a scheduled task. Chinese narration and subtitles; thinking and waiting are accelerated. Recorded in the current development build; available features depend on the installed release.
+
 ## Release status
 
 | Version | Status | Details |
