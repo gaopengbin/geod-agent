@@ -1,13 +1,19 @@
-<p align="center"><img src="docs/images/geod-symbol.png" width="64" alt="GeoD" /></p>
+<p align="center"><img src="docs/images/geod-symbol.png" width="80" alt="GeoD Agent" /></p>
 
 <h1 align="center">GeoD Agent</h1>
-<p align="center"><strong>说出需求，把地理数据带回你的工作区。</strong></p>
-<p align="center">对话规划 · 本机下载 · 二维 / 三维地图 · 可核验成果</p>
-<p align="center"><a href="https://geod.laogao.xyz/agent">官网</a> · <a href="#开始使用">开始使用</a> · <a href="docs/releases/0.2.4.md">0.2.4 候选说明</a> · <a href="README.EN.md">English</a></p>
+<p align="center"><strong>用对话配置图源、组织任务，把地理数据带回工作区。</strong></p>
+<p align="center">AI 对话 · 本机下载与处理 · 二维 / 三维地图 · Skill / MCP 扩展</p>
+<p align="center">
+  <a href="https://github.com/gaopengbin/geod-agent/releases"><img alt="Release" src="https://img.shields.io/github/v/release/gaopengbin/geod-agent?include_prereleases&style=flat-square&color=1a73e8" /></a>
+  <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-1a73e8?style=flat-square" /></a>
+  <img alt="Windows x64" src="https://img.shields.io/badge/platform-Windows_x64-202124?style=flat-square" />
+  <a href="https://github.com/gaopengbin/geod-agent/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/gaopengbin/geod-agent?style=flat-square&color=1a73e8" /></a>
+</p>
+<p align="center"><a href="https://geod.laogao.xyz/agent"><strong>官网</strong></a> · <a href="https://github.com/gaopengbin/geod-agent/releases/tag/v0.2.3"><strong>下载 Windows 测试版</strong></a> · <a href="https://geod.laogao.xyz/agent#demo">观看实录</a> · <a href="https://github.com/gaopengbin/geod-agent/issues">反馈问题</a> · <a href="README.EN.md">English</a></p>
 
-![GeoD Agent 对话、地图与任务工作区](docs/images/workbench-light.jpg)
+![GeoD Agent 对话、地图与任务工作区](docs/images/workbench-light-20261008.png)
 
-*工作区界面预览，图中任务与进度为演示数据；下方影像与三维截图来自真实本机验证。*
+*当前浅色开发版实拍。下载版本与开发中的改进分别标注。*
 
 GeoD Agent 是独立的 Windows 桌面应用。描述区域、数据类型和用途，核对图源、范围与输出参数，由你的电脑完成下载、拼接、裁剪和文件核验。模型负责理解需求与组织工具调用；影像瓦片不经 GeoD 模型服务器中转。
 
@@ -26,7 +32,16 @@ GeoD Agent 是独立的 Windows 桌面应用。描述区域、数据类型和用
 | **0.2.3** | Windows x64 公开测试版 | [下载安装包](https://geod.laogao.xyz/agent-updates/windows-x86_64/0.2.3/GeoD%20Agent_0.2.3_x64-setup.exe) · [版本说明](docs/releases/0.2.3.md) |
 | **0.2.4** | 本地候选，尚未发布本次改进 | [本次候选说明](docs/releases/0.2.4.md) |
 
-本页描述当前代码，包含 0.2.4 改进。现有公开安装包的功能以 0.2.3 说明为准。仓库当前为私有；[GitHub 发行资源](https://github.com/gaopengbin/geod-agent/releases/tag/v0.2.3)需要仓库访问权限。全新 Windows 验收仍按用户要求暂缓；本次提交与官网预览不等于发布。
+本页描述当前代码，包含 0.2.4 改进。现有公开安装包的功能以 0.2.3 说明为准。源代码以 [MIT 许可证](LICENSE)公开，[GitHub 发行资源](https://github.com/gaopengbin/geod-agent/releases/tag/v0.2.3)可直接下载。0.2.4 仍为开发候选，尚未完成全新 Windows 验收。
+
+## 对话能做什么
+
+| 配置图源 | 组织任务 | 扩展能力 |
+| --- | --- | --- |
+| 添加预设与自定义图源，核对可用状态 | 确认范围、坐标系和输出，查看进度与成果 | 接入 MCP、安装 Skill，配置模型渠道 |
+| “添加 Esri World Imagery，命名为项目影像。” | “沿这条路线 1 公里范围下载影像，输出 EPSG:4326。” | “帮我接入高德 MCP。” |
+
+**体验额度：** [登录并领取 20,000 Credits](https://geod.laogao.xyz/agent#trial)，限量 100 名。数据源 Key 在应用本机表单配置。
 
 ## 开始使用
 
@@ -66,7 +81,7 @@ GeoD Agent 是独立的 Windows 桌面应用。描述区域、数据类型和用
 
 ## 一个工作区，连接对话、地图与成果
 
-![真实影像成果](docs/images/imagery-completed.png)
+![真实影像成果](docs/images/imagery-light-20261008.png)
 
 *2026-10-06 本机实际成果：昌平区影像，704 张瓦片，按行政边界裁剪后加载到地图。截图中的对话属于当时的验证记录。*
 
@@ -77,9 +92,9 @@ GeoD Agent 是独立的 Windows 桌面应用。描述区域、数据类型和用
 - **地图：** 内置 OpenLayers / Cesium 工具用于视野、图层、对象、底图与二维 / 三维切换。
 - **会话：** 中英文界面、独立登录页、头像与昵称同步，执行过程可展开、停止和继续。超长思考限制高度；未完成轮次明确标记。
 
-![Cesium 三维场景](docs/images/scene-3d.png)
+![Cesium 三维场景](docs/images/scene-light-20261008.png)
 
-*真实模型验证：名古屋 OSM 建筑已加载，二维 / 三维切换及场景状态读回通过。*
+*当前浅色开发版实拍：本机已下载的 Cesium 官方 3D Tiles 样例，可在同一工作区切换二维 / 三维。*
 
 ## 0.2.4：GIS 按需安装
 
@@ -100,7 +115,7 @@ GeoD Agent 是独立的 Windows 桌面应用。描述区域、数据类型和用
 ## 模型与扩展
 
 - **模型渠道：** GeoD 托管服务、自有 Key 和兼容中转网关；支持已适配的 OpenAI、Anthropic 与 Google 原生协议。不同渠道的模型、工具和视觉能力需实际验证。
-- **Credits：** 模型用量依据实际收据记录与结算。当前测试服务首次启用钱包赠送 20,000 Credits；充值与真实收费尚未开放。自有渠道费用由对应提供方结算。
+- **Credits：** 模型用量依据实际收据记录与结算。新用户登录后自动赠送 **20,000 Credits**，限前 **100 个符合条件的账号**，每个账号仅赠送一次；已有余额记录的账号不参与，名额用完即止。充值与真实收费尚未开放。自有渠道费用由对应提供方结算。
 - **Skill：** 搜索目录、检查链接或导入本地包，保留指令、脚本与资料。安装 Skill 不代表其所有外部依赖都可用。
 - **MCP：** HTTP / stdio 工具接入，认证请求头与浏览器 OAuth。首次启用确认与工作区文件权限分别管理；连接后列出真实工具与状态。
 - **可选 RTK：** 对部分成功的本机命令输出做摘要，降低进入模型的冗余文本。原始执行记录保留；不改变命令、权限或退出码，也不承诺固定的 Token 或费用节省比例。
@@ -114,6 +129,12 @@ GeoD Agent 是独立的 Windows 桌面应用。描述区域、数据类型和用
 GeoD Agent 与[旧 GeoD 桌面端 / CLI / MCP](https://github.com/gaopengbin/geo-downloader)、GeoD Global 分别维护。当前运行时没有指向旧仓库的路径依赖。
 
 ## 开发与验证
+
+欢迎提交 [Issue](https://github.com/gaopengbin/geod-agent/issues) 或 Pull Request。请先说明场景与预期结果；Bug 反馈附版本号、复现步骤和脱敏日志。
+
+<details>
+<summary>展开项目结构与验证文档</summary>
+
 
 | 目录 | 内容 |
 | --- | --- |
@@ -138,3 +159,11 @@ GeoD Agent 与[旧 GeoD 桌面端 / CLI / MCP](https://github.com/gaopengbin/geo
 - [架构设计](docs/design/geod-agent-desktop-technical-architecture.md) · [产品边界](docs/REPOSITORY_BOUNDARY.md)
 
 反馈时请附上版本、图源类型、任务状态与脱敏日志；不要在会话或 Issue 中粘贴 Key、Token、密码或私钥。
+
+</details>
+
+## 相关项目与许可证
+
+[GeoD 桌面端 / CLI / MCP](https://github.com/gaopengbin/geo-downloader) · [作者 GitHub](https://github.com/gaopengbin) · [GeoD 官网](https://geod.laogao.xyz)
+
+本仓库使用 [MIT](LICENSE) 许可证；第三方组件遵循各自许可证，见 [第三方声明](apps/geod-agent-desktop/THIRD_PARTY_NOTICES.md)。数据源的访问和下载授权由提供方决定。
