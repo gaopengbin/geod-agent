@@ -7,6 +7,7 @@ import { api, errorMessage } from "./api";
 import { ExternalLink } from "./icons";
 import { elicitationBrowserUrl, elicitationContent, fieldOptions, type ElicitationSchema } from "./codex-elicitation";
 import { UserInputQuestionCard } from "./user-input-card";
+import {ExecutionReviewCard} from './execution-review';
 
 export type CodexRequest = Extract<CodexEvent, { type: "request" }>;
 export function CodexRequestCard({ request, respond }: { request: CodexRequest; respond: (value: unknown) => void|Promise<void> }) {
@@ -27,6 +28,7 @@ export function CodexRequestCard({ request, respond }: { request: CodexRequest; 
   const fields = Object.entries(schema?.properties ?? {});
   const setField = (name: string, value: unknown) => setFormValues(previous => ({ ...previous, [name]: value }));
   if (userInput) return <UserInputQuestionCard questions={request.params.questions} respond={respond}/>;
+  if(request.method==='geod/executionReview')return <ExecutionReviewCard request={request} respond={respond}/>;
   return <section className="codex-request-card" role="region" aria-label={t("Agent 等待你的回复")}>
     <strong>{verificationMode?t("设备身份验证"):urlMode?t("在浏览器中继续"):approval || permissions ? t("需要你的确认") : t("需要补充信息")}</strong>
     {verificationMode&&<div className="codex-browser-flow">

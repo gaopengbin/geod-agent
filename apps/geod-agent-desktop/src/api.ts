@@ -1,8 +1,22 @@
 import { OPENLAYERS_ID, OPENLAYERS_CONNECTOR, openLayersEnabled, setOpenLayersEnabled, openLayersTools, openLayersCall } from "./openlayers-mcp";
 import { CESIUM_ID, CESIUM_CONNECTOR, cesiumEnabled, setCesiumEnabled, cesiumTools, cesiumCall } from "./cesium-mcp";
-import { Channel, invoke, isTauri } from "@tauri-apps/api/core";
+import { Channel, invoke as nativeInvoke, isTauri, type InvokeArgs, type InvokeOptions } from "@tauri-apps/api/core";
+import { AUTH_INVALIDATED } from "./auth-events";
 import type { CodexEvent, CodexResult } from "./codex-client";
 import {hasBulkGeometry} from '../../../packages/codex-protocol/bulk-data.mjs';
+
+async function invoke<T>(command: string, args?: InvokeArgs, options?: InvokeOptions): Promise<T> {
+  try { return await nativeInvoke<T>(command, args, options); }
+  catch (cause) {
+    let value = cause;
+    if (typeof value === "string") { try { value = JSON.parse(value); } catch { /* Ordinary errors remain unchanged. */ } }
+    const code = value && typeof value === "object" && "code" in value ? value.code : null;
+    if (!command.startsWith("auth_") && (code === "AUTH_REQUIRED" || code === "AUTH_EXPIRED")) {
+      window.dispatchEvent(new Event(AUTH_INVALIDATED));
+    }
+    throw cause; // Never replay a mutation merely because its response was lost.
+  }
+}
 
 export type Bounds = [number, number, number, number];
 export type OutputFormat = "geotiff" | "mbtiles" | "png" | "jpeg" | "gpkg" | "tiles";
@@ -129,7 +143,7 @@ export interface AudioSettings {model:string;language:string;models:{id:string;b
 export interface AudioDownloadProgress {phase:'downloading'|'verifying'|'complete';downloaded:number;total:number}
 export interface DocumentRead {attachment:DocumentAttachment;text:string;offset:number;nextOffset:number|null;complete:boolean;available:boolean;untrustedContent:true}
 export interface AgentMessage { role: "user" | "assistant" | "tool"; content: string | null; tool_call_id?: string; tool_calls?: AgentToolCall[]; images?:ImageAttachment[]; documents?:DocumentAttachment[] }
-export interface Generation { generationId: string; conversationId: string; state: "reserved" | "streaming" | "settled" | "failed" | "pending_reconcile"; errorCode: string | null; inputTokens?: number | null; outputTokens?: number | null; billingScope?: "hosted" | "personal" | "sponsored"; channelId?: string; selectedModel?: string; usageKnown?: boolean; result: { role: "assistant"; content: string | null; toolCalls: AgentToolCall[] } | null }
+export interface Generation { generationId: string; conversationId: string; state: "reserved" | "streaming" | "settled" | "failed" | "pending_reconcile"; errorCode: string | null; inputTokens?: number | null; outputTokens?: number | null; cachedInputTokens?: number | null; reasoningTokens?: number | null; billingScope?: "hosted" | "personal" | "sponsored"; channelId?: string; selectedModel?: string; usageKnown?: boolean; result: { role: "assistant"; content: string | null; toolCalls: AgentToolCall[]; usage?: {cachedInputTokens?:number|null;reasoningTokens?:number|null} } | null }
 export type GenerationStreamEvent =
   | { type: "started"; data: { generationId: string } }
   | { type: "content_delta"; data: { text: string } }
@@ -179,6 +193,7 @@ export const api = {
   agentMessagesRead:(accountId:string,messageIds:string[])=>invoke<{accountId:string;accepted:number}>("agent_messages_read",{accountId,messageIds}),
   agentMessageOpenLink:(url:string)=>invoke<void>("agent_message_open_link",{url}),
   desktopSettings:()=>invoke<DesktopSettings>("desktop_settings_get"),
+  desktopTrayLocale:(locale: "zh-CN" | "en")=>invoke<void>("desktop_tray_locale_set",{locale}),
   desktopAutostart:(enabled:boolean)=>invoke<DesktopSettings>("desktop_autostart_set",{enabled}),
   desktopUpdatePreferences:(automaticChecks:boolean)=>invoke<DesktopSettings>("desktop_update_preferences",{automaticChecks}),
   desktopUpdateCheck:()=>invoke<DesktopUpdate>("desktop_update_check"),
@@ -227,7 +242,7 @@ export const api = {
   sqlConnectionConnect:(conversationId:string,request:Record<string,unknown>)=>invoke<SqlConnectionResult>("sql_connection_connect",{conversationId,request}),
   sqlConnectionSave:(conversationId:string,draft:SqlConnectionDraft)=>invoke<SqlConnectionResult>("sql_connection_save",{conversationId,draft}),
   sqlConnectionRemove:(connectionId:string)=>invoke<void>("sql_connection_remove",{connectionId}),
-  billingRunSnapshot:(runId:string)=>invoke<{status:string;conversationId:string;generations:{generationId:string}[]}>("billing_run_snapshot",{runId}),
+  billingRunSnapshot:(runId:string)=>invoke<{status:string;conversationId:string;generations:import('./turn-token-usage').GenerationTokenReceipt[]}>("billing_run_snapshot",{runId}),
   sqlObjectsSearch:(connectionId:string,request:Record<string,unknown>={objectType:"table"})=>invoke<{result:unknown;mcp:unknown}>("sql_objects_search",{connectionId,request}),
   sqlQuery:(connectionId:string,sql:string)=>invoke<unknown>("sql_query",{connectionId,sql}),
   dataConnectionConnect: (conversationId: string, request: DataConnectionRequest) => invoke<DataConnectionResult>("data_connection_connect", { conversationId, request }),
@@ -310,6 +325,8 @@ export const api = {
     return invoke<CodexResult>("codex_turn", { runId, conversationId, input, history, events,images:images?.map(image=>image.id),documentIds:documents?.map(document=>document.id) });
   },
   codexCommand: (runId: string, command: Record<string, unknown>) => invoke<void>("codex_command", { runId, command }),
+  codexConversationStatus: (conversationId:string) => invoke<{busy:boolean;runId:string|null;stopping:boolean}>("codex_conversation_status", {conversationId}),
+  codexConversationStop: (conversationId:string) => invoke<{busy:boolean;runId:string|null;stopping:boolean}>("codex_conversation_stop", {conversationId}),
   codexFork:(sourceConversationId:string,conversationId:string,imageIds:string[],documentIds:string[]=[])=>invoke<{threadId:string;sourceThreadId:string;forkedFromId:string;images:[string,ImageAttachment][];documents:DocumentAttachment[]}>("codex_fork",{sourceConversationId,conversationId,imageIds,documentIds}),
   extensionsList: async () => { const overview = await invoke<ExtensionOverview>("extensions_list"); return { ...overview, connectors: [{ ...OPENLAYERS_CONNECTOR, enabled: openLayersEnabled() }, { ...CESIUM_CONNECTOR, enabled: cesiumEnabled() }, ...overview.connectors] }; },
   skillImport: async (path: string) => { await invoke<ExtensionOverview>("skill_import", { path }); return api.extensionsList(); },

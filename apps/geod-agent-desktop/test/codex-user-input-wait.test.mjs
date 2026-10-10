@@ -7,7 +7,7 @@ for(const tool of ['ask_user','plan_imagery'])test(`real Core waits for ${tool} 
  const host=await createHost({codex:process.env.GEOD_CODEX_EXE,home:root,toolsFile:resolve('src-tauri/codex-tools.json'),requestDeadline:(timeout,expire)=>inputWaitDeadline(timeout,expire,time),receive:fn=>{listener=fn;return()=>{};},emit:event=>{
   if(event.type==='model'){
    models++;outputs.push(event.request.input);
-   listener({type:'response',requestId:event.requestId,value:{generationId:event.generationId,state:'settled',inputTokens:20,outputTokens:10,result:{content:models===1?null:'输入后继续完成',toolCalls:models===1?[{id:'call_wait_user',type:'function',function:{name:tool,arguments:tool==='ask_user'?JSON.stringify({questions:[{id:'q',header:'坐标系',question:'使用哪个投影？',options:[{label:'EPSG:2363',description:'西安80'}]}]}):JSON.stringify({sourceId:'fixture',bounds:[116.37,39.97,116.42,40.01],zoom:18,outputFormats:['geotiff']})}}]:[]}}});
+   listener({type:'response',requestId:event.requestId,value:{generationId:event.generationId,state:'settled',inputTokens:20,outputTokens:10,result:{content:models===1?null:'输入后继续完成',toolCalls:models===1?[{id:'call_wait_user',type:'function',function:{name:tool,arguments:tool==='ask_user'?JSON.stringify({questions:[{id:'q',header:'坐标系',question:'使用哪个投影？',options:[{label:'EPSG:2363',description:'西安80'},{label:'EPSG:4326',description:'WGS84 经纬度'}]}]}):JSON.stringify({sourceId:'fixture',bounds:[116.37,39.97,116.42,40.01],zoom:18,outputFormats:['geotiff']})}}]:[]}}});
   }else if(event.type==='tool'){toolEvent=event;listener({type:'userInputState',requestId:event.requestId,waiting:true});}
  }});
  try{

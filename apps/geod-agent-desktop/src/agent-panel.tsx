@@ -1,6 +1,6 @@
 import { getLocale, t, localize, replyLanguageInstruction } from "./i18n";
 import {continueTaskContext} from './continue-task';
-import {inheritedImageryCrs,resolvedRevisionQuestions} from './imagery-revision';
+import {inheritedImageryCrs,resolvedRevisionQuestions,revisionCrsForQuestions} from './imagery-revision';
 // i18n: presentation strings migrated
 import { localStateStore, flushLocalState } from "./local-state";
 import { TILES3D_CONNECTION_ID, tiles3dConnectionTools, executeTiles3dConnectionTool } from "./data-connection-tools";
@@ -26,11 +26,13 @@ import type { GeoDAuth } from "./geod-auth";
 import { useAIModels, modelValue,availableAIChannels,SPONSORED_CHANNELS_VISIBLE } from "./ai-channels";
 import { useDownloadTelemetry } from "./use-download-telemetry";
 import { ChatTranscript } from "./chat-ui";
+import {recordGenerationTokenUsage,type TurnTokenUsage} from './turn-token-usage';
 import { ExtensionStorePage } from "./extension-store";
 import { SchedulesPage } from "./schedules-page";
 import { requestScheduleFocus } from "./schedule-navigation";
 import { api, desktopAvailable, errorMessage, type AgentMessage, type AgentToolCall, type BoundaryImport, type DataInputRequest, type DataConnectionDraft, type DataConnectionResult, type Generation, type Job, type ModelUsage, type OnlineSkillCandidate, type RegistryMcpItem, type SkillSourceCandidate, type SourceRegistrationDraft, type StoredPlan, type WorkspaceSettings } from "./api";
 import { crsFromAnswers, exportCrsQuestions, humanCrsIntent, isExportPlan, resolveExportCrs } from "./export-crs";
+import {hasReusableCrsQuestion,knownCrsChoice,requestCrsIntent,reuseCrsQuestions} from './export-crs-input';
 import {ensureExportRuntime} from "./runtime-compatibility";
 import {listen} from "@tauri-apps/api/event";
 import {GisInstallCard} from "./gis-install-card";
@@ -51,6 +53,7 @@ import { SOURCE_CREATOR_ID, skillDiscoveryText } from "./builtin-skills";
 import { displayPath } from "./path-display";
 import { runCodexTurn, type CodexEvent, type CodexTokenUsage } from "./codex-client";
 import { reduceCodexItems } from "./codex-items";
+import {completeCodexReply,orphanedReplyTurn,recoverCodexReply} from './codex-final-reply';
 import { CodexRequestCard, type CodexRequest } from "./codex-request";
 import { inputQuestions, validatedInputReply, UserInputGate } from "./user-input";
 import {answeredCrsChoice,reusableInputReply,userInputReplyText,detachedUserInput,isDetachedUserInput,inputOrigin,type UserInputDraft} from './user-input-records';
@@ -58,6 +61,7 @@ import {userApprovedMcpUrl,reconcileMcpProposals} from './mcp-onboarding';
 import {resolveMcpTarget,prepareMcpConnection} from './mcp-connection';
 import {repairSavedMcpHistory,knownSavedMcpAddress} from './mcp-history-repair';
 import {turnOutcomeMessage,outputFailureCode,modelResponseIssue,orphanedReasoningTurn,recoverTurnOutcome} from './turn-outcome';
+import {prepareCodexConversation,conversationBusyFailure,confirmedCreditRejection} from './codex-recovery';
 import { McpRequestQueue } from "./mcp-request-queue";
 import { backgroundHandoff, backgroundRunning, backgroundStateLabels, type BackgroundSnapshot } from "./background-jobs";
 import { jobExecutionState, jobStatusFacts } from "./job-runtime";
@@ -208,7 +212,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
   const codexRun = session.ref<string | null>("codexRun",null);
   const [codexRequests, setCodexRequests] = useConversationState<CodexRequest[]>(session,"codexRequests",[]);
   const codexRequest = codexRequests[0];
-  const codexRequestResolve = session.ref("codexRequestResolve",new Map<string, (value: unknown) => void>());
+  const codexRequestResolve = session.ref("codexRequestResolve",new Map<string, (value: unknown) => void|Promise<void>>());
   const [openInputId,setOpenInputId]=useConversationState<string|null>(session,'openInputId',null);
   const userInputGate = session.ref("userInputGate",new UserInputGate());
   const humanRequestRevision=session.ref("humanRequestRevision",0);
@@ -255,12 +259,25 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
     exportCrsChoice.current={...choice,userMessageId};
     if(choice.session) await api.workspaceSetOutputCrs(conversationId,choice.crs);
   }
+  async function establishedCrsInput(questions:ReturnType<typeof inputQuestions>,userMessageId?:string){
+    // Do not query plan state for unrelated questions.
+    if(!hasReusableCrsQuestion(questions))return reuseCrsQuestions(questions,null);
+    const workspace=await api.workspaceGet(conversationId);
+    const inherited=await revisionCrsForQuestions({messages:displayRef.current,userMessageId,planIds:planIdsRef.current,activeBoundary:boundaryRef.current},api.plansGet);
+    return reuseCrsQuestions(questions,knownCrsChoice(displayRef.current,userMessageId,workspace.outputCrs,inherited));
+  }
   async function persistQuestionTranscript(){
     const previous=chatRecordsRef.current.find(chat=>chat.conversationId===conversationId);
     setChatRecords(persistCompletedChat(chatStore(),{...previous,...session.snapshot(),conversationId,messages:session.get('messages',[]),display:displayRef.current,updatedAt:new Date().toISOString()}));
     await flushLocalState();
   }
-  async function waitForUserInput(request: CodexRequest,nativeRequestId?:string,toolCallId?:string): Promise<unknown> {
+  function saveTurnTokenUsage(id:string,tokenUsage:TurnTokenUsage){
+    const item=displayRef.current.find(item=>item.id===id);
+    if(!item||JSON.stringify(item.tokenUsage)===JSON.stringify(tokenUsage))return;
+    replaceDisplay(id,{tokenUsage});
+    void persistQuestionTranscript().catch(()=>{});
+  }
+  async function waitForUserInput(request: CodexRequest,nativeRequestId?:string,toolCallId?:string,nativeReply?:(value:unknown)=>Promise<void>): Promise<unknown> {
     const question=request.method==='item/tool/requestUserInput';
     if(question){
       const questions=inputQuestions(request.params.questions);
@@ -273,7 +290,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
     }
     await pauseUserWait(nativeRequestId??(question?request.requestId:undefined),true);
     try{return await new Promise(resolve => {
-      codexRequestResolve.current.set(request.requestId, resolve);
+      codexRequestResolve.current.set(request.requestId,nativeReply?async value=>{const reply=value&&typeof value==='object'&&'decision' in value?value:{decision:'stop'};await nativeReply(reply);resolve(reply);}:resolve);
       if(!question)setCodexRequests(previous => [...previous, request]);setLiveActivity("等待你的回复…");
     });}finally{await pauseUserWait(nativeRequestId??(question?request.requestId:undefined),false);}
   }
@@ -306,7 +323,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
   function cancelInputRequests(explicit=false) {
     cancelGisInstall();
     if(explicit){displayRef.current=displayRef.current.map(item=>item.userInput?.status==='pending'&&codexRequestResolve.current.has(item.userInput.requestId)?{...item,userInput:{...item.userInput,status:'cancelled'}}:item);setDisplay(displayRef.current);}
-    for (const resolve of codexRequestResolve.current.values()) resolve(explicit?{ answers: {} }:detachedUserInput);
+    for (const resolve of codexRequestResolve.current.values()) Promise.resolve(resolve(explicit?{ answers: {} }:detachedUserInput)).catch(()=>{});
     codexRequestResolve.current.clear(); setCodexRequests([]);
   }
   const engine = chatRecords.find(chat => chat.conversationId === conversationId)?.engine ?? (codexAvailable ? "codex" : "legacy");
@@ -461,6 +478,22 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
     return ()=>{cancelled=true;};
   },[accountId,conversationId,mainView,busy,mcpProposalState]);
   const orphanedTurn=orphanedReasoningTurn(display);
+  const orphanedReply=orphanedReplyTurn(display);
+  useEffect(()=>{
+    if(!desktopAvailable||!accountId||busy||codexRun.current||!orphanedReply||mainView!=='conversation')return;
+    let cancelled=false;
+    void recoverCodexReply(displayRef.current,conversationId,api).then(next=>{
+      if(cancelled||!next||session.get('busy',false)||codexRun.current||orphanedReplyTurn(displayRef.current)!==orphanedReply)return;
+      // Native reads are asynchronous: retain any cards/monitor updates that
+      // arrived while reading proof instead of replacing the whole transcript.
+      const changes=new Map(next.filter(item=>item.turnId===orphanedReply&&(item.phase==='final'||item.itemType==='reasoning'&&item.toolStatus==='success')).map(item=>[item.id,item]));
+      const ids=new Set(displayRef.current.map(item=>item.id));
+      const repaired=displayRef.current.map(item=>changes.get(item.id)??item);
+      repaired.push(...[...changes.values()].filter(item=>!ids.has(item.id)));
+      displayRef.current=repaired;setDisplay(repaired);void persistQuestionTranscript().catch(()=>{});
+    }).catch(()=>{});
+    return()=>{cancelled=true;};
+  },[accountId,conversationId,mainView,busy,orphanedReply]);
   useEffect(()=>{
     if(!desktopAvailable||!accountId||busy||codexRun.current||!orphanedTurn||mainView!=='conversation')return;
     let cancelled=false;
@@ -799,7 +832,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
       if (isExportPlan(call.function.name,args)) {
         await ensureExportRuntime(api.runtimeCapabilities);
         const human=[...displayRef.current].reverse().find(item=>item.role==="user");
-        const intent=humanCrsIntent(human?.content ?? "");
+        const intent=requestCrsIntent(displayRef.current,human?.id);
         let workspace=await api.workspaceGet(conversationId);
         if ([...displayRef.current].reverse().find(item=>item.role==="user")?.id !== human?.id) return {error:"REPLAN_AFTER_USER_INPUT",message:"用户请求已更新，请依据最新请求重新规划。"};
         if(exportCrsPreferenceProcessed.current!==human?.id) {
@@ -831,10 +864,14 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
         if(requestRevision!==humanRequestRevision.current||[...displayRef.current].reverse().find(item=>item.role==='user')?.id!==userMessageId)return {error:"REPLAN_AFTER_USER_INPUT",message:"用户请求已更新，请依据最新请求重新规划。"};
       }
       if (call.function.name === "ask_user") {
-        const questions = inputQuestions(args.questions);
+        let questions = inputQuestions(args.questions);
         if (questions.some(question => question.isSecret)) return { error: "SECRET_INPUT_NOT_SUPPORTED", message: "认证信息请通过对应的本机认证表单填写。" };
         const accepted=reusableInputReply(questions,displayRef.current,userMessageId);
         if(accepted)return {...accepted,answeredBy:'user',reusedPreviousAnswer:true};
+        const established=await establishedCrsInput(questions,userMessageId);
+        if(requestRevision!==humanRequestRevision.current)return {error:'REPLAN_AFTER_USER_INPUT',message:'用户请求已更新，请依据最新请求重新规划。'};
+        if(!established.remaining.length)return {...established.reused,knownFacts:established.knownFacts,reusedPreviousAnswer:true};
+        questions=established.remaining;
         if(questions.some(q=>/(?:MCP|服务|server)/i.test(q.question)&&/(?:地址|endpoint|url)/i.test(q.question))){
           const known=knownSavedMcpAddress(questions,(await api.extensionsList()).connectors,displayRef.current.find(m=>m.id===userMessageId)?.content??'');
           if(known)return known;
@@ -846,7 +883,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
         userInputGate.current.finish(questions, reply);
         await rememberCrsAnswer(questions,reply);
         if (!reply) return { error: "USER_INPUT_CANCELLED", message: "用户取消了本次操作；未使用默认答案。" };
-        return { ...reply, answeredBy: "user" };
+        return { answers:{...established.reused.answers,...reply.answers}, answeredBy: established.knownFacts?"userAndExistingRequirements":"user", ...(established.knownFacts?{knownFacts:established.knownFacts,reusedPreviousAnswer:true}:{}) };
       }
       if(call.function.name==="attachment_list")return await api.documentAttachmentsList(conversationId);
       if(call.function.name==="attachment_read"){const id=stringArg(args.id);if(!id)return{error:"INVALID_ATTACHMENT_ID"};return await api.documentAttachmentRead(conversationId,id,typeof args.offset==="number"?args.offset:undefined,typeof args.limit==="number"?args.limit:undefined);}
@@ -1179,6 +1216,17 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
     setPendingId("");
     setPendingNeedsReview(false);
   }
+  useEffect(()=>{
+    if(!pendingId||busy||engine!=='codex'||!status.userId)return;
+    const saved=readPending(chatStore())?.[conversationId];
+    if(saved?.generationId!==pendingId||saved.userId!==status.userId)return;
+    let disposed=false;
+    void confirmedCreditRejection(api,conversationId,pendingId).then(async confirmed=>{
+      if(!confirmed||disposed||session.get('busy',false)||session.get('pendingId','')!==pendingId)return;
+      await persistQuestionTranscript();await releasePending();
+    }).catch(()=>{/* Unknown results retain the explicit recovery path. */});
+    return ()=>{disposed=true;};
+  },[pendingId,busy,engine,status.userId,session]);
   async function commitFinalGeneration(generationId: string, context: AgentMessage[]) {
     const compacted = boundedContext(context);
     contextCompressedRef.current ||= JSON.stringify(compacted).length < JSON.stringify(context).length;
@@ -1191,6 +1239,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
     await releasePending();
   }
   async function handleGenerationFailure(cause: unknown) {
+    if(outputFailureCode(errorMessage(cause))==='MODEL_CALL_LIMIT'){await persistQuestionTranscript();await releasePending();setError('');return;}
     const saved = readPending(chatStore())?.[conversationId];
     if (saved) removeTransientGeneration(saved.generationId);
     const rejectedForQuota = cause && typeof cause === "object" && "code" in cause && cause.code === "QUOTA_EXCEEDED";
@@ -1233,10 +1282,12 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
         setLiveActivity(`正在准备工具：${event.data.name}`);
       }
     });
+    displayRef.current=recordGenerationTokenUsage(displayRef.current,generation);setDisplay(displayRef.current);
     await api.agentUsage().then(setUsage).catch(() => {});
     return generation;
   }
   async function finishGeneration(first: Generation, startingContext: AgentMessage[]) {
+    displayRef.current=recordGenerationTokenUsage(displayRef.current,first);setDisplay(displayRef.current);
     let context = startingContext;
     let generation = first;
     for (let round = 0; round < 12; round++) {
@@ -1324,6 +1375,9 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
       if (saved.engine === "codex") {
         const generation = await api.agentGenerationGet(saved.generationId);
         if (["reserved", "streaming", "pending_reconcile"].includes(generation.state)) throw new Error("模型请求还在核对中，请稍后检查。已完成的本机工具不会自动重复执行。");
+        const capabilities=await api.runtimeCapabilities();
+        if(!capabilities.conversationExecution)throw new Error('请先重启应用以核对并停止原执行。模型计费结果已保留，本机任务不会重复执行。');
+        await prepareCodexConversation(api,conversationId);
         setMessages(saved.messages);
         await releasePending();
         setError("模型请求已核对。Codex 原执行已停止，可以继续提问；本机任务以后台状态为准。");
@@ -1381,6 +1435,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
     if(inputCrsChoice)exportCrsChoice.current={...inputCrsChoice,userMessageId:visible.at(-1)?.id};
     try {
       await ensureExportRuntime(api.runtimeCapabilities);
+      if(engine==='codex')await prepareCodexConversation(api,conversationId);
       await rememberHumanCrsPreference(text, visible.at(-1)?.id);
       const installed = await api.extensionsList();
       const activeBoundary = boundaryRef.current;
@@ -1431,18 +1486,24 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
     try {
       const result = await runCodexTurn(runId, conversationId, input, history, {
         onEvent,
-        onRequest: async request => {
+        onRequest: async (request,nativeReply) => {
+          if(request.method==='geod/executionReview')return waitForUserInput(request,undefined,undefined,nativeReply);
           if (request.method !== "item/tool/requestUserInput") return waitForUserInput(request);
-          const questions = inputQuestions(request.params.questions);
-          const accepted=reusableInputReply(questions,displayRef.current,[...displayRef.current].reverse().find(item=>item.role==='user')?.id);
+          let questions = inputQuestions(request.params.questions);
+          if(questions.some(q=>q.isSecret))throw new Error('认证信息请通过对应的本机认证表单填写。');
+          const userMessageId=[...displayRef.current].reverse().find(item=>item.role==='user')?.id;
+          const accepted=reusableInputReply(questions,displayRef.current,userMessageId);
           if(accepted)return accepted;
+          const established=await establishedCrsInput(questions,userMessageId);
+          if(!established.remaining.length)return established.reused;
+          questions=established.remaining;
           userInputGate.current.begin();
-          const value = await waitForUserInput(request);
+          const value = await waitForUserInput({...request,params:{...request.params,questions}});
           if(isDetachedUserInput(value)){userInputGate.current.waiting=false;return {answers:{}};}
           const reply = validatedInputReply(questions, value);
           userInputGate.current.finish(questions, reply);
-        await rememberCrsAnswer(questions,reply);
-          return reply ?? { answers: {} };
+          await rememberCrsAnswer(questions,reply);
+          return reply ? {answers:{...established.reused.answers,...reply.answers}} : { answers: {} };
         },
         onModel: async (generationId, context) => {
           userInputGate.current.freshModelRound();
@@ -1476,6 +1537,9 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
         },
       },attachments,attachedDocuments);
       const interrupted = result.status === "interrupted";
+      if(result.status==='completed') {
+        displayRef.current=completeCodexReply(displayRef.current,runId,result);setDisplay(displayRef.current);
+      }
       if (interrupted) {
         changeQueue(chat=>({...chat,queuePaused:true}));
         displayRef.current = displayRef.current.map(item => item.id.startsWith(`codex-${runId}-`) ? { ...item, streaming: false, ...(item.toolStatus === "running" ? { toolStatus: "attention" as const } : {}) } : item); setDisplay(displayRef.current);
@@ -1492,7 +1556,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
       displayRef.current=displayRef.current.map(item=>item.id.startsWith(`codex-${runId}-`)?{...item,streaming:false,...(item.toolStatus==='running'?{toolStatus:'attention' as const}:{})}:item);
       setDisplay(displayRef.current);
       const message=errorMessage(cause),code=outputFailureCode(message);
-      appendDisplay(turnOutcomeMessage(runId,{status:code?'incomplete':'failed',message,code,generationId:lastGenerationId??undefined}));
+      if(!conversationBusyFailure(cause))appendDisplay(turnOutcomeMessage(runId,{status:code?'incomplete':'failed',message,code,generationId:lastGenerationId??undefined}));
       await persistQuestionTranscript();
       throw cause;
     } finally {
@@ -1531,7 +1595,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
         loading={busy && (engine === "codex" || !!codexRequest)}
         allowSteer={engine === "codex" && !!codexRun.current}
         loadingSubmitLabel={followupMode==="queue"?"加入消息队列":"补充指令"}
-        onStop={engine === "codex" || codexRequest ? () => { userInputGate.current.cancelled = true; cancelInputRequests(true); void api.mcpRequestsCancel(conversationId).catch(cause=>setError(errorMessage(cause))); if (connectionResolve.current) finishConnectionAuthentication({ error: { code: "INPUT_CANCELLED", message: "数据库认证已取消" } }); if(sqlResolve.current)finishSqlAuthentication({error:{code:"INPUT_CANCELLED",message:"数据库认证已取消"}}); if (codexRun.current) void api.codexCommand(codexRun.current, { type: "interrupt" }).catch(cause => setError(errorMessage(cause))); } : undefined}
+        onStop={engine === "codex" || codexRequest ? () => { userInputGate.current.cancelled = true; cancelInputRequests(true); setLiveActivity('正在停止上一轮…'); void api.mcpRequestsCancel(conversationId).catch(cause=>setError(errorMessage(cause))); if (connectionResolve.current) finishConnectionAuthentication({ error: { code: "INPUT_CANCELLED", message: "数据库认证已取消" } }); if(sqlResolve.current)finishSqlAuthentication({error:{code:"INPUT_CANCELLED",message:"数据库认证已取消"}}); if (codexRun.current) void api.codexCommand(codexRun.current, { type: "interrupt" }).catch(cause => setError(errorMessage(cause))); } : undefined}
         onPaste={pasteIntoComposer}
         placeholder={t("描述需求，添加图片、数据网址或矢量范围")}
         aria-label={t("发送给 GeoD Agent")}
@@ -1555,7 +1619,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
               <button type="button" aria-pressed={workspace?.permission === "fullAccess"} onClick={() => { setPermissionMenuOpen(false); void changePermission("fullAccess"); }}><ShieldAlert size={17} /><span><b>{t("完全访问")}</b><small>{t("允许 Agent 在当前工作区执行操作")}</small></span></button>
             </MorphPopoverContent>
           </MorphPopover>
-          <ContextWindow usage={contextUsage} compressedBefore={contextCompressed} lastInputTokens={lastInputTokens} codex={engine === "codex" ? { usage: codexContext } : undefined} />
+          <ContextWindow accountId={accountId} conversationId={conversationId} usage={contextUsage} compressedBefore={contextCompressed} lastInputTokens={lastInputTokens} codex={engine === "codex" ? { usage: codexContext } : undefined} />
           {busy&&engine==="codex"&&<MorphPopover open={followupMenuOpen} onOpenChange={setFollowupMenuOpen}><MorphPopoverTrigger><button type="button" className="composer-followup-trigger" aria-label={t("发送方式：{0}", {"0": followupMode==="queue"?"排队":"补充"})}>{followupMode==="queue"?t("排队"):t("补充")}<ChevronDown size={13}/></button></MorphPopoverTrigger><MorphPopoverContent side="top" align="end" className="composer-permission-menu"><strong>{t("发送后续消息")}</strong><button type="button" aria-pressed={followupMode==="queue"} onClick={()=>{setFollowupMode("queue");setFollowupMenuOpen(false);}}><span><b>{t("排队")}</b><small>{t("当前回复结束后开始下一轮")}</small></span></button><button type="button" aria-pressed={followupMode==="steer"} onClick={()=>{setFollowupMode("steer");setFollowupMenuOpen(false);}}><span><b>{t("补充指令")}</b><small>{t("立即补充到正在处理的请求")}</small></span></button></MorphPopoverContent></MorphPopover>}
         </div>}
       />
@@ -1606,14 +1670,14 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
     {error && <div className="agent-error" role="alert"><CircleAlert size={16} />{localize(error)}</div>}
     {(status.error || auth.error) && <div className="agent-error" role="alert"><CircleAlert size={16} />{localize(status.error || auth.error)}</div>}
     {emptyConversation ? <div className="agent-start-screen"><div className="agent-start-content"><div className="agent-start-heading"><h1>{t("需要什么地理数据？")}</h1><p>{t("影像、矢量或三维数据，描述范围和用途即可。")}</p></div>{composer}</div></div> : desktopAvailable && status.state === "connected" && <>
-      <ChatTranscript openInputId={openInputId} onOpenInput={setOpenInputId} onInputReply={replyToInput} onInputDraft={updateInputDraft} canAnswerInput={id=>{const request=displayRef.current.find(item=>item.id===id)?.userInput;if(request?.resolution?.kind==='existingPlanCrs'&&inputOrigin(displayRef.current,[...displayRef.current].reverse().find(m=>m.role==='user')?.id)!==request.userMessageId)return false;return !!request&&(codexRequestResolve.current.has(request.requestId)||!busy&&!sending.current);}} planTitles={planTitles} afterEntry={id => {
+      <ChatTranscript onTokenUsage={saveTurnTokenUsage} openInputId={openInputId} onOpenInput={setOpenInputId} onInputReply={replyToInput} onInputDraft={updateInputDraft} canAnswerInput={id=>{const request=displayRef.current.find(item=>item.id===id)?.userInput;if(request?.resolution?.kind==='existingPlanCrs'&&inputOrigin(displayRef.current,[...displayRef.current].reverse().find(m=>m.role==='user')?.id)!==request.userMessageId)return false;return !!request&&(codexRequestResolve.current.has(request.requestId)||!busy&&!sending.current);}} planTitles={planTitles} afterEntry={id => {
         const group = (planAnchors[id] ?? []).flatMap(planId => {
           const task = ownedTasks.find(item => item.stored.planId === planId);
           return task ? [{ ...task, title: presentations[planId].title }] : [];
         });
         return <TranscriptTaskGroup key={`tasks-${id}`} tasks={group} permission={workspace?.permission} onOpen={onTaskGroupSelect}/>;
       }} backgroundJobs={backgroundJobs} onOpenJob={id => void openBackgroundJob(id)} conversationId={conversationId} messages={display} busy={busy || extensionApprovalBusy} activeTurnId={codexRun.current} activity={liveActivity} onContinueTurn={()=>{if(!busy&&!pendingId&&!sending.current)void send('继续刚才的任务');}} canContinueTurn={!busy&&!pendingId&&!sending.current} onReviewSource={draft => onOpenSources(draft, conversationId)} onApproveExtension={proposal => void approveExtension(proposal)} onConfigureExtension={(old,next)=>{displayRef.current=displayRef.current.map(item=>item.extensionProposal?.id===old.id?{...item,content:`已连接 MCP · ${next.name}，等待确认启用`,extensionProposal:next}:item);setDisplay(displayRef.current);void persistQuestionTranscript().catch(cause=>setError(errorMessage(cause)));}}>
-        {codexRequest && <CodexRequestCard key={codexRequest.requestId} request={codexRequest} respond={value => { codexRequestResolve.current.get(codexRequest.requestId)?.(value); codexRequestResolve.current.delete(codexRequest.requestId); setCodexRequests(previous => previous.filter(item => item.requestId !== codexRequest.requestId)); if (codexRequest.method === "item/tool/requestUserInput" && !Object.keys((value as {answers?:object})?.answers ?? {}).length) { userInputGate.current.cancelled = true; if (codexRun.current) void api.codexCommand(codexRun.current, { type: "interrupt" }).catch(cause => setError(errorMessage(cause))); } }} />}
+        {codexRequest && <CodexRequestCard key={codexRequest.requestId} request={codexRequest} respond={async value => { await codexRequestResolve.current.get(codexRequest.requestId)?.(value); codexRequestResolve.current.delete(codexRequest.requestId); setCodexRequests(previous => previous.filter(item => item.requestId !== codexRequest.requestId)); if (codexRequest.method === "item/tool/requestUserInput" && !Object.keys((value as {answers?:object})?.answers ?? {}).length) { userInputGate.current.cancelled = true; if (codexRun.current) void api.codexCommand(codexRun.current, { type: "interrupt" }).catch(cause => setError(errorMessage(cause))); } }} />}
         {gisInstallRequest&&<GisInstallCard key={gisInstallRequest.requestId} request={gisInstallRequest} onInstall={()=>void gisInstallFlow.current.install()} onCancel={cancelGisInstall}/>}
         <McpRequestQueue conversationId={conversationId} accountId={accountId}/>
         {pendingId && pendingNeedsReview && !busy && <div className="agent-recovery-note" role="status"><CircleAlert size={17} /><span>{t("上次请求尚未确认结果，可检查状态后继续。")}</span><Button variant="ghost" size="sm" onClick={checkPending}>{t("检查状态")}</Button></div>}

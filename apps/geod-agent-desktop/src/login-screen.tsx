@@ -5,17 +5,18 @@ import { t, useLocale } from "./i18n";
 import "./login-screen.css";
 
 /** A dedicated account entry surface; authentication controls come from the real flow. */
-export function LoginScreen({ children, theme, onNetwork, onLanguage, onTheme }: {
+export function LoginScreen({ children, inert, theme, onNetwork, onLanguage, onTheme }: {
   children: ReactNode;
+  inert?: boolean;
   theme: "light" | "dark";
   onNetwork: () => void;
   onLanguage: () => void;
   onTheme: () => void;
 }) {
   useLocale();
-  return <main className="login-screen" aria-labelledby="login-heading">
+  return <main className="login-screen" inert={inert} aria-labelledby="login-heading">
     <section className="login-content">
-      <img className="login-symbol" src="/geod-symbol.png" alt="" width={56} height={56}/>
+      <img className="login-symbol" src="/geod-agent-symbol-blue-violet.png" alt="" width={56} height={56}/>
       <h1 id="login-heading">{t("欢迎使用 GeoD Agent")}</h1>
       <p className="login-summary">{t("用自然语言，获取你需要的地理数据。")}</p>
       <div className="login-controls">{children}</div>

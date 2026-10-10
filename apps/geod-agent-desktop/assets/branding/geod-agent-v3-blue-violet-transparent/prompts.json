@@ -1,0 +1,17 @@
+{
+  "generator": "built-in imagegen",
+  "source": "C:\\Users\\Administrator\\.codex\\generated_images\\01a0e5c2-8233-7833-b50d-1e52fbb46660\\exec-acf1cb4f-55ed-4496-af8d-22a52847a586.png",
+  "design": "Only the folded G; transparent background; no backing tile or decorative star; blue-to-violet gradient.",
+  "prompt": "Change only the existing isolated ribbon G color to a vivid blue-to-violet gradient. Preserve the silhouette, folds and glossy material. Use pale blue and lavender highlights. Keep real transparency inside and around the G, with no tile, star, backdrop, border or shadow.",
+  "size": [
+    1254,
+    1254
+  ],
+  "opaqueBounds": [
+    113,
+    104,
+    1191,
+    1179
+  ],
+  "fullyTransparentPixels": 910371
+}

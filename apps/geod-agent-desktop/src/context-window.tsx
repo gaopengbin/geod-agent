@@ -3,6 +3,11 @@ import { getLocale, t } from "./i18n";
 import { MorphPopover, MorphPopoverContent, MorphPopoverTrigger } from "@/components/motion/popover-morph";
 import { MAX_CONTEXT_CHARS, MAX_CONTEXT_MESSAGES, contextWindowUsage } from "./conversation-context";
 import type { CodexTokenUsage } from "./codex-client";
+import {useState,useEffect} from 'react';
+import {Button} from './components/motion/button/base';
+import {ContextSettingsDialog,type Spending} from './context-settings';
+import {api,desktopAvailable} from './api';
+import {invoke} from '@tauri-apps/api/core';
 
 type Usage = ReturnType<typeof contextWindowUsage>;
 
@@ -13,12 +18,24 @@ const formatK = (value: number) => {
   return `${rounded.toLocaleString(getLocale(), { maximumFractionDigits: 1 })}K`;
 };
 
-export function ContextWindow({ usage, compressedBefore, lastInputTokens, codex }: {
+export function ContextWindow({ usage, compressedBefore, lastInputTokens, codex,accountId,conversationId }: {
   usage: Usage;
   compressedBefore: boolean;
   lastInputTokens: number | null;
   codex?: { usage: CodexTokenUsage | null };
+  accountId?:string|null;
+  conversationId?:string;
 }) {
+  const [settingsOpen,setSettingsOpen]=useState(false);
+  const [spending,setSpending]=useState<Spending|null>(null);
+  useEffect(()=>{
+    let current=true;setSpending(null);
+    const load=()=>{if(accountId&&conversationId&&desktopAvailable)void api.runtimeCapabilities().then(c=>c.executionSafety?invoke<Spending>('execution_spending_get',{accountId,conversationId}):null).then(value=>{if(current)setSpending(value);}).catch(()=>{});};
+    const update=(event:Event)=>{const detail=(event as CustomEvent).detail;if(current&&detail?.accountId===accountId&&detail?.conversationId===conversationId)setSpending(detail.spending);};
+    load();window.addEventListener('geod:execution-spending-changed',update);window.addEventListener('geod:context-settings-changed',load);
+    return()=>{current=false;window.removeEventListener('geod:execution-spending-changed',update);window.removeEventListener('geod:context-settings-changed',load);};
+  },[accountId,conversationId]);
+  const creditText=spending?.spentCredits.toLocaleString(getLocale(),{maximumFractionDigits:2});
   const tokens = codex?.usage;
   const used = tokens ? tokens.inputTokens + tokens.outputTokens : 0;
   const limit = tokens?.modelContextWindow ?? 0;
@@ -31,7 +48,7 @@ export function ContextWindow({ usage, compressedBefore, lastInputTokens, codex 
     { key: "structure" as const, label: "消息结构", color: "#8f72df" },
   ];
 
-  return <MorphPopover className="context-usage-root">
+  return <><MorphPopover className="context-usage-root">
     <MorphPopoverTrigger>
       <button type="button" className="context-usage-trigger" aria-label={codex ? t("查看 Codex 上下文用量，{0}", {"0": tokens ? `${formatK(used)} / ${formatK(limit)} token，${percent.toFixed(1)}%` : "等待首次请求"}) : t("查看上下文用量，当前 {0} / {1} 字符，{2}%", {"0": formatK(usage.sentChars), "1": formatK(MAX_CONTEXT_CHARS), "2": percent.toFixed(1)})}>
         <svg className="context-usage-ring" viewBox="0 0 24 24" aria-hidden="true">
@@ -46,13 +63,14 @@ export function ContextWindow({ usage, compressedBefore, lastInputTokens, codex 
         <div className="context-usage-number"><strong>{tokens ? `${percent.toFixed(1)}%` : "—"}</strong><span>{tokens ? `${formatK(used)} / ${limit ? formatK(limit) : "未知"} token` : t("等待首次模型请求")}</span></div>
         <div className="context-usage-track" role="meter" aria-label={t("Codex 上下文占用")} aria-valuemin={0} aria-valuemax={limit || 1} aria-valuenow={Math.min(used, limit || 1)}><span style={{ width: `${percent}%`, backgroundColor: "var(--app-blue)" }} /></div>
         <div className="context-usage-details">
+          {spending&&<><div><span>{t('本会话已记录费用')}</span><strong>{creditText} Credits</strong></div><div><span>{t('会话累计预算')}</span><strong>{spending.budgetCredits===null?t('不设金额上限'):`${spending.budgetCredits.toLocaleString(getLocale())} Credits`}</strong></div>{spending.unknownRequests>0&&<div><span>{t('费用待核对请求')}</span><strong>{spending.unknownRequests}</strong></div>}</>}
           <div><span>{t("引擎")}</span><strong>Codex app-server</strong></div>
           <div><span>{t("最近请求输入")}</span><strong>{tokens ? `${formatK(tokens.inputTokens)} token` : t("暂无记录")}</strong></div>
           <div><span>{t("最近请求输出")}</span><strong>{tokens ? `${formatK(tokens.outputTokens)} token` : t("暂无记录")}</strong></div>
           <div><span>{t("缓存输入")}</span><strong>{tokens ? `${formatK(tokens.cachedInputTokens)} token` : t("暂无记录")}</strong></div>
-          <div><span>{t("模型")}</span><strong>DeepSeek Flash</strong></div>
         </div>
-        <p className="context-usage-note">{t("用量来自最近一次模型请求；窗口由网关配置，Codex 会在接近上限时自动压缩上下文。完整请求经过原生层传输。账号用量另计。")}</p>
+        <p className="context-usage-note">{t("用量来自最近一次模型请求。上下文预算和压缩阈值可配置，实际窗口不超过当前模型上限。修改后下一轮对话生效。")}</p>
+        {accountId&&<Button size="sm" variant="outline" onClick={()=>setSettingsOpen(true)}>{t('配置上下文')}</Button>}
       </> : <>
       <div className="context-usage-number"><strong>{percent.toFixed(1)}%</strong><span>{formatK(usage.sentChars)} / {formatK(MAX_CONTEXT_CHARS)} {t(" 字符")}</span></div>
       <div className="context-usage-track" role="meter" aria-label={t("本机对话上下文占用")} aria-valuemin={0} aria-valuemax={MAX_CONTEXT_CHARS} aria-valuenow={Math.min(usage.sentChars, MAX_CONTEXT_CHARS)}>
@@ -72,5 +90,5 @@ export function ContextWindow({ usage, compressedBefore, lastInputTokens, codex 
       <p className="context-usage-note">{t("进度按应用实际发送的对话字符计算，不是模型 token 占比；上次请求的 token 用量包含系统提示和工具定义。账号额度另计。")}</p>
       </>}
     </MorphPopoverContent>
-  </MorphPopover>;
+  </MorphPopover><ContextSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} accountId={accountId??null} conversationId={conversationId??'default'}/></>;
 }

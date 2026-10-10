@@ -4,7 +4,7 @@ import { useLayoutEffect, useRef, useState, type CSSProperties, type PointerEven
 import { Button } from "@/components/motion/button/base";
 import { MapTrifold, NewChat, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from "./icons";
 import { UiTooltip } from "./ui-tooltip";
-import { fitPanelWidths, workspaceArrangement, type WorkspaceMode } from "./workspace-layout";
+import { fitPanelWidths, resizePanelWidths, workspaceArrangement, type WorkspaceMode } from "./workspace-layout";
 
 const storageKey = "geod-agent-panel-widths-v2";
 const sidebarKey = "geod-agent-sidebar-collapsed";
@@ -19,71 +19,103 @@ export function useResizableWorkspace(mode: WorkspaceMode) {
   const ref = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(1440);
   const [preferred, setPreferred] = useState(savedWidths);
-  const [activeDivider, setActiveDivider] = useState<number | "inspector" | null>(null);
+  const [activeDivider, setActiveDivider] = useState<number | null>(null);
   const dragging = activeDivider !== null;
   const [view, setView] = useState<View>("conversation");
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => { try { return localStorage.getItem(sidebarKey) === "true"; } catch { return false; } });
-  const drag = useRef<{ index: number; x: number; widths: number[] } | null>(null);
-  const inspectorDrag = useRef<{ x: number; width: number } | null>(null);
-  const current = useRef(preferred); current.current = preferred;
+  const drag = useRef<{ index: number; x: number; widths: number[]; key: string; minimums: number[] } | null>(null);
+  const current = useRef(preferred);
+  const dragFrame = useRef<number | null>(null);
+  const pendingMove = useRef<(() => void) | null>(null);
+  function flushMove() {
+    if (dragFrame.current !== null) cancelAnimationFrame(dragFrame.current);
+    dragFrame.current = null;
+    const apply = pendingMove.current; pendingMove.current = null; apply?.();
+  }
+  function scheduleMove(apply: () => void) {
+    pendingMove.current = apply;
+    if (dragFrame.current === null) dragFrame.current = requestAnimationFrame(() => {
+      dragFrame.current = null;
+      const next = pendingMove.current; pendingMove.current = null; next?.();
+    });
+  }
+  useLayoutEffect(() => () => {
+    if (dragFrame.current !== null) cancelAnimationFrame(dragFrame.current);
+    pendingMove.current = null;
+  }, []);
   useLayoutEffect(() => {
     const element = ref.current; if (!element) return;
-    const resize = () => { if (element.clientWidth > 0) setWidth(element.clientWidth); }; resize();
+    let frame: number | null = null;
+    const resize = () => {
+      if (frame !== null) return;
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        if (element.clientWidth > 0) setWidth(element.clientWidth);
+      });
+    }; resize();
     const observer = new ResizeObserver(resize); observer.observe(element);
-    return () => observer.disconnect();
+    return () => { observer.disconnect(); if (frame !== null) cancelAnimationFrame(frame); };
   }, []);
   const { density, rail, key, minimums, defaults } = workspaceArrangement(mode, width, sidebarCollapsed);
   const sidebarOverlay = density === "compact" || density === "single";
   const sidebarVisible = sidebarOverlay ? sidebarExpanded : !sidebarCollapsed;
   const saved = preferred[key];
   const widths = fitPanelWidths(saved?.length === defaults.length ? saved : defaults, width, minimums);
-  const inspectorMax = Math.max(300, width - widths[0] - widths[1] - 120);
-  const inspectorWidth = Math.max(300, Math.min(inspectorMax, preferred.inspector?.[0] ?? 340));
   const save = () => { try { localStorage.setItem(storageKey, JSON.stringify(current.current)); } catch { /* Session widths remain usable. */ } };
+  function paintWidths(next: number[]) {
+    const element = ref.current; if (!element) return;
+    element.style.setProperty("--workspace-columns", next.map(n => `${n}px`).join(" "));
+    element.style.setProperty("--canvas-start", `${next.slice(0, 2).reduce((a, b) => a + b, 0)}px`);
+    for (const divider of element.querySelectorAll<HTMLElement>("[data-panel-divider]")) {
+      const index = Number(divider.dataset.panelDivider);
+      const boundary = next.slice(0, index + 1).reduce((a, b) => a + b, 0);
+      divider.style.left = `${boundary}px`;
+      divider.setAttribute("aria-valuenow", String(Math.round(boundary)));
+      divider.setAttribute("aria-valuetext", `${Math.round(boundary)} 像素`);
+    }
+  }
   function move(index: number, delta: number, initial = widths) {
-    const amount = Math.max(minimums[index] - initial[index], Math.min(initial[index + 1] - minimums[index + 1], delta));
-    const next = initial.map((n, i) => i === index ? n + amount : i === index + 1 ? n - amount : n);
+    const next = resizePanelWidths(initial, minimums, index, delta);
     current.current = { ...current.current, [key]: next }; setPreferred(current.current);
   }
   function endDrag(event: PointerEvent<HTMLDivElement>) {
     if (!drag.current) return;
+    flushMove();
     drag.current = null; setActiveDivider(null);
+    setPreferred(current.current);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     save();
   }
   const separators = density === "single" ? [] : widths.slice(0, -1).flatMap((_, index) => {
     if (rail && index === 0) return [];
     return [<div key={`${key}-${index}`} className="workspace-separator" role="separator" tabIndex={0}
-      data-dragging={activeDivider === index}
-      aria-label={labels[index]} aria-orientation="vertical" aria-valuemin={minimums[index]}
-      aria-valuemax={Math.round(widths[index] + widths[index + 1] - minimums[index + 1])}
-      aria-valuenow={Math.round(widths[index])} aria-valuetext={`${Math.round(widths[index])} 像素`}
+      data-dragging={activeDivider === index} data-panel-divider={index}
+      aria-label={labels[index]} aria-orientation="vertical" aria-valuemin={minimums.slice(0,index+1).reduce((a,b)=>a+b,0)}
+      aria-valuemax={Math.round(width-minimums.slice(index+1).reduce((a,b)=>a+b,0))}
+      aria-valuenow={Math.round(widths.slice(0,index+1).reduce((a,b)=>a+b,0))} aria-valuetext={`${Math.round(widths.slice(0,index+1).reduce((a,b)=>a+b,0))} 像素`}
       style={{ left: widths.slice(0, index + 1).reduce((a, b) => a + b, 0) }}
-      onPointerDown={event => { if (event.button !== 0) return; event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); drag.current = { index, x: event.clientX, widths }; setActiveDivider(index); }}
-      onPointerMove={event => { if (drag.current?.index === index) move(index, event.clientX - drag.current.x, drag.current.widths); }}
-      onPointerUp={endDrag} onPointerCancel={endDrag} onLostPointerCapture={() => { drag.current = null; setActiveDivider(null); save(); }}
+      onPointerDown={event => { if (event.button !== 0) return; event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); drag.current = { index, x: event.clientX, widths, key, minimums }; setActiveDivider(index); }}
+      onPointerMove={event => {
+        const active = drag.current; if (active?.index !== index) return;
+        const delta = event.clientX - active.x;
+        scheduleMove(() => {
+          const next = resizePanelWidths(active.widths, active.minimums, index, delta);
+          current.current = { ...current.current, [active.key]: next };
+          paintWidths(next);
+        });
+      }}
+      onPointerUp={endDrag} onPointerCancel={endDrag} onLostPointerCapture={endDrag}
       onKeyDown={event => { if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return; event.preventDefault(); move(index, (event.key === "ArrowLeft" ? -1 : 1) * (event.shiftKey ? 40 : 12)); save(); }}
       onDoubleClick={() => { current.current = { ...current.current, [key]: defaults }; setPreferred(current.current); save(); }}
     ><span /></div>];
   });
-  function resizeInspector(next: number) {
-    current.current = { ...current.current, inspector: [Math.max(300, Math.min(inspectorMax, next))] };
-    setPreferred(current.current);
-  }
-  if (density === "overlay" && mode === "tasks") separators.push(<div key="inspector" className="workspace-separator" role="separator" tabIndex={0} data-dragging={activeDivider === "inspector"} aria-label={t("地图区与任务区宽度")} aria-orientation="vertical" aria-valuemin={300} aria-valuemax={Math.round(inspectorMax)} aria-valuenow={Math.round(inspectorWidth)} style={{left:width-inspectorWidth}}
-    onPointerDown={event=>{if(event.button!==0)return;event.preventDefault();event.currentTarget.setPointerCapture(event.pointerId);inspectorDrag.current={x:event.clientX,width:inspectorWidth};setActiveDivider("inspector");}}
-    onPointerMove={event=>{if(inspectorDrag.current)resizeInspector(inspectorDrag.current.width-event.clientX+inspectorDrag.current.x);}}
-    onPointerUp={event=>{inspectorDrag.current=null;setActiveDivider(null);if(event.currentTarget.hasPointerCapture(event.pointerId))event.currentTarget.releasePointerCapture(event.pointerId);save();}}
-    onPointerCancel={()=>{inspectorDrag.current=null;setActiveDivider(null);save();}} onLostPointerCapture={()=>{inspectorDrag.current=null;setActiveDivider(null);save();}}
-    onKeyDown={event=>{if(event.key!=="ArrowLeft"&&event.key!=="ArrowRight")return;event.preventDefault();resizeInspector(inspectorWidth+(event.key==="ArrowLeft"?1:-1)*(event.shiftKey?40:12));save();}}
-    onDoubleClick={()=>{resizeInspector(340);save();}}><span/></div>);
   function show(next: View) { setView(next); setSidebarExpanded(false); }
   function toggleSidebar() {
     if (sidebarOverlay) setSidebarExpanded(!sidebarExpanded);
     else { const next = !sidebarCollapsed; setSidebarCollapsed(next); setSidebarExpanded(false); try { localStorage.setItem(sidebarKey, String(next)); } catch { /* Keep the session usable. */ } }
   }
-  return { ref, style: { "--workspace-columns": widths.map(n => `${n}px`).join(" "), "--canvas-start": `${widths.slice(0, 2).reduce((a, b) => a + b, 0)}px`, "--inspector-width": `${inspectorWidth}px` } as CSSProperties,
+  return { ref, style: { "--workspace-columns": widths.map(n => `${n}px`).join(" "), "--canvas-start": `${widths.slice(0, 2).reduce((a, b) => a + b, 0)}px` } as CSSProperties,
     attributes: { "data-layout": density, "data-view": view, "data-sidebar-rail": rail, "data-sidebar-expanded": sidebarOverlay && sidebarExpanded },
     separators, dragging, density, view, show, sidebarExpanded: sidebarOverlay && sidebarExpanded, setSidebarExpanded, sidebarVisible, toggleSidebar };
 }

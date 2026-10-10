@@ -18,7 +18,7 @@ export function workspacePermissionContext(messages: AgentMessage[], permission:
   const instruction = permission === "fullAccess"
     ? "当前对话为完全访问。用户要求下载或执行时，生成或核对计划后继续调用 jobs_start，不等待计划卡片确认，不沿用旧消息中的逐次确认状态。仅要求规划、预览或估算时不启动任务。执行结果以本机工具返回为准。完全访问不代表用户授权代选参数。任何影响结果的需求不明确时，先通过 ask_user 询问并等待回答，不能擅自决定范围、时期、缩放、格式、合并方式或降级方案；只有用户明确要求不要询问或在相应范围内授权你决定时，才自行选择并说明假设。已经明确的要求和工具能查询的事实不用重复问。"
     : "当前对话为逐次确认。生成计划后等待用户在右侧任务面板确认，不自动调用 jobs_start。聊天里的任务入口可打开对应任务。";
-  latest.content = permissionPrefix + state + "\n" + instruction + "\noutputCrs 是用户明确选择的当前会话默认成果坐标系；非空时沿用，当前请求单次指定可覆盖但不改写默认。为空且本次未指定时，通过询问卡片确认，不擅自默认。需要查看本轮新更改时查询 workspace_status。\n下载由本机后台执行。启动本轮用户要求的全部计划后结束本轮；批量任务需逐个启动成功计划，不能只启动第一个。查询到任务仍在运行时报告一次当前状态，不反复调用 jobs_get/jobs_events 等待完成。" + permissionEnd + request;
+  latest.content = permissionPrefix + state + "\n" + instruction + "\noutputCrs 是用户明确选择的当前会话默认成果坐标系；非空时沿用，当前请求单次指定可覆盖但不改写默认。同一任务已确认的坐标系在重试、继续处理和仅修改缩放时沿用，不重复询问坐标系或应用范围，也不升级为会话默认。为空且本次任务尚未明确时，通过询问卡片确认，不擅自默认。需要查看本轮新更改时查询 workspace_status。\n下载由本机后台执行。启动本轮用户要求的全部计划后结束本轮；批量任务需逐个启动成功计划，不能只启动第一个。查询到任务仍在运行时报告一次当前状态，不反复调用 jobs_get/jobs_events 等待完成。" + permissionEnd + request;
   return current;
 }
 
@@ -37,6 +37,8 @@ export function boundaryLookupReply(raw: Record<string, unknown>) {
 }
 
 const labels: Record<string, string> = {
+  runtime_task_state: "读取任务检查点",
+  runtime_task_update: "更新任务目标与验收条件",
   workspace_status: "检查工作区",
   workspace_boundaries_list: "查找工作区边界",
   workspace_boundary_use: "读取工作区边界",

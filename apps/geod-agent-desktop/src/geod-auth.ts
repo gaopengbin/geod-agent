@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, desktopAvailable, errorMessage, type AuthStatus } from "./api";
 import { useAccountProfile } from "./account-profile";
+import { AUTH_INVALIDATED } from "./auth-events";
 
 const initialStatus: AuthStatus = { state: "unconfigured", userId: null, error: null };
 export type GeoDAuth = ReturnType<typeof useGeoDAuth>;
@@ -42,6 +43,15 @@ export function useGeoDAuth() {
     if (!desktopAvailable || status.state !== "waiting") return;
     const timer = window.setInterval(() => void refresh(), 1200);
     return () => window.clearInterval(timer);
+  }, [status.state, refresh]);
+  useEffect(() => {
+    if (!desktopAvailable) return;
+    const invalidate = () => void refresh();
+    const focus = () => { if (status.state === "connected") void refresh(); };
+    window.addEventListener(AUTH_INVALIDATED, invalidate);
+    window.addEventListener("focus", focus);
+    const timer = status.state === "connected" ? window.setInterval(() => void refresh(), 30000) : undefined;
+    return () => { window.removeEventListener(AUTH_INVALIDATED, invalidate); window.removeEventListener("focus", focus); if (timer !== undefined) window.clearInterval(timer); };
   }, [status.state, refresh]);
 
   const run = useCallback(async (action: "login" | "logout") => {

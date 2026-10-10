@@ -1,0 +1,14 @@
+{
+  "tool": "built-in imagegen",
+  "palette": {
+    "main": "#7048EB",
+    "highlight": "#B18CFF",
+    "deep": "#44239C",
+    "orchid": "#CD96FF",
+    "tile": "#160E2D",
+    "text": "#251B3D"
+  },
+  "symbol": "Use case: precise-object-edit / logo-brand.\nEdit target: the supplied GeoD Agent standalone G-and-spark symbol.\nChange ONLY its colors into a polished violet brand palette: rich royal violet #7048EB, luminous lavender #B18CFF, deep indigo-violet #44239C, with restrained orchid highlights #CD96FF. Preserve exactly the G silhouette, ribbon fold construction, original proportions, single four-point spark position and size, transparent negative space and square framing. The entire visible mark and spark must now be violet/lavender, with no cyan or blue sections left. Preserve smooth 3D gradient shading, no excessive glow. Clean smooth antialiased edges without stray pixels or grain.\nOne standalone symbol on REAL transparent alpha background. No square tile, no text, no words, no collage, no labels, no watermark.",
+  "app": "Use case: precise-object-edit / logo-brand.\nEdit target: Image 1, the existing GeoD Agent desktop application tile. Image 2 is the new violet primary symbol and mandatory color reference.\nRecolor the app tile to the new violet palette while preserving its exact composition, rounded square, G ribbon shape, one four-point spark, padding and dimensions. G and spark: rich royal violet #7048EB, luminous lavender #B18CFF, deep indigo-violet #44239C and restrained orchid #CD96FF. Tile surface: very dark plum #160E2D to #211238, with subtle violet edge lighting. No cyan or bright blue remains anywhere. Smooth polished shading, crisp antialiasing, restrained professional depth.\nIMPORTANT: all negative space inside G is the clean dark plum tile surface. Remove ALL stray pixels, blue speckles, texture contamination and random colored flecks; the rounded square exterior is truly transparent alpha. One icon only. No text, no labels, no mockup, no collage, no watermark.",
+  "wordmark": "Use case: precise-object-edit / logo-brand.\nEdit target: Image 1, GeoD Agent horizontal wordmark. Image 2 is the new violet G-and-spark symbol and mandatory color reference.\nChange ONLY the logo's palette. Keep exact horizontal composition, G shape and four-point spark, wordmark text \"GeoD Agent\", letter casing, font, text size, spacing and layout. Recolor the G and spark to royal violet #7048EB, lavender #B18CFF, deep violet #44239C and restrained orchid #CD96FF. Make the text dark plum #251B3D for legibility on white and pale UI backgrounds. No cyan or blue sections in the visible symbol. Clean polished edges, consistent smooth ribbon shading, no grain or colored flecks.\nKeep real transparent alpha background, transparent negative spaces, original wide landscape aspect ratio. One wordmark asset, no backdrop, no square tile, no mockup, no additional text, no tagline, no watermark."
+}

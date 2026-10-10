@@ -18,12 +18,14 @@ export function connectorRegistration(connector:McpConnector){
 export function discoveredConnector(connector: Pick<McpConnector, "id" | "name" | "url">, list: McpToolList, query = "") {
   const needle = query.trim().toLowerCase().slice(0, 80);
   const connectorMatches = matchesQuery(`${connector.id} ${connector.name} ${connector.url} ${list.name}`, needle);
-  const matched = connectorMatches ? list.tools : list.tools.filter(tool => matchesQuery(`${tool.name} ${tool.description ?? ""} ${Object.keys(tool.inputSchema.properties ?? {}).join(' ')}`, needle));
+  const tokens = new Set(needle.split(/[\s,，、;；/|]+/));
+  const exact = list.tools.filter(tool => tokens.has(tool.name.toLowerCase()));
+  const matched = exact.length ? exact : connectorMatches ? list.tools : list.tools.filter(tool => matchesQuery(`${tool.name} ${tool.description ?? ""} ${Object.keys(tool.inputSchema.properties ?? {}).join(' ')}`, needle));
   if (!connectorMatches && !matched.length) return null;
   return {
     connectorId: connector.id, name: connector.name, url:connector.url,registered:true,enabled:true,status:'enabled',toolCount: list.tools.length,
-    matchedToolCount: matched.length, availableTools: matched.map(tool => tool.name), tools: matched.slice(0, 32),
-    ...(matched.length > 32 ? { omittedToolCount: matched.length - 32, next: "Use extensions_list with a specific tool name or capability to obtain its complete schema" } : {}),
+    matchedToolCount: matched.length, availableTools: matched.map(tool => tool.name), tools: matched.slice(0, 6),
+    ...(matched.length > 6 ? { omittedToolCount: matched.length - 6, next: "Use extensions_list with one exact available tool name to obtain its complete schema" } : {}),
   };
 }
 

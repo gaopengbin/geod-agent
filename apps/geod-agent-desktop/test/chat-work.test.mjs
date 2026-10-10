@@ -57,8 +57,40 @@ test('completed and new turns remain separate, including restored legacy convers
   {id:'p3',turnId:'new',role:'assistant',phase:'progress',content:'处理中'},
  ]);
  const work = entries.filter(isTurnWork);
- assert.equal(work.length,3);
- assert.deepEqual(work.map(group=>group.items.map(item=>item.id)),[['p1','t1'],['p2'],['t2','p3']]);
+ assert.equal(work.length,2);
+ assert.deepEqual(work.map(group=>group.items.map(item=>item.id)),[['p1','t1'],['p2','t2','p3']]);
+ assert.equal(work[1].id,'new');
+});
+
+test('local work and resumed run IDs share one answer while active run remains identifiable',()=>{
+ const entries=groupWorkRecords([
+  {id:'u',role:'user',content:'下载故宫历史影像'},
+  {id:'first',turnId:'run-a',role:'tool',content:'核对参数'},
+  {id:'question',turnId:'run-a',role:'tool',content:'补充需求',userInput:{status:'pending'}},
+  {id:'local',role:'tool',content:'核对已保存计划'},
+  {id:'resume',turnId:'run-b',role:'assistant',phase:'progress',content:'继续生成计划'},
+ ]);
+ const groups=entries.filter(isTurnWork);
+ assert.equal(groups.length,1);
+ assert.deepEqual(groups[0].items.map(m=>m.id),['first','local','resume']);
+ assert.deepEqual(groups[0].turnIds,['run-a','run-b']);
+ assert(entries.some(m=>m.id==='question'));
+});
+
+test('completed question history moves into work records; pending questions never disappear',()=>{
+ const rows=[
+  {id:'u',role:'user',content:'下载'},
+  {id:'work',turnId:'run',role:'tool',content:'思考'},
+  {id:'answered',turnId:'run',role:'tool',content:'补充需求',userInput:{status:'answered',userMessageId:'u'}},
+  {id:'pending',turnId:'run',role:'tool',content:'补充需求',userInput:{status:'pending',userMessageId:'u'}},
+ ];
+ assert(groupWorkRecords(rows).some(m=>m.id==='answered'));
+ const before=JSON.stringify(rows);
+ const completed=groupWorkRecords([...rows,{id:'final',turnId:'run',role:'assistant',phase:'final',content:'已准备13项任务'}]);
+ assert.deepEqual(completed.filter(isTurnWork)[0].items.map(m=>m.id),['work','answered']);
+ assert(completed.some(m=>m.id==='pending'));
+ assert(!completed.some(m=>m.id==='answered'));
+ assert.equal(JSON.stringify(rows),before);
 });
 test('historical polling trace remains inside the same completed turn', () => {
  const entries = groupWorkRecords([

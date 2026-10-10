@@ -1,0 +1,70 @@
+/* A brief branded intro; the light sweep is decorative, not download progress. */
+.startup-splash {
+  --splash-blue: #4fb9ff;
+  position: fixed;
+  inset: var(--app-titlebar-height) 0 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  color: #edf7ff;
+  background: radial-gradient(ellipse at 50% 42%, #0d2440 0, #071322 45%, #040a13 85%);
+  isolation: isolate;
+  animation: startup-dismiss 2000ms ease both;
+}
+.app-shell--starting .app-header.custom-titlebar { background: #040a13; color: #edf7ff; }
+.app-shell--starting .custom-titlebar .brand { color: #edf7ff; }
+.app-shell--starting .custom-titlebar .brand span { color: #a9bfd5; }
+.app-shell--starting .window-controls button { color: #b9c9dc; }
+.app-shell--starting .window-controls button:hover { background: #162438; }
+.app-shell--starting .window-controls .window-close:hover { background: #c22e38; color: white; }
+.startup-grid {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: linear-gradient(#65b7f00c 1px, transparent 1px), linear-gradient(90deg, #65b7f00c 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(ellipse, black, transparent 72%);
+}
+.startup-stars {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: .6;
+  background-image: radial-gradient(circle at 18% 25%, #81c9ff 0 1px, transparent 2px), radial-gradient(circle at 79% 33%, #81c9ff 0 1px, transparent 2px), radial-gradient(circle at 28% 72%, #81c9ff 0 1px, transparent 2px), radial-gradient(circle at 73% 78%, #81c9ff 0 1px, transparent 2px);
+}
+.startup-content { width: min(760px, 100%); padding: 24px; text-align: center; transform: translateY(-20px); }
+.startup-globe { position: relative; width: min(320px, 42vh, 65vw); aspect-ratio: 1; margin: 0 auto 22px; animation: startup-reveal 800ms cubic-bezier(.2,.7,.2,1) both; }
+.startup-globe-aura { position: absolute; inset: 9%; border-radius: 50%; background: #1878d220; box-shadow: 0 0 70px 22px #2587d519; }
+.startup-orbits, .startup-sphere { position: absolute; inset: 0; width: 100%; height: 100%; }
+.startup-orbits { color: #5cb9ef65; }
+.startup-orbit-outer { transform-origin: 200px 200px; animation: startup-orbit 12s linear infinite; }
+.startup-satellite { transform-origin: 200px 200px; animation: startup-satellite 3s ease-in-out infinite; }
+.startup-scan { animation: startup-scan 1800ms ease-in-out both; }
+.startup-logo { position: absolute; inset: 0; display: grid; place-items: center; }
+.startup-logo img { width: clamp(48px, 14vw, 72px); height: auto; filter: drop-shadow(0 0 20px #35adff80); animation: startup-logo 900ms cubic-bezier(.2,.7,.2,1) both; }
+.startup-copy { animation: startup-copy 650ms 160ms ease both; }
+.startup-copy h1 { margin: 0; font: 600 clamp(24px, 3.3vw, 38px)/1.35 var(--app-font); letter-spacing: -.035em; }
+.startup-copy p { margin: 16px 0 0; color: #a9bfd5; font-size: clamp(13px, 1.5vw, 16px); line-height: 1.6; letter-spacing: .025em; }
+.startup-light { width: 112px; height: 2px; margin: 30px auto 0; background: #4caaff25; border-radius: 2px; overflow: clip; }
+.startup-light span { display: block; width: 42px; height: 100%; background: linear-gradient(90deg, transparent, #9cdeff, transparent); box-shadow: 0 0 10px #48b7ff; animation: startup-light 1800ms ease-in-out both; }
+.startup-caption { position: absolute; bottom: clamp(20px, 5vh, 44px); color: #8ba8c1; font-size: 11px; letter-spacing: .16em; }
+@keyframes startup-reveal { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: scale(1); } }
+@keyframes startup-logo { from { opacity: 0; transform: scale(.82); } to { opacity: 1; transform: scale(1); } }
+@keyframes startup-copy { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes startup-orbit { to { transform: rotate(360deg); } }
+@keyframes startup-satellite { from { transform: rotate(-28deg) translateX(189px); } to { transform: rotate(332deg) translateX(189px); } }
+@keyframes startup-scan { 0% { opacity: 0; transform: translateY(-40px); } 25% { opacity: .85; } 100% { opacity: 0; transform: translateY(95px); } }
+@keyframes startup-light { from { transform: translateX(-42px); } to { transform: translateX(112px); } }
+@keyframes startup-dismiss { 0%, 84% { opacity: 1; } 100% { opacity: 0; } }
+@media (max-height: 520px) {
+  .startup-content { transform: none; padding: 12px; }
+  .startup-globe { width: min(180px, 35vh); margin-bottom: 12px; }
+  .startup-copy h1 { font-size: 24px; }
+  .startup-copy p { margin-top: 8px; }
+  .startup-light { margin-top: 16px; }
+  .startup-caption { bottom: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .startup-splash, .startup-globe, .startup-logo img, .startup-copy, .startup-orbit-outer, .startup-satellite, .startup-scan, .startup-light span { animation: none; }
+  .startup-satellite, .startup-scan, .startup-light { display: none; }
+}

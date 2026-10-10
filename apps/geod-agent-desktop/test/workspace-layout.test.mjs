@@ -1,16 +1,34 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { workspaceArrangement, fitPanelWidths } from '../src/workspace-layout.ts';
+import { workspaceArrangement, fitPanelWidths, resizePanelWidths } from '../src/workspace-layout.ts';
 for (const width of [390,800,900,960,1120,1280,1440,1920]) {
   test(`workspace at ${width}px preserves usable panels and fits exactly`,()=>{
     const a=workspaceArrangement('tasks',width);
     const fitted=fitPanelWidths(a.defaults,width,a.minimums);
     assert.ok(Math.abs(fitted.reduce((sum,n)=>sum+n,0)-width)<.1);
     assert.ok(fitted.every((n,i)=>n>=a.minimums[i]));
-    assert.equal(fitted.length,width>=1440?4:width<900?2:3);
+    assert.equal(fitted.length,width>=1120?4:width<900?2:3);
     if(width<1120)assert.equal(fitted[0],64);
   });
 }
+test('expanding tasks borrows space from map then conversation then navigation', () => {
+  const initial = [224, 480, 400, 336], minimums = [180, 340, 240, 300];
+  const next = resizePanelWidths(initial, minimums, 2, -500);
+  assert.deepEqual(next, [180, 340, 240, 680]);
+  assert.equal(next.reduce((a,b)=>a+b,0), 1440);
+  assert.deepEqual(initial, [224,480,400,336]);
+});
+test('every divider keeps total width and all minimums, even at extreme deltas', () => {
+  for (const width of [1120,1280,1440,1920]) {
+    const a=workspaceArrangement('tasks',width);
+    const initial=fitPanelWidths(a.defaults,width,a.minimums);
+    for(let index=0;index<3;index++)for(const delta of [-10000,-80,0,80,10000]) {
+      const next=resizePanelWidths(initial,a.minimums,index,delta);
+      assert.ok(Math.abs(next.reduce((x,y)=>x+y,0)-width)<.001);
+      assert.ok(next.every((n,i)=>n>=a.minimums[i]-.001));
+    }
+  }
+});
 test('saved widths survive resizing without changing the selected arrangement',()=>{
   const a=workspaceArrangement('tasks',1440);
   const fitted=fitPanelWidths([200,520,400,320],1600,a.minimums);

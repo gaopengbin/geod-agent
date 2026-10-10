@@ -320,12 +320,19 @@ export function createGatewayServer(config, { fetchImpl = fetch } = {}) {
           streamEvent(response, "generation", replayed);
         return response.end();
       }
-      try{await payments.reserve(userId,body.generationId,{sponsored:!!sponsored,codex});}
+       const upstreamBody=sponsored?null:{model:selectedModel,
+         messages:codex?messages:[{role:'system',content:`${SYSTEM} ${USER_INPUT_POLICY} ${BULK_DATA_POLICY}`},...messages.map(message=>message.role==='tool'?{...message,content:compactGeometryToolOutput(message.content)}:message)],
+         ...(codex&&!contract.tools.length?{}:{tools:codex?contract.tools:TOOLS,tool_choice:'auto'}),
+         thinking:{type:codex?config.codexThinking:'disabled'},max_tokens:codex?config.maxOutputTokens:2048,
+         stream:live,...(live?{stream_options:{include_usage:true}}:{})};
+       let requestReservation;
+       try{requestReservation=await payments.reserve(userId,body.generationId,{sponsored:!!sponsored,codex,request:upstreamBody});}
       catch(cause){ledger.fail(userId,body.generationId,cause instanceof PaymentError?cause.code:'BILLING_RESERVATION_FAILED');throw cause;}
+       if(requestReservation?.maxOutputTokens)upstreamBody.max_tokens=requestReservation.maxOutputTokens;
       ledger.markStreaming(userId, body.generationId);
       if (live) {
         response.writeHead(200, { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store, no-transform", "x-content-type-options": "nosniff", "x-accel-buffering": "no" });
-        streamEvent(response, "started", { generationId: body.generationId });
+         streamEvent(response, "started", { generationId: body.generationId,...(requestReservation?.maxOutputTokens?{maxOutputTokens:requestReservation.maxOutputTokens}:{} ) });
       }
        const respond = async (generation, status = 200) => {
         generation=await payments.settlement(userId,generation);
@@ -355,11 +362,7 @@ export function createGatewayServer(config, { fetchImpl = fetch } = {}) {
       try {
         upstream = await fetchImpl(`${sponsored?.provider.upstreamBase??config.upstreamBase}/chat/completions`, {
           method: "POST", redirect: "error", headers: { authorization: `Bearer ${sponsored?.provider.apiKey??config.apiKey}`, "content-type": "application/json" },
-          body: JSON.stringify({ model: selectedModel,
-            messages: codex ? messages : [{ role: "system", content: `${SYSTEM} ${USER_INPUT_POLICY} ${BULK_DATA_POLICY}` }, ...messages.map(message=>message.role==='tool'?{...message,content:compactGeometryToolOutput(message.content)}:message)],
-            ...(codex && !contract.tools.length ? {} : { tools: codex ? contract.tools : TOOLS, tool_choice: "auto" }),
-            ...(sponsored?(sponsored.model.thinking?{thinking:{type:sponsored.model.thinking}}:{}):{thinking:{type:codex?config.codexThinking:'disabled'}}), max_tokens: sponsored?.model.maxOutputTokens??(codex ? config.maxOutputTokens : 2048),
-            stream: live, ...(live ? { stream_options: { include_usage: true } } : {}) }),
+           body: JSON.stringify(upstreamBody),
           signal: AbortSignal.timeout(live ? 120_000 : 45_000),
         });
       } catch {

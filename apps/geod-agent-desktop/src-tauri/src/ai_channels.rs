@@ -133,7 +133,7 @@ impl RouteSnapshot {
         if self.is_sponsored(){let sponsor=self.sponsor.as_ref().unwrap();let model=self.model.as_ref().unwrap();return json!({"model":model.id,"contextWindow":model.context_window,"contextWindowSource":"gatewayConfigured","maxOutputTokens":model.max_output_tokens,"reasoning":matches!(model.thinking.as_deref(),Some("enabled"|"adaptive")),"inputModalities":model.input_modalities,"protocol":sponsor.protocol,"providerName":sponsor.name,"billingScope":"sponsored","channelId":format!("sponsor:{}",sponsor.id),"channelRevision":sponsor.revision});}
         let channel = self.channel.as_ref().unwrap();
         let model = self.model.as_ref().unwrap();
-        json!({"model":model.id,"contextWindow":model.context_window,"contextWindowSource":"channelConfiguration","reasoning":matches!(model.thinking.as_deref(),Some("enabled"|"adaptive")),"inputModalities":model.input_modalities,"protocol":channel.protocol,"providerName":channel.name,"billingScope":"personal","channelId":channel.id,"channelRevision":channel.revision})
+        json!({"model":model.id,"contextWindow":model.context_window,"maxOutputTokens":model.max_output_tokens,"contextWindowSource":"channelConfiguration","reasoning":matches!(model.thinking.as_deref(),Some("enabled"|"adaptive")),"inputModalities":model.input_modalities,"protocol":channel.protocol,"providerName":channel.name,"billingScope":"personal","channelId":channel.id,"channelRevision":channel.revision})
     }
     fn adapter_snapshot(&self) -> Value {
         let c = self.channel.as_ref().unwrap();
@@ -911,17 +911,19 @@ fn prepare_worker(state: &AiChannels) -> Result<PathBuf, ServiceError> {
     let source = include_str!("../provider-worker.mjs");
     let adapter = include_str!("../../../../packages/codex-protocol/provider-adapter.mjs");
     let contract = include_str!("../../../../packages/codex-protocol/codex-contract.mjs");
+    let bulk_data = include_str!("../../../../packages/codex-protocol/bulk-data.mjs");
     let native=include_str!("../../../../packages/codex-protocol/provider-native.mjs");
     let provider_error=include_str!("../../../../packages/codex-protocol/provider-error.mjs");
     let root = state.root.join("protocol").join(format!(
         "{:x}",
-        Sha256::digest(format!("{source}{adapter}{contract}{native}{provider_error}"))
+        Sha256::digest(format!("{source}{adapter}{contract}{bulk_data}{native}{provider_error}"))
     ));
     fs::create_dir_all(&root).map_err(|_| error("AI_CHANNEL_STORAGE", "接口适配层准备失败"))?;
     for (name, text) in [
         ("provider-worker.mjs", source),
         ("provider-adapter.mjs", adapter),
         ("codex-contract.mjs", contract),
+        ("bulk-data.mjs", bulk_data),
         ("provider-native.mjs", native),
         ("provider-error.mjs", provider_error),
     ] {
@@ -1100,6 +1102,26 @@ pub(crate) fn generate(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn embedded_provider_worker_starts_without_external_modules() {
+        let root = tempfile::tempdir().unwrap();
+        let state = AiChannels::new(root.path().to_owned());
+        let worker = prepare_worker(&state).unwrap();
+        let node = if cfg!(windows) {
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/codex/node.exe")
+        } else {
+            PathBuf::from("node")
+        };
+        // EOF closes the worker cleanly, after Node loads every transitive import.
+        // Run the exact native package in a clean directory, not the source tree.
+        let output = std::process::Command::new(node)
+            .arg(worker)
+            .current_dir(root.path())
+            .stdin(std::process::Stdio::null())
+            .output()
+            .expect("provider worker requires the bundled Node runtime");
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    }
     fn draft() -> ChannelDraft {
         ChannelDraft {
             id: None,

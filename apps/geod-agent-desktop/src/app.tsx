@@ -23,6 +23,7 @@ import { AgentPanel, type AgentMainView } from "./agent-panel";
 import { useGeoDAuth } from "./geod-auth";
 import { LoginScreen } from "./login-screen";
 import { GeoDLogin } from "./geod-login";
+import { StartupSplash, useStartupSplash } from "./startup-splash";
 import { AIChannelsPage } from "./ai-channels-page";
 import { MapView } from "./openlayers-map-view";
 import { SourcePage } from "./source-page";
@@ -39,9 +40,14 @@ import { api, desktopAvailable, errorMessage, type ArtifactPreview, type Job, ty
 const emptyTileGrids: PlanTileGrid[] = [];
 
 export function App() {
-  useLocale();
+  const locale = useLocale();
+  useEffect(() => {
+    if (desktopAvailable) void api.desktopTrayLocale(locale).catch(() => {});
+  }, [locale]);
   const auth = useGeoDAuth();
   const loginRequired = !auth.ready || auth.status.state !== "connected";
+  const startupVisible = useStartupSplash();
+  const workspaceControlsVisible = !loginRequired && !startupVisible;
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     const stored = localStorage.getItem("geod-agent-theme");
     return stored === "light" || stored === "dark" ? stored : "light";
@@ -80,6 +86,10 @@ export function App() {
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  useEffect(() => {
+    if (auth.status.state !== "connected" || auth.status.error) return;
+    setError(current => ["请先登录 GeoD", "请重新登录 GeoD", "GeoD 授权已失效，请重新登录"].includes(current) ? "" : current);
+  }, [auth.status]);
   useEffect(() => {
     const failed = (event: Event) => setError(errorMessage((event as CustomEvent).detail));
     window.addEventListener("geod-state-storage-error", failed);
@@ -170,6 +180,7 @@ export function App() {
     const [list, active] = await Promise.all([api.jobsList(), api.jobsActive()]);
     setJobs(list);
     setActiveJobs(active);
+    setError(current=>current==="后台已退出，请在后台运行设置中启动"?"":current);
   }, []);
 
   useEffect(() => {
@@ -345,24 +356,29 @@ export function App() {
   const latestProgress = [...events].reverse().find(event => event.completedTiles !== undefined && event.totalTiles);
   const mapCompletedTiles = job ? job.state === "completed" ? plan?.plan.totalTiles ?? 0 : latestProgress?.completedTiles ?? 0 : null;
 
-  return <div className="app-shell">
-    <header className="app-header custom-titlebar" onMouseDown={handleTitlebarMouseDown}>
-      <div className="brand"><img src="/geod-symbol.png" alt="" /><strong>GeoD <span>Agent</span></strong></div>
-      {!loginRequired && <WorkspaceSidebarToggle layout={layout}/>}
-      {!loginRequired && focusedConversation && mainView === "conversation" && <Button variant="ghost" size="sm" className="empty-map-entry" onClick={revealMap}><MapTrifold size={16}/>{t("地图选范围")}</Button>}
-      {!loginRequired && <WorkspaceControls layout={layout} focused={focusedConversation || mainView !== "conversation"} tasksOpen={resultsOpen} onTasksChange={setResultsOpen}/>}
+  const windowControls = desktopAvailable && <div className="window-controls">
+    <UiTooltip content={t("最小化")} side="bottom"><button type="button" aria-label={t("最小化")} onClick={() => void getCurrentWindow().minimize()}><Minus size={16} /></button></UiTooltip>
+    <UiTooltip content={t("最大化或还原")} side="bottom"><button type="button" aria-label={t("最大化或还原")} onClick={() => void getCurrentWindow().toggleMaximize()}><Square size={13} /></button></UiTooltip>
+    <UiTooltip content={t("关闭窗口并留在托盘")} side="bottom"><button type="button" className="window-close" aria-label={t("关闭窗口并留在托盘")} onClick={() => void getCurrentWindow().close()}><X size={17} /></button></UiTooltip>
+  </div>;
+
+  return <div className={`app-shell${startupVisible ? " app-shell--starting" : ""}`}>
+    {(!loginRequired || startupVisible) && <header className="app-header custom-titlebar" onMouseDown={handleTitlebarMouseDown}>
+      <div className="brand"><img src="/geod-agent-symbol-blue-violet.png" alt="" /><strong>GeoD <span>Agent</span></strong></div>
+      {workspaceControlsVisible && <WorkspaceSidebarToggle layout={layout}/>}
+      {workspaceControlsVisible && focusedConversation && mainView === "conversation" && <Button variant="ghost" size="sm" className="empty-map-entry" onClick={revealMap}><MapTrifold size={16}/>{t("地图选范围")}</Button>}
+      {workspaceControlsVisible && <WorkspaceControls layout={layout} focused={focusedConversation || mainView !== "conversation"} tasksOpen={resultsOpen} onTasksChange={setResultsOpen}/>}
       <div className="header-right">
-        {desktopAvailable&&!loginRequired&&<MessageCenter accountId={accountId} desktop={desktopAvailable}/>}
+        {desktopAvailable&&workspaceControlsVisible&&<MessageCenter accountId={accountId} desktop={desktopAvailable}/>}
         {!desktopAvailable && <UiTooltip content={t("浏览器仅用于界面预览，本机操作请使用桌面应用。")} side="bottom"><span className="preview-label">{t("界面预览")}</span></UiTooltip>}
-        {desktopAvailable && <div className="window-controls">
-          <UiTooltip content={t("最小化")} side="bottom"><button type="button" aria-label={t("最小化")} onClick={() => void getCurrentWindow().minimize()}><Minus size={16} /></button></UiTooltip>
-          <UiTooltip content={t("最大化或还原")} side="bottom"><button type="button" aria-label={t("最大化或还原")} onClick={() => void getCurrentWindow().toggleMaximize()}><Square size={13} /></button></UiTooltip>
-          <UiTooltip content={t("关闭窗口")} side="bottom"><button type="button" className="window-close" aria-label={t("关闭窗口")} onClick={() => void getCurrentWindow().close()}><X size={17} /></button></UiTooltip>
-        </div>}
+        {windowControls}
       </div>
-    </header>
-    {loginRequired && <LoginScreen theme={theme} onNetwork={() => setNetworkDialogOpen(true)} onLanguage={() => setLanguageDialogOpen(true)} onTheme={() => setTheme(current => current === "light" ? "dark" : "light")}><GeoDLogin auth={auth}/></LoginScreen>}
-    <div hidden={loginRequired} ref={layout.ref} style={layout.style} {...layout.attributes} onKeyDown={event => { if (event.key === "Escape") layout.setSidebarExpanded(false); }} className={`workspace ai-workspace resizable-workspace ${layout.dragging ? "panels-resizing" : ""} ${mainView !== "conversation" ? "management-page" : ""} ${focusedConversation ? "new-chat" : ""} ${resultsOpen ? "results-open" : ""}`}>
+    </header>}
+    {desktopAvailable && loginRequired && !startupVisible && <div className="login-window-drag-region" aria-hidden="true" onMouseDown={handleTitlebarMouseDown}/>}
+    {desktopAvailable && loginRequired && !startupVisible && <div className="login-window-controls">{windowControls}</div>}
+    {startupVisible && <StartupSplash/>}
+    {loginRequired && <LoginScreen inert={startupVisible} theme={theme} onNetwork={() => setNetworkDialogOpen(true)} onLanguage={() => setLanguageDialogOpen(true)} onTheme={() => setTheme(current => current === "light" ? "dark" : "light")}><GeoDLogin auth={auth}/></LoginScreen>}
+    <div hidden={loginRequired} inert={startupVisible} ref={layout.ref} style={layout.style} {...layout.attributes} onKeyDown={event => { if (event.key === "Escape") layout.setSidebarExpanded(false); }} className={`workspace ai-workspace resizable-workspace ${layout.dragging ? "panels-resizing" : ""} ${mainView !== "conversation" ? "management-page" : ""} ${focusedConversation ? "new-chat" : ""} ${resultsOpen ? "results-open" : ""}`}>
       <AgentPanel auth={auth} onAccountChange={setAccountId} onBackgroundSnapshots={setTaskSnapshots} ledgerJobs={jobs} onOpenJob={item => void selectJob(item)} onWorkspaceChange={setWorkspaceState} onConversationChange={setMapConversationId} registeredSource={registeredSource} onOpenSources={(draft, originConversationId) => { setSourceDraft(draft ?? null); setSourceReviewConversationId(originConversationId ?? null); setMainView("sources"); }} onOpenNetwork={() => setNetworkDialogOpen(true)} onOpenCache={() => setCacheManagerOpen(true)} onToggleTheme={() => setTheme(current => current === "light" ? "dark" : "light")} onEmptyConversationChange={setEmptyConversation} mainView={mainView} onMainViewChange={view => { setMainView(view); if (view === "conversation") { setSourceDraft(null); setSourceReviewConversationId(null); } }} theme={theme} onSelectConversation={(planIds, conversationId) => void selectConversationPlan(planIds, conversationId)} conversationTasks={tasks} onTaskGroupSelect={openTaskGroup} selectedJob={job} onJobStarted={(started,originConversationId) => {
         if(taskScope.current.conversationId===originConversationId)void selectJob(started);
         void refreshJobs().catch(cause => setError(errorMessage(cause)));
@@ -391,7 +407,7 @@ export function App() {
         }
         setNotice(`已登记图源：${saved.displayName}。`);
       }} />
-      <AIChannelsPage active={mainView === "models"} accountId={accountId} onReturn={() => setMainView("conversation")}/>
+      <AIChannelsPage active={mainView === "models"} accountId={accountId} conversationId={mapConversationId||undefined} onReturn={() => setMainView("conversation")}/>
       {layout.separators}
       {layout.sidebarExpanded && <button type="button" className="workspace-nav-scrim" aria-label={t("收起会话列表")} onClick={() => layout.setSidebarExpanded(false)}/>}
     </div>

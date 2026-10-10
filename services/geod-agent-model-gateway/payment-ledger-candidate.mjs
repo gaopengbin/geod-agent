@@ -163,32 +163,58 @@ export function createPaymentLedgerCandidate(path,{gateway=null,loadGeneration,p
     const order=requestCancel(account,orderId);if(order.status!=='cancel-requested')return {order:safeOrder(order)};
     const evidence=await gateway.close(providerOrder(order));return applyEvidence(orderId,evidence,'close','close:'+hash(evidence));
   });
-  const reserve=atomic((account,generationId,maximum)=>{
-    const maximumNano=nano(maximum);if(maximumNano<=0n)fail('BILLING_AMOUNT_INVALID','Positive server-calculated reservation required');
+  const reserve=atomic((account,generationId,maximum,limits=null)=>{
     const old=db.prepare('SELECT * FROM geod_credit_reservations WHERE account=? AND generation_id=?').get(account,generationId);
+    if(limits&&(!Number.isSafeInteger(limits.inputTokens)||limits.inputTokens<0||limits.inputTokens>1000000||!Number.isSafeInteger(limits.maxOutputTokens)||limits.maxOutputTokens<256||limits.maxOutputTokens>32768))fail('BILLING_AMOUNT_INVALID','Invalid server request bounds');
+    if(old&&limits){
+      const stored=JSON.parse(old.pricing_snapshot??'null')?.requestBounds;
+      if(!stored||stored.inputTokens!==limits.inputTokens||stored.requestedMaxOutputTokens!==limits.maxOutputTokens)fail('BILLING_IDEMPOTENCY_CONFLICT','Generation request bounds conflict',409);
+      return {state:old.state,replayed:true,maximumNanoCny:String(old.maximum_nano),maxOutputTokens:stored.maxOutputTokens};
+    }
+    let bounds=null,maximumNano;
+    if(limits){
+      const inputCost=BigInt(limits.inputTokens)*BigInt(currentPricing.retailNanoPerToken.uncachedInput);
+      const outputRate=BigInt(currentPricing.retailNanoPerToken.output);
+      const available=balance(account)-reserved(account);
+      if(available<=0n)fail(balance(account)>0n?'BILLING_CREDIT_IN_USE':'BILLING_INSUFFICIENT_CREDIT',balance(account)>0n?'AI credit is held by unresolved requests':'AI credit balance is exhausted',409);
+      // The estimate coordinates concurrent requests; it is not an admission
+      // threshold or a shorter response budget. Any positive available balance
+      // admits the request with the model's normal configured output capacity.
+      const estimated=inputCost+BigInt(limits.maxOutputTokens)*outputRate;
+      maximumNano=estimated<available?estimated:available;
+      bounds={inputTokens:limits.inputTokens,requestedMaxOutputTokens:limits.maxOutputTokens,maxOutputTokens:limits.maxOutputTokens,billingPolicy:'wallet-until-empty-v1'};
+    }else maximumNano=nano(maximum);
+    if(maximumNano<=0n)fail('BILLING_AMOUNT_INVALID','Positive server-calculated reservation required');
     if(old){if(BigInt(old.maximum_nano)!==maximumNano)fail('BILLING_IDEMPOTENCY_CONFLICT','Generation reservation conflict',409);return {state:old.state,replayed:true};}
     if(balance(account)-reserved(account)<maximumNano)fail('BILLING_INSUFFICIENT_CREDIT','Insufficient available AI credit',409);
-    db.prepare('INSERT INTO geod_credit_reservations(account,generation_id,maximum_nano,state,created_at,pricing_snapshot) VALUES (?,?,?,\'reserved\',?,?)').run(account,generationId,maximumNano,now(),JSON.stringify(currentPricing));
-    return {state:'reserved',replayed:false,maximumNanoCny:String(maximumNano),pricingVersion:currentPricing.version};
+    db.prepare('INSERT INTO geod_credit_reservations(account,generation_id,maximum_nano,state,created_at,pricing_snapshot) VALUES (?,?,?,\'reserved\',?,?)').run(account,generationId,maximumNano,now(),JSON.stringify(bounds?{...currentPricing,requestBounds:bounds}:currentPricing));
+    return {state:'reserved',replayed:false,maximumNanoCny:String(maximumNano),pricingVersion:currentPricing.version,...(bounds?{maxOutputTokens:bounds.maxOutputTokens}:{} )};
   });
-  async function reserveGeneration(account,generationId,maximum){
+  async function reserveGeneration(account,generationId,maximum,limits=null){
     if(!identity(account)||!identity(generationId))fail('BILLING_GENERATION_INVALID','Invalid generation binding');
     const generation=await loadGeneration(account,generationId);
     if(!generation||generation.generationId!==generationId)fail('BILLING_GENERATION_NOT_FOUND','Generation unavailable for this account',404);
     if(['sponsored','personal'].includes(generation.billingScope))return {state:'externally-funded',replayed:false};
     if(!['reserved','streaming'].includes(generation.state))fail('BILLING_GENERATION_INVALID','Generation is not awaiting provider execution');
     if(generation.model!==currentPricing.model)fail('BILLING_MODEL_UNPRICED','Model has no server price version',409);
-    return reserve(account,generationId,maximum);
+    return reserve(account,generationId,maximum,limits);
   }
+  const settledCharge=(charge,replayed)=>({state:'settled',replayed,chargeNanoCny:String(charge.amount_nano),...(JSON.parse(charge.quote).creditSettlement??{})});
   const settle=atomic((account,generation,quote)=>{
     const old=db.prepare('SELECT * FROM geod_credit_charges WHERE account=? AND generation_id=?').get(account,generation.generationId);
-    if(old)return {state:'settled',replayed:true,chargeNanoCny:String(old.amount_nano)};
+    if(old)return settledCharge(old,true);
     const reservation=db.prepare('SELECT * FROM geod_credit_reservations WHERE account=? AND generation_id=?').get(account,generation.generationId);
     if(generation.state==='failed'&&reservation?.state==='released')return {state:'released',replayed:true,chargeNanoCny:'0'};
     if(!reservation||reservation.state!=='reserved')fail('BILLING_RESERVATION_REQUIRED','Original server reservation required',409);
     if(generation.state==='failed'){db.prepare('UPDATE geod_credit_reservations SET state=\'released\' WHERE account=? AND generation_id=?').run(account,generation.generationId);return {state:'released',chargeNanoCny:'0'};}
-    const amount=nano(quote.retailNanoCny);
-    if(amount>BigInt(reservation.maximum_nano)||balance(account)-reserved(account,generation.generationId)<amount)return {state:'settlement-review',reservationRetained:true};
+    const quoted=nano(quote.retailNanoCny),available=balance(account)-reserved(account,generation.generationId);
+    const walletPolicy=JSON.parse(reservation.pricing_snapshot??'null')?.requestBounds?.billingPolicy==='wallet-until-empty-v1';
+    // Old reservations keep their original strict contract. New requests spend
+    // actual usage up to available wallet funds, never debit another request's
+    // hold, and never create a negative wallet or a debt against future top-ups.
+    if((!walletPolicy&&(quoted>BigInt(reservation.maximum_nano)||available<quoted))||available<0n)return {state:'settlement-review',reservationRetained:true};
+    const amount=walletPolicy&&quoted>available?available:quoted;
+    const creditSettlement=walletPolicy?{billingPolicy:'wallet-until-empty-v1',quotedNanoCny:String(quoted),waivedNanoCny:String(quoted-amount)}:null;
     let remaining=amount;
     for(const lot of db.prepare('SELECT * FROM geod_credit_lots WHERE account=? AND frozen=0 AND remaining_nano>0 ORDER BY CASE WHEN id IN (SELECT lot_id FROM geod_credit_grants) THEN 0 ELSE 1 END,created_at,id').all(account)){
       if(remaining===0n)break;const part=remaining<BigInt(lot.remaining_nano)?remaining:BigInt(lot.remaining_nano);
@@ -196,9 +222,9 @@ export function createPaymentLedgerCandidate(path,{gateway=null,loadGeneration,p
       db.prepare('INSERT INTO geod_credit_allocations VALUES (?,?,?,?)').run(account,generation.generationId,lot.id,part);remaining-=part;
     }
     if(remaining!==0n)fail('BILLING_INSUFFICIENT_CREDIT','Credit changed during settlement',409);
-    db.prepare('INSERT INTO geod_credit_charges VALUES (?,?,?,?,?)').run(account,generation.generationId,amount,JSON.stringify(quote),now());
+    db.prepare('INSERT INTO geod_credit_charges VALUES (?,?,?,?,?)').run(account,generation.generationId,amount,JSON.stringify(creditSettlement?{...quote,creditSettlement}:quote),now());
     db.prepare('UPDATE geod_credit_reservations SET state=\'settled\' WHERE account=? AND generation_id=?').run(account,generation.generationId);
-    return {state:'settled',replayed:false,chargeNanoCny:String(amount)};
+    return {state:'settled',replayed:false,chargeNanoCny:String(amount),...(creditSettlement??{})};
   });
   async function settleGeneration(account,generationId){
     if(!identity(account)||!identity(generationId))fail('BILLING_GENERATION_INVALID','Invalid generation binding');
@@ -207,8 +233,8 @@ export function createPaymentLedgerCandidate(path,{gateway=null,loadGeneration,p
     if(['sponsored','personal'].includes(generation.billingScope))return {state:'externally-funded',chargeNanoCny:'0'};
     if(!['failed','settled'].includes(generation.state))return {state:'waiting-for-provider',reservationRetained:true};
     const reservation=db.prepare('SELECT pricing_snapshot FROM geod_credit_reservations WHERE account=? AND generation_id=?').get(account,generationId);
-    const charged=db.prepare('SELECT amount_nano FROM geod_credit_charges WHERE account=? AND generation_id=?').get(account,generationId);
-    if(charged)return {state:'settled',replayed:true,chargeNanoCny:String(charged.amount_nano)};
+    const charged=db.prepare('SELECT amount_nano,quote FROM geod_credit_charges WHERE account=? AND generation_id=?').get(account,generationId);
+    if(charged)return settledCharge(charged,true);
     if(generation.state==='settled'&&!reservation?.pricing_snapshot)return {state:'settlement-review',code:'BILLING_PRICE_SNAPSHOT_MISSING',reservationRetained:true};
     const quote=generation.state==='failed'?null:quoteFromPricingSnapshot(generation,JSON.parse(reservation.pricing_snapshot));
     if(quote&&quote.status!=='priced')return {state:'waiting-for-usage',reservationRetained:true};
@@ -263,12 +289,12 @@ export function createPaymentLedgerCandidate(path,{gateway=null,loadGeneration,p
     return {generationId:charge.generation_id,chargeNanoCny:String(charge.amount_nano),createdAt:charge.created_at,
       model:quote.model??null,inputTokens:quote.inputTokens,cachedInputTokens:quote.cachedInputTokens,outputTokens:quote.outputTokens,
       reasoningTokens:quote.reasoningTokens??null,pricingVersion:quote.version,
-      pricingDigest:quote.pricingSnapshot?hash(quote.pricingSnapshot):null,ratesNanoPerToken:quote.pricingSnapshot?.retailNanoPerToken??null};
+      pricingDigest:quote.pricingSnapshot?hash(quote.pricingSnapshot):null,ratesNanoPerToken:quote.pricingSnapshot?.retailNanoPerToken??null,...(quote.creditSettlement??{})};
   };
   const safeReservation=reservation=>{
     const price=reservation.pricing_snapshot?JSON.parse(reservation.pricing_snapshot):null;
     return {generationId:reservation.generation_id,maximumNanoCny:String(reservation.maximum_nano),createdAt:reservation.created_at,
-      pricingVersion:price?.version??null,model:price?.model??null};
+      pricingVersion:price?.version??null,model:price?.model??null,requestBounds:price?.requestBounds??null};
   };
   const history=createCreditHistory(path,db,{safeCharge,safeReservation,safeOrder,safeRefund,now});
   const summary=db.transaction(account=>({environment:gateway?.environment??'credits-only',fixture:gateway?.fixture??false,currency:'CNY',

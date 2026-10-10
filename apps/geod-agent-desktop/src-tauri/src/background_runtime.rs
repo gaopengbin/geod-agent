@@ -48,6 +48,10 @@ struct Endpoint { port: u16, pid: u32, protocol: u32, fingerprint: String }
 pub(crate) struct BackgroundClient { dir: PathBuf, stopped: Arc<AtomicBool>, maintenance: Arc<AtomicBool> }
 impl BackgroundClient {
     pub(crate) fn new(dir: PathBuf) -> Self { Self { dir, stopped: Arc::new(AtomicBool::new(false)), maintenance:Arc::new(AtomicBool::new(false)) } }
+    // Read-only monitor: never launches/restarts a companion or replays work.
+    pub(crate) fn observe(&self) -> Result<Value, Value> {
+        self.request("runtime_status", json!({}), Duration::from_secs(2))
+    }
     fn endpoint(&self) -> Result<Endpoint, Value> {
         let bytes = fs::read(self.dir.join("background-endpoint.json"))
             .map_err(|_| failure("BACKGROUND_OFFLINE", "本机后台尚未运行"))?;

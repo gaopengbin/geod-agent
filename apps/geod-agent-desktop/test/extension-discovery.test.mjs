@@ -35,8 +35,13 @@ test("large schema remains intact and an omitted list explicitly reports its siz
   const result = discoveredConnector(connector, { ...list, tools }, "OpenLayers");
   assert.deepEqual(result.tools[0].inputSchema, huge);
   assert.equal(result.toolCount, 40);
-  assert.equal(result.omittedToolCount, 8);
-  assert.match(result.next, /specific tool/);
+  assert.equal(result.tools.length, 6);
+  assert.equal(result.availableTools.length, 40);
+  assert.equal(result.omittedToolCount, 34);
+  assert.match(result.next, /exact available tool/);
+  const exact = discoveredConnector(connector, { ...list, tools }, "builtin-openlayers-mcp tool39");
+  assert.deepEqual(exact.tools.map(tool => tool.name), ["tool39"]);
+  assert.deepEqual(exact.tools[0].inputSchema, huge);
 });
 test("discovery retains matching builtins and isolates connector failures", async () => {
   const installed = { skills: [], connectors: [connector, { id: "broken", name: "Broken MCP", url: "", enabled: true }] };

@@ -31,6 +31,13 @@ pub(crate) struct ExtensionState {
 }
 
 impl ExtensionState {
+    // Configuration-only revision: call history and observation timestamps do
+    // not make an unchanged connector eligible for retry. Only a hash is exposed.
+    pub(crate) fn policy_revision(&self,owner:&str)->Result<String,AppError>{
+        let store=visible_to(self.load()?,Some(owner));
+        let facts=serde_json::json!({"connectors":store.connectors,"settings":store.connector_settings,"skills":store.skills.iter().map(|s|(&s.id,s.enabled,&s.content_sha256)).collect::<Vec<_>>()});
+        Ok(format!("{:x}",Sha256::digest(facts.to_string().as_bytes())))
+    }
     pub(crate) fn gis_skill_status(&self,id:&str,owner:&str)->Option<bool>{
         self.load().ok()?.skills.iter().find(|s|s.id==format!("gis-{owner}-{id}")).map(|s|s.enabled)
     }
@@ -113,6 +120,7 @@ impl ExtensionState {
         self.export_bundle(home, Some(owner))
     }
     fn export_bundle(&self, home: &Path, owner: Option<&str>) -> Result<Value, AppError> {
+        let _guard = self.write_lock.lock().map_err(|_| error("EXTENSIONS_LOCK_FAILED", "扩展设置暂时不可写"))?;
         let store = visible_to(self.load()?, owner);
         let root = home.join("skills");
         fs::create_dir_all(&root).map_err(|_| error("SKILL_IMPORT_FAILED", "无法准备 Skill 运行目录"))?;
@@ -126,14 +134,22 @@ impl ExtensionState {
         }
         for skill in store.skills.iter().filter(|skill| skill.enabled) {
             let folder = root.join(&skill.name);
-            if folder.exists() { fs::remove_dir_all(&folder).map_err(|_| error("SKILL_IMPORT_FAILED", "无法更新 Skill"))?; }
+            let content = plugin_package::runtime_skill_content(self, &store, skill)?;
+            let mut expected = skill.files.clone();
+            expected.insert("SKILL.md".into(), content.into_bytes());
+            // Windows can keep exported skill directories open while an engine
+            // reads them. Reuse only an exact, verified copy instead of deleting
+            // and recreating the same directory before every conversation turn.
+            if runtime_skill_matches(&folder, &expected) { continue; }
             fs::create_dir_all(&folder).map_err(|_| error("SKILL_IMPORT_FAILED", "无法准备 Skill"))?;
-            fs::write(folder.join("SKILL.md"), plugin_package::runtime_skill_content(self,&store,skill)?).map_err(|_| error("SKILL_IMPORT_FAILED", "无法准备 Skill"))?;
-            for (relative, bytes) in &skill.files {
+            remove_stale_skill_resources(&folder, &folder, &expected)?;
+            for (relative, bytes) in &expected {
                 validate_bundle_path(relative)?;
                 let destination = folder.join(relative);
                 if let Some(parent) = destination.parent() { fs::create_dir_all(parent).map_err(|_| error("SKILL_IMPORT_FAILED", "无法准备 Skill 资源"))?; }
-                fs::write(destination, bytes).map_err(|_| error("SKILL_IMPORT_FAILED", "无法准备 Skill 资源"))?;
+                if fs::read(&destination).ok().as_deref() != Some(bytes.as_slice()) {
+                    fs::write(destination, bytes).map_err(|_| error("SKILL_IMPORT_FAILED", "无法准备 Skill 资源"))?;
+                }
             }
         }
         // Private services use GeoD's native dispatcher; Codex receives neither
@@ -1225,6 +1241,40 @@ pub(crate) fn mcp_add(
     });
     if result.is_err() && private {let _=crate::mcp_credentials::remove(&state.path,&id);}
     Ok(scoped_overview(result?,Some(&owner)))
+}
+
+fn runtime_skill_matches(root: &Path, expected: &BTreeMap<String, Vec<u8>>) -> bool {
+    fn collect(root: &Path, path: &Path, actual: &mut BTreeMap<String, Vec<u8>>) -> Option<()> {
+        let metadata = fs::symlink_metadata(path).ok()?;
+        if metadata.file_type().is_symlink() { return None; }
+        if metadata.is_dir() {
+            for entry in fs::read_dir(path).ok()? {
+                collect(root, &entry.ok()?.path(), actual)?;
+            }
+        } else if metadata.is_file() {
+            let relative = path.strip_prefix(root).ok()?.to_str()?.replace('\\', "/");
+            actual.insert(relative, fs::read(path).ok()?);
+        } else { return None; }
+        Some(())
+    }
+    let mut actual = BTreeMap::new();
+    collect(root, root, &mut actual).is_some() && &actual == expected
+}
+
+fn remove_stale_skill_resources(root: &Path, folder: &Path, expected: &BTreeMap<String, Vec<u8>>) -> Result<(), AppError> {
+    let metadata = fs::symlink_metadata(folder).map_err(|_| error("SKILL_IMPORT_FAILED", "无法检查 Skill 资源"))?;
+    if metadata.file_type().is_symlink() || !metadata.is_dir() { return Err(error("SKILL_IMPORT_FAILED", "Skill 运行目录不是普通目录")); }
+    for entry in fs::read_dir(folder).map_err(|_| error("SKILL_IMPORT_FAILED", "无法检查 Skill 资源"))? {
+        let path = entry.map_err(|_| error("SKILL_IMPORT_FAILED", "无法检查 Skill 资源"))?.path();
+        let metadata = fs::symlink_metadata(&path).map_err(|_| error("SKILL_IMPORT_FAILED", "无法检查 Skill 资源"))?;
+        if metadata.file_type().is_symlink() { return Err(error("SKILL_IMPORT_FAILED", "Skill 资源不能使用符号链接")); }
+        if metadata.is_dir() { remove_stale_skill_resources(root, &path, expected)?; }
+        else {
+            let relative = path.strip_prefix(root).ok().and_then(Path::to_str).ok_or_else(|| error("SKILL_IMPORT_FAILED", "Skill 资源路径无效"))?.replace('\\', "/");
+            if !expected.contains_key(&relative) { fs::remove_file(path).map_err(|_| error("SKILL_IMPORT_FAILED", "无法更新 Skill 资源"))?; }
+        }
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -2482,6 +2532,43 @@ mod tests {
         let imported = loaded.skills.iter().find(|item| item.name == "saved-skill").unwrap();
         assert!(!imported.enabled);
         assert!(imported.content.contains("Read instructions."));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn unchanged_skill_export_succeeds_with_an_open_windows_reader() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let state = ExtensionState::new(dir.path().join("extensions.json"));
+        let home = dir.path().join("home");
+        state.codex_bundle(&home).unwrap();
+        let file = home.join("skills/geod-source-creator/SKILL.md");
+        let reader = fs::OpenOptions::new().read(true).share_mode(1).open(&file).unwrap();
+        state.codex_bundle(&home).unwrap();
+        drop(reader);
+        fs::write(&file, b"tampered content").unwrap();
+        fs::write(file.parent().unwrap().join("unexpected.js"), b"unexpected resource").unwrap();
+        state.codex_bundle(&home).unwrap();
+        assert!(fs::read_to_string(&file).unwrap().contains("geod-source-creator"));
+        assert!(!file.parent().unwrap().join("unexpected.js").exists());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn changed_skill_export_preserves_a_windows_directory_handle() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let state = ExtensionState::new(dir.path().join("extensions.json"));
+        let home = dir.path().join("home");
+        state.codex_bundle(&home).unwrap();
+        let folder = home.join("skills/geod-source-creator");
+        let reader = fs::OpenOptions::new().read(true).share_mode(3).custom_flags(0x02000000).open(&folder).unwrap();
+        fs::write(folder.join("SKILL.md"), b"old version").unwrap();
+        fs::write(folder.join("stale.js"), b"old resource").unwrap();
+        state.codex_bundle(&home).unwrap();
+        assert!(fs::read_to_string(folder.join("SKILL.md")).unwrap().contains("geod-source-creator"));
+        assert!(!folder.join("stale.js").exists());
+        drop(reader);
     }
 
     #[test]

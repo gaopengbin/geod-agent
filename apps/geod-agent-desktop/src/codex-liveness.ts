@@ -6,20 +6,26 @@ export interface TurnGuardOptions {
   probeTimeoutMs?: number;
   startupTimeoutMs?: number;
   silenceTimeoutMs?: number;
+  stopTimeoutMs?: number;
 }
 
 /** A lost native IPC promise must not keep the composer busy forever. */
 export function guardedCodexTurn<T>(start: (activity: () => void) => Promise<T>, options: TurnGuardOptions): Promise<T> {
   const started = Date.now(); let lastActivity = started; let received = false; let probing = false;
   return new Promise<T>((resolve, reject) => {
-    let settled = false;
+    let settled = false; let recovering = false;
     const finish = (error: unknown, value?: T) => {
       if (settled) return; settled = true; clearInterval(timer);
       error ? reject(error) : resolve(value as T);
     };
     const fail = (message: string) => {
-      if (settled) return;
-      finish(new Error(message)); void options.interrupt().catch(() => {});
+      if (settled || recovering) return;
+      recovering = true; clearInterval(timer);
+      let stopTimer: ReturnType<typeof setTimeout>;
+      // Keep the composer occupied while native cancellation releases its lease.
+      Promise.race([Promise.resolve().then(options.interrupt),new Promise(resolve=>{
+        stopTimer=setTimeout(resolve,options.stopTimeoutMs??8_000);
+      })]).catch(()=>{}).finally(()=>{clearTimeout(stopTimer);finish(new Error(message));});
     };
     const timer = setInterval(() => {
       if (!received && Date.now() - started > (options.startupTimeoutMs ?? 35_000)) {
@@ -37,6 +43,6 @@ export function guardedCodexTurn<T>(start: (activity: () => void) => Promise<T>,
         .catch(() => { if (!settled) fail("本机引擎连接已中断，已结束等待。请重新打开 GeoD Agent 后继续。"); })
         .finally(() => { clearTimeout(timeout); probing = false; });
     }, options.tickMs ?? 2_000);
-    Promise.resolve().then(() => start(() => { lastActivity = Date.now(); received = true; })).then(value => finish(null, value), error => finish(error));
+    Promise.resolve().then(() => start(() => { lastActivity = Date.now(); received = true; })).then(value => {if(!recovering)finish(null, value);}, error => {if(!recovering)finish(error);});
   });
 }

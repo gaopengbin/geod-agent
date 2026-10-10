@@ -11,6 +11,9 @@
   padding: 32px 24px 20px;
 }
 .login-screen::-webkit-scrollbar { display: none; }
+/* Keep a borderless login window draggable without adding a visible titlebar. */
+.login-window-drag-region { position: fixed; inset: 0 0 auto; height: 32px; z-index: 3; }
+.login-window-controls { position: fixed; top: 0; right: 0; height: 42px; display: flex; z-index: 4; }
 .login-content {
   width: min(380px, 100%);
   margin: auto 0;
@@ -18,7 +21,7 @@
   text-align: center;
   animation: login-enter 240ms var(--app-ease) both;
 }
-.login-symbol { display: block; margin: 0 auto 24px; border-radius: 14px; }
+.login-symbol { display: block; margin: 0 auto 24px; }
 .login-content h1 { margin: 0; font-size: 26px; font-weight: 600; line-height: 1.4; letter-spacing: -.025em; }
 .login-summary { margin: 12px 0 32px; font-size: 15px; line-height: 1.7; color: var(--app-soft-text); }
 .login-controls { display: grid; gap: 16px; text-align: left; }

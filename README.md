@@ -9,7 +9,7 @@
   <img alt="Windows x64" src="https://img.shields.io/badge/platform-Windows_x64-202124?style=flat-square" />
   <a href="https://github.com/gaopengbin/geod-agent/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/gaopengbin/geod-agent?style=flat-square&color=1a73e8" /></a>
 </p>
-<p align="center"><a href="https://geod.laogao.xyz/agent"><strong>官网</strong></a> · <a href="https://github.com/gaopengbin/geod-agent/releases/tag/v0.2.3"><strong>下载 Windows 测试版</strong></a> · <a href="https://geod.laogao.xyz/agent#demo">观看实录</a> · <a href="https://github.com/gaopengbin/geod-agent/issues">反馈问题</a> · <a href="README.EN.md">English</a></p>
+<p align="center"><a href="https://geod.laogao.xyz/agent"><strong>官网</strong></a> · <a href="https://github.com/gaopengbin/geod-agent/releases/tag/v0.2.4"><strong>下载 Windows 测试版</strong></a> · <a href="https://geod.laogao.xyz/agent#demo">观看实录</a> · <a href="https://github.com/gaopengbin/geod-agent/issues">反馈问题</a> · <a href="README.EN.md">English</a></p>
 
 ![GeoD Agent 对话、地图与任务工作区](docs/images/workbench-light-20261008.png)
 
@@ -30,9 +30,9 @@ GeoD Agent 是独立的 Windows 桌面应用。描述区域、数据类型和用
 | 版本 | 状态 | 入口 |
 | --- | --- | --- |
 | **0.2.3** | Windows x64 公开测试版 | [下载安装包](https://geod.laogao.xyz/agent-updates/windows-x86_64/0.2.3/GeoD%20Agent_0.2.3_x64-setup.exe) · [版本说明](docs/releases/0.2.3.md) |
-| **0.2.4** | 本地候选，尚未发布本次改进 | [本次候选说明](docs/releases/0.2.4.md) |
+| **0.2.4** | Windows x64 公开测试版 | [下载安装包](https://geod.laogao.xyz/agent-updates/windows-x86_64/0.2.4/GeoD%20Agent_0.2.4_x64-setup.exe) · [版本说明](docs/releases/0.2.4.md) |
 
-本页描述当前代码，包含 0.2.4 改进。现有公开安装包的功能以 0.2.3 说明为准。源代码以 [MIT 许可证](LICENSE)公开，[GitHub 发行资源](https://github.com/gaopengbin/geod-agent/releases/tag/v0.2.3)可直接下载。0.2.4 仍为开发候选，尚未完成全新 Windows 验收。
+当前公开测试版为 **0.2.4**，包含按需模型上下文、任务状态同步、独立登录页、开屏与托盘等改进。源代码以 [MIT 许可证](LICENSE)公开，[GitHub 发行资源](https://github.com/gaopengbin/geod-agent/releases/tag/v0.2.4)可直接下载。全新 Windows 验收尚未完成，具体验证范围见版本说明。
 
 ## 对话能做什么
 
@@ -150,7 +150,7 @@ GeoD Agent 与[旧 GeoD 桌面端 / CLI / MCP](https://github.com/gaopengbin/geo
 
 ### 文档导航
 
-- [0.2.4 本次候选与验证范围](docs/releases/0.2.4.md)
+- [0.2.4 版本说明与验证范围](docs/releases/0.2.4.md)
 - [功能清单与验收记录](docs/implementation/2026-10-03-functional-roadmap.md)
 - [GIS 技能拆分](docs/implementation/2026-10-06-slim-gis-skills.md)
 - [坐标系与仅修改缩放等级](docs/implementation/2026-10-07-imagery-zoom-revision.md)

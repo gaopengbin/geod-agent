@@ -29,6 +29,7 @@ await page.addInitScript(() => {
     convertFileSrc: () => "",
     invoke: async (command, args) => {
       fixture.calls.push(command);
+      if (command === "desktop_tray_locale_set") return;
       if (command === "account_profile") {
         const kind = fixture.profileKind, fail = fixture.profileError, id = args.accountId;
         await new Promise(resolve => setTimeout(resolve, fixture.profileDelay));

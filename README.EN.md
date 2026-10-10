@@ -9,7 +9,7 @@
   <img alt="Windows x64" src="https://img.shields.io/badge/platform-Windows_x64-202124?style=flat-square" />
   <a href="https://github.com/gaopengbin/geod-agent/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/gaopengbin/geod-agent?style=flat-square&color=1a73e8" /></a>
 </p>
-<p align="center"><a href="https://geod.laogao.xyz/en/agent"><strong>Website</strong></a> · <a href="https://github.com/gaopengbin/geod-agent/releases/tag/v0.2.3"><strong>Download Windows beta</strong></a> · <a href="https://geod.laogao.xyz/en/agent#demo">Watch demo</a> · <a href="https://github.com/gaopengbin/geod-agent/issues">Report an issue</a> · <a href="README.md">简体中文</a></p>
+<p align="center"><a href="https://geod.laogao.xyz/en/agent"><strong>Website</strong></a> · <a href="https://github.com/gaopengbin/geod-agent/releases/tag/v0.2.4"><strong>Download Windows beta</strong></a> · <a href="https://geod.laogao.xyz/en/agent#demo">Watch demo</a> · <a href="https://github.com/gaopengbin/geod-agent/issues">Report an issue</a> · <a href="README.md">简体中文</a></p>
 
 ![Conversation, map and task workspace](docs/images/workbench-light-20261008.png)
 
@@ -30,9 +30,9 @@ Start from an empty conversation: configure imagery sources, prepare an MCP conn
 | Version | Status | Details |
 | --- | --- | --- |
 | **0.2.3** | Public Windows x64 beta | [Download installer](https://geod.laogao.xyz/agent-updates/windows-x86_64/0.2.3/GeoD%20Agent_0.2.3_x64-setup.exe) · [Release notes](docs/releases/0.2.3.md) |
-| **0.2.4** | Local candidate; these changes have not been published | [Candidate notes](docs/releases/0.2.4.md) |
+| **0.2.4** | Public Windows x64 beta | [Download installer](https://geod.laogao.xyz/agent-updates/windows-x86_64/0.2.4/GeoD%20Agent_0.2.4_x64-setup.exe) · [Release notes](docs/releases/0.2.4.md) |
 
-This README describes current code, including 0.2.4 changes. The public installer follows the 0.2.3 release notes. Source code is public under the [MIT license](LICENSE), and [GitHub release assets](https://github.com/gaopengbin/geod-agent/releases/tag/v0.2.3) are available directly. Version 0.2.4 remains a development candidate; clean Windows acceptance is pending.
+The current public beta is **0.2.4**, with on-demand model context, current task-state synchronization, a dedicated login screen, startup animation and system tray support. Source code is public under the [MIT license](LICENSE), and [GitHub release assets](https://github.com/gaopengbin/geod-agent/releases/tag/v0.2.4) are available directly. Clean Windows acceptance is pending; see the release notes for the verified scope.
 
 ## What can you configure through conversation?
 
@@ -147,7 +147,7 @@ Contributions through [Issues](https://github.com/gaopengbin/geod-agent/issues) 
 | `docs/implementation` | Validation evidence, limitations and recovery records |
 
 - [Independent development entry point](docs/implementation/2026-10-06-independent-development-host.md)
-- [0.2.4 candidate and validation scope](docs/releases/0.2.4.md)
+- [0.2.4 release notes and validation scope](docs/releases/0.2.4.md)
 - [Feature validation index](docs/implementation/2026-10-03-functional-roadmap.md)
 - [GIS skill split](docs/implementation/2026-10-06-slim-gis-skills.md)
 - [Zoom-only revisions](docs/implementation/2026-10-07-imagery-zoom-revision.md)

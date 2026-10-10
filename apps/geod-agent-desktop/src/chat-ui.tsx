@@ -2,7 +2,7 @@ import { t, localize } from "./i18n";
 // i18n: presentation strings migrated
 import { Activity, ArrowRight, Bot, Check, CheckCircle2, ChevronDown, CircleAlert, Copy } from "./icons";
 import "./codex-work.css";
-import { Fragment, useEffect, useId, useState, type ReactNode } from "react";
+import { Fragment, memo, useEffect, useId, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -13,7 +13,6 @@ import { UiTooltip } from "./ui-tooltip";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { api, errorMessage, type SourceRegistrationDraft } from "./api";
 import type { DisplayMessage, ExtensionProposal } from "./pending-generations";
-import { BackgroundJobRow } from "./background-job-row";
 import {ImageAttachments} from "./image-attachments";
 import {DocumentAttachments} from "./document-attachments";
 import { collapsePollingHistory, type BackgroundSnapshot } from "./background-jobs";
@@ -22,6 +21,14 @@ import {UserInputRequest} from './user-input-request';
 import type {UserInputDraft} from './user-input-records';
 import {McpKeyDialog} from './mcp-key-dialog';
 import {mcpProvider} from './mcp-provider-presets';
+import {conversationBusyFailure} from './codex-recovery';
+import {turnUsageSources,type TurnTokenUsage} from './turn-token-usage';
+import {TurnTokenUsageFooter} from './turn-token-usage-footer';
+
+// Streaming and layout updates must not reparse every completed Markdown block.
+const MarkdownContent = memo(function MarkdownContent({ children }: { children: string }) {
+  return <ReactMarkdown remarkPlugins={[remarkGfm]}>{children}</ReactMarkdown>;
+});
 
 function PollingHistory({ item }: { item: DisplayMessage }) {
   const [open, setOpen] = useState(false);
@@ -64,8 +71,8 @@ function WorkDetails({ item }: { item: DisplayMessage }) {
   if (item.monitorTrace || item.itemType === "reasoning") return <ScrollArea className="agent-work-reasoning-area" viewportProps={{ "aria-label": t(item.monitorTrace ? "执行记录详情" : "模型思考详情") }}>
     <div className="agent-work-reasoning agent-work-content geod-message-body">
       {item.monitorTrace
-        ? item.monitorTrace.map(entry => <ReactMarkdown key={entry.id} remarkPlugins={[remarkGfm]}>{entry.content}</ReactMarkdown>)
-        : <ReactMarkdown remarkPlugins={[remarkGfm]}>{item.details}</ReactMarkdown>}
+        ? item.monitorTrace.map(entry => <MarkdownContent key={entry.id}>{entry.content}</MarkdownContent>)
+        : <MarkdownContent>{item.details ?? ""}</MarkdownContent>}
     </div>
   </ScrollArea>;
   const sections: { label: string; content: string }[] = [];
@@ -107,9 +114,9 @@ function WorkRecord({ item, active }: { item: DisplayMessage; active: boolean })
   const attention = item.toolStatus === "attention" || (!active && item.toolStatus === "running");
   const reasoning = item.itemType === "reasoning";
   const hasDetails = !!item.details || item.itemType === "commandExecution" || !!item.monitorTrace?.length;
-  const icon = running ? <MessageTyping label={t("正在执行")} /> : attention ? <CircleAlert size={16}/> : reasoning ? <Activity size={16}/> : <CheckCircle2 size={16}/>;
+  const icon = attention ? <CircleAlert size={16}/> : reasoning ? <Activity size={16}/> : running ? <MessageTyping label={t("正在执行")} /> : <CheckCircle2 size={16}/>;
   if (item.role === "assistant") return <motion.div className={`agent-work-record agent-work-note ${item.streaming ? "is-streaming" : ""}`} initial={active ? { opacity: 0, y: 6 } : false} animate={{ opacity: 1, y: 0 }} transition={{ duration: .24 }}>
-    <span className="agent-work-record-icon"><Activity size={15}/></span><div className="agent-work-content geod-message-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{item.content}</ReactMarkdown></div>
+    <span className="agent-work-record-icon"><Activity size={15}/></span><div className="agent-work-content geod-message-body"><MarkdownContent>{item.content}</MarkdownContent></div>
   </motion.div>;
   const row = <><span className={`agent-work-record-icon ${running ? "is-running" : ""}`}>{icon}</span><span className="agent-work-record-title">{workTitle(item)}</span>{hasDetails && <ChevronDown size={14} className={open ? "is-open" : ""}/>}</>;
   return <motion.div className={`agent-work-record ${attention ? "attention" : ""}`} initial={active ? { opacity: 0, y: 6 } : false} animate={{ opacity: 1, y: 0 }} transition={{ duration: .24 }}>
@@ -118,31 +125,31 @@ function WorkRecord({ item, active }: { item: DisplayMessage; active: boolean })
   </motion.div>;
 }
 
-function WorkRecords({ group, active, activity }: { group: TurnWork; active: boolean; activity: string }) {
+function WorkRecords({ group, active, renderInput }: { group: TurnWork; active: boolean; renderInput: (item: DisplayMessage) => ReactNode }) {
   const [open, setOpen] = useState(active);
   const bodyId = useId();
   const { items } = group;
-  const operations = items.filter(item => item.role === "tool" && item.itemType !== "reasoning").length;
+  const operations = items.filter(item => item.role === "tool" && item.itemType !== "reasoning" && !item.userInput).length;
   const failed = items.some(item => item.toolStatus === "attention" || (!active && item.toolStatus === "running"));
   // Completion closes the whole turn once; a finished turn can still be reopened.
   useEffect(() => { setOpen(active); }, [active]);
   return <section className={`agent-work-records ${active ? "is-active" : ""}`} data-work-turn={group.id} aria-label={t("本轮思考与执行")}>
     <Button variant="ghost" size="sm" whileHover={undefined} whileTap={undefined} className="agent-work-records-trigger" aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen(!open)}>
-      <span className="agent-work-records-icon">{active ? <MessageTyping label={t("正在处理")} /> : <Activity size={16}/>}</span>
-       <span className="agent-work-records-label">{active ? localize(activity) || t("正在处理") : t("思考与执行")}</span>
+      <span className="agent-work-records-icon"><Activity size={16}/></span>
+      <span className="agent-work-records-label">{t("思考与执行")}</span>
       {operations > 0 && <span className="agent-work-count">{operations} {t(" 项操作")}</span>}
       {!active && failed && <span className="agent-work-warning"><CircleAlert size={14}/>{t("有异常记录")}</span>}
       <ChevronDown size={14} className={open ? "is-open" : ""}/>
     </Button>
     <AnimatePresence initial={false}>{open && <motion.div id={bodyId} className="agent-work-records-body" {...disclosureMotion}>
-      <div className="agent-work-timeline">{items.map(item => <WorkRecord key={item.id} item={item} active={active}/>)}</div>
+      <div className="agent-work-timeline">{items.map(item => item.userInput ? <Fragment key={item.id}>{renderInput(item)}</Fragment> : <WorkRecord key={item.id} item={item} active={active}/>)}</div>
     </motion.div>}</AnimatePresence>
   </section>;
 }
 
 function activeWorkId(entries: ReturnType<typeof groupWorkRecords>, busy: boolean, activeTurnId?: string | null) {
   if (!busy) return undefined;
-  if (activeTurnId) return activeTurnId;
+  if (activeTurnId) return entries.find(entry => isTurnWork(entry) && (entry.id === activeTurnId || entry.turnIds.includes(activeTurnId)))?.id ?? activeTurnId;
   for (let index = entries.length - 1; index >= 0; index--) {
     const entry = entries[index];
     if (isTurnWork(entry)) return entry.id;
@@ -179,30 +186,39 @@ function ExtensionReview({ proposal, busy, onApprove,onConfigured,conversationId
   </div>;
 }
 
-export function ChatTranscript({ conversationId, messages, busy, activity, activeTurnId, onReviewSource, onApproveExtension, onConfigureExtension, backgroundJobs = {}, onOpenJob, afterEntry, planTitles = {}, children, openInputId, onOpenInput, onInputReply, onInputDraft, canAnswerInput, onContinueTurn, canContinueTurn=true }: { conversationId: string; messages: DisplayMessage[]; busy: boolean; activity: string; activeTurnId?: string | null; onReviewSource: (draft: SourceRegistrationDraft) => void; onApproveExtension: (proposal: ExtensionProposal) => void; onConfigureExtension?:(old:ExtensionProposal,next:ExtensionProposal)=>void; backgroundJobs?: Record<string, BackgroundSnapshot>; onOpenJob?: (jobId: string) => void; afterEntry?: (id: string) => ReactNode; planTitles?: Record<string, string>; children?: ReactNode;openInputId?:string|null;onOpenInput?:(id:string|null)=>void;onInputReply?:(id:string,value:unknown)=>Promise<void>;onInputDraft?:(id:string,value:UserInputDraft)=>void;canAnswerInput?:(id:string)=>boolean;onContinueTurn?:()=>void;canContinueTurn?:boolean }) {
+export function ChatTranscript({ conversationId, messages, busy, activity, activeTurnId, onReviewSource, onApproveExtension, onConfigureExtension, afterEntry, children, openInputId, onOpenInput, onInputReply, onInputDraft, canAnswerInput, onContinueTurn, canContinueTurn=true, onTokenUsage }: { conversationId: string; messages: DisplayMessage[]; busy: boolean; activity: string; activeTurnId?: string | null; onReviewSource: (draft: SourceRegistrationDraft) => void; onApproveExtension: (proposal: ExtensionProposal) => void; onConfigureExtension?:(old:ExtensionProposal,next:ExtensionProposal)=>void; backgroundJobs?: Record<string, BackgroundSnapshot>; onOpenJob?: (jobId: string) => void; afterEntry?: (id: string) => ReactNode; planTitles?: Record<string, string>; children?: ReactNode;openInputId?:string|null;onOpenInput?:(id:string|null)=>void;onInputReply?:(id:string,value:unknown)=>Promise<void>;onInputDraft?:(id:string,value:UserInputDraft)=>void;canAnswerInput?:(id:string)=>boolean;onContinueTurn?:()=>void;canContinueTurn?:boolean;onTokenUsage?:(id:string,usage:TurnTokenUsage)=>void }) {
   const entries = groupWorkRecords(collapsePollingHistory(uniqueDisplayMessages(messages)));
+  const usageSources=turnUsageSources(messages);
+  const tokenFooter=(item:DisplayMessage)=>!item.streaming&&!(activeTurnId&&usageSources[item.id]?.runIds.includes(activeTurnId))&&<TurnTokenUsageFooter key={`usage-${item.id}`} conversationId={conversationId} messageId={item.id} source={usageSources[item.id]??{runIds:[],receipts:[]}} saved={item.tokenUsage} onUsage={onTokenUsage}/>;
   const executionActive = busy || !!activeTurnId;
+  const followKey = messages.filter(item => item.role === "user" || item.userInput?.status === "answered").map(item => item.id).join("|");
   const liveWorkId = activeWorkId(entries, executionActive, activeTurnId);
   const activityLabel = localize(activity) || t("正在处理…");
+  const lastCompletedAnswer = [...messages].reverse().find(item => item.role === "assistant" && item.phase !== "progress" && !item.streaming)?.id;
+  // Close a reviewed answer once on completion; users can reopen it afterwards.
+  useEffect(() => {
+    if (messages.some(item => item.id === openInputId && item.userInput && item.userInput.status !== "pending")) onOpenInput?.(null);
+  }, [conversationId, lastCompletedAnswer]);
+  const renderInput = (item: DisplayMessage) => <UserInputRequest record={item.userInput!} open={openInputId===item.id} onOpen={open=>onOpenInput?.(open?item.id:null)} onReply={value=>onInputReply?.(item.id,value)??Promise.resolve()} onDraft={value=>onInputDraft?.(item.id,value)} disabled={canAnswerInput?!canAnswerInput(item.id):false}/>;
   let resumableOutcome:string|undefined;
   for(let index=messages.length-1;index>=0;index--){
     const item=messages[index];
     if(item.role==='user'||item.role==='assistant'&&item.phase==='final')break;
-    if(item.turnOutcome){resumableOutcome=item.id;break;}
+    if(item.turnOutcome){if(!conversationBusyFailure(item.turnOutcome))resumableOutcome=item.id;break;}
   }
-  return <><MessageScroller key={conversationId} className="agent-messages" viewportClassName="agent-messages-viewport" contentClassName="agent-messages-content" label={t("GeoD Agent 工作记录")} busy={executionActive}>
+  return <><MessageScroller key={conversationId} className="agent-messages" viewportClassName="agent-messages-viewport" contentClassName="agent-messages-content" label={t("GeoD Agent 工作记录")} busy={executionActive} followKey={followKey}>
     <motion.div className="agent-transcript-stage" initial={{ opacity: 0, x: 24, scale: 0.985 }} animate={{ opacity: 1, x: 0, scale: 1 }} transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}>
     {messages.length ? <MessageGroup spacing="default" className="geod-message-group">
       {entries.map(item => <Fragment key={item.id}>{isTurnWork(item)
-        ? <WorkRecords key={`work-${conversationId}-${item.id}`} group={item} active={item.id === liveWorkId} activity={activity}/>
+        ? <WorkRecords key={`work-${conversationId}-${item.id}`} group={item} active={item.id === liveWorkId} renderInput={renderInput}/>
         : item.turnOutcome
-        ? <TurnOutcomeCard item={item} onContinue={item.id===resumableOutcome?onContinueTurn:undefined} canContinue={canContinueTurn&&!executionActive}/>
+        ? conversationBusyFailure(item.turnOutcome) ? null : <div><TurnOutcomeCard item={item} onContinue={item.id===resumableOutcome?onContinueTurn:undefined} canContinue={canContinueTurn&&!executionActive}/><div className="agent-message-actions">{tokenFooter(item)}</div></div>
         : item.userInput
-        ? <UserInputRequest record={item.userInput} open={openInputId===item.id} onOpen={open=>onOpenInput?.(open?item.id:null)} onReply={value=>onInputReply?.(item.id,value)??Promise.resolve()} onDraft={value=>onInputDraft?.(item.id,value)} disabled={canAnswerInput?!canAnswerInput(item.id):false}/>
+        ? renderInput(item)
         : item.monitorTrace
         ? <PollingHistory key={item.id} item={item}/>
         : item.backgroundJob
-        ? <BackgroundJobRow key={item.id} task={item.backgroundJob} title={planTitles[item.backgroundJob.planId]} snapshot={backgroundJobs[item.backgroundJob.jobId]} onOpen={onOpenJob} />
+        ? null
         : item.role === "user"
         ? <Message key={item.id} from="user" className="geod-message geod-message-user" initial={busy ? { opacity: 0, x: 30, y: 16, scale: 0.9 } : false} animate={{ opacity: 1, x: 0, y: 0, scale: 1 }} transition={{ type: "spring", stiffness: 390, damping: 24, mass: 0.72 }}>
             <MessageContent><MessageHeader>{t("你")}</MessageHeader>{item.images?.length?<ImageAttachments images={item.images}/>:null}{item.documents?.length?<DocumentAttachments documents={item.documents}/>:null}<MessageBubble variant="soft" animateIn={false} className="geod-message-bubble"><MessageBubbleContent className="geod-message-body">{item.content}</MessageBubbleContent></MessageBubble></MessageContent>
@@ -214,8 +230,8 @@ export function ChatTranscript({ conversationId, messages, busy, activity, activ
             </motion.div>
           : <motion.article className={`agent-work-entry ${item.phase === "progress" ? "progress" : "final"} ${busy && messages.at(-1)?.id === item.id ? "is-live" : ""} ${item.streaming ? "is-streaming" : ""}`} key={item.id} initial={busy ? { opacity: 0, y: 24, scale: 0.975, filter: "blur(5px)" } : false} animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }} transition={{ type: "spring", stiffness: 310, damping: 28, mass: 0.85 }}>
               {item.phase !== "progress" && <div className="agent-work-label"><Bot size={17} /><span>GeoD Agent</span></div>}
-              <div className="agent-work-content geod-message-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{item.content}</ReactMarkdown></div>
-              {item.phase !== "progress" && !item.streaming && <CopyMessage content={item.content} />}
+              <div className="agent-work-content geod-message-body"><MarkdownContent>{item.content}</MarkdownContent></div>
+              {item.phase !== "progress" && !item.streaming && <div className="agent-message-actions"><CopyMessage content={item.content}/>{tokenFooter(item)}</div>}
             </motion.article>}{afterEntry?.(item.id)}</Fragment>)}
     </MessageGroup> : <div className="agent-welcome"><Bot size={28} /><h3>{t("描述你要获取的影像")}</h3><p>{t("也可以直接说需要什么 Skill 或 MCP 能力，Agent 会查找并准备接入。")}</p></div>}
     {children}

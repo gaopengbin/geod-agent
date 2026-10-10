@@ -11,23 +11,25 @@ import {createPaymentLedgerCandidate} from '../payment-ledger-candidate.mjs';
 import {readWelcomeCreditPolicy} from '../welcome-credit-policy.mjs';
 import {fixture} from './helpers/payment-fixture.mjs';
 
-async function host({credits='20000',quotaMode='enforced',contextWindow=128000,maxRecipients='100'}={}){
+async function host({credits='20000',quotaMode='enforced',contextWindow=128000,maxOutputTokens=256,maxRecipients='100'}={}){
   const root=mkdtempSync(join(tmpdir(),'geod-welcome-credit-'));
   const secret=randomBytes(32).toString('hex');
   const sessions=new Map(),deviceA=randomBytes(32).toString('base64url'),deviceB=randomBytes(32).toString('base64url'),other=randomBytes(32).toString('base64url');
   sessions.set(deviceA,{userId:'new-agent-account'});sessions.set(deviceB,{userId:'new-agent-account'});sessions.set(other,{userId:'another-account'});
   const environment={GEOD_AGENT_GATEWAY_SECRET:secret,DEEPSEEK_API_KEY:'isolated-protocol-fixture',GEOD_IDENTITY_ORIGIN:'http://127.0.0.1:41000',
     DEEPSEEK_BASE_URL:'http://127.0.0.1:41001',GEOD_AGENT_DB_PATH:join(root,'model.sqlite'),GEOD_AGENT_QUOTA_MODE:quotaMode,
-    GEOD_AGENT_CONTEXT_WINDOW:String(contextWindow),GEOD_AGENT_MAX_OUTPUT_TOKENS:'256',GEOD_AGENT_WELCOME_CREDITS:credits,GEOD_AGENT_WELCOME_MAX_RECIPIENTS:maxRecipients};
-  let calls=0,upstream='ok',usage={prompt_tokens:10000,completion_tokens:100,prompt_cache_hit_tokens:8000};
+    GEOD_AGENT_CONTEXT_WINDOW:String(contextWindow),GEOD_AGENT_MAX_OUTPUT_TOKENS:String(maxOutputTokens),GEOD_AGENT_WELCOME_CREDITS:credits,GEOD_AGENT_WELCOME_MAX_RECIPIENTS:maxRecipients};
+  let calls=0,upstream='ok',usage={prompt_tokens:10000,completion_tokens:100,prompt_cache_hit_tokens:8000},lastRequest;
   const fetchImpl=async(url,options)=>{
     if(url.endsWith('/api/geod/oauth/introspect')){
       const account=sessions.get(JSON.parse(options.body).token);
       return Response.json({active:account?{clientId:'geod-agent-desktop',scope:'geod:agent',expiresAt:Date.now()+60000,...account}:null});
     }
     assert(url.endsWith('/chat/completions'));++calls;
+    lastRequest=JSON.parse(options.body);
     if(upstream==='lost')throw new Error('isolated response lost');
     if(upstream==='reject')return Response.json({error:'isolated rejection'},{status:400});
+    if(lastRequest.stream)return new Response('data: '+JSON.stringify({id:'isolated-model-'+calls,model:'deepseek-flash',choices:[{delta:{content:'你好！有什么需要帮忙的？'}}]})+'\n\n'+'data: '+JSON.stringify({id:'isolated-model-'+calls,model:'deepseek-flash',usage,choices:[{delta:{},finish_reason:'stop'}]})+'\n\ndata: [DONE]\n\n',{headers:{'content-type':'text/event-stream'}});
     return Response.json({id:'isolated-model-'+calls,model:'deepseek-flash',usage,
       choices:[{message:{role:'assistant',content:'Isolated model protocol response',tool_calls:[]}}]});
   };
@@ -37,10 +39,10 @@ async function host({credits='20000',quotaMode='enforced',contextWindow=128000,m
   await start();
   async function request(path,{method='GET',value,token=deviceA}={}){
     const res=await fetch(base+path,{method,headers:{authorization:'Bearer '+token,'content-type':'application/json'},...(value!==undefined?{body:JSON.stringify(value)}:{})});
-    return {status:res.status,data:await res.json()};
+    return {status:res.status,data:res.headers.get('content-type')?.includes('text/event-stream')?await res.text():await res.json()};
   }
   const generate=(generationId=randomUUID())=>request('/api/agent/generations',{method:'POST',value:{generationId,conversationId:'welcome-credit-check',messages:[{role:'user',content:'isolated welcome check'}]}});
-  return {root,environment,sessions,deviceA,deviceB,other,request,generate,get calls(){return calls;},
+  return {root,environment,sessions,deviceA,deviceB,other,request,generate,get calls(){return calls;},get lastRequest(){return lastRequest;},
     set upstream(value){upstream=value;},set usage(value){usage=value;},
     async restart(patch={}){await stop();Object.assign(environment,patch);await start();},
     async close(){if(server.listening)await stop();rmSync(root,{recursive:true,force:true});}};
@@ -115,14 +117,115 @@ test('gift credits fund hosted calls and settle trusted cache usage once across 
   }finally{await h.close();}
 });
 
-test('insufficient remaining gift blocks upstream requests and repeated sign-in never replenishes it',async()=>{
+test('580.37184 Credits funds a greeting even when the context capacity is one million tokens',async()=>{
+  const h=await host({credits:'581',contextWindow:1000000,maxOutputTokens:8192});try{
+    await h.request('/v1/payments/wallet');
+    const database=new Database(join(h.root,'model.sqlite-credits.sqlite'));
+    try{database.prepare('UPDATE geod_credit_lots SET remaining_nano=? WHERE account=?').run(580371840,'new-agent-account');}finally{database.close();}
+    h.usage={prompt_tokens:100,completion_tokens:20,prompt_cache_hit_tokens:0};
+    const id=randomUUID(),response=await h.request('/api/agent/codex/generations/stream',{method:'POST',value:{generationId:id,conversationId:'low-balance-greeting',request:{instructions:'Reply briefly to a greeting.',input:[{role:'user',content:'你好'}],tools:[]}}});
+    assert.equal(response.status,200);assert.match(response.data,/你好/);assert.equal(h.calls,1);
+    assert.equal(h.lastRequest.max_tokens,8192);
+    const wallet=(await h.request('/v1/payments/wallet')).data;assert.equal(wallet.chargeCount,1);assert.equal(wallet.reservedNanoCny,'0');assert.equal(wallet.balanceNanoCny,'579651840');
+  }finally{await h.close();}
+});
+
+test('low balance keeps normal upstream output capacity while unresolved holds survive restart',async()=>{
+  const h=await host({credits:'50',contextWindow:1000000,maxOutputTokens:8192});try{
+    h.upstream='lost';
+    const id=randomUUID(),response=await h.request('/api/agent/codex/generations/stream',{method:'POST',value:{generationId:id,conversationId:'limited-output',maximumNanoCny:'1',maxOutputTokens:1000000,request:{instructions:'Keep the response brief.',max_output_tokens:1000000,input:[{role:'user',content:'你好'}],tools:[]}}});
+    assert.equal(response.status,200);assert.equal(h.calls,1);assert.equal(h.lastRequest.max_tokens,8192);
+    const wallet=(await h.request('/v1/payments/wallet')).data,reservation=wallet.reservations[0];assert.equal(wallet.reservationCount,1);
+    assert.equal(reservation.requestBounds.maxOutputTokens,h.lastRequest.max_tokens);
+    assert.equal(reservation.requestBounds.billingPolicy,'wallet-until-empty-v1');
+    assert.equal(wallet.availableNanoCny,'0');assert.equal(wallet.reservedNanoCny,'50000000');
+    await h.restart();assert.equal((await h.request('/v1/payments/wallet')).data.reservedNanoCny,wallet.reservedNanoCny);
+  }finally{await h.close();}
+});
+
+test('an input estimate above the wallet still dispatches; concurrent outstanding holds cannot reuse funds',async()=>{
+  const h=await host({credits:'50',contextWindow:1000000,maxOutputTokens:8192});try{
+    const request={instructions:'Reply briefly.',input:[{role:'user',content:'x'.repeat(20000)}],tools:[]};
+    const admitted=await h.request('/api/agent/codex/generations/stream',{method:'POST',value:{generationId:randomUUID(),conversationId:'large-input',request}});assert.equal(admitted.status,200);assert.equal(h.calls,1);
+    assert.equal(h.lastRequest.max_tokens,8192);assert.equal((await h.request('/v1/payments/wallet')).data.reservationCount,0);
+    h.upstream='lost';const small={instructions:'Reply briefly.',input:[{role:'user',content:'你好'}],tools:[]};
+    const simultaneous=await Promise.all(Array.from({length:2},()=>h.request('/api/agent/codex/generations/stream',{method:'POST',value:{generationId:randomUUID(),conversationId:'concurrent-request',request:small}})));
+    assert.deepEqual(simultaneous.map(r=>r.status).sort(),[200,409]);assert.equal(h.calls,2);
+    assert.equal(simultaneous.find(r=>r.status===409).data.error,'BILLING_CREDIT_IN_USE');
+    assert(BigInt((await h.request('/v1/payments/wallet')).data.availableNanoCny)>=0n);
+  }finally{await h.close();}
+});
+
+test('the last positive balance dispatches, reaches zero without debt, and only then blocks the model',async()=>{
   const h=await host({credits:'100',contextWindow:16000});try{
     h.usage={prompt_tokens:16000,completion_tokens:2048,prompt_cache_hit_tokens:0};
     assert.equal((await h.generate()).data.billing.chargeNanoCny,'96768000');
-    const denied=await h.generate();assert.equal(denied.status,409);assert.equal(denied.data.error,'BILLING_INSUFFICIENT_CREDIT');assert.equal(h.calls,1);
-    const wallet=(await h.request('/v1/payments/wallet',{token:h.deviceB})).data;assert.equal(wallet.availableNanoCny,'3232000');assert.equal(wallet.grants.length,1);
-    await h.restart();assert.equal((await h.request('/v1/payments/wallet')).data.availableNanoCny,'3232000');
+    const last=await h.generate();assert.equal(last.status,200);assert.equal(last.data.billing.chargeNanoCny,'3232000');assert.equal(last.data.billing.quotedNanoCny,'96768000');assert.equal(last.data.billing.waivedNanoCny,'93536000');
+    const denied=await h.generate();assert.equal(denied.status,409);assert.equal(denied.data.error,'BILLING_INSUFFICIENT_CREDIT');assert.equal(h.calls,2);
+    const wallet=(await h.request('/v1/payments/wallet',{token:h.deviceB})).data;assert.equal(wallet.availableNanoCny,'0');assert.equal(wallet.reservedNanoCny,'0');assert.equal(wallet.grants.length,1);
+    const charge=wallet.charges.find(charge=>charge.chargeNanoCny==='3232000');assert.equal(charge.waivedNanoCny,'93536000');
+    await h.restart();assert.equal((await h.request('/v1/payments/wallet')).data.availableNanoCny,'0');
   }finally{await h.close();}
+});
+
+test('348.10096 Credits accepts a long real-task context despite a higher conservative input estimate',async()=>{
+  const h=await host({credits:'349',contextWindow:1000000,maxOutputTokens:8192});try{
+    await h.request('/v1/payments/wallet');
+    const database=new Database(join(h.root,'model.sqlite-credits.sqlite'));
+    try{database.prepare('UPDATE geod_credit_lots SET remaining_nano=? WHERE account=?').run(348100960,'new-agent-account');}finally{database.close();}
+    h.usage={prompt_tokens:17394,completion_tokens:3121,prompt_cache_hit_tokens:12800};
+    const response=await h.request('/api/agent/codex/generations/stream',{method:'POST',value:{generationId:randomUUID(),conversationId:'historical-imagery-task',request:{instructions:'Continue the geographic imagery workflow.',input:[{role:'user',content:'下载今年的历史影像\n'+'context '.repeat(15000)}],tools:[]}}});
+    assert.equal(response.status,200);assert.equal(h.calls,1);assert.equal(h.lastRequest.max_tokens,8192);
+    const wallet=(await h.request('/v1/payments/wallet')).data;
+    assert.equal(wallet.balanceNanoCny,'278764960');assert.equal(wallet.reservedNanoCny,'0');assert.equal(wallet.charges[0].chargeNanoCny,'69336000');
+  }finally{await h.close();}
+});
+
+test('even one nano-CNY admits a request and its capped settlement replays exactly once after restart',async()=>{
+  const h=await host({credits:'1',maxOutputTokens:8192});try{
+    await h.request('/v1/payments/wallet');
+    const database=new Database(join(h.root,'model.sqlite-credits.sqlite'));
+    try{database.prepare('UPDATE geod_credit_lots SET remaining_nano=1 WHERE account=?').run('new-agent-account');}finally{database.close();}
+    h.usage={prompt_tokens:100,completion_tokens:20,prompt_cache_hit_tokens:0};
+    const id=randomUUID(),response=await h.generate(id);assert.equal(response.status,200);assert.equal(response.data.billing.chargeNanoCny,'1');assert.equal(response.data.billing.waivedNanoCny,'719999');
+    const wallet=(await h.request('/v1/payments/wallet')).data;assert.equal(wallet.balanceNanoCny,'0');assert.equal(wallet.chargeCount,1);assert.equal(wallet.reservationCount,0);
+    await h.restart();const replay=await h.generate(id);assert.equal(replay.data.billing.replayed,true);assert.equal(replay.data.billing.chargeNanoCny,'1');assert.equal(replay.data.billing.waivedNanoCny,'719999');
+    assert.equal((await h.generate()).status,409);assert.equal(h.calls,1);assert.equal((await h.request('/v1/payments/wallet')).data.chargeCount,1);
+  }finally{await h.close();}
+});
+
+test('progressing work can make more than twelve requests and stops only at an empty wallet',async()=>{
+  const h=await host({credits:'10'});try{
+    h.usage={prompt_tokens:100,completion_tokens:10,prompt_cache_hit_tokens:0};
+    for(let step=0;step<18;step++)assert.equal((await h.generate()).status,200);
+    assert.equal(h.calls,18);const wallet=(await h.request('/v1/payments/wallet')).data;
+    assert.equal(wallet.balanceNanoCny,'0');assert.equal(wallet.chargeCount,18);assert.equal(wallet.reservedNanoCny,'0');
+    assert.equal((await h.generate()).status,409);assert.equal(h.calls,18);
+  }finally{await h.close();}
+});
+
+test('a capped final debit cannot spend another in-flight request hold or leave a debt for later funding',async()=>{
+  const f=await fixture();try{
+    await f.makePaid();
+    const database=new Database(join(f.root,'geod-payments.sqlite'));
+    try{database.prepare('UPDATE geod_credit_lots SET remaining_nano=100000000 WHERE account=?').run('geod-alice');}finally{database.close();}
+    const first={generationId:randomUUID(),model:'deepseek-flash',billingScope:'hosted',state:'reserved'},second={...first,generationId:randomUUID()};
+    for(const generation of [first,second]){
+      f.generations.set('geod-alice:'+generation.generationId,generation);
+      await f.ledger.reserveGeneration('geod-alice',generation.generationId,null,{inputTokens:5000,maxOutputTokens:1000});
+    }
+    Object.assign(first,{state:'settled',inputTokens:25000,cachedInputTokens:0,outputTokens:100,reasoningTokens:0});
+    const last=await f.ledger.settleGeneration('geod-alice',first.generationId);
+    assert.equal(last.chargeNanoCny,'64000000');assert.equal(last.waivedNanoCny,'37600000');
+    const held=f.ledger.summary('geod-alice');assert.equal(held.balanceNanoCny,'36000000');assert.equal(held.reservedNanoCny,'36000000');assert.equal(held.availableNanoCny,'0');
+    Object.assign(second,{state:'settled',inputTokens:10000,cachedInputTokens:8000,outputTokens:100,reasoningTokens:0});
+    assert.equal((await f.ledger.settleGeneration('geod-alice',second.generationId)).chargeNanoCny,'10240000');
+    assert.equal(f.ledger.summary('geod-alice').availableNanoCny,'25760000');
+    const third={...first,generationId:randomUUID(),state:'reserved'};f.generations.set('geod-alice:'+third.generationId,third);
+    await f.ledger.reserveGeneration('geod-alice',third.generationId,null,{inputTokens:5000,maxOutputTokens:1000});
+    third.state='failed';assert.equal((await f.ledger.settleGeneration('geod-alice',third.generationId)).state,'released');
+    assert.equal(f.ledger.summary('geod-alice').availableNanoCny,'25760000');assert.equal(f.ledger.summary('geod-alice').reservationCount,0);
+  }finally{await f.close();}
 });
 
 test('stopping new grants preserves existing gift wallets and continues model settlement',async()=>{

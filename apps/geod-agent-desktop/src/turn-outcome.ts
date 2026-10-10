@@ -18,6 +18,7 @@ export function modelResponseIssue(generation:{state?:string;result?:{content?:s
  return null;
 }
 export function outputFailureCode(message:string):string|undefined {
+ if(message.includes('次模型请求上限'))return 'MODEL_CALL_LIMIT';
  if(message.includes('模型输出达到本次上限'))return 'MODEL_OUTPUT_LIMIT';
  if(message.includes('模型只返回了思考或空内容'))return 'MODEL_EMPTY_RESPONSE';
  if(message.includes('模型供应商未返回完整内容'))return 'MODEL_CONTENT_FILTERED';
@@ -30,7 +31,7 @@ export function orphanedReasoningTurn(messages:DisplayMessage[]):string|null {
  if(records.some(message=>message.turnOutcome||message.userInput?.status==='pending'||message.role==='assistant'&&message.phase==='final'))return null;
  return last.turnId;
 }
-interface NativeProofClient {
+export interface NativeProofClient {
  billingRunSnapshot:(runId:string)=>Promise<{status:string;conversationId:string;generations:{generationId:string}[]}>;
  agentGenerationGet:(generationId:string)=>Promise<{state?:string;result?:{content?:string|null;toolCalls?:unknown[];finishReason?:string;response?:unknown}|null}>;
 }

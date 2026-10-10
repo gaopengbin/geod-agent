@@ -1,6 +1,10 @@
 import {runtimeCompatibilityFailure, runtimeUpdateError} from "./app-error.ts";
 
 export interface NativeRuntimeCapabilities {
+  contextSettings?:boolean;
+  conversationExecution?:boolean;
+  modelRequestBudget?:boolean;
+  executionSafety?:boolean;
   version: string;
   exportCrs: boolean;
   conversationOutputCrs: boolean;

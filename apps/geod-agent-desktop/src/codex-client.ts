@@ -7,6 +7,7 @@ export interface CodexTokenUsage { inputTokens: number; outputTokens: number; ca
 export type CodexEvent =
   | { type: "stage"; stage: string; message: string }
   | { type: "heartbeat" }
+  | {type:"spending";accountId:string;conversationId:string;spending:import('./context-settings').Spending}
   | { type: "thread"; threadId: string }
   | { type: "event"; method: string; params: Record<string, unknown> }
   | { type: "generation"; generationId: string; inputTokens?: number; state: string }
@@ -22,7 +23,7 @@ export interface CodexHooks {
   onEvent: (event: CodexEvent) => void;
   onModel: (generationId: string, messages: AgentMessage[]) => void | Promise<void>;
   onGeneration: (generation: Generation) => void;
-  onRequest: (request: Extract<CodexEvent, { type: "request" }>) => Promise<unknown>;
+  onRequest: (request: Extract<CodexEvent, { type: "request" }>,sendReply?:(value:unknown)=>Promise<void>) => Promise<unknown>;
   execute: (call: AgentToolCall, executionId: string, context: AgentMessage[], requestId:string) => Promise<{ result: unknown }>;
 }
 
@@ -33,16 +34,19 @@ export async function runCodexTurn(runId: string, conversationId: string, input:
   let active = true;
   let checkpoint: Promise<void> = Promise.resolve();
   const fulfilled = new Set<string>();
+  const replying=new Map<string,Promise<void>>();
   async function respond(requestId: string, value: unknown, error?: string) {
     if (!active || fulfilled.has(requestId)) return;
-    fulfilled.add(requestId);
-    await api.codexCommand(runId, { type: "response", requestId, value, ...(error ? { error } : {}) });
+    if(replying.has(requestId))return replying.get(requestId);
+    const pending=api.codexCommand(runId, { type: "response", requestId, value, ...(error ? { error } : {}) });replying.set(requestId,pending);
+    try{await pending;fulfilled.add(requestId);}finally{replying.delete(requestId);}
   }
   const handle = async (event: CodexEvent) => {
     if (!active) return;
     if (event.type === "steered") context = [...context, { role: "user", content: event.text }];
     try {
       hooks.onEvent(event);
+      if(event.type==='spending')window.dispatchEvent(new CustomEvent('geod:execution-spending-changed',{detail:event}));
       if (event.type === "model") {
         const modelContext = context;
         checkpoint = checkpoint.then(() => hooks.onModel(event.generationId, modelContext));
@@ -50,8 +54,8 @@ export async function runCodexTurn(runId: string, conversationId: string, input:
       } else if (event.type === "generationResult") {
         hooks.onGeneration(event.generation);
       } else if (event.type === "request") {
-        if (!["item/commandExecution/requestApproval", "item/fileChange/requestApproval", "item/permissions/requestApproval", "item/tool/requestUserInput", "mcpServer/elicitation/request"].includes(event.method)) throw new Error(`当前客户端尚未支持此请求：${event.method}`);
-        await respond(event.requestId, await hooks.onRequest(event));
+        if (!["item/commandExecution/requestApproval", "item/fileChange/requestApproval", "item/permissions/requestApproval", "item/tool/requestUserInput", "mcpServer/elicitation/request", "geod/executionReview"].includes(event.method)) throw new Error(`当前客户端尚未支持此请求：${event.method}`);
+        await respond(event.requestId, await hooks.onRequest(event,event.method==='geod/executionReview'?value=>respond(event.requestId,value):undefined));
       } else if (event.type === "tool") {
         await checkpoint;
         const call: AgentToolCall = { id: event.callId, type: "function", function: { name: event.tool, arguments: JSON.stringify(event.arguments) } };
@@ -67,7 +71,10 @@ export async function runCodexTurn(runId: string, conversationId: string, input:
   };
   try {
     const result = await guardedCodexTurn(activity => api.codexTurn(runId, conversationId, input, modelMessagesWithoutArtifactPaths(history), event => { activity(); void handle(event); }, images,documents), {
-      probe: () => api.authStatus(), interrupt: () => api.codexCommand(runId, { type: "interrupt" }),
+      probe: () => api.authStatus(), interrupt: async () => {
+        await api.codexCommand(runId, { type: "interrupt" }).catch(cause=>{if((cause as {code?:string})?.code!=='CODEX_RUN_NOT_FOUND')throw cause;});
+        if((await api.runtimeCapabilities()).conversationExecution)await api.codexConversationStop(conversationId);
+      },
     });
     await checkpoint;
     if (callbacksError) throw callbacksError;

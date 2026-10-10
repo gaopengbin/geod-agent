@@ -12,16 +12,22 @@ const fingerprint=(q:UserInputQuestion)=>JSON.stringify([q.header,q.question,q.o
 export function inputOrigin(messages:DisplayMessage[],userMessageId?:string){
   const humans=messages.filter(m=>m.role==='user'),index=humans.findIndex(m=>m.id===userMessageId);
   if(index<0)return userMessageId;
-  const submitted=messages.find(m=>m.userInput?.status==='answered'&&m.userInput.reply&&userInputReplyText(m.userInput,m.userInput.reply)===humans[index].content)?.userInput;
-  if(submitted?.userMessageId)return submitted.userMessageId;
+  const withoutAttachment=(text:string)=>text.replace(/\n已附加边界：[^\n]*$/,'');
   let cursor=index;
-  while(cursor>0&&/^(?:请)?(?:继续(?:刚才的任务|处理)?|再试试|重试(?:一下)?|接着做|continue|retry)[。！!\s]*$/i.test(humans[cursor].content.split('\n已附加边界：')[0].trim()))cursor--;
+  while(cursor>0){
+    const submitted=messages.find(m=>m.userInput?.status==='answered'&&m.userInput.reply&&withoutAttachment(userInputReplyText(m.userInput,m.userInput.reply))===withoutAttachment(humans[cursor].content))?.userInput;
+    const parent=submitted?.userMessageId?humans.findIndex(m=>m.id===submitted.userMessageId):-1;
+    if(parent>=0&&parent<cursor){cursor=parent;continue;}
+    if(!/^(?:请)?(?:继续(?:刚才的任务|处理)?|再试试|重试(?:一下)?|接着做|continue|retry)[。！!\s]*$/i.test(withoutAttachment(humans[cursor].content).trim()))break;
+    cursor--;
+  }
   return humans[cursor].id;
 }
 export function reusableInputReply(questions:UserInputQuestion[],messages:DisplayMessage[],userMessageId?:string):UserInputReply|null {
   const origin=inputOrigin(messages,userMessageId);
+  if(!origin)return null;
   const values=new Map<string,string>();
-  for(const message of messages){const record=message.userInput;if(record?.status!=='answered'||!record.reply||record.userMessageId!==origin)continue;
+  for(const message of messages){const record=message.userInput;if(record?.status!=='answered'||!record.reply||inputOrigin(messages,record.userMessageId)!==origin)continue;
     for(const q of record.questions){const answer=record.reply.answers[q.id]?.answers[0];if(answer)values.set(fingerprint(q),answer);}
   }
   if(!questions.every(q=>values.has(fingerprint(q))))return null;
@@ -29,8 +35,9 @@ export function reusableInputReply(questions:UserInputQuestion[],messages:Displa
 }
 export function answeredCrsChoice(messages:DisplayMessage[],userMessageId?:string){
   const origin=inputOrigin(messages,userMessageId);
+  if(!origin)return null;
   for(const item of [...messages].reverse()){
-    const record=item.userInput;if(record?.status!=='answered'||record.userMessageId!==origin)continue;
+    const record=item.userInput;if(record?.status!=='answered'||inputOrigin(messages,record.userMessageId)!==origin)continue;
     const choice=crsFromAnswers(record.questions,record.reply??null);if(choice)return choice;
   }
   return null;

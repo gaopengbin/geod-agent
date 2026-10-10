@@ -10,6 +10,7 @@ import { desktopAvailable, errorMessage } from "./api";
 import { UiTooltip } from "./ui-tooltip";
 import {availableAIChannels,sponsorAvailability,useSponsorClock,SPONSORED_CHANNELS_VISIBLE,type AISponsor} from './ai-channels';
 import {ExternalLink} from './icons';
+import {ContextSettingsPanel} from './context-settings';
 
 const newModel = (): AIModel => ({ id: "", name: "", contextWindow: 128000, maxOutputTokens: 4096, inputModalities: ["text"], thinking: null });
 const emptyDraft = (): AIChannelDraft => ({ name: "", baseUrl: "", protocol: "chatCompletions", enabled: true, models: [newModel()] });
@@ -88,7 +89,7 @@ function ChannelForm({ channel, onSaved, onCancel }: { channel: AIChannel | null
   </form>;
 }
 
-export function AIChannelsPage({ active, accountId, onReturn }: { active: boolean; accountId: string | null; onReturn: () => void }) {
+export function AIChannelsPage({ active, accountId, conversationId, onReturn }: { active: boolean; accountId: string | null; conversationId?:string; onReturn: () => void }) {
   const [list, setList] = useState<AIChannelList | null>(null);
   useSponsorClock(SPONSORED_CHANNELS_VISIBLE?list?.sponsors:undefined);
   const [editing, setEditing] = useState<AIChannel | "new" | null>(null);
@@ -114,6 +115,7 @@ export function AIChannelsPage({ active, accountId, onReturn }: { active: boolea
       {!accountId ? <p className="ai-channel-empty">{t("登录 GeoD 后管理此账号的本机模型配置。")}</p> : editing ? <ChannelForm key={editing === "new" ? "new" : editing.id} channel={editing === "new" ? null : editing} onCancel={() => { setEditing(null); void refresh(); }} onSaved={saved => { setEditing(null); setNotice(`已保存 ${saved.name}，可在会话输入栏选择。`); void refresh(); }}/> : <>
         {error && <p className="ai-channel-error" role="alert"><CircleAlert size={16}/>{localize(error)}</p>}{notice && <p className="ai-channel-notice" role="status"><Check size={16}/>{localize(notice)}</p>}
         <section className="ai-channel-row ai-channel-hosted"><span className="ai-channel-icon"><Bot size={22}/></span><div className="ai-channel-info"><h2>{t("GeoD 托管")}{list?.default.channelId === "hosted" && <span>{t("新对话默认")}</span>}</h2><p>{t("直接使用 GeoD 账号 · 无需填写密钥")}</p></div><Button size="sm" variant="ghost" disabled={busy || !list || list.default.channelId === "hosted"} onClick={() => void action(() => aiChannels.select("default", "hosted", "hosted"), "新对话将使用 GeoD 托管；已有会话与定时任务保留原选择。")}>{t("设为默认")}</Button></section>
+        <ContextSettingsPanel accountId={accountId} conversationId={conversationId}/>
         {SPONSORED_CHANNELS_VISIBLE&&<><div className="ai-channel-section-heading ai-sponsors-heading"><div><h2>{t("赞助渠道")} <span>{list?.sponsors?.length??0}</span></h2><p>{t("额度由供应方提供，不扣 GeoD 托管额度。")}</p></div><Button size="sm" variant="ghost" disabled={busy} onClick={()=>void action(()=>aiChannels.sponsors(true),'赞助渠道已更新')}><RefreshCw size={14}/>{t("刷新赞助渠道")}</Button></div>
         {!list?.sponsors?.length&&<p className="ai-sponsors-empty">{t("当前账号暂无赞助渠道。")}</p>}
         {list?.sponsors?.map(sponsor=><section className={`ai-channel-row ai-sponsor-row${sponsorAvailability(sponsor)!=='active'?' is-disabled':''}`} key={sponsor.id}>

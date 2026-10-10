@@ -13,7 +13,7 @@ use std::{
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
-use tauri::{ipc::Channel, AppHandle, State};
+use tauri::{ipc::Channel, AppHandle, State, Manager};
 use tauri_plugin_opener::OpenerExt;
 use uuid::Uuid;
 pub mod credit_history;
@@ -104,10 +104,7 @@ impl ServiceState {
 
 pub fn current_user_id(state: &ServiceState) -> Result<String, ServiceError> {
     let config = load_config(&state.config_path)?;
-    let _ = get_access_token(state, &config)?;
-    let tokens = read_tokens(&config.identity_origin)?
-        .ok_or_else(|| error("AUTH_REQUIRED", "请先登录 GeoD"))?;
-    Ok(tokens.user_id)
+    Ok(authenticated_tokens(state, &config)?.user_id)
 }
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -146,6 +143,19 @@ fn credential_account(identity_origin: &str) -> String {
             Sha256::digest(identity_origin.as_bytes())
         )
     }
+}
+// The vault entry is shared by installed and development profiles. Its rotating
+// token needs one lock for the Windows user, rather than a separate profile lock.
+fn lock_credentials(identity_origin: &str) -> Result<fs::File, ServiceError> {
+    let root = std::env::var_os("LOCALAPPDATA").or_else(|| std::env::var_os("APPDATA"))
+        .map(PathBuf::from).unwrap_or_else(std::env::temp_dir)
+        .join("GeoD Agent").join("auth-locks");
+    fs::create_dir_all(&root).map_err(|_| error("CREDENTIAL_STORE", "无法取得本机授权锁"))?;
+    let path = root.join(format!("{:x}.lock", Sha256::digest(credential_account(identity_origin).as_bytes())));
+    let file = fs::OpenOptions::new().create(true).read(true).write(true).open(path)
+        .map_err(|_| error("CREDENTIAL_STORE", "无法取得本机授权锁"))?;
+    fs2::FileExt::lock_exclusive(&file).map_err(|_| error("CREDENTIAL_STORE", "无法取得本机授权锁"))?;
+    Ok(file)
 }
 fn entry(identity_origin: &str) -> Result<Entry, ServiceError> {
     Entry::new(
@@ -278,10 +288,14 @@ fn token_response(value: TokenResponse, identity_origin: String) -> Result<Token
     })
 }
 fn get_access_token(state: &ServiceState, config: &ServiceConfig) -> Result<String, ServiceError> {
+    Ok(authenticated_tokens(state, config)?.access_token)
+}
+fn authenticated_tokens(state: &ServiceState, config: &ServiceConfig) -> Result<Tokens, ServiceError> {
     let _guard = state
         .credential_lock
         .lock()
         .expect("credential mutex poisoned");
+    let _shared = lock_credentials(&config.identity_origin)?;
     // The desktop and its detached background share the same rotating token.
     // Serialize refresh across processes, then reread the current vault value.
     let refresh_lock = fs::OpenOptions::new().create(true).read(true).write(true)
@@ -295,7 +309,7 @@ fn get_access_token(state: &ServiceState, config: &ServiceConfig) -> Result<Stri
         return Err(error("AUTH_REQUIRED", "请重新登录 GeoD"));
     }
     if tokens.access_expires_at > unix_seconds() + 30 {
-        return Ok(tokens.access_token);
+        return Ok(tokens);
     }
     let response = client(&config.identity_origin)?
         .post(format!("{}/api/geod/oauth/token", config.identity_origin))
@@ -313,6 +327,16 @@ fn get_access_token(state: &ServiceState, config: &ServiceConfig) -> Result<Stri
                 | reqwest::StatusCode::UNAUTHORIZED
                 | reqwest::StatusCode::FORBIDDEN
         ) {
+            // Do not erase credentials replaced by an older installed process
+            // while our refresh request was in flight.
+            if let Some(latest) = read_tokens(&config.identity_origin)? {
+                if latest.refresh_token != tokens.refresh_token || latest.access_token != tokens.access_token {
+                    if latest.identity_origin == config.identity_origin && latest.access_expires_at > unix_seconds() + 30 {
+                        return Ok(latest);
+                    }
+                    return Err(error("IDENTITY_UNAVAILABLE", "本机授权已更新，请稍后重试"));
+                }
+            }
             delete_tokens(&config.identity_origin)?;
             return Err(error("AUTH_EXPIRED", "GeoD 授权已失效，请重新登录"));
         }
@@ -323,7 +347,7 @@ fn get_access_token(state: &ServiceState, config: &ServiceConfig) -> Result<Stri
         .map_err(|_| error("INVALID_TOKEN_RESPONSE", "身份服务返回了无效授权"))?;
     tokens = token_response(refreshed, config.identity_origin.clone())?;
     write_tokens(&tokens)?;
-    Ok(tokens.access_token)
+    Ok(tokens)
 }
 
 #[tauri::command]
@@ -353,6 +377,7 @@ pub fn auth_status(state: State<'_, ServiceState>) -> Result<AuthStatus, Service
             .credential_lock
             .lock()
             .expect("credential mutex poisoned");
+        let _shared = lock_credentials(&config.identity_origin)?;
         read_tokens(&config.identity_origin)?
     };
     if let Some(tokens) = tokens {
@@ -499,6 +524,7 @@ fn complete_flow(
                         .map_err(|_| error("INVALID_TOKEN_RESPONSE", "身份服务响应无效"))?;
                     let tokens = token_response(value, config.identity_origin.clone())?;
                     let _guard = credential_lock.lock().expect("credential mutex poisoned");
+                    let _shared = lock_credentials(&config.identity_origin)?;
                     write_tokens(&tokens)
                 })();
                 send_page(&mut stream, outcome.is_ok());
@@ -614,6 +640,7 @@ pub fn auth_logout(app: AppHandle, state: State<'_, ServiceState>) -> Result<Aut
         .credential_lock
         .lock()
         .expect("credential mutex poisoned");
+    let _shared = lock_credentials(&config.identity_origin)?;
     if let Some(tokens) = read_tokens(&config.identity_origin)? {
         if tokens.identity_origin == config.identity_origin {
             let _ = client(&config.identity_origin).and_then(|client| {
@@ -772,8 +799,17 @@ mod tests {
             identity_origin: origin.clone(),
             gateway_origin: origin.clone(),
         };
-        let first_state = ServiceState::new(config_path.clone());
-        assert_eq!(get_access_token(&first_state, &config).unwrap(), new_access);
+        let other_path = config_path.with_extension("other-profile.json");
+        let barrier = Arc::new(std::sync::Barrier::new(2));
+        let workers = [config_path.clone(), other_path.clone()].map(|path| {
+            let barrier = Arc::clone(&barrier);
+            let config = config.clone();
+            thread::spawn(move || {
+                barrier.wait();
+                get_access_token(&ServiceState::new(path), &config)
+            })
+        });
+        for worker in workers { assert_eq!(worker.join().unwrap().unwrap(), new_access); }
         server.join().unwrap();
         let persisted = read_tokens(&origin).unwrap().unwrap();
         assert_eq!(persisted.refresh_token, "s".repeat(43));
@@ -784,6 +820,32 @@ mod tests {
         );
         drop(cleanup);
         assert!(read_tokens(&origin).unwrap().is_none());
+        let _ = fs::remove_file(other_path.with_extension("credentials.lock"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn stale_refresh_failure_keeps_a_replacement_login_and_returns_its_owner() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let origin = format!("http://{}", listener.local_addr().unwrap());
+        let path = std::env::temp_dir().join(format!("geod-refresh-replaced-{}.json", Uuid::new_v4()));
+        let config = ServiceConfig { identity_origin: origin.clone(), gateway_origin: origin.clone() };
+        write_tokens(&Tokens { identity_origin: origin.clone(), access_token: "a".repeat(43), refresh_token: "r".repeat(43), user_id: "old-fixture-owner".into(), access_expires_at: 0 }).unwrap();
+        let server_origin = origin.clone();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = [0u8;4096]; stream.read(&mut request).unwrap();
+            // Simulate an older application replacing the vault without our lock.
+            write_tokens(&Tokens { identity_origin: server_origin, access_token: "b".repeat(43), refresh_token: "s".repeat(43), user_id: "new-fixture-owner".into(), access_expires_at: unix_seconds()+3600 }).unwrap();
+            write!(stream,"HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").unwrap();
+        });
+        let result = authenticated_tokens(&ServiceState::new(path.clone()), &config);
+        server.join().unwrap();
+        let persisted = read_tokens(&origin).unwrap();
+        delete_tokens(&origin).unwrap();
+        let _ = fs::remove_file(path.with_extension("credentials.lock"));
+        assert_eq!(result.unwrap().user_id, "new-fixture-owner");
+        assert_eq!(persisted.unwrap().refresh_token, "s".repeat(43));
     }
 
     #[test]
@@ -944,7 +1006,8 @@ fn gateway_status_error(status: reqwest::StatusCode, path: &str, code: &str) -> 
             _=>error("PAYMENT_ERROR","支付操作未完成，请刷新原订单核对状态"),
         };
     }
-    if code=="BILLING_INSUFFICIENT_CREDIT" {return error("BILLING_INSUFFICIENT_CREDIT","可用 AI 余额不足以预留本次模型请求，请查看余额与订阅；本次未提交给模型");}
+    if code=="BILLING_INSUFFICIENT_CREDIT" {return error("BILLING_INSUFFICIENT_CREDIT","AI 余额已用完，请查看余额与订阅；本次未提交给模型");}
+    if code=="BILLING_CREDIT_IN_USE" {return error("BILLING_CREDIT_IN_USE","AI 余额正被尚未结算的请求占用，请先检查这些请求的状态；本次未提交给模型");}
     let sponsored=match code {"SPONSOR_QUOTA_EXCEEDED"=>Some("此赞助渠道的可用额度不足，请选择其他渠道"),"SPONSOR_CHANGED"=>Some("赞助渠道配置已更新，请刷新列表并重新选择模型"),"SPONSOR_DISABLED"=>Some("赞助渠道已停用，请选择其他模型"),"SPONSOR_NOT_STARTED"=>Some("赞助活动尚未开始，请稍后使用或选择其他模型"),"SPONSOR_ENDED"=>Some("赞助活动已结束，请选择其他模型"),"SPONSOR_UNAVAILABLE"=>Some("赞助渠道不可用，请刷新列表或选择其他模型"),"SPONSOR_MODEL_MISSING"=>Some("赞助模型已移除，请选择其他模型"),"SPONSOR_IMAGE_UNSUPPORTED"=>Some("此赞助渠道暂不支持图片，请选择支持图片的模型"),_=>None};
     if let Some(message)=sponsored{return error(match code{"SPONSOR_QUOTA_EXCEEDED"=>"SPONSOR_QUOTA_EXCEEDED","SPONSOR_CHANGED"=>"SPONSOR_CHANGED","SPONSOR_DISABLED"=>"SPONSOR_DISABLED","SPONSOR_NOT_STARTED"=>"SPONSOR_NOT_STARTED","SPONSOR_ENDED"=>"SPONSOR_ENDED","SPONSOR_MODEL_MISSING"=>"SPONSOR_MODEL_MISSING","SPONSOR_IMAGE_UNSUPPORTED"=>"SPONSOR_IMAGE_UNSUPPORTED",_=>"SPONSOR_UNAVAILABLE"},message);}
     if path=="/api/agent/sponsors"&&status==reqwest::StatusCode::NOT_FOUND{return error("SPONSOR_CATALOG_UNAVAILABLE","赞助渠道暂未开放");}
@@ -1040,6 +1103,9 @@ fn gateway_stream_call(
 pub(crate) fn codex_capabilities(state: &ServiceState) -> Result<Value, ServiceError> {
     gateway_call(state, "/api/agent/capabilities", None)
 }
+pub(crate) fn generation_snapshot(state:&ServiceState,generation_id:&str)->Result<Value,ServiceError>{
+    gateway_call(state,&format!("/api/agent/generations/{generation_id}"),None)
+}
 fn sponsor_catalogue_result(result:Result<Value,ServiceError>)->Result<Value,ServiceError>{
     match result {
         // An authenticated legacy gateway without this optional endpoint has no sponsors.
@@ -1114,6 +1180,7 @@ pub(crate) fn creator_test_generation(state: &ServiceState, conversation_id: &st
 }
 #[tauri::command]
 pub async fn agent_generate(
+    app: AppHandle,
     state: State<'_, ServiceState>,
     generation_id: String,
     conversation_id: String,
@@ -1124,11 +1191,17 @@ pub async fn agent_generate(
         flow: Arc::clone(&state.flow),
         credential_lock: Arc::clone(&state.credential_lock),
     });
-    tauri::async_runtime::spawn_blocking(move || gateway_call(&state, "/api/agent/generations", Some(json!({ "generationId": generation_id, "conversationId": conversation_id, "messages": messages })))).await
+    tauri::async_runtime::spawn_blocking(move || {
+        let owner=current_user_id(&state)?;
+        let facts=crate::task_state_context::snapshot(&app.state::<crate::AppState>().db_path,&owner,&conversation_id);
+        let messages=crate::task_state_context::messages(messages,&facts);
+        gateway_call(&state, "/api/agent/generations", Some(json!({ "generationId": generation_id, "conversationId": conversation_id, "messages": messages })))
+    }).await
         .map_err(|_| error("GATEWAY_ERROR", "模型请求线程中断"))?
 }
 #[tauri::command]
 pub async fn agent_generate_stream(
+    app: AppHandle,
     state: State<'_, ServiceState>,
     generation_id: String,
     conversation_id: String,
@@ -1140,7 +1213,11 @@ pub async fn agent_generate_stream(
         flow: Arc::clone(&state.flow),
         credential_lock: Arc::clone(&state.credential_lock),
     });
-    tauri::async_runtime::spawn_blocking(move || gateway_stream_call(&state, generation_id, conversation_id, messages, events))
+    tauri::async_runtime::spawn_blocking(move || {
+        let owner=current_user_id(&state)?;
+        let facts=crate::task_state_context::snapshot(&app.state::<crate::AppState>().db_path,&owner,&conversation_id);
+        gateway_stream_call(&state, generation_id, conversation_id, crate::task_state_context::messages(messages,&facts), events)
+    })
         .await.map_err(|_| error("GATEWAY_ERROR", "模型流式请求线程中断"))?
 }
 #[tauri::command]

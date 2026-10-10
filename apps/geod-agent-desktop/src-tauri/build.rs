@@ -1,4 +1,8 @@
 fn main() {
+    // Rebuild Windows resources when branding changes, including development builds.
+    for icon in ["32x32.png", "128x128.png", "128x128@2x.png", "icon.ico"] {
+        println!("cargo:rerun-if-changed=icons/{icon}");
+    }
     tauri_build::build();
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
         // Tauri embeds this for the app, but Rust's unit-test executable also links rfd.

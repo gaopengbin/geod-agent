@@ -1,5 +1,6 @@
 import type { ThreadItem } from "./codex-protocol/v2/ThreadItem";
 import type { DisplayMessage } from "./pending-generations";
+import {completeCodexReply} from './codex-final-reply.ts';
 export const CODEX_HOOK_LABELS: Record<string, string> = {
   sessionStart: "会话开始", sessionEnd: "会话结束", userPromptSubmit: "提交消息",
   preToolUse: "工具执行前", permissionRequest: "请求权限时", postToolUse: "工具执行后",
@@ -9,6 +10,13 @@ export const CODEX_HOOK_LABELS: Record<string, string> = {
 
 // Pinned to the generated protocol of the runtime checked by codex-host.
 export function reduceCodexItems(messages: DisplayMessage[], runId: string, method: string, params: Record<string, unknown>): DisplayMessage[] {
+  if(method==='turn/completed') {
+    const turn=params.turn as {status:string;items?:ThreadItem[]} | undefined;
+    if(turn?.status!=='completed')return messages;
+    const reply=[...(turn.items??[])].reverse().find(item=>item.type==='agentMessage');
+    const text=reply?.type==='agentMessage'?reply.text:[...messages].reverse().find(item=>item.turnId===runId&&item.role==='assistant'&&!item.itemType)?.content??'';
+    return completeCodexReply(messages,runId,{status:turn.status,text});
+  }
   const hook = params.run as { id: string; eventName: string; status: string; statusMessage?: string; executionMode: string } | undefined;
   const id = `codex-${runId}-${String(hook?.id ?? params.itemId ?? (params.item as ThreadItem | undefined)?.id ?? "")}`;
   const previous = messages.find(item => item.id === id);

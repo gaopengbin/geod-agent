@@ -3,6 +3,14 @@ import assert from 'node:assert/strict';
 import {guardedCodexTurn} from '../src/codex-liveness.ts';
 
 const timing={tickMs:5,probeAfterMs:10,probeTimeoutMs:10,startupTimeoutMs:70};
+test('timeout retains busy state until native stop has finished',async()=>{
+ let release,finished=false;
+ const guarded=guardedCodexTurn(()=>new Promise(()=>{}),{...timing,startupTimeoutMs:5,interrupt:()=>new Promise(resolve=>{release=resolve;}),probe:async()=>{},stopTimeoutMs:500}).catch(()=>{finished=true;});
+ await new Promise(resolve=>setTimeout(resolve,30));assert.equal(finished,false);assert.equal(typeof release,'function');release();await guarded;assert.equal(finished,true);
+});
+test('an unreachable stop command is bounded',async()=>{
+ await assert.rejects(guardedCodexTurn(()=>new Promise(()=>{}),{...timing,startupTimeoutMs:5,stopTimeoutMs:15,interrupt:()=>new Promise(()=>{}),probe:async()=>{}}),/启动未完成/);
+});
 test('lost native IPC ends waiting even if its original promise never settles',async()=>{
  let interrupted=0;
  await assert.rejects(guardedCodexTurn(activity=>{activity();return new Promise(()=>{});},{...timing,probe:()=>new Promise(()=>{}),interrupt:async()=>{interrupted++;}}),/本机引擎连接已中断/);

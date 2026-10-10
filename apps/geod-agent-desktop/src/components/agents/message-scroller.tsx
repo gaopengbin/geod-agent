@@ -77,6 +77,8 @@ function getMessagePreview(
 export interface MessageScrollerProps extends ComponentPropsWithRef<"div"> {
   /** Keep streamed output pinned while the reader remains near the end. */
   followOutput?: boolean;
+  /** Resume following a new user message or submitted answer. */
+  followKey?: string;
   /** Distance from the end that still counts as following the output. */
   followThreshold?: number;
   /** Smoothly follow growing content. */
@@ -107,6 +109,7 @@ export interface MessageScrollerProps extends ComponentPropsWithRef<"div"> {
 
 export function MessageScroller({
   followOutput = true,
+  followKey,
   followThreshold = 56,
   smooth = true,
   onFollowChange,
@@ -128,6 +131,9 @@ export function MessageScroller({
   const viewportRef = useRef<HTMLElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const followingRef = useRef(followOutput);
+  const readerScrolledRef = useRef(false);
+  const previousBusyRef = useRef(busy);
+  const userScrollUntilRef = useRef(0);
   const programmaticScrollRef = useRef(false);
   const scrollTimerRef = useRef<number | undefined>(undefined);
   const frameRef = useRef<number | undefined>(undefined);
@@ -315,11 +321,19 @@ export function MessageScroller({
 
     const distance =
       viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
-    setFollowing(distance <= followThreshold);
+    // Content growth can emit scroll events without any reader input.
+    if (distance <= followThreshold) {
+      readerScrolledRef.current = false;
+      setFollowing(true);
+    } else if (performance.now() < userScrollUntilRef.current) {
+      readerScrolledRef.current = true;
+      setFollowing(false);
+    }
     updateActiveRailItem();
   }, [followThreshold, setFollowing, updateActiveRailItem]);
 
-  const leaveLiveEdge = useCallback(() => {
+  const leaveLiveEdge = useCallback((readerInput = true) => {
+    if (readerInput) userScrollUntilRef.current = performance.now() + 1200;
     if (followFrameRef.current !== undefined) cancelAnimationFrame(followFrameRef.current);
     followFrameRef.current = undefined;
     programmaticScrollRef.current = false;
@@ -334,6 +348,21 @@ export function MessageScroller({
       if (frameRef.current) cancelAnimationFrame(frameRef.current);
     };
   }, [followOutput, scrollToEnd]);
+
+  useLayoutEffect(() => {
+    readerScrolledRef.current = false;
+    setFollowing(followOutput);
+    if (followOutput) scrollToEnd("auto");
+  }, [followKey, followOutput, setFollowing, scrollToEnd]);
+
+  useLayoutEffect(() => {
+    const completed = previousBusyRef.current && !busy;
+    previousBusyRef.current = busy;
+    if (completed && followOutput && !readerScrolledRef.current) {
+      setFollowing(true);
+      animateFollow();
+    }
+  }, [busy, followOutput, setFollowing, animateFollow]);
 
   useEffect(() => {
     const content = contentRef.current;
@@ -446,7 +475,11 @@ export function MessageScroller({
         onViewportScroll?.(event);
       }}
       onWheel={(event) => {
-        leaveLiveEdge();
+        if (event.deltaY < 0 && !(event.target instanceof Element && event.target.closest(".agent-work-reasoning-area"))) {
+          readerScrolledRef.current = true;
+          setFollowing(false);
+          leaveLiveEdge();
+        }
         onViewportWheel?.(event);
       }}
       onTouchStart={(event) => {
@@ -454,19 +487,21 @@ export function MessageScroller({
         onViewportTouchStart?.(event);
       }}
       onPointerDown={(event) => {
-        leaveLiveEdge();
+        if (event.target === event.currentTarget) leaveLiveEdge();
         onViewportPointerDown?.(event);
       }}
       onClickCapture={(event) => {
         // Reading an expanded execution record should keep its trigger in view.
         if (event.target instanceof Element && event.target.closest("button[aria-expanded], summary")) {
-          leaveLiveEdge();
+          leaveLiveEdge(false);
           setFollowing(false);
         }
         onViewportClickCapture?.(event);
       }}
       onKeyDown={(event) => {
         if (["ArrowUp", "PageUp", "Home"].includes(event.key)) {
+          readerScrolledRef.current = true;
+          setFollowing(false);
           leaveLiveEdge();
         }
         onViewportKeyDown?.(event);

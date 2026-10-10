@@ -7,7 +7,7 @@ use services::ServiceError;
 
 type Input = Arc<Mutex<ChildStdin>>;
 pub(crate) type EventSink = Arc<dyn Fn(Value) -> Result<(), ServiceError> + Send + Sync>;
-struct ActiveRun { owner: String, input: Input, cancelled: Arc<AtomicBool> }
+struct ActiveRun { owner: String, host_key: String, input: Input, cancelled: Arc<AtomicBool>, safety:Arc<Mutex<crate::execution_safety::Guard>> }
 struct HostProcess {
     owner: String,
     child: Child, input: Input, route: Arc<Mutex<Option<mpsc::Sender<Value>>>>,
@@ -291,7 +291,10 @@ async fn run_operation(
         if model_route.owner_id!=owner{return Err(error("AI_CHANNEL_OWNER","任务渠道不属于当前账号"));}
         let _model_route_guard=crate::ai_channels::bind(&app,&run_id,&conversation_id,&model_route)?;
         let mut capabilities = if model_route.is_personal()||model_route.is_sponsored(){model_route.capabilities()}else{services::codex_capabilities(&services)?};
+        let context_preferences=crate::context_settings::load(&app.state::<crate::ai_channels::AiChannels>(),&owner)?;
+        capabilities=crate::context_settings::apply(capabilities,&context_preferences)?;
         capabilities["isolatedWorker"]=json!(isolated);
+        capabilities["runtimePolicyNative"]=json!(true);
         let extensions = if isolated{json!({"skillDirectories":[],"selectedSkills":[],"mcpServers":[]})}else{app.state::<crate::extensions::ExtensionState>().codex_bundle_owned(&root.join(format!("account-{:x}", Sha256::digest(owner.as_bytes()))),&owner).map_err(|e| error(e.code, e.message))?};
         let memory = if isolated{json!({"entries":[],"omitted":0})}else{crate::agent_memory::prompt(&app, &conversation_id).map_err(|e|error(e.code,e.message))?};
         if services::current_user_id(&services)?!=owner{return Err(error("ACCOUNT_CHANGED","账号已切换，请在当前账号重新发送请求"));}
@@ -335,19 +338,35 @@ async fn run_operation(
         let mut hook_source=include_str!("../plugin-hook-runner.mjs").to_owned();
         let mut bulk_source=include_str!("../codex-bulk-data.mjs").to_owned();
         let mut rtk_source=include_str!("../rtk-output.mjs").to_owned();
+        let mut policy_source=include_str!("../runtime-policy.mjs").to_owned();
+        let mut policy_geod_source=include_str!("../runtime-policy-geod.mjs").to_owned();
+        let mut policy_hook_source=include_str!("../runtime-policy-hook.mjs").to_owned();
+        let mut input_context_source=include_str!("../model-input-context.mjs").to_owned();
+        if cfg!(debug_assertions){
+            let source=PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+            if let Ok(value)=fs::read_to_string(source.join("runtime-policy.mjs")){policy_source=value;}
+            if let Ok(value)=fs::read_to_string(source.join("runtime-policy-geod.mjs")){policy_geod_source=value;}
+            if let Ok(value)=fs::read_to_string(source.join("runtime-policy-hook.mjs")){policy_hook_source=value;}
+            if let Ok(value)=fs::read_to_string(source.join("model-input-context.mjs")){input_context_source=value;}
+        }
         if cfg!(debug_assertions){if let Ok(source)=fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("rtk-output.mjs")){rtk_source=source;}}
         if cfg!(debug_assertions){if let Ok(source)=fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("codex-bulk-data.mjs")){bulk_source=source;}}
         if cfg!(debug_assertions){if let Ok(source)=fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("plugin-hook-runner.mjs")){hook_source=source;}}
         // A loaded Codex thread retains its lifecycle handlers even after an
         // MCP reload. Replace the idle owned process when reviewed automation
         // changes; resume the durable thread under the newly exported hooks.
-        let source_hash = format!("{:x}", Sha256::digest(format!("{host_source}\n{hook_source}\n{bulk_source}\n{rtk_source}\n{capabilities}\n{}",extensions["pluginHooks"]).as_bytes()));
+        let tool_source=if isolated{include_str!("../worker-tools.json")}else{include_str!("../codex-tools.json")};
+        let source_hash = format!("{:x}", Sha256::digest(format!("{host_source}\n{hook_source}\n{bulk_source}\n{rtk_source}\n{policy_source}\n{policy_geod_source}\n{policy_hook_source}\n{input_context_source}\n{tool_source}\n{capabilities}\n{}",extensions["pluginHooks"]).as_bytes()));
+        for (name,source) in [("runtime-policy.mjs",policy_source),("runtime-policy-geod.mjs",policy_geod_source),("runtime-policy-hook.mjs",policy_hook_source)]{
+            fs::write(home.join(name),source).map_err(|_|error("CODEX_STORAGE_ERROR","无法准备执行策略运行环境"))?;
+        }
         fs::write(home.join("rtk-output.mjs"),rtk_source).map_err(|_|error("CODEX_STORAGE_ERROR","无法准备命令输出精简环境"))?;
         fs::write(home.join("codex-bulk-data.mjs"),bulk_source).map_err(|_|error("CODEX_STORAGE_ERROR","无法准备本机几何数据传递环境"))?;
         fs::write(home.join("plugin-hook-runner.mjs"),hook_source).map_err(|_|error("CODEX_STORAGE_ERROR","无法准备插件自动化运行环境"))?;
         fs::write(home.join("codex-input-wait.mjs"),include_str!("../codex-input-wait.mjs")).map_err(|_|error("CODEX_STORAGE_ERROR","无法准备问答等待运行环境"))?;
+        fs::write(home.join("model-input-context.mjs"),input_context_source).map_err(|_|error("CODEX_STORAGE_ERROR","无法准备按需模型上下文"))?;
         fs::write(&host, host_source).map_err(|_| error("CODEX_STORAGE_ERROR", "无法准备 Codex 适配层"))?;
-        fs::write(&tools, if isolated{include_str!("../worker-tools.json")}else{include_str!("../codex-tools.json")}).map_err(|_| error("CODEX_STORAGE_ERROR", "无法准备 GeoD 工具定义"))?;
+        fs::write(&tools, tool_source).map_err(|_| error("CODEX_STORAGE_ERROR", "无法准备 GeoD 工具定义"))?;
         let (sender, receiver) = mpsc::channel();
         let (stdin, route) = {
             let mut pool = hosts.lock().unwrap();
@@ -359,10 +378,11 @@ async fn run_operation(
             (Arc::clone(&host.input), Arc::clone(&host.route))
         };
         let cancelled=Arc::new(AtomicBool::new(false));
+        let safety=Arc::new(Mutex::new(crate::execution_safety::Guard::default()));
         {
             let mut runs = active.lock().unwrap();
             if runs.contains_key(&run_id) { return Err(error("CODEX_BUSY", "请求编号已经在执行")); }
-            runs.insert(run_id.clone(), ActiveRun { owner:owner.clone(), input: Arc::clone(&stdin), cancelled:cancelled.clone() });
+            runs.insert(run_id.clone(), ActiveRun { owner:owner.clone(), host_key:host_key.clone(), input: Arc::clone(&stdin), cancelled:cancelled.clone(),safety:safety.clone() });
         }
         *route.lock().unwrap() = Some(sender);
         let start = json!({"type":operation_type,"runId":run_id,"options":{"codex":executable,"home":home,"sqliteHome":sqlite_home,"toolsFile":tools,"capabilities":capabilities},"params":{"conversationId":conversation_id,"threadKey":thread_key,"workspace":workspace,"permission":settings.permission,"outputCrs":settings.output_crs,"rtkOutput":if isolated{None}else{crate::rtk_runtime::descriptor(&owner)},"input":input,"history":history,"images":images,"historyImages":history_images,"skillDirectories":extensions["skillDirectories"],"selectedSkills":extensions["selectedSkills"],"mcpServers":extensions["mcpServers"],"pluginHooks":extensions["pluginHooks"],"memory":memory,"background":background,"sourceConversationId":operation["sourceConversationId"],"resumeThread":resume,"sourceThread":source_thread}});
@@ -370,13 +390,68 @@ async fn run_operation(
         let mut result = Err(error("CODEX_PROCESS_ERROR", "Codex 对话进程提前结束，请重新发送消息"));
         let last_model_error=Arc::new(Mutex::new(None::<ServiceError>));
         let hook_calls=Arc::new(Mutex::new(HashMap::<String,Arc<AtomicBool>>::new()));
-        while let Ok(value) = receiver.recv() {
+        let mut cancellation = CancellationDeadline::default();
+        let mut forced_stop = false;
+        let mut held_model:Option<Value>=None;
+        loop {
+            if cancellation.expired(cancelled.load(Ordering::Acquire), std::time::Instant::now()) {
+                result = Ok(json!({"status":"interrupted","text":""}));
+                forced_stop = true;
+                break;
+            }
+            // Keep receiving host heartbeats while the same model request waits
+            // for a human decision. No new generation or host restart is needed.
+            let resume=if held_model.is_some(){
+                if services::current_user_id(&services).ok().as_deref()!=Some(&owner){result=Err(error("ACCOUNT_CHANGED","账号已切换，执行确认已取消。"));break;}
+                let review={let mut g=safety.lock().unwrap();if g.review.as_ref().is_some_and(|r|r.decision.is_some()){g.review.take()}else{None}};
+                if let Some(review)=review{
+                    let decision=review.decision.as_ref().unwrap();
+                    if let Err(cause)=crate::execution_safety::approve(&app.state::<crate::ai_channels::AiChannels>(),&owner,&conversation_id,&run_id,&review,decision){result=Err(cause);break;}
+                    if matches!(decision,crate::execution_safety::Decision::Stop){cancelled.store(true,Ordering::Release);let _=write_command(&stdin,&json!({"type":"interrupt"}));held_model=None;None}
+                    else{ safety.lock().unwrap().resume(&review.spending);let _=write_command(&stdin,&json!({"type":"policyResume"}));let mut model=held_model.take().unwrap();if review.reason=="repeat"{if let Some(input)=model["request"]["input"].as_array_mut(){input.push(json!({"role":"developer","content":[{"type":"input_text","text":"The native runtime detected stalled operations, including unchanged prerequisites or failure families. The human chose to continue with a changed approach. Reuse the durable checkpoint; resolve the blocked condition or use a materially different valid method. Continue only the original authorized goal."}]}));}}let _=write_command(&stdin,&json!({"type":"userInputState","requestId":model["requestId"],"waiting":false}));Some(model)}
+                }else{None}
+            }else{None};
+            let value = if let Some(model)=resume{model}else{match receiver.recv_timeout(std::time::Duration::from_millis(100)) {
+                Ok(value) => value,
+                Err(mpsc::RecvTimeoutError::Timeout) => continue,
+                Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            }};
             if value.get("runId").is_some_and(|id| id != &run_id) { continue; }
             if value["type"] == "done" { result = Ok(value["result"].clone()); break; }
             if value["type"] == "failed" { result = Err(error("CODEX_TURN_FAILED", value["error"].as_str().unwrap_or("Codex 对话失败"))); break; }
-            if value["type"]=="pluginHookMcpCancel" {
+            if value["type"]=="pluginHookMcpCancel"||value["type"]=="backgroundWaitCancel" {
                 if let Some(flag)=value["requestId"].as_str().and_then(|id|hook_calls.lock().unwrap().get(id).cloned()){flag.store(true,Ordering::Release);}
                 continue;
+            }
+            if value["type"]=="backgroundWait" {
+                let request_id=value["requestId"].as_str().unwrap_or("").to_owned();
+                if request_id.is_empty()||value["conversationId"]!=conversation_id {result=Err(error("BACKGROUND_WAIT_INVALID","本机等待请求与会话不匹配"));break;}
+                let detached=Arc::new(AtomicBool::new(false));hook_calls.lock().unwrap().insert(request_id.clone(),detached.clone());
+                let wait_app=app.clone();let wait_owner=owner.clone();let wait_conversation=conversation_id.clone();let wait_input=stdin.clone();let wait_events=events.clone();let wait_cancel=cancelled.clone();let waits=hook_calls.clone();
+                std::thread::spawn(move||{
+                    let outcome=crate::background_wait::wait(&wait_app,&wait_owner,&wait_conversation,value["kind"].as_str().unwrap_or(""),value["resourceId"].as_str().unwrap_or(""),&wait_cancel,&detached,|state|{let _=wait_events(json!({"type":"stage","stage":"backgroundWaiting","message":format!("本机下载与核验：{state}")}));});
+                    let _=write_command(&wait_input,&json!({"type":"response","requestId":request_id,"value":outcome}));waits.lock().unwrap().remove(&request_id);
+                });
+                continue;
+            }
+            if value["type"]=="policyState" {
+                let facts=if cancelled.load(Ordering::Acquire){json!({"error":"EXECUTION_CANCELLED","message":"执行已取消"})}
+                else if services::current_user_id(&services).ok().as_deref()!=Some(&owner){json!({"error":"ACCOUNT_CHANGED","message":"账号已切换，执行已停止"})}
+                else{match read_workspace(&app,&state,&services,&conversation_id){
+                    Ok(settings)=>json!({"permission":settings.permission,"outputCrs":settings.output_crs,"connectionsRevision":app.state::<crate::extensions::ExtensionState>().policy_revision(&owner).ok(),"imagery":crate::task_state_context::snapshot(&state.db_path,&owner,&conversation_id)}),
+                    Err(cause)=>json!({"error":cause.code,"message":cause.message})
+                }};
+                if let Err(cause)=write_command(&stdin,&json!({"type":"response","requestId":value["requestId"],"value":facts})){result=Err(cause);break;}
+                continue;
+            }
+            if value["type"]=="policySignal" {
+                safety.lock().unwrap().policy_stalled(value["tool"].as_str().unwrap_or("执行策略"));
+                continue;
+            }
+            // Every dynamic dispatch checks the current native identity and
+            // cancellation before it is allowed to reach a frontend executor.
+            if value["type"]=="tool" && (cancelled.load(Ordering::Acquire)||services::current_user_id(&services).ok().as_deref()!=Some(&owner)) {
+                let _=write_command(&stdin,&json!({"type":"response","requestId":value["requestId"],"value":{"result":{"error":"EXECUTION_CANCELLED","message":"执行已取消或账号已切换；未派发工具"}}}));continue;
             }
             if value["type"]=="pluginHookMcp" {
                 let request_id=value["requestId"].as_str().unwrap_or("").to_owned();
@@ -403,13 +478,32 @@ async fn run_operation(
                 if write_command(&stdin,&reply).is_err(){result=Err(error("CODEX_PROCESS_ERROR","无法保存本机地图结果"));break;}continue;
             }
             if value["type"] == "model" {
+                if cancelled.load(Ordering::Acquire){continue;}
+                if held_model.is_some(){result=Err(error("EXECUTION_SAFETY","执行确认期间收到重复模型请求。"));break;}
+                let spending=match crate::execution_safety::spending(&app.state::<crate::ai_channels::AiChannels>(),&owner,&conversation_id){Ok(s)=>s,Err(cause)=>{result=Err(cause);break;}};
+                let mut g=safety.lock().unwrap();
+                let reason=spending.reason(&g.acknowledged_unknown).or_else(||g.repeated().then_some("repeat"));
+                if let Some(reason)=reason{
+                    if background||isolated{result=Err(error("USER_INPUT_REQUIRED","会话预算或重复操作需要人工确认，请回到会话检查后继续。"));break;}
+                    let id=format!("execution-review-{}",uuid::Uuid::new_v4());
+                    let review_event=json!({"type":"request","requestId":id,"method":"geod/executionReview","params":{"reason":reason,"spending":spending.view(),"lastTool":g.last_tool,"conversationId":conversation_id}});
+                    g.review=Some(crate::execution_safety::Review{id,reason:reason.into(),spending,decision:None});drop(g);
+                    if let Err(cause)=write_command(&stdin,&json!({"type":"userInputState","requestId":value["requestId"],"waiting":true})){result=Err(cause);break;}
+                    held_model=Some(value);
+                    if let Err(cause)=events(review_event){result=Err(cause);break;}continue;
+                }
+                drop(g);
+                let hosted=!model_route.is_personal()&&!model_route.is_sponsored();
+                if let Err(cause)=crate::execution_safety::requested(&app.state::<crate::ai_channels::AiChannels>(),&owner,&conversation_id,value["generationId"].as_str().unwrap_or(""),hosted){result=Err(cause);break;}
                 if operation_type=="start"{if let Err(cause)=crate::execution_receipts::requested(&receipts,&owner,&run_id,value["generationId"].as_str().unwrap_or("")){result=Err(error(cause.code,cause.message));break;}}
                 let service = services.inner().clone(); let model_input = Arc::clone(&stdin); let channel = events.clone();
                 let receipt_path=receipts.clone();let receipt_owner=owner.clone();let receipt_run=run_id.clone();
                 let selected_route=model_route.clone();let model_app=app.clone();let model_cancel=cancelled.clone();let model_error=last_model_error.clone();
+                let model_conversation=conversation_id.clone();
                 let _ = events(json!({"type":"model","generationId":value["generationId"]}));
                 std::thread::spawn(move || {
                     let request_id = &value["requestId"];
+                    let request_generation_id=value["generationId"].as_str().unwrap_or("").to_owned();
                     let on_event=|kind:&str, data:&Value| {
                         if model_cancel.load(Ordering::Acquire){return;}
                         if kind=="wire"{let _=write_command(&model_input,&json!({"type":"wire","requestId":request_id,"event":data["event"],"value":data["data"]}));}
@@ -417,15 +511,26 @@ async fn run_operation(
                             let _ = write_command(&model_input, &json!({"type":"delta","requestId":request_id,"part":if kind == "reasoning_delta" {"reasoning"} else {"content"},"text":data["text"]}));
                         }
                     };
-                    let generation = if selected_route.is_personal(){crate::ai_channels::generate(&model_app,&selected_route,value["generationId"].as_str().unwrap_or(""),value["conversationId"].as_str().unwrap_or(""),value["request"].clone(),model_cancel.clone(),on_event)}else if selected_route.is_sponsored(){services::codex_generate_sponsored(&service, value["generationId"].as_str().unwrap_or(""), value["conversationId"].as_str().unwrap_or(""), value["request"].clone(),selected_route.sponsor_request(),on_event)}else{services::codex_generate(&service,value["generationId"].as_str().unwrap_or(""),value["conversationId"].as_str().unwrap_or(""),value["request"].clone(),on_event)};
+                    let generation = (|| {
+                        if services::current_user_id(&service)? != receipt_owner { return Err(error("AUTH_REQUIRED","账号已切换，请重新发起此会话请求")); }
+                        let request = if isolated { value["request"].clone() } else {
+                            let facts=crate::task_state_context::snapshot(&model_app.state::<AppState>().db_path,&receipt_owner,&model_conversation);
+                            crate::task_state_context::responses(value["request"].clone(),&facts)
+                        };
+                        if selected_route.is_personal(){crate::ai_channels::generate(&model_app,&selected_route,value["generationId"].as_str().unwrap_or(""),&model_conversation,request,model_cancel.clone(),on_event)}else if selected_route.is_sponsored(){services::codex_generate_sponsored(&service,value["generationId"].as_str().unwrap_or(""),&model_conversation,request,selected_route.sponsor_request(),on_event)}else{services::codex_generate(&service,value["generationId"].as_str().unwrap_or(""),&model_conversation,request,on_event)}
+                    })();
                     let reply = match generation { Ok(value) => {
                         *model_error.lock().unwrap()=None;
+                        let cost=crate::execution_safety::settled(&model_app.state::<crate::ai_channels::AiChannels>(),&receipt_owner,&model_conversation,request_generation_id.as_str(),&value,hosted);
+                        if let Err(cause)=cost{*model_error.lock().unwrap()=Some(error(cause.code,cause.message.clone()));let _=write_command(&model_input,&json!({"type":"response","requestId":request_id,"error":cause.message}));return;}
+                        if let Ok(spending)=crate::execution_safety::spending(&model_app.state::<crate::ai_channels::AiChannels>(),&receipt_owner,&model_conversation){let _=channel(json!({"type":"spending","accountId":receipt_owner,"conversationId":model_conversation,"spending":spending.view()}));}
                         match crate::execution_receipts::generation(&receipt_path,&receipt_owner,&receipt_run,&value){
                             Ok(())=>{let _=channel(json!({"type":"generationResult","generation":value}));json!({"type":"response","requestId":request_id,"value":value})},
                             Err(cause)=>json!({"type":"response","requestId":request_id,"error":cause.message})
                         }
                     }, Err(cause) => {
                         *model_error.lock().unwrap()=Some(error(cause.code,cause.message.clone()));
+                        if let Ok(spending)=crate::execution_safety::spending(&model_app.state::<crate::ai_channels::AiChannels>(),&receipt_owner,&model_conversation){let _=channel(json!({"type":"spending","accountId":receipt_owner,"conversationId":model_conversation,"spending":spending.view()}));}
                         if selected_route.is_personal(){if let Ok(Some(failed))=crate::ai_channels::generation_get(&model_app,&receipt_owner,value["generationId"].as_str().unwrap_or("")){let _=crate::execution_receipts::generation(&receipt_path,&receipt_owner,&receipt_run,&failed);let _=channel(json!({"type":"generationResult","generation":failed}));}}
                         json!({"type":"response","requestId":request_id,"error":cause.message,"errorCode":cause.code})
                     } };
@@ -433,6 +538,7 @@ async fn run_operation(
                 });
                 continue;
             }
+            safety.lock().unwrap().event(&value);
             if operation_type=="start"{if let Err(cause)=crate::execution_receipts::observe(&receipts,&owner,&run_id,&value){result=Err(error(cause.code,cause.message));break;}}
             crate::mcp_interaction::register_codex(&app,&owner,&conversation_id,&run_id,&value);
             if let Err(cause) = events(value) { result = Err(cause); break; }
@@ -443,13 +549,83 @@ async fn run_operation(
             if let Some(cause)=last_model_error.lock().unwrap().take(){result=Err(cause);}
         }
         cancelled.store(true,Ordering::Release);
-        if result.is_err() { let _ = write_command(&stdin, &json!({"type":"interrupt"})); hosts.lock().unwrap().remove(&host_key); }
+        if result.is_err() || forced_stop { let _ = write_command(&stdin, &json!({"type":"interrupt"})); hosts.lock().unwrap().remove(&host_key); }
         active.lock().unwrap().remove(&run_id);
         crate::mcp_interaction::dismiss_scope(&app,&run_id);
         *route.lock().unwrap() = None;
         if operation_type=="start"{let status=match &result{Ok(v)if v["status"]=="completed"=>"completed",Ok(v)if v["status"]=="interrupted"=>"interrupted",_=>"failed"};crate::execution_receipts::finish(&receipts,&owner,&run_id,status).map_err(|e|error(e.code,e.message))?;}
         result
     }).await.map_err(|_| error("CODEX_PROCESS_ERROR", "Codex 执行线程中断"))?
+}
+
+// A frontend timeout must also release the native conversation lease. Only an
+// explicitly cancelled turn gets this deadline; model and user-input waits do not.
+#[derive(Default)]
+struct CancellationDeadline { started: Option<std::time::Instant> }
+impl CancellationDeadline {
+    fn expired(&mut self, cancelled: bool, now: std::time::Instant) -> bool {
+        if !cancelled { return false; }
+        now.duration_since(*self.started.get_or_insert(now)) >= std::time::Duration::from_secs(3)
+    }
+}
+
+fn conversation_execution(runtime: &CodexState, owner: &str, conversation: &str) -> Value {
+    let key = format!("{owner}:{conversation}");
+    let leased = runtime.leases.lock().unwrap();
+    let runs = runtime.active.lock().unwrap();
+    let run = runs.iter().find(|(_, run)| run.owner == owner && run.host_key == key);
+    json!({"busy":leased.contains(&key),"runId":run.map(|(id,_)|id),"stopping":run.is_some_and(|(_,run)|run.cancelled.load(Ordering::Acquire))})
+}
+
+#[tauri::command]
+pub fn codex_conversation_status(runtime: State<'_, CodexState>, services: State<'_, services::ServiceState>, conversation_id: String) -> Result<Value, ServiceError> {
+    let owner = services::current_user_id(&services)?;
+    Ok(conversation_execution(runtime.inner(), &owner, &conversation_id))
+}
+
+#[tauri::command]
+pub async fn codex_conversation_stop(runtime: State<'_, CodexState>, services: State<'_, services::ServiceState>, conversation_id: String) -> Result<Value, ServiceError> {
+    let owner = services::current_user_id(&services)?;
+    let status = conversation_execution(runtime.inner(), &owner, &conversation_id);
+    if let Some(run) = status["runId"].as_str() {
+        if let Err(cause) = send_command(runtime.inner(), &owner, run, json!({"type":"interrupt"})) {
+            if cause.code != "CODEX_RUN_NOT_FOUND" { return Err(cause); }
+        }
+    }
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(6);
+    loop {
+        if services::current_user_id(&services)? != owner { return Err(error("ACCOUNT_CHANGED","账号已切换，请在当前账号重新操作")); }
+        let status = conversation_execution(runtime.inner(), &owner, &conversation_id);
+        if status["busy"] != true { return Ok(status); }
+        if std::time::Instant::now() >= deadline { return Err(error("CODEX_BUSY","上一轮仍在停止，请稍后再发送消息。")); }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+}
+
+#[cfg(test)]
+mod cancellation_tests {
+    use super::*;
+    #[test]
+    fn only_explicit_cancellation_expires() {
+        let now = std::time::Instant::now();
+        let mut wait = CancellationDeadline::default();
+        assert!(!wait.expired(false, now));
+        assert!(!wait.expired(false, now + std::time::Duration::from_secs(3600)));
+        assert!(!wait.expired(true, now + std::time::Duration::from_secs(3600)));
+        assert!(!wait.expired(true, now + std::time::Duration::from_secs(3602)));
+        assert!(wait.expired(true, now + std::time::Duration::from_secs(3603)));
+    }
+    #[test]
+    fn execution_status_is_scoped_to_account_and_conversation() {
+        let runtime = CodexState::new(PathBuf::new());
+        runtime.leases.lock().unwrap().insert("owner:chat".into());
+        assert_eq!(conversation_execution(&runtime,"owner","chat")["busy"],true);
+        assert_eq!(conversation_execution(&runtime,"other","chat")["busy"],false);
+        assert_eq!(conversation_execution(&runtime,"owner","other")["busy"],false);
+        let guard = TurnGuard { leases: runtime.leases.clone(), key: "owner:chat".into() };
+        drop(guard);
+        assert_eq!(conversation_execution(&runtime,"owner","chat")["busy"],false);
+    }
 }
 
 #[tauri::command]
@@ -462,6 +638,11 @@ pub(crate) fn send_command(runtime: &CodexState, owner: &str, run_id: &str, comm
     if !matches!(command["type"].as_str(), Some("response" | "interrupt" | "steer" | "userInputState")) { return Err(error("CODEX_COMMAND_INVALID", "无效的 Codex 响应")); }
     let runs = runtime.active.lock().unwrap();
     let run=runs.get(run_id).filter(|run| run.owner == owner).ok_or_else(|| error("CODEX_RUN_NOT_FOUND", "本轮对话已结束"))?;
+    if command["type"]=="response"{
+        let id=command["requestId"].as_str().unwrap_or("");let mut guard=run.safety.lock().unwrap();
+        if guard.reply(id,&command["value"])?{return Ok(());}
+        guard.tool_reply(id,&json!([command["value"],command["error"]]));
+    }
     if command["type"]=="interrupt"{run.cancelled.store(true,Ordering::Release);}
     let input = Arc::clone(&run.input);
     drop(runs);

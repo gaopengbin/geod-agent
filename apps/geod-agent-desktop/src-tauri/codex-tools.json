@@ -184,6 +184,83 @@
   {
     "type": "function",
     "function": {
+      "name": "runtime_task_state",
+      "description": "Read the durable execution checkpoint: goal revision, confirmed requirements, unresolved operations, failure recovery conditions and evidence. Page evidence with offset/limit. This is not a download status poll.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "offset": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 64
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "runtime_task_update",
+      "description": "Propose a structured goal or amend its requirements. expectedRevision prevents stale updates. Model proposals cannot grant permissions or mark outputs verified. Use start only for a genuinely new user goal; amend keeps confirmed compatible requirements. complete requires the named native evidence records. Conversation budget remains cumulative.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "expectedRevision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "amend",
+              "start",
+              "complete"
+            ]
+          },
+          "objective": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "deliverables": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          "evidenceIds": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "type": "string"
+            }
+          },
+          "invalidateRequirements": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "expectedRevision",
+          "action"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
       "name": "data_input_read",
       "description": "Read and attach a polygon boundary from one source: a user supplied HTTP(S) vector file / WFS GetFeature / ArcGIS query / OGC API Features items URL, a relative workspace vector filename, saved PostGIS connectionId, or a handle returned by this tool. Supports GeoJSON, Shapefile with sidecars or ZIP, GPKG/SQLite, KML/KMZ, GML, FGB, WKT and CSV WKT. Returns layer choices for multi-layer inputs; repeat with layer and the returned handle/connectionId. Supply sourceCrs only when known or explicitly provided; never guess a missing CRS. Points/lines cannot be clipping boundaries. Whole geometry remains on desktop. On success the boundary is attached to plan_imagery. Do not ask for manual GeoJSON conversion.",
       "parameters": {

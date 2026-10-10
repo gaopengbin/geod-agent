@@ -1,5 +1,5 @@
 /* The split grid has one width source. Handles overlap boundaries without taking content space. */
-.resizable-workspace { position: relative; }
+.resizable-workspace { position: relative; width: 100%; min-width: 0; }
 .workspace-separator { position: absolute; top: 0; bottom: 0; z-index: 12; display: flex; align-items: center; justify-content: center; width: 12px; margin-left: -6px; cursor: col-resize; touch-action: none; outline: none; }
 .workspace-separator > span { width: 3px; height: 40px; border-radius: 999px; background: var(--app-soft-text); opacity: 0; transition: opacity .16s; }
 .workspace-separator:hover > span, .workspace-separator:focus-visible > span { opacity: .7; }
@@ -33,7 +33,6 @@
 .resizable-workspace > .map-column { grid-column: 3; }
 .resizable-workspace > .right-panel { grid-column: 4; }
 .ai-workspace.resizable-workspace.results-open .right-panel { position: static; width: auto; max-width: none; box-shadow: none; z-index: auto; }
-.ai-workspace[data-layout="overlay"].results-open .right-panel { position: absolute; grid-column: auto; grid-row: auto; top: 0; right: 0; bottom: 0; margin: 12px; width: calc(var(--inspector-width) - 12px); z-index: 10; box-shadow: -8px 0 24px var(--app-shadow); animation: inspector-enter var(--app-motion-panel) var(--app-ease); }
 .ai-workspace[data-layout="compact"].results-open .right-panel { position: absolute; grid-column: auto; grid-row: auto; top: 0; left: var(--canvas-start); right: 0; bottom: 0; margin: 12px; z-index: 10; animation: inspector-enter var(--app-motion-panel) var(--app-ease); }
 .ai-workspace:is([data-layout="overlay"], [data-layout="compact"]):not(.results-open) > .map-column { margin-right: 12px; }
 .ai-workspace[data-layout="single"] > :is(.map-column, .right-panel) { margin: 0; border: 0; border-radius: 0; }
@@ -220,3 +219,4 @@
 .transcript-task-group.state-pending .transcript-task-icon, .transcript-task-group.state-pending .transcript-task-state { color: var(--app-soft-text); }
 .transcript-task-group.state-attention .transcript-task-icon, .transcript-task-group.state-attention .transcript-task-state { color: var(--app-warning); }
 @media (prefers-reduced-motion: reduce) { .task-spinner { animation-duration: 1.8s; } }
+.execution-review-card .field { margin:12px 0; }

@@ -50,6 +50,11 @@ mod agent_tasks;
 mod conversation_files;
 mod desktop_settings;
 mod desktop_backups;
+mod desktop_tray;
+mod task_state_context;
+mod context_settings;
+mod execution_safety;
+mod background_wait;
 
 use base64::Engine;
 use chrono::Utc;
@@ -1386,9 +1391,10 @@ async fn osm_basemap_tile(app: AppHandle, z: u8, x: u32, y: u32) -> Result<Strin
 }
 
 #[tauri::command]
-fn desktop_runtime_capabilities() -> serde_json::Value {
+fn desktop_runtime_capabilities(app: AppHandle) -> serde_json::Value {
     serde_json::json!({"version": env!("CARGO_PKG_VERSION"), "ipcContract": 1, "exportCrs": true,
-        "exportOptions": ["targetCrs", "resampling"], "conversationOutputCrs": true})
+        "exportOptions": ["targetCrs", "resampling"], "conversationOutputCrs": true,
+        "systemTray": desktop_tray::available(&app),"contextSettings":true,"conversationExecution":true,"executionSafety":true})
 }
 
 pub fn run() {
@@ -1408,15 +1414,13 @@ pub fn run() {
     {
         // Register first: a second launch must not create another OAuth flow or worker.
         if !daemon { builder = builder.plugin(tauri_plugin_single_instance::init(|app, _, _| {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.unminimize();
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
+            desktop_tray::show_main(app);
         })); }
     }
     builder
-        .on_window_event(|_, event| {
+        .manage(desktop_tray::DesktopTray::default())
+        .on_window_event(|window, event| {
+            desktop_tray::on_window_event(window, event);
             if matches!(event, tauri::WindowEvent::Destroyed) { data_jobs::cancel_all(); cache_management::cancel_all(); }
         })
         .manage(data_asset_protocol::DataAssets::default())
@@ -1486,6 +1490,9 @@ pub fn run() {
                 // companion. Commands report the precise background error.
                 if let Err(error) = client.ensure() { eprintln!("GeoD background unavailable: {}", error["code"]); }
                 app.manage(client);
+                if let Err(error) = desktop_tray::install(app.handle()) {
+                    eprintln!("GeoD tray unavailable; retaining ordinary window controls: {error}");
+                }
             }
             Ok(())
         })
@@ -1498,6 +1505,8 @@ pub fn run() {
             if matches!(invoke.message.command(), "background_status" | "background_stop" | "background_start") { return handlers(invoke); }
             let commands: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool = tauri::generate_handler![
             desktop_runtime_capabilities,
+            desktop_tray::desktop_tray_locale_set,
+            desktop_tray::desktop_quit,
             desktop_settings::desktop_settings_get,
             desktop_settings::desktop_autostart_set,
             desktop_settings::desktop_update_preferences,
@@ -1515,6 +1524,10 @@ pub fn run() {
             ai_channels::ai_channel_probe,
             ai_channels::ai_model_select,
             ai_channels::ai_model_selection,
+            context_settings::context_settings_get,
+            context_settings::context_settings_set,
+            execution_safety::execution_spending_get,
+            execution_safety::execution_spending_reconcile,
             data_credentials::tiles3d_connections_list,
             terrain_protocol::ion_terrain_open,
             terrain_protocol::ion_terrain_close,
@@ -1651,6 +1664,8 @@ pub fn run() {
             agent_memory::agent_memory_remove,
             extensions::skill_remove,
             codex_runtime::codex_command,
+            codex_runtime::codex_conversation_status,
+            codex_runtime::codex_conversation_stop,
             extensions::extensions_list,
             extensions::plugin_package::plugins_list,
             extensions::plugin_package::plugin_preview,

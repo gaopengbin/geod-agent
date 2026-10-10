@@ -57,7 +57,7 @@ test('real Codex returns job tool results to the model instead of injecting a ho
   if(process.env.GEOD_CODEX_TEST_TRACE)console.log(JSON.stringify({type:event.type,method:event.method,stage:event.stage,tool:event.tool,requestId:event.requestId}));
   events.push(event);
   if(event.type==='model'){
-   const contract=codexRequest(event.request);assert.ok(contract.messages.some(m=>m.role==='system'),'Real Codex instructions reach the gateway contract');assert.ok(contract.tools.length>27,'Native Codex tools are preserved');
+   const contract=codexRequest(event.request);assert.ok(contract.messages.some(m=>m.role==='system'),'Real Codex instructions reach the gateway contract');assert.ok(contract.tools.some(tool=>tool.function.name==='runtime_tools_search'),'Native tools remain discoverable with exact schemas');
    modelCalls++;
    runModelCalls++;
    listener({type:'delta',requestId:event.requestId,part:'reasoning',text:''});
@@ -79,7 +79,7 @@ test('real Codex returns job tool results to the model instead of injecting a ho
  assert.ok(events.some(e=>e.type==='event'&&e.method==='item/agentMessage/delta'),'The real engine emits streaming text');
  assert.ok(!events.some(e=>e.type==='event'&&e.params?.item?.type==='reasoning'),'Empty upstream reasoning chunks cannot invent an unfinished thinking item');
  mode='handoff';runModelCalls=0;const before=modelCalls;
- const second=await host.turn({...params,permission:'fullAccess'});assert.equal(host.processId,pid,'Consecutive turns reuse the engine process');
+ const second=await host.turn({...params,input:'开始下载任务',permission:'fullAccess'});assert.equal(host.processId,pid,'Consecutive turns reuse the engine process');
  assert.equal(second.threadId,first.threadId);assert.equal(second.status,'completed');assert.equal(second.text,'真实引擎调用完成');
  assert.equal(modelCalls-before,2,'The model receives the job result and produces its own final answer');
  assert.ok(!second.text.includes('FAKE_HOST_ANSWER'));

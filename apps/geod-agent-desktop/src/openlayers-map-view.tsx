@@ -191,8 +191,12 @@ export function MapView({ conversationId, bounds, boundary, tileGrids, completed
       restoring = false; detach = attachOpenLayers(conversationId,execute); setReady(true);
     })();
     map.on("moveend",persist);
-    const resize = new ResizeObserver(() => map.updateSize()); resize.observe(container.current);
-    return () => { persist(); disposed = true; detach?.(); resize.disconnect(); bridge.dispose(); map.setTarget(undefined); map.dispose(); mapRef.current = null; };
+    let resizeFrame: number | null = null;
+    const resize = new ResizeObserver(() => {
+      if (resizeFrame !== null) return;
+      resizeFrame = requestAnimationFrame(() => { resizeFrame = null; if (!disposed) map.updateSize(); });
+    }); resize.observe(container.current);
+    return () => { persist(); disposed = true; detach?.(); resize.disconnect(); if (resizeFrame !== null) cancelAnimationFrame(resizeFrame); bridge.dispose(); map.setTarget(undefined); map.dispose(); mapRef.current = null; };
   }, [conversationId]);
 
   useEffect(() => {

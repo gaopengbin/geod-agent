@@ -85,13 +85,21 @@ export function createPaymentHostCandidate(config,modelLedger,authenticate){
       throw new PaymentError('PAYMENT_DISABLED','Payments have not been enabled',409);
     }catch(cause){if(res.headersSent){res.destroy();return true;}json(res,cause instanceof PaymentError?cause.status:500,{error:{code:cause instanceof PaymentError?cause.code:'PAYMENT_INTERNAL_ERROR',message:cause instanceof PaymentError?cause.message:'Payment operation unavailable'}});return true;}
   }
-  async function reserve(account,generationId,{sponsored=false,codex=false}={}){
+  async function reserve(account,generationId,{sponsored=false,codex=false,request=null}={}){
     if(!ledger||!enforced||sponsored)return;
-    // A server-configured upper bound, never a client-supplied amount. Actual
-    // signed provider usage determines settlement; an overrun stays in review.
-    const maximum=BigInt(config.contextWindow)*pricingCandidate.retail.uncachedInput+
-      BigInt(codex?config.maxOutputTokens:2048)*pricingCandidate.retail.output;
-    await ledger.reserveGeneration(account,generationId,String(maximum));
+    // Use the normalized request actually sent upstream, including instructions
+    // and tools. UTF-8 bytes plus framing are a conservative text-token estimate,
+    // not the configured context capacity. Image token cost is provider-specific;
+    // retain the context bound for images until a trusted estimator is available.
+    if(!request||!Array.isArray(request.messages))throw new PaymentError('BILLING_REQUEST_REQUIRED','Normalized server request required');
+    const tools=request.tools??[];
+    const hasImages=request.messages.some(message=>Array.isArray(message.content)&&message.content.some(part=>part.type==='image_url'||part.type==='input_image'));
+    const inputTokens=hasImages?config.contextWindow:Math.min(config.contextWindow,Buffer.byteLength(JSON.stringify({messages:request.messages,tools}),'utf8')+256+32*request.messages.length+64*tools.length);
+    // A positive available wallet admits the request. The atomic hold prevents
+    // concurrent reuse but does not shorten the model's configured response.
+    // Trusted actual usage settles up to the wallet; excess is recorded, waived,
+    // and cannot become debt against a future top-up.
+    return ledger.reserveGeneration(account,generationId,null,{inputTokens,maxOutputTokens:codex?config.maxOutputTokens:2048});
   }
   async function settlement(account,generation){
     if(!generation||!ledger||!enforced||generation.billingScope==='sponsored')return generation;

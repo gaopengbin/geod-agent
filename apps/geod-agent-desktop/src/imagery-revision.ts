@@ -17,14 +17,11 @@ const same=(a:unknown,b:unknown)=>JSON.stringify(a)===JSON.stringify(b);
 const formats=(v:unknown)=>Array.isArray(v)&&v.every(x=>typeof x==='string')?[...new Set(v)].sort():null;
 
 /** Trust an owned native plan, never an assistant's claim or a model-supplied CRS. */
-export async function inheritedImageryCrs(request:RevisionRequest,load:(id:string)=>Promise<StoredPlan|null>):Promise<InheritedImageryCrs|null> {
- if(request.toolName!=='plan_imagery')return null;
+async function revisionPlan(request:Omit<RevisionRequest,'toolName'|'args'>,load:(id:string)=>Promise<StoredPlan|null>) {
  const origin=inputOrigin(request.messages,request.userMessageId),index=request.messages.findIndex(m=>m.id===origin&&m.role==='user');
  if(index<0)return null;
  const human=request.messages[index],intent=humanCrsIntent(human.content),zoom=zoomRevision(human.content);
  if(zoom===null||intent.clear||intent.crs||intent.needsClarification)return null;
- const levels=request.args.zoom!==undefined?[request.args.zoom]:request.args.zoomLevels??(request.args.zoomMin===request.args.zoomMax?[request.args.zoomMin]:null);
- if(!same(levels,[zoom]))return null;
  // The latest actual planning record is the reference. Do not search older
  // unrelated plans merely because their parameters happen to match.
  const previous=[...request.messages.slice(0,index)].reverse().find(m=>m.role==='tool'&&['plan_imagery','plan_imagery_batch'].includes(m.toolName??'')&&m.details);
@@ -33,7 +30,26 @@ export async function inheritedImageryCrs(request:RevisionRequest,load:(id:strin
  const id=record.result?.planId;
  if(typeof id!=='string'||!request.planIds.includes(id))return null;
  const stored=await load(id);if(!stored||stored.planId!==id)return null;
- const spec=stored.plan.spec,old=record.arguments;
+ const spec=stored.plan.spec;
+ if(spec.kind!=='imagery')return null;
+ return {stored,old:record.arguments,zoom};
+}
+
+/** Resolve a zoom-only clarification before the model has supplied new plan arguments. */
+export async function revisionCrsForQuestions(request:Omit<RevisionRequest,'toolName'|'args'>,load:(id:string)=>Promise<StoredPlan|null>):Promise<InheritedImageryCrs|null> {
+ const reference=await revisionPlan(request,load);if(!reference)return null;
+ const {stored}=reference,spec=stored.plan.spec;
+ if(request.activeBoundary&&(!same(request.activeBoundary.bounds,spec.bounds)||!same(request.activeBoundary.geometry,spec.boundary)))return null;
+ const crs=typeof spec.exportOptions?.targetCrs==='string'?normalizeExportCrs(spec.exportOptions.targetCrs):null;
+ return crs?{crs,resampling:spec.exportOptions?.resampling??'nearest',planId:stored.planId}:null;
+}
+
+export async function inheritedImageryCrs(request:RevisionRequest,load:(id:string)=>Promise<StoredPlan|null>):Promise<InheritedImageryCrs|null> {
+ if(request.toolName!=='plan_imagery')return null;
+ const reference=await revisionPlan(request,load);if(!reference)return null;
+ const {stored,old,zoom}=reference,spec=stored.plan.spec,id=stored.planId;
+ const levels=request.args.zoom!==undefined?[request.args.zoom]:request.args.zoomLevels??(request.args.zoomMin===request.args.zoomMax?[request.args.zoomMin]:null);
+ if(!same(levels,[zoom]))return null;
  if(!old||spec.kind!=='imagery'||request.args.sourceId!==spec.sourceId||!same(formats(request.args.outputFormats),formats(spec.outputFormats)))return null;
  let matchingRange=false;
  if(typeof request.args.boundaryId==='string'){
