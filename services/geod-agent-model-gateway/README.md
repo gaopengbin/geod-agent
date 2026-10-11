@@ -143,6 +143,7 @@ version, without prompts or upstream credentials. Checkout/return-page visits
 never credit money. Ambiguous payment/refund results reconcile the original ID.
 
 Keep `payment-host-candidate.mjs`, `payment-ledger-candidate.mjs`,
+`monthly-plans.mjs`,
 `payment-http-candidate.mjs`, `alipay-payment-candidate.mjs`,
 `pricing-candidate.mjs`, `welcome-credit-policy.mjs` and the locked SDK dependencies with `server.mjs` when
 preparing a candidate package. This wiring is still a locally verified candidate:

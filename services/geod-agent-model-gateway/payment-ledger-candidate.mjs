@@ -55,9 +55,12 @@ export function createPaymentLedgerCandidate(path,{gateway=null,loadGeneration,p
     const prior=db.prepare('SELECT value FROM geod_payment_meta WHERE key=\'merchant\'').get();
     if(prior&&prior.value!==binding){db.close();fail('PAYMENT_LEDGER_SCOPE','Payment ledger belongs to a different merchant or environment');}
     db.prepare('INSERT OR IGNORE INTO geod_payment_meta VALUES (\'merchant\',?)').run(binding);
-  }else if(db.prepare('SELECT 1 FROM geod_payment_meta WHERE key=\'merchant\'').get()){
+  }else if(!creditOnly&&db.prepare('SELECT 1 FROM geod_payment_meta WHERE key=\'merchant\'').get()){
     db.close();fail('PAYMENT_LEDGER_SCOPE','A merchant ledger cannot be reopened as a credit-only wallet');
   }
+  // Disabling cash checkout must not strand previously granted/purchased
+  // Credits. The merchant binding stays intact; requirePayments still denies
+  // every payment mutation and re-enabling verifies the original merchant.
   if(welcomeCredit){
     const key='welcome:'+welcomeCredit.policyId,terms=JSON.stringify({creditNanoCny:welcomeCredit.creditNanoCny});
     db.prepare('INSERT OR IGNORE INTO geod_payment_meta VALUES (?,?)').run(key,terms);
@@ -301,7 +304,7 @@ export function createPaymentLedgerCandidate(path,{gateway=null,loadGeneration,p
     welcomeCreditStatus:welcomeStatus(),
     welcomeCreditDecision:db.prepare("SELECT state,policy_id AS policyId,created_at AS createdAt FROM geod_welcome_decisions WHERE account=? ORDER BY CASE state WHEN 'granted' THEN 0 ELSE 1 END,created_at DESC LIMIT 1").get(account)??null,
     balanceNanoCny:String(balance(account)),reservedNanoCny:String(reserved(account)),frozenNanoCny:String(frozen(account)),availableNanoCny:String(balance(account)-reserved(account)),
-    subscription:db.prepare('SELECT expires_at AS expiresAt FROM geod_payment_subscriptions WHERE account=?').get(account)??null,
+    subscription:(()=>{const row=db.prepare('SELECT s.expires_at AS expiresAt,o.product FROM geod_payment_subscriptions s JOIN geod_payment_orders o ON o.id=s.order_id WHERE s.account=?').get(account);return row?{expiresAt:row.expiresAt,lastProduct:JSON.parse(row.product)}:null;})(),
     orders:db.prepare('SELECT * FROM geod_payment_orders WHERE account=? ORDER BY created_at DESC,id LIMIT 100').all(account).map(safeOrder),
     orderCount:db.prepare('SELECT COUNT(*) AS count FROM geod_payment_orders WHERE account=?').get(account).count,
     refunds:db.prepare('SELECT * FROM geod_cash_refunds WHERE account=? ORDER BY created_at DESC,id DESC LIMIT 100').all(account).map(safeRefund),

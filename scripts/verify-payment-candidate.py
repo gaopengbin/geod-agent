@@ -47,7 +47,7 @@ report['sourceAdapterSha256'] = hashlib.sha256(source.read_bytes()).hexdigest()
 report['sdkVersion'] = lock['packages']['node_modules/alipay-sdk']['version']
 report['networkDependencyVersion'] = lock['packages']['node_modules/urllib']['version']
 report['files'] = {name:hashlib.sha256((service/name).read_bytes()).hexdigest() for name in
-                  ['alipay-payment-candidate.mjs','payment-ledger-candidate.mjs','payment-http-candidate.mjs','payment-host-candidate.mjs','pricing-candidate.mjs','server.mjs',
+                  ['alipay-payment-candidate.mjs','payment-ledger-candidate.mjs','payment-http-candidate.mjs','payment-host-candidate.mjs','monthly-plans.mjs','pricing-candidate.mjs','server.mjs',
                    'test/payment-candidate.test.mjs','test/payment-host.test.mjs','test/helpers/payment-fixture.mjs','test/helpers/payment-ledger-child.mjs','package-lock.json']}
 gateway = psutil.Process(baseline['originalGatewayPid'])
 assert gateway.is_running() and abs(gateway.create_time()-baseline['originalGatewayCreatedAt']) < .01

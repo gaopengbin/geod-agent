@@ -1,0 +1,26 @@
+{
+  "billingMode": "enforced",
+  "dbPath": "REPLACE_WITH_EXISTING_GEOD_CREDIT_WALLET_ABSOLUTE_PATH",
+  "catalogueApproved": false,
+  "approvedPricingVersion": "",
+  "approvedCatalogueSha256": "",
+  "approvedPlanPolicyVersion": "",
+  "maxDailyFen": 0,
+  "products": [
+    {"id":"agent-month-light","name":"轻量月套餐","kind":"subscription","priceFen":1000,"creditNanoCny":"10000000000","days":30},
+    {"id":"agent-month-standard","name":"标准月套餐","kind":"subscription","priceFen":2000,"creditNanoCny":"20000000000","days":30},
+    {"id":"agent-month-pro","name":"进阶月套餐","kind":"subscription","priceFen":5000,"creditNanoCny":"50000000000","days":30}
+  ],
+  "gateway": {
+    "environment": "sandbox",
+    "externalRequestsAuthorized": false,
+    "appId": "REPLACE_WITH_REVIEWED_APP_ID",
+    "sellerId": "REPLACE_WITH_REVIEWED_SELLER_ID",
+    "maxSingleFen": 0,
+    "privateKeyPath": "REPLACE_WITH_SERVER_KEY_PATH",
+    "alipayPublicKeyPath": "REPLACE_WITH_PROVIDER_KEY_PATH",
+    "notifyUrl": "https://geod.laogao.xyz/v1/payments/alipay/notify",
+    "returnUrl": "https://geod.laogao.xyz/agent",
+    "timeoutMs": 10000
+  }
+}

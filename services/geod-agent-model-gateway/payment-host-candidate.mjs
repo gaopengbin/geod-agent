@@ -8,6 +8,7 @@ import {createPaymentLedgerCandidate,paymentProductsCandidate} from './payment-l
 import {createPaymentCandidateHandler} from './payment-http-candidate.mjs';
 import {pricingCandidate} from './pricing-candidate.mjs';
 import {handleCreditHistory} from './credit-history.mjs';
+import {monthlyPlanPolicy,monthlyPlanPreview,isMonthlyTier} from './monthly-plans.mjs';
 
 export function paymentCatalogueDigest(products=paymentProductsCandidate){
   if(!Array.isArray(products)||!products.length)throw new PaymentError('PAYMENT_CONFIG_INVALID','Server catalogue required');
@@ -20,6 +21,8 @@ function requireReviewedTerms(options){
   if(options.catalogueApproved!==true)throw new PaymentError('PAYMENT_CATALOGUE_NOT_APPROVED','Reviewed catalogue required');
   if(options.approvedPricingVersion!==pricingCandidate.version||options.approvedCatalogueSha256!==paymentCatalogueDigest(options.products))
     throw new PaymentError('PAYMENT_TERMS_NOT_APPROVED','Reviewed price version and catalogue fingerprint required');
+  if(options.products?.some(isMonthlyTier)&&(options.approvedPlanPolicyVersion!==monthlyPlanPolicy.version||options.products.some(product=>isMonthlyTier(product)&&product.days!==monthlyPlanPolicy.periodDays)))
+    throw new PaymentError('PAYMENT_PLAN_POLICY_NOT_APPROVED','Reviewed monthly plan terms required');
 }
 
 export function readPaymentHostConfig(env){
@@ -62,7 +65,9 @@ export function createPaymentHostCandidate(config,modelLedger,authenticate){
     billingMode:enforced?'prepaid':config.quotaEnforced===false?'unlimited-test':'token-quota',
     pricingVersion:pricingCandidate.version,pricesApproved:options?.catalogueApproved===true,
     catalogueSha256:ledger&&!provider?null:paymentCatalogueDigest(ledger?.products()??paymentProductsCandidate),
-    welcomeCreditEnabled:!!welcomeCredit,welcomeCreditStatus:ledger?.welcomeStatus()??null,creditHistoryEnabled:!!ledger,paymentHistoryEnabled:!!ledger,products:ledger?.products()??paymentProductsCandidate});
+    welcomeCreditEnabled:!!welcomeCredit,welcomeCreditStatus:ledger?.welcomeStatus()??null,creditHistoryEnabled:!!ledger,paymentHistoryEnabled:!!ledger,
+    planPolicy:options?.products?.some(isMonthlyTier)?monthlyPlanPolicy:null,
+    planPreview:!provider?monthlyPlanPreview:null,products:ledger?.products()??paymentProductsCandidate});
   const onSignIn=account=>ledger?.grantWelcome(account);
   const paymentHandler=provider?createPaymentCandidateHandler({ledger,authenticate:async request=>{
     const account=await authenticate(request);onSignIn(account);return account;

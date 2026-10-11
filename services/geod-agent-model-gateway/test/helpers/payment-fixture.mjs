@@ -13,7 +13,7 @@ import {createPaymentCandidateHandler} from '../../payment-http-candidate.mjs';
 
 const sign=(text,key)=>createSign('RSA-SHA256').update(text).sign(key,'base64');
 const content=(fields,notification=false)=>Object.keys(fields).filter(key=>key!=='sign'&&(!notification||key!=='sign_type')).sort().map(key=>`${key}=${fields[key]}`).join('&');
-export async function fixture({maxDailyFen=100000}={}){
+export async function fixture({maxDailyFen=100000,products,welcomeCredit}={}){
   const root=mkdtempSync(join(tmpdir(),'geod-payment-candidate-'));
   const app=generateKeyPairSync('rsa',{modulusLength:2048}),provider=generateKeyPairSync('rsa',{modulusLength:2048});
   const trades=new Map(),refunds=new Map(),calls=[],generations=new Map();let ledger;
@@ -45,7 +45,7 @@ export async function fixture({maxDailyFen=100000}={}){
   const origin=`http://127.0.0.1:${providerServer.address().port}`;
   const config={environment:'fixture',appId,sellerId,maxSingleFen:5000,fixtureGateway:origin+'/gateway.do',fixturePrivateKey:app.privateKey.export({type:'pkcs8',format:'pem'}),fixtureProviderPublicKey:provider.publicKey.export({type:'spki',format:'pem'}),notifyUrl:origin+'/notify',returnUrl:origin+'/return',timeoutMs:1000};
   const gateway=createAlipayPaymentCandidate(config);
-  const options={gateway,loadGeneration:async(account,id)=>generations.get(account+':'+id),maxDailyFen,now:()=>clock};
+  const options={gateway,loadGeneration:async(account,id)=>generations.get(account+':'+id),maxDailyFen,now:()=>clock,...(products?{products}:{}),...(welcomeCredit?{welcomeCredit}:{})};
   ledger=createPaymentLedgerCandidate(join(root,'geod-payments.sqlite'),options);
   const tokens=new Map([[randomUUID(),'geod-alice'],[randomUUID(),'geod-bob']]);
   const [aliceToken,bobToken]=tokens.keys();

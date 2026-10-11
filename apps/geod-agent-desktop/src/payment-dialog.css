@@ -48,6 +48,29 @@
 .payment-product span { font-size:11px; color:var(--app-soft-text); line-height:1.5; }
 .payment-product > b { font-size:14px; font-weight:500; white-space:nowrap; }
 .payment-product > button { flex:none; }
+.monthly-plans { margin-top:20px; }
+.payment-monthly-content .monthly-plans { margin-top:14px; }
+.payment-plan-balance { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:8px; padding-bottom:12px; border-bottom:1px solid var(--app-line); }
+.payment-plan-balance span { font-size:12px; color:var(--app-soft-text); }
+.payment-plan-balance strong { font-size:16px; font-weight:600; }
+.monthly-plans-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+.monthly-plans-heading h3 { margin:0; font-size:14px; font-weight:600; }
+.monthly-plans-heading p { margin:6px 0 0; color:var(--app-soft-text); font-size:12px; line-height:1.6; }
+.monthly-plan-draft { flex:none; font-size:11px; color:var(--app-soft-text); padding:3px 7px; border:1px solid var(--app-line); border-radius:5px; }
+.monthly-plan-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; margin-top:14px; }
+.monthly-plan-grid .monthly-plan-card { display:flex; flex-direction:column; align-items:flex-start; justify-content:flex-start; height:auto; min-width:0; white-space:normal; padding:13px 11px; gap:8px; border-radius:9px; text-align:left; border-color:var(--app-line); transition-property:border-color,box-shadow; }
+.monthly-plan-grid .monthly-plan-card[aria-pressed=true] { border-color:var(--app-blue); background:var(--app-selected); box-shadow:inset 0 0 0 1px var(--app-blue); }
+.monthly-plan-name { font-size:12px; font-weight:500; color:var(--app-text); }
+.monthly-plan-price { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px; font-size:25px; font-weight:600; line-height:1.2; color:var(--app-text); }
+.monthly-plan-price small { font-size:10px; font-weight:400; color:var(--app-soft-text); }
+.monthly-plan-credits { font-size:11px; font-weight:400; color:var(--app-soft-text); }
+.monthly-plan-terms { margin-top:12px; }
+.monthly-plan-terms p { font-size:12px; color:var(--app-soft-text); line-height:1.7; margin:5px 0 0; }
+.monthly-plan-checkout { display:flex; align-items:center; justify-content:space-between; gap:12px; padding-top:14px; margin-top:13px; border-top:1px solid var(--app-line); }
+.monthly-plan-checkout > div { display:flex; align-items:baseline; gap:8px; }
+.monthly-plan-checkout span { font-size:12px; color:var(--app-soft-text); }
+.monthly-plan-checkout strong { font-size:19px; font-weight:600; }
+@media(max-width:440px) { .monthly-plan-grid { grid-template-columns:1fr; }.monthly-plan-grid .monthly-plan-card { flex-direction:row; align-items:center; flex-wrap:wrap; gap:8px 12px; padding:12px; }.monthly-plan-name { flex:1; }.monthly-plan-price { font-size:21px; }.monthly-plan-credits { flex-basis:100%; }.monthly-plan-draft { white-space:nowrap; } }
 .payment-caption { margin:12px 0 0; }
 .payment-orders { display:flex; flex-direction:column; gap:0; }
 .payment-order { padding:12px 0; border-bottom:1px solid var(--app-line); }
