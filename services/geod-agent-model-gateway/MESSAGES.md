@@ -31,3 +31,11 @@ node messages-admin.mjs --db /srv/laogao/data/geod-agent/agent-model.sqlite list
 发布、撤回和草稿状态持久化在 Agent 主账本；已读信息也保存在同一账本。升级前须做 SQLite 一致性备份。客户端缓存按账号分开，服务不可达时仍可查看上次保存的消息。
 
 本功能采用应用内轮询，在可见窗口中每分钟刷新；不是应用关闭时运行的操作系统推送服务。实现功能不等于批准向用户发送具体公告；发布前仍须确认内容和受众。
+# Legacy GeoD desktop compatibility (3.6.11)
+
+Announcements accept `product: "geod-agent" | "geod" | "all"`. Existing publications without this field continue targeting GeoD Agent. For GeoD-only publication, explicitly set `product: "geod"`; cross-product notices must explicitly use `all`. Do not broadcast QA messages.
+
+Legacy desktop inbox requests include `product=geod` and their actual `clientVersion`; read receipts include `product: "geod"` and the authenticated `accountId`. They require identity client `geod-desktop` with `geod:notifications` scope. GeoD Agent retains its existing client/scope. Notification-only tokens cannot access model or wallet routes, and inbox/read calls skip welcome Credits issuance. Same-revision `all` notices share account read receipts across products.
+
+Before publishing a legacy client installer, deploy the matching identity-client registration and gateway compatibility patch, then verify authorization, audience targeting and receipts. No database schema migration is required for the optional product field.
+

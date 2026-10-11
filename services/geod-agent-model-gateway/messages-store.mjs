@@ -22,10 +22,12 @@ function date(value, fallback = null) {
   return new Date(value).toISOString();
 }
 export function validateAnnouncement(value) {
-  const allowed = ['id', 'title', 'body', 'priority', 'audienceAccountId', 'startsAt', 'expiresAt', 'minimumVersion', 'maximumVersion', 'action'];
+  const allowed = ['id', 'title', 'body', 'priority', 'product', 'audienceAccountId', 'startsAt', 'expiresAt', 'minimumVersion', 'maximumVersion', 'action'];
   if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(key => !allowed.includes(key)) || !identifier(value.id)) throw new MessageError('INVALID_MESSAGE');
   const title = text(value.title, 160), body = text(value.body, 8000);
   const priority = value.priority ?? 'normal';
+  const product = value.product ?? 'geod-agent';
+  if (!['geod-agent', 'geod', 'all'].includes(product)) throw new MessageError('INVALID_MESSAGE_PRODUCT');
   if (!['normal', 'important'].includes(priority)) throw new MessageError('INVALID_MESSAGE_PRIORITY');
   const audienceAccountId = value.audienceAccountId ?? null;
   if (audienceAccountId !== null && (typeof audienceAccountId !== 'string' || !audienceAccountId.length || audienceAccountId.length > 160 || /[\x00-\x1f]/.test(audienceAccountId))) throw new MessageError('INVALID_MESSAGE_AUDIENCE');
@@ -45,7 +47,7 @@ export function validateAnnouncement(value) {
       action.url = url.href;
     } else if (item.url != null) throw new MessageError('INVALID_MESSAGE_ACTION');
   }
-  return { id: value.id, title, body, priority, audienceAccountId, startsAt, expiresAt, minimumVersion, maximumVersion, action };
+  return { id: value.id, title, body, priority, product, audienceAccountId, startsAt, expiresAt, minimumVersion, maximumVersion, action };
 }
 export function openMessageStore(path, { clock = () => new Date() } = {}) {
   const db = new Database(path);
@@ -59,12 +61,14 @@ export function openMessageStore(path, { clock = () => new Date() } = {}) {
     PRIMARY KEY(user_id,message_id,revision)
   );`);
   const now = () => clock().toISOString();
-  function visible(userId, clientVersion) {
+  function visible(userId, clientVersion, product = 'geod-agent') {
+    if (!['geod-agent', 'geod'].includes(product)) throw new MessageError('INVALID_MESSAGE_PRODUCT');
     if (!version(clientVersion)) throw new MessageError('INVALID_CLIENT_VERSION');
     const at = now();
     return db.prepare(`SELECT a.*, r.read_at FROM agent_announcements a LEFT JOIN agent_message_reads r
       ON r.message_id=a.id AND r.revision=a.revision AND r.user_id=? WHERE a.state='published'
       ORDER BY a.published_at DESC, a.id DESC`).all(userId).map(row => ({ row, item: JSON.parse(row.payload) })).filter(({ item }) =>
+        ((item.product ?? 'geod-agent') === product || item.product === 'all') &&
         (!item.audienceAccountId || item.audienceAccountId === userId) && (!item.startsAt || item.startsAt <= at) &&
         (!item.expiresAt || item.expiresAt > at) && (!item.minimumVersion || compare(clientVersion, item.minimumVersion) >= 0) &&
         (!item.maximumVersion || compare(clientVersion, item.maximumVersion) <= 0));
@@ -91,15 +95,15 @@ export function openMessageStore(path, { clock = () => new Date() } = {}) {
       if (!db.prepare("UPDATE agent_announcements SET state='retracted',updated_at=? WHERE id=?").run(now(), id).changes) throw new MessageError('MESSAGE_NOT_FOUND', 404);
       return { id, state: 'retracted' };
     },
-    list(userId, clientVersion) {
-      const values = visible(userId, clientVersion).slice(0, 100);
-      return { schemaVersion: 1, accountId: userId, checkedAt: now(), unreadCount: values.filter(value => !value.row.read_at).length,
+    list(userId, clientVersion, product = 'geod-agent') {
+      const values = visible(userId, clientVersion, product).slice(0, 100);
+      return { schemaVersion: 1, product, accountId: userId, checkedAt: now(), unreadCount: values.filter(value => !value.row.read_at).length,
         items: values.map(({ row, item }) => ({ id: item.id, revision: row.revision, title: item.title, body: item.body,
           priority: item.priority, action: item.action, publishedAt: row.published_at, expiresAt: item.expiresAt, readAt: row.read_at ?? null })) };
     },
-    markRead: db.transaction((userId, clientVersion, ids) => {
+    markRead: db.transaction((userId, clientVersion, ids, product = 'geod-agent') => {
       if (!Array.isArray(ids) || ids.length < 1 || ids.length > 100 || ids.some(id => !identifier(id))) throw new MessageError('INVALID_MESSAGE_IDS');
-      const available = visible(userId, clientVersion), wanted = new Set(ids), at = now();
+      const available = visible(userId, clientVersion, product), wanted = new Set(ids), at = now();
       const insert = db.prepare('INSERT OR IGNORE INTO agent_message_reads VALUES (?,?,?,?)');
       let accepted = 0;
       for (const { row } of available) if (wanted.has(row.id)) accepted += insert.run(userId, row.id, row.revision, at).changes;

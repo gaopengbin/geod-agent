@@ -3,10 +3,52 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import Database from 'better-sqlite3';
 import { openMessageStore, validateAnnouncement } from '../messages-store.mjs';
 import { createGatewayServer, readConfig } from '../server.mjs';
 
 const message = (id, extra = {}) => ({ id, title: { zh: '服务公告', en: 'Service notice' }, body: { zh: '测试消息内容。', en: 'Test message.' }, ...extra });
+test('legacy GeoD inbox isolates product audiences and read receipts', () => {
+  const folder = mkdtempSync(join(tmpdir(), 'geod-products-'));
+  const store = openMessageStore(join(folder, 'ledger.sqlite'));
+  try {
+    store.put(message('agent'), true);
+    store.put(message('desktop', { product: 'geod' }), true);
+    store.put(message('shared', { product: 'all' }), true);
+    store.put(message('target', { product: 'geod', audienceAccountId: 'a' }), true);
+    assert.deepEqual(new Set(store.list('a', '3.6.11', 'geod').items.map(x => x.id)), new Set(['desktop', 'shared', 'target']));
+    assert.equal(store.markRead('b', '3.6.11', ['desktop', 'agent', 'target'], 'geod').accepted, 1);
+    assert.equal(store.list('b', '0.2.4').unreadCount, 2);
+    assert.equal(store.list('a', '3.6.11', 'geod').unreadCount, 3);
+    assert.throws(() => validateAnnouncement(message('bad', { product: 'anything' })), /INVALID_MESSAGE_PRODUCT/);
+  } finally { store.close(); rmSync(folder, { recursive: true, force: true }); }
+});
+test('notification-only HTTP tokens cannot access Agent or claim trial Credits', async () => {
+  const folder = mkdtempSync(join(tmpdir(), 'geod-scope-')), path = join(folder, 'ledger.sqlite');
+  const publisher = openMessageStore(path);
+  publisher.put(message('desktop', { product: 'geod' }), true); publisher.close();
+  let modelCalls = 0;
+  const config = readConfig({ GEOD_AGENT_GATEWAY_SECRET: 's'.repeat(40), DEEPSEEK_API_KEY: 'unused-test-key', GEOD_IDENTITY_ORIGIN: 'http://127.0.0.1:1', GEOD_AGENT_DB_PATH: path, GEOD_AGENT_WELCOME_CREDITS: '20000' });
+  const gateway = createGatewayServer(config, { fetchImpl: async (url, options) => {
+    if (!url.endsWith('/api/geod/oauth/introspect')) { modelCalls++; throw new Error('Unexpected model request'); }
+    return Response.json({ active: { userId: 'legacy-account', clientId: 'geod-desktop', scope: 'geod:notifications', expiresAt: Date.now() + 60000 } });
+  } });
+  await new Promise(resolve => gateway.listen(0, '127.0.0.1', resolve));
+  const base = `http://127.0.0.1:${gateway.address().port}`, headers = { authorization: `Bearer ${'D'.repeat(43)}`, 'content-type': 'application/json' };
+  try {
+    const own = await (await fetch(`${base}/api/agent/messages?product=geod&clientVersion=3.6.11`, { headers })).json();
+    assert.equal(own.product, 'geod'); assert.equal(own.unreadCount, 1);
+    assert.equal((await fetch(`${base}/api/agent/messages/read`, { method: 'POST', headers, body: JSON.stringify({ product: 'geod', accountId: 'other', clientVersion: '3.6.11', messageIds: ['desktop'] }) })).status, 409);
+    assert.equal((await fetch(`${base}/api/agent/messages/read`, { method: 'POST', headers, body: JSON.stringify({ product: 'geod', accountId: 'legacy-account', clientVersion: '3.6.11', messageIds: ['desktop'] }) })).status, 200);
+    for (const route of ['/api/agent/messages?clientVersion=0.2.4', '/api/agent/usage', '/api/agent/billing/wallet']) assert.equal((await fetch(`${base}${route}`, { headers })).status, 401, route);
+    assert.equal((await fetch(`${base}/api/agent/generations`, { method: 'POST', headers, body: '{}' })).status, 401);
+    const db = new Database(path + '-credits.sqlite', { readonly: true });
+    try {
+      for (const table of ['geod_credit_lots', 'geod_credit_grants', 'geod_welcome_decisions']) assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get().n, 0, table);
+    } finally { db.close(); }
+    assert.equal(modelCalls, 0);
+  } finally { await new Promise(resolve => gateway.close(resolve)); rmSync(folder, { recursive: true, force: true }); }
+});
 test('messages respect draft, audience, dates, versions and retraction', () => {
   const folder = mkdtempSync(join(tmpdir(), 'geod-messages-'));
   const store = openMessageStore(join(folder, 'ledger.sqlite'), { clock: () => new Date('2026-10-06T10:00:00Z') });
