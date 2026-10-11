@@ -200,7 +200,7 @@ function validateMessages(value) {
   if (value.at(-1).role !== "user" && value.at(-1).role !== "tool") throw new HttpError(400, "INVALID_LAST_MESSAGE");
   return value;
 }
-async function identity(config, token, fetchImpl, product = 'geod-agent') {
+async function identity(config, token, fetchImpl) {
   if (!/^[A-Za-z0-9_-]{43}$/.test(token)) throw new HttpError(401, "UNAUTHORIZED");
   let response;
   try {
@@ -210,7 +210,7 @@ async function identity(config, token, fetchImpl, product = 'geod-agent') {
   let data;
   try { data = await response.json(); } catch { throw new HttpError(503, "IDENTITY_UNAVAILABLE"); }
   const active = data?.active;
-  const validClient = product === 'geod' ? active?.clientId === 'geod-desktop' && active?.scope === 'geod:notifications' : active?.clientId === 'geod-agent-desktop' && active?.scope === 'geod:agent';
+  const validClient = active?.clientId === 'geod-agent-desktop' && active?.scope === 'geod:agent';
   if (!active || typeof active.userId !== "string" || !active.userId.length || active.userId.length>160 || /[\x00-\x1f]/.test(active.userId) || !validClient || !Number.isSafeInteger(active.expiresAt) || active.expiresAt <= Date.now()) throw new HttpError(401, "UNAUTHORIZED");
   return active.userId;
 }
@@ -259,15 +259,18 @@ export function createGatewayServer(config, { fetchImpl = fetch } = {}) {
     try {
       const url = new URL(request.url, "http://localhost");
       if (request.method === "GET" && url.pathname === "/health") return json(response, 200, { status: "ok" });
+      if (request.method === 'GET' && url.pathname === '/api/agent/messages/public') {
+        if ((url.searchParams.get('product') ?? 'geod') !== 'geod') throw new HttpError(400, 'INVALID_MESSAGE_PRODUCT');
+        return json(response, 200, messageStore.listPublic(url.searchParams.get('clientVersion') ?? '0.0.0'));
+      }
       if(await payments.handle(request,response))return;
       const bearer = request.headers.authorization?.match(/^Bearer (.+)$/)?.[1] ?? "";
       const isMessage = request.method === 'GET' && url.pathname === '/api/agent/messages' || request.method === 'POST' && url.pathname === '/api/agent/messages/read';
       const messageBody = isMessage && request.method === 'POST' ? await readJson(request, 16384) : null;
       const product = isMessage ? (messageBody?.product ?? url.searchParams.get('product') ?? 'geod-agent') : 'geod-agent';
-      if (!['geod-agent', 'geod'].includes(product)) throw new HttpError(400, 'INVALID_MESSAGE_PRODUCT');
-      const userId = await identity(config, bearer, fetchImpl, product);
-      // Reading legacy GeoD notices must not claim an AI trial or create a wallet.
-      if (product !== 'geod') payments.onSignIn(userId);
+      if (product !== 'geod-agent') throw new HttpError(400, 'INVALID_MESSAGE_PRODUCT');
+      const userId = await identity(config, bearer, fetchImpl);
+      payments.onSignIn(userId);
       if (request.method === 'GET' && url.pathname === '/api/agent/messages') {
         return json(response, 200, messageStore.list(userId, url.searchParams.get('clientVersion') ?? '0.0.0', product));
       }

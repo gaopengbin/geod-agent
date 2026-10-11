@@ -1,41 +1,19 @@
-# 应用内消息
+# Classic GeoD public announcements (3.6.11)
 
-桌面标题栏的铃铛打开消息中心。普通消息显示未读标记；重要消息在应用打开时提示一次。正文展开后同步已读状态，支持全部已读和中英双语。应用关闭期间的公告会在下次登录后获取。
+Classic GeoD remains free and open source. Its notification center has no login, account-targeted delivery, remote read receipts or Credits integration.
 
-消息使用 GeoD OAuth 身份，由账号隔离已读记录。默认只显示最近 100 条可见消息；可按账号、客户端版本及生效时间定向。消息不会调用模型或扣除 Credits。
+Announcements accept product geod-agent (the old-data default), geod, or all. GeoD publications reject audienceAccountId. The anonymous GET /api/agent/messages/public?product=geod&clientVersion=3.6.11 endpoint returns published, public geod/all notices matching date and version filters, with accountId null. It never calls identity, model or welcome-credit logic. Read and reminder state stay on the device per message revision.
 
-## 发布工具
+GeoD Agent retains its existing authenticated inbox and account targeting. Public classic GeoD clients cannot choose recipients, write receipts or publish notices. Deploy the public gateway compatibility route before publishing the desktop installer; no identity service change is needed.
 
-管理员在服务器上使用当前发行目录中的 `messages-admin.mjs`，数据库路径必须明确指定。普通用户没有消息发布接口。`put` 默认保存草稿，发布须明确执行 `publish` 或添加 `--publish`。
 
-```json
-{
-  "id": "release-023",
-  "title": { "zh": "GeoD Agent 更新", "en": "GeoD Agent update" },
-  "body": { "zh": "更新内容经确认后填写。", "en": "Add the approved release details here." },
-  "priority": "normal",
-  "minimumVersion": "0.2.3",
-  "action": { "kind": "update", "label": { "zh": "查看应用更新", "en": "View app updates" } }
-}
-```
-
-```sh
-node messages-admin.mjs --db /srv/laogao/data/geod-agent/agent-model.sqlite put --file announcement.json
-node messages-admin.mjs --db /srv/laogao/data/geod-agent/agent-model.sqlite publish --id release-023
-node messages-admin.mjs --db /srv/laogao/data/geod-agent/agent-model.sqlite retract --id release-023
-node messages-admin.mjs --db /srv/laogao/data/geod-agent/agent-model.sqlite list
-```
-
-添加 `audienceAccountId` 可只发送给一个 GeoD 账号。`startsAt`、`expiresAt` 使用 ISO 时间；`maximumVersion` 限制最高可见版本。`action.kind="link"` 只接受没有用户名和密码的 HTTPS 链接。正文按纯文本展示。修改相同 ID 会产生新修订、重新成为未读，并默认返回草稿状态。
-
-发布、撤回和草稿状态持久化在 Agent 主账本；已读信息也保存在同一账本。升级前须做 SQLite 一致性备份。客户端缓存按账号分开，服务不可达时仍可查看上次保存的消息。
-
-本功能采用应用内轮询，在可见窗口中每分钟刷新；不是应用关闭时运行的操作系统推送服务。实现功能不等于批准向用户发送具体公告；发布前仍须确认内容和受众。
 # Legacy GeoD desktop compatibility (3.6.11)
 
 Announcements accept `product: "geod-agent" | "geod" | "all"`. Existing publications without this field continue targeting GeoD Agent. For GeoD-only publication, explicitly set `product: "geod"`; cross-product notices must explicitly use `all`. Do not broadcast QA messages.
 
 Legacy desktop inbox requests include `product=geod` and their actual `clientVersion`; read receipts include `product: "geod"` and the authenticated `accountId`. They require identity client `geod-desktop` with `geod:notifications` scope. GeoD Agent retains its existing client/scope. Notification-only tokens cannot access model or wallet routes, and inbox/read calls skip welcome Credits issuance. Same-revision `all` notices share account read receipts across products.
+
+Anonymous legacy desktop requests use `GET /api/agent/messages/public?product=geod&clientVersion=3.6.11`. This read-only route excludes all account-targeted notices, drafts, expired and version-incompatible entries; it returns `accountId: null` and no server read receipts. It never calls identity, model or welcome-credit logic. Anonymous receipts stay on the device, keyed by message ID and revision. Public reads cannot choose an account or publish/write notices.
 
 Before publishing a legacy client installer, deploy the matching identity-client registration and gateway compatibility patch, then verify authorization, audience targeting and receipts. No database schema migration is required for the optional product field.
 

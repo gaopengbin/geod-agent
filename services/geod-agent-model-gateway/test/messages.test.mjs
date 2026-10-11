@@ -8,6 +8,29 @@ import { openMessageStore, validateAnnouncement } from '../messages-store.mjs';
 import { createGatewayServer, readConfig } from '../server.mjs';
 
 const message = (id, extra = {}) => ({ id, title: { zh: '服务公告', en: 'Service notice' }, body: { zh: '测试消息内容。', en: 'Test message.' }, ...extra });
+test('anonymous GeoD announcements exclude private notices and never call identity or billing', async () => {
+  const folder = mkdtempSync(join(tmpdir(), 'geod-public-')), path = join(folder, 'ledger.sqlite');
+  const publisher = openMessageStore(path);
+  for (const [id, extra] of [['public', { product: 'geod' }], ['shared', { product: 'all' }], ['agent', {}], ['private', { product: 'all', audienceAccountId: 'user-a' }], ['future-version', { product: 'geod', minimumVersion: '3.6.12' }], ['expired', { product: 'geod', expiresAt: '2025-01-01' }]]) publisher.put(message(id, extra), true);
+  publisher.put(message('draft', { product: 'geod' })); publisher.close();
+  const config = readConfig({ GEOD_AGENT_GATEWAY_SECRET: 's'.repeat(40), DEEPSEEK_API_KEY: 'unused-test-key', GEOD_IDENTITY_ORIGIN: 'http://127.0.0.1:1', GEOD_AGENT_DB_PATH: path, GEOD_AGENT_WELCOME_CREDITS: '20000' });
+  let upstreamCalls = 0;
+  const gateway = createGatewayServer(config, { fetchImpl: async () => { upstreamCalls++; throw new Error('Public notices cannot call identity or model'); } });
+  await new Promise(resolve => gateway.listen(0, '127.0.0.1', resolve));
+  const base = `http://127.0.0.1:${gateway.address().port}`;
+  try {
+    const response = await fetch(`${base}/api/agent/messages/public?product=geod&clientVersion=3.6.11&accountId=user-a`);
+    assert.equal(response.status, 200); const feed = await response.json();
+    assert.equal(feed.accountId, null); assert.equal(feed.unreadCount, 2);
+    assert.deepEqual(new Set(feed.items.map(x => x.id)), new Set(['public', 'shared']));
+    assert(feed.items.every(x => x.readAt === null));
+    assert.equal((await fetch(`${base}/api/agent/messages/public?product=geod-agent&clientVersion=0.2.4`)).status, 400);
+    assert.equal((await fetch(`${base}/api/agent/messages/read`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ product: 'geod', accountId: 'user-a', clientVersion: '3.6.11', messageIds: ['public'] }) })).status, 400);
+    const db = new Database(path + '-credits.sqlite', { readonly: true });
+    try { for (const table of ['geod_credit_lots', 'geod_credit_grants', 'geod_welcome_decisions']) assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get().n, 0); } finally { db.close(); }
+    assert.equal(upstreamCalls, 0);
+  } finally { await new Promise(resolve => gateway.close(resolve)); rmSync(folder, { recursive: true, force: true }); }
+});
 test('legacy GeoD inbox isolates product audiences and read receipts', () => {
   const folder = mkdtempSync(join(tmpdir(), 'geod-products-'));
   const store = openMessageStore(join(folder, 'ledger.sqlite'));
@@ -15,15 +38,16 @@ test('legacy GeoD inbox isolates product audiences and read receipts', () => {
     store.put(message('agent'), true);
     store.put(message('desktop', { product: 'geod' }), true);
     store.put(message('shared', { product: 'all' }), true);
-    store.put(message('target', { product: 'geod', audienceAccountId: 'a' }), true);
+    store.put(message('target', { product: 'all', audienceAccountId: 'a' }), true);
     assert.deepEqual(new Set(store.list('a', '3.6.11', 'geod').items.map(x => x.id)), new Set(['desktop', 'shared', 'target']));
     assert.equal(store.markRead('b', '3.6.11', ['desktop', 'agent', 'target'], 'geod').accepted, 1);
     assert.equal(store.list('b', '0.2.4').unreadCount, 2);
     assert.equal(store.list('a', '3.6.11', 'geod').unreadCount, 3);
     assert.throws(() => validateAnnouncement(message('bad', { product: 'anything' })), /INVALID_MESSAGE_PRODUCT/);
+    assert.throws(() => validateAnnouncement(message('targeted-desktop', { product: 'geod', audienceAccountId: 'a' })), /GEOD_PUBLIC_NOTICES_ONLY/);
   } finally { store.close(); rmSync(folder, { recursive: true, force: true }); }
 });
-test('notification-only HTTP tokens cannot access Agent or claim trial Credits', async () => {
+test('classic GeoD public notices need no token and cannot create a wallet', async () => {
   const folder = mkdtempSync(join(tmpdir(), 'geod-scope-')), path = join(folder, 'ledger.sqlite');
   const publisher = openMessageStore(path);
   publisher.put(message('desktop', { product: 'geod' }), true); publisher.close();
@@ -36,10 +60,10 @@ test('notification-only HTTP tokens cannot access Agent or claim trial Credits',
   await new Promise(resolve => gateway.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${gateway.address().port}`, headers = { authorization: `Bearer ${'D'.repeat(43)}`, 'content-type': 'application/json' };
   try {
-    const own = await (await fetch(`${base}/api/agent/messages?product=geod&clientVersion=3.6.11`, { headers })).json();
-    assert.equal(own.product, 'geod'); assert.equal(own.unreadCount, 1);
-    assert.equal((await fetch(`${base}/api/agent/messages/read`, { method: 'POST', headers, body: JSON.stringify({ product: 'geod', accountId: 'other', clientVersion: '3.6.11', messageIds: ['desktop'] }) })).status, 409);
-    assert.equal((await fetch(`${base}/api/agent/messages/read`, { method: 'POST', headers, body: JSON.stringify({ product: 'geod', accountId: 'legacy-account', clientVersion: '3.6.11', messageIds: ['desktop'] }) })).status, 200);
+    const own = await (await fetch(`${base}/api/agent/messages/public?product=geod&clientVersion=3.6.11`)).json();
+    assert.equal(own.product, 'geod'); assert.equal(own.accountId, null); assert.equal(own.unreadCount, 1);
+    assert.equal((await fetch(`${base}/api/agent/messages/read`, { method: 'POST', headers, body: JSON.stringify({ product: 'geod', accountId: 'other', clientVersion: '3.6.11', messageIds: ['desktop'] }) })).status, 400);
+    assert.equal((await fetch(`${base}/api/agent/messages/read`, { method: 'POST', headers, body: JSON.stringify({ product: 'geod', accountId: 'legacy-account', clientVersion: '3.6.11', messageIds: ['desktop'] }) })).status, 400);
     for (const route of ['/api/agent/messages?clientVersion=0.2.4', '/api/agent/usage', '/api/agent/billing/wallet']) assert.equal((await fetch(`${base}${route}`, { headers })).status, 401, route);
     assert.equal((await fetch(`${base}/api/agent/generations`, { method: 'POST', headers, body: '{}' })).status, 401);
     const db = new Database(path + '-credits.sqlite', { readonly: true });

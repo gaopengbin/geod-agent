@@ -30,6 +30,7 @@ export function validateAnnouncement(value) {
   if (!['geod-agent', 'geod', 'all'].includes(product)) throw new MessageError('INVALID_MESSAGE_PRODUCT');
   if (!['normal', 'important'].includes(priority)) throw new MessageError('INVALID_MESSAGE_PRIORITY');
   const audienceAccountId = value.audienceAccountId ?? null;
+  if (product === 'geod' && audienceAccountId !== null) throw new MessageError('GEOD_PUBLIC_NOTICES_ONLY');
   if (audienceAccountId !== null && (typeof audienceAccountId !== 'string' || !audienceAccountId.length || audienceAccountId.length > 160 || /[\x00-\x1f]/.test(audienceAccountId))) throw new MessageError('INVALID_MESSAGE_AUDIENCE');
   const startsAt = date(value.startsAt), expiresAt = date(value.expiresAt);
   if (startsAt && expiresAt && expiresAt <= startsAt) throw new MessageError('INVALID_MESSAGE_DATE');
@@ -100,6 +101,10 @@ export function openMessageStore(path, { clock = () => new Date() } = {}) {
       return { schemaVersion: 1, product, accountId: userId, checkedAt: now(), unreadCount: values.filter(value => !value.row.read_at).length,
         items: values.map(({ row, item }) => ({ id: item.id, revision: row.revision, title: item.title, body: item.body,
           priority: item.priority, action: item.action, publishedAt: row.published_at, expiresAt: item.expiresAt, readAt: row.read_at ?? null })) };
+    },
+    listPublic(clientVersion) {
+      // A null owner can never match an account-targeted audience or read receipt.
+      return this.list(null, clientVersion, 'geod');
     },
     markRead: db.transaction((userId, clientVersion, ids, product = 'geod-agent') => {
       if (!Array.isArray(ids) || ids.length < 1 || ids.length > 100 || ids.some(id => !identifier(id))) throw new MessageError('INVALID_MESSAGE_IDS');
