@@ -9,7 +9,7 @@
   <img alt="Windows x64" src="https://img.shields.io/badge/platform-Windows_x64-202124?style=flat-square" />
   <a href="https://github.com/gaopengbin/geod-agent/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/gaopengbin/geod-agent?style=flat-square&color=1a73e8" /></a>
 </p>
-<p align="center"><a href="https://geod.laogao.xyz/agent"><strong>官网</strong></a> · <a href="https://github.com/gaopengbin/geod-agent/releases/tag/v0.2.4"><strong>下载 Windows 测试版</strong></a> · <a href="https://geod.laogao.xyz/agent#demo">观看实录</a> · <a href="https://github.com/gaopengbin/geod-agent/issues">反馈问题</a> · <a href="README.EN.md">English</a></p>
+<p align="center"><a href="https://geod.laogao.xyz/agent"><strong>官网</strong></a> · <a href="https://github.com/gaopengbin/geod-agent/releases/tag/v0.2.4"><strong>下载 Windows 正式版</strong></a> · <a href="https://geod.laogao.xyz/agent#demo">观看实录</a> · <a href="https://github.com/gaopengbin/geod-agent/issues">反馈问题</a> · <a href="README.EN.md">English</a></p>
 
 ![GeoD Agent 对话、地图与任务工作区](docs/images/workbench-light-20261008.png)
 
@@ -30,9 +30,9 @@ GeoD Agent 是独立的 Windows 桌面应用。描述区域、数据类型和用
 | 版本 | 状态 | 入口 |
 | --- | --- | --- |
 | **0.2.3** | Windows x64 公开测试版 | [下载安装包](https://geod.laogao.xyz/agent-updates/windows-x86_64/0.2.3/GeoD%20Agent_0.2.3_x64-setup.exe) · [版本说明](docs/releases/0.2.3.md) |
-| **0.2.4** | Windows x64 公开测试版 | [下载安装包](https://geod.laogao.xyz/agent-updates/windows-x86_64/0.2.4/GeoD%20Agent_0.2.4_x64-setup.exe) · [版本说明](docs/releases/0.2.4.md) |
+| **0.2.4** | Windows x64 正式版 | [下载安装包](https://geod.laogao.xyz/agent-updates/windows-x86_64/0.2.4/GeoD%20Agent_0.2.4_x64-setup.exe) · [版本说明](docs/releases/0.2.4.md) |
 
-当前公开测试版为 **0.2.4**，包含按需模型上下文、任务状态同步、独立登录页、开屏与托盘等改进。源代码以 [MIT 许可证](LICENSE)公开，[GitHub 发行资源](https://github.com/gaopengbin/geod-agent/releases/tag/v0.2.4)可直接下载。全新 Windows 验收尚未完成，具体验证范围见版本说明。
+当前正式版为 **0.2.4**，包含按需模型上下文、任务状态同步、独立登录页、开屏与托盘等改进。源代码以 [MIT 许可证](LICENSE)公开，[GitHub 发行资源](https://github.com/gaopengbin/geod-agent/releases/tag/v0.2.4)可直接下载。全新 Windows 验收尚未完成，具体验证范围见版本说明。
 
 ## 对话能做什么
 
@@ -45,7 +45,7 @@ GeoD Agent 是独立的 Windows 桌面应用。描述区域、数据类型和用
 
 ## 开始使用
 
-1. 安装当前测试版，使用 GeoD 账号在浏览器完成授权。
+1. 安装当前正式版，使用 GeoD 账号在浏览器完成授权。
 2. 配置数据图源。需要 Key / Token 的服务，在应用本机表单填写。
 3. 描述需求，附上范围文件，或在地图上绘制边界。
 4. 核对计划中的图源、范围、精度、格式、坐标系、预算与保存位置，然后执行。

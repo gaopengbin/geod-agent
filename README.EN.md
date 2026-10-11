@@ -9,7 +9,7 @@
   <img alt="Windows x64" src="https://img.shields.io/badge/platform-Windows_x64-202124?style=flat-square" />
   <a href="https://github.com/gaopengbin/geod-agent/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/gaopengbin/geod-agent?style=flat-square&color=1a73e8" /></a>
 </p>
-<p align="center"><a href="https://geod.laogao.xyz/en/agent"><strong>Website</strong></a> · <a href="https://github.com/gaopengbin/geod-agent/releases/tag/v0.2.4"><strong>Download Windows beta</strong></a> · <a href="https://geod.laogao.xyz/en/agent#demo">Watch demo</a> · <a href="https://github.com/gaopengbin/geod-agent/issues">Report an issue</a> · <a href="README.md">简体中文</a></p>
+<p align="center"><a href="https://geod.laogao.xyz/en/agent"><strong>Website</strong></a> · <a href="https://github.com/gaopengbin/geod-agent/releases/tag/v0.2.4"><strong>Download Windows release</strong></a> · <a href="https://geod.laogao.xyz/en/agent#demo">Watch demo</a> · <a href="https://github.com/gaopengbin/geod-agent/issues">Report an issue</a> · <a href="README.md">简体中文</a></p>
 
 ![Conversation, map and task workspace](docs/images/workbench-light-20261008.png)
 
@@ -30,9 +30,9 @@ Start from an empty conversation: configure imagery sources, prepare an MCP conn
 | Version | Status | Details |
 | --- | --- | --- |
 | **0.2.3** | Public Windows x64 beta | [Download installer](https://geod.laogao.xyz/agent-updates/windows-x86_64/0.2.3/GeoD%20Agent_0.2.3_x64-setup.exe) · [Release notes](docs/releases/0.2.3.md) |
-| **0.2.4** | Public Windows x64 beta | [Download installer](https://geod.laogao.xyz/agent-updates/windows-x86_64/0.2.4/GeoD%20Agent_0.2.4_x64-setup.exe) · [Release notes](docs/releases/0.2.4.md) |
+| **0.2.4** | Windows x64 release | [Download installer](https://geod.laogao.xyz/agent-updates/windows-x86_64/0.2.4/GeoD%20Agent_0.2.4_x64-setup.exe) · [Release notes](docs/releases/0.2.4.md) |
 
-The current public beta is **0.2.4**, with on-demand model context, current task-state synchronization, a dedicated login screen, startup animation and system tray support. Source code is public under the [MIT license](LICENSE), and [GitHub release assets](https://github.com/gaopengbin/geod-agent/releases/tag/v0.2.4) are available directly. Clean Windows acceptance is pending; see the release notes for the verified scope.
+The current release is **0.2.4**, with on-demand model context, current task-state synchronization, a dedicated login screen, startup animation and system tray support. Source code is public under the [MIT license](LICENSE), and [GitHub release assets](https://github.com/gaopengbin/geod-agent/releases/tag/v0.2.4) are available directly. Clean Windows acceptance is pending; see the release notes for the verified scope.
 
 ## What can you configure through conversation?
 
@@ -45,7 +45,7 @@ The current public beta is **0.2.4**, with on-demand model context, current task
 
 ## Get started
 
-1. Install the current beta and authorize your GeoD account in the browser.
+1. Install the current release and authorize your GeoD account in the browser.
 2. Configure your data sources. Enter required keys or tokens in local application forms.
 3. Describe the task, attach a boundary file or draw an area on the map.
 4. Review the source, area, resolution, format, coordinate system, budget and output location before execution.
