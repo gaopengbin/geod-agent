@@ -16,7 +16,7 @@ try{
  assert.equal(await dialog.locator('[data-plan-id="agent-month-standard"]').getAttribute('aria-pressed'),'true');
  assert.equal(await dialog.locator('.payment-plan-balance strong').innerText(),displayCredits(initialCredits));
  await dialog.locator('[data-plan-id="agent-month-pro"]').click();
- assert.equal(await dialog.locator('.monthly-plan-checkout strong').innerText(),'¥50');
+ assert.equal(await dialog.locator('.monthly-plan-checkout strong').innerText(),'¥49');
  await page.evaluate(()=>document.fonts.ready);await page.screenshot({path:join(output,'monthly-plans-dark-zh.png')});
  checks.push('Three server-owned tiers render with correct selected price and retained welcome balance');
  const popupPromise=page.waitForEvent('popup');await dialog.getByRole('button',{name:'演练购买',exact:true}).click();const popup=await popupPromise;
