@@ -415,7 +415,7 @@ export function App() {
     {backgroundDialogOpen && <BackgroundDialog onClose={() => setBackgroundDialogOpen(false)}/>}
     <LanguageDialog open={languageDialogOpen} onOpenChange={setLanguageDialogOpen}/>
     {desktopSettingsOpen && <DesktopSettingsDialog onClose={() => setDesktopSettingsOpen(false)}/>}
-    {paymentDialogOpen&&<PaymentDialog key={accountId??'signed-out'} accountId={accountId} onClose={()=>setPaymentDialogOpen(false)}/>}
+    {paymentDialogOpen&&<PaymentDialog key={accountId??'signed-out'} accountId={accountId} onClose={()=>setPaymentDialogOpen(false)} onOpenChannels={()=>{setPaymentDialogOpen(false);setMainView('models');}}/>}
     {tiles3dConnections && <Tiles3dConnections initialConnectionId={tiles3dConnections.connectionId} onClose={() => setTiles3dConnections(null)}/>}
     {networkDialogOpen && <NetworkDialog onClose={() => setNetworkDialogOpen(false)} onSaved={status => setNotice(`网络连接方式已更新：${status.source}。`)} />}
   </div>;

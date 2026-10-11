@@ -11,6 +11,7 @@ import { UiTooltip } from "./ui-tooltip";
 import {availableAIChannels,sponsorAvailability,useSponsorClock,SPONSORED_CHANNELS_VISIBLE,type AISponsor} from './ai-channels';
 import {ExternalLink} from './icons';
 import {ContextSettingsPanel} from './context-settings';
+import {OwnChannelGuide} from './own-channel-guide';
 
 const newModel = (): AIModel => ({ id: "", name: "", contextWindow: 128000, maxOutputTokens: 4096, inputModalities: ["text"], thinking: null });
 const emptyDraft = (): AIChannelDraft => ({ name: "", baseUrl: "", protocol: "chatCompletions", enabled: true, models: [newModel()] });
@@ -124,6 +125,7 @@ export function AIChannelsPage({ active, accountId, conversationId, onReturn }: 
         </section>)}
         {!!list?.sponsors?.length&&<p className="ai-sponsors-empty">{t("额度以上次刷新为准；渠道变化不会自动切换已保存的任务。")}</p>}</>}
         <div className="ai-channel-section-heading"><h2>{t("自有渠道 ")}<span>{list?.channels.length ?? 0}</span></h2><p>{t("自有渠道用量独立记录，不扣 GeoD 托管额度。")}</p></div>
+        <OwnChannelGuide/>
         {list?.channels.length === 0 && <div className="ai-channel-empty"><ShieldCheck size={24}/><h3>{t("接入你的模型服务")}</h3><p>{t("支持 Responses、Chat Completions、Claude Messages 和 Gemini，也可填写兼容中转地址。")}</p><Button variant="outline" size="sm" onClick={() => setEditing("new")}><Plus size={16}/>{t("添加第一个渠道")}</Button></div>}
         {list?.channels.map(channel => <section className={`ai-channel-row ${!channel.enabled ? "is-disabled" : ""}`} key={channel.id}>
           <span className="ai-channel-icon"><Bot size={22}/></span><div className="ai-channel-info"><h2>{channel.name}{list.default.channelId === channel.id && <span>{t("新对话默认")}</span>}{!channel.enabled && <span>{t("已停用")}</span>}</h2><p>{protocolName(channel.protocol)} · {channel.models.length} {t(" 个模型 · ")}{channel.keyConfigured ? t("密钥已保存") : t("未配置密钥")}</p><small title={channel.baseUrl}>{channel.baseUrl}</small><div className="ai-channel-model-names">{channel.models.map(m => <span key={m.id}>{m.name}</span>)}</div></div>

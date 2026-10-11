@@ -1,0 +1,13 @@
+.own-channel-guide {margin:18px 0 4px;padding:15px;border:1px solid var(--app-line);border-radius:10px;background:var(--app-bg);color:var(--app-text);font-size:12px;line-height:1.7;}
+.own-channel-guide-heading {display:flex;gap:10px;align-items:flex-start;}
+.own-channel-guide-heading > svg {flex:none;margin-top:3px;color:var(--app-blue);}
+.own-channel-guide h3 {margin:0;font-size:13px;font-weight:600;}
+.own-channel-guide p {margin:4px 0;color:var(--app-soft-text);overflow-wrap:anywhere;}
+.own-channel-guide-actions {display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+.own-channel-guide-actions button {font-size:12px;}
+.own-channel-guide-chevron-open {transform:rotate(180deg);}
+.own-channel-guide-body {padding-top:12px;}
+.own-channel-guide ol {margin:0;padding-left:20px;}
+.own-channel-guide li {padding:0 0 12px 3px;}
+.own-channel-guide li:last-child {padding-bottom:0;}
+.own-channel-guide .own-channel-guide-note {margin-top:12px;padding-top:12px;border-top:1px solid var(--app-line);}

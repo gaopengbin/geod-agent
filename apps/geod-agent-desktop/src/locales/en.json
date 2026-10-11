@@ -2469,5 +2469,20 @@
   "月套餐尚未开放，价格与权益确认后即可购买。": "Monthly plans are not available yet. Purchases will open after prices and benefits are confirmed.",
   "最近购买：{0}": "Last purchase: {0}",
   "套餐周期已结束，余额仍可使用": "The plan period has ended. Your Credits are still usable.",
-  "演练购买": "Try a fixture purchase"
+  "演练购买": "Try a fixture purchase",
+  "自有模型渠道": "Your own model provider",
+  "也可以使用自己的模型渠道": "You can also use your own model provider",
+  "自有渠道不扣 GeoD Credits，模型费用由对应服务商结算。": "Your own provider does not use GeoD Credits. Model charges are billed by that provider.",
+  "收起教程": "Hide guide",
+  "查看配置教程": "View setup guide",
+  "打开模型与渠道": "Open Models & channels",
+  "准备 API Key": "Get an API key",
+  "在你选择的模型服务商后台开通 API，并取得 API Key。网页版会员不一定包含 API 额度。": "Enable API access with your chosen provider and get an API key. A web chat subscription may not include API credit.",
+  "打开左侧“模型与渠道”，点击“添加渠道”。选择服务预设，或填写服务商给出的 API 基础地址与接口类型，再粘贴 API Key。": "Open Models & channels in the sidebar and click Add channel. Choose a preset or enter the API base URL and protocol supplied by your provider, then paste your API key.",
+  "例如 DeepSeek：选择 DeepSeek 预设，基础地址为 https://api.deepseek.com/v1，接口类型为 Chat Completions。": "For DeepSeek, choose the DeepSeek preset with https://api.deepseek.com/v1 as the base URL and Chat Completions as the protocol.",
+  "选择实际可用的模型": "Choose an available model",
+  "点击“读取模型目录”，从返回的目录添加模型；若服务不提供目录，可按服务商文档手动填写模型 ID。模型需支持工具调用；上下文和输出上限按服务商规格填写。然后点击“保存渠道”。": "Click Read model catalog and add a returned model. If the provider has no catalog, enter the model ID from its documentation. Choose a model that supports tool calling and use its documented context and output limits. Then click Save provider.",
+  "在对话中切换渠道": "Switch the provider in your chat",
+  "在输入框右下角的模型选择器中选择你的渠道和模型，先发一句简短消息验证。也可以设置“新对话默认模型”；已有会话与定时任务保留原选择，需要分别切换。": "Choose your provider and model in the selector at the bottom right of the message box, then send a short message to verify it. You can also set the default for new chats. Existing chats and scheduled tasks keep their saved selection and must be switched separately.",
+  "API Key 保存在本机系统凭据中。自有渠道的用量在应用内单独记录，余额和费用请到服务商后台查看。连接失败时核对基础地址、接口类型、模型 ID、API 余额和网络代理。": "Your API key is saved in this device's credential store. Personal provider usage is recorded separately in the app; check balance and charges with the provider. For connection errors, check the base URL, protocol, model ID, API balance, and network proxy."
 }

@@ -12,6 +12,7 @@ import './payment-dialog.css';
 import {CreditUsageHistory} from './credit-usage-history';
 import {PaymentHistory,PaymentRefundRow} from './payment-history';
 import {MonthlyPlans} from './monthly-plans';
+import {OwnChannelGuide} from './own-channel-guide';
 
 export const PAYMENT_OPEN='geod:payment-open';
 const currency=(value:number)=>new Intl.NumberFormat(getLocale(),{style:'currency',currency:'CNY',maximumFractionDigits:2}).format(value);
@@ -23,7 +24,7 @@ const names:Record<PaymentOrder['status'],string>={pending:'待支付',paid:'已
 const completedPayments=new Set(['paid','closed','refunding','refunded']);
 const productName=(product:PaymentProduct)=>product.kind==='topup'?credit(product.creditNanoCny):t(product.name);
 
-export function PaymentDialog({accountId,onClose,initialTab='balance'}:{accountId:string|null;onClose:()=>void;initialTab?:'balance'|'plans'|'orders'|'usage'}){
+export function PaymentDialog({accountId,onClose,onOpenChannels,initialTab='balance'}:{accountId:string|null;onClose:()=>void;onOpenChannels?:()=>void;initialTab?:'balance'|'plans'|'orders'|'usage'}){
   const [snapshot,setSnapshot]=useState<PaymentSnapshot|null>(null),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true);
   const [error,setError]=useState(''),[notice,setNotice]=useState(''),[tab,setTab]=useState<string>(initialTab);
   const [paymentHistoryUnavailable,setPaymentHistoryUnavailable]=useState(false);
@@ -143,11 +144,13 @@ export function PaymentDialog({accountId,onClose,initialTab='balance'}:{accountI
             {!hasMonthlyPlans&&snapshot.status.environment!=='credits-only'&&<><div className="payment-section-title"><h3>{snapshot.status.checkoutEnabled?t('充值与订阅'):t('方案预览')}</h3>{!snapshot.status.pricesApproved&&<span>{t('待确认方案')}</span>}</div>
             {snapshot.status.products.length>0?<div className="payment-products">{snapshot.status.products.map(product=><section key={product.id} className="payment-product"><div><strong>{productName(product)}</strong><span>{product.kind==='subscription'?t('{0} 天 · 含 {1}',{'0':product.days,'1':credit(product.creditNanoCny)}):t('按实际模型用量结算')}</span></div><b>{currency(product.priceFen/100)}</b><Button variant="outline" size="sm" disabled={busy||!snapshot.status.checkoutEnabled} onClick={()=>void buy(product)}>{!snapshot.status.checkoutEnabled?t('未开放'):snapshot.status.fixture?t('演练下单'):product.kind==='subscription'?t('订阅'):t('充值')}</Button></section>)}</div>:<p className="payment-caption">{t('收费方案确认后将在这里提供。')}</p>}</>}
             <p className="payment-caption">{t(SPONSORED_CHANNELS_VISIBLE?'自带 Key 与赞助渠道不扣此余额；本机数据处理与下载不按模型用量计费。':'自带 Key 不扣此余额；本机数据处理与下载不按模型用量计费。')}</p>
+            <OwnChannelGuide onConfigure={onOpenChannels}/>
           </section>
           {hasMonthlyPlans&&<section role="tabpanel" aria-label={t('月套餐')} hidden={tab!=='plans'} className="payment-content payment-monthly-content">
             {wallet&&<div className="payment-plan-balance"><span>{t('可用 Credits')}</span><strong>{credit(wallet.availableNanoCny)}</strong></div>}
             {monthlyProducts.length>0&&snapshot.status.planPolicy?<MonthlyPlans products={monthlyProducts} policy={snapshot.status.planPolicy} preview={!snapshot.status.checkoutEnabled||(!snapshot.status.fixture&&!snapshot.status.pricesApproved)} fixture={snapshot.status.fixture} busy={busy} onBuy={product=>void buy(product)}/>:
             planPreview&&<MonthlyPlans products={planPreview.products} policy={planPreview.policy} preview busy={busy} onBuy={()=>{}}/>}
+            <OwnChannelGuide onConfigure={onOpenChannels}/>
           </section>}
           <section role="tabpanel" aria-label={t('支付记录')} hidden={tab!=='orders'} className="payment-content">
             {snapshot.status.paymentHistoryEnabled===true&&!paymentHistoryUnavailable?tab==='orders'&&<PaymentHistory refreshKey={snapshot} onUnavailable={recentPayments} renderOrder={renderOrder}/>:<>

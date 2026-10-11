@@ -17,6 +17,8 @@ export function paymentCatalogueDigest(products=paymentProductsCandidate){
   return createHash('sha256').update(JSON.stringify(terms)).digest('hex');
 }
 function requireReviewedTerms(options){
+  if(options?.checkoutAccounts!==undefined&&(!Array.isArray(options.checkoutAccounts)||!options.checkoutAccounts.length||options.checkoutAccounts.some(account=>typeof account!=='string'||!account||account.length>160||/[\x00-\x1f]/.test(account))))
+    throw new PaymentError('PAYMENT_CONFIG_INVALID','Explicit verified checkout accounts required');
   if(!options||options.gateway?.environment==='fixture')return;
   if(options.catalogueApproved!==true)throw new PaymentError('PAYMENT_CATALOGUE_NOT_APPROVED','Reviewed catalogue required');
   if(options.approvedPricingVersion!==pricingCandidate.version||options.approvedCatalogueSha256!==paymentCatalogueDigest(options.products))
@@ -61,28 +63,32 @@ export function createPaymentHostCandidate(config,modelLedger,authenticate){
   const walletPath=options?.dbPath??resolve(config.dbPath+'-credits.sqlite');
   const ledger=provider||enforced?createPaymentLedgerCandidate(walletPath,{gateway:provider,maxDailyFen:options?.maxDailyFen,welcomeCredit,creditOnly:!provider,
     ...(options?.products?{products:options.products}:{}),loadGeneration:(account,id)=>modelLedger.get(account,id)}):null;
-  const status=()=>({candidate:true,checkoutEnabled:!!provider,environment:provider?.environment??(ledger?'credits-only':'disabled'),fixture:provider?.fixture??false,
+  const checkoutAllowed=account=>!options?.checkoutAccounts||options.checkoutAccounts.includes(account);
+  const status=account=>({candidate:true,checkoutEnabled:!!provider&&checkoutAllowed(account),environment:provider?.environment??(ledger?'credits-only':'disabled'),fixture:provider?.fixture??false,
     billingMode:enforced?'prepaid':config.quotaEnforced===false?'unlimited-test':'token-quota',
     pricingVersion:pricingCandidate.version,pricesApproved:options?.catalogueApproved===true,
     catalogueSha256:ledger&&!provider?null:paymentCatalogueDigest(ledger?.products()??paymentProductsCandidate),
     welcomeCreditEnabled:!!welcomeCredit,welcomeCreditStatus:ledger?.welcomeStatus()??null,creditHistoryEnabled:!!ledger,paymentHistoryEnabled:!!ledger,
     planPolicy:options?.products?.some(isMonthlyTier)?monthlyPlanPolicy:null,
-    planPreview:!provider?monthlyPlanPreview:null,products:ledger?.products()??paymentProductsCandidate});
+    planPreview:!provider||!checkoutAllowed(account)?monthlyPlanPreview:null,products:checkoutAllowed(account)?ledger?.products()??paymentProductsCandidate:[]});
   const onSignIn=account=>ledger?.grantWelcome(account);
   const paymentHandler=provider?createPaymentCandidateHandler({ledger,authenticate:async request=>{
-    const account=await authenticate(request);onSignIn(account);return account;
+    const account=await authenticate(request);onSignIn(account);
+    if(!checkoutAllowed(account)&&request.method==='POST'&&(/^\/v1\/payments\/orders(?:$|\/GDA[0-9a-f]{32}\/checkout$)/.test(new URL(request.url,'http://127.0.0.1').pathname)))
+      throw new PaymentError('PAYMENT_ACCEPTANCE_ONLY','Payment checkout is undergoing acceptance verification',409);
+    return account;
   }}):null;
   async function handle(req,res){
     const url=new URL(req.url,'http://127.0.0.1');
     if(!url.pathname.startsWith('/v1/payments'))return false;
-    if(provider&&url.pathname!=='/v1/payments/status')return paymentHandler(req,res);
+    if(provider&&!['/v1/payments/status','/v1/payments/products'].includes(url.pathname))return paymentHandler(req,res);
     try{
       const account=await authenticate(req);
       if(typeof account!=='string'||!account)throw new PaymentError('AUTH_REQUIRED','GeoD sign-in required',401);
       onSignIn(account);
       if(await handleCreditHistory(req,res,url,ledger,account))return true;
-      if(req.method==='GET'&&url.pathname==='/v1/payments/status'){json(res,200,status());return true;}
-      if(!provider&&req.method==='GET'&&url.pathname==='/v1/payments/products'){json(res,200,status());return true;}
+      if(req.method==='GET'&&url.pathname==='/v1/payments/status'){json(res,200,status(account));return true;}
+      if(req.method==='GET'&&url.pathname==='/v1/payments/products'){json(res,200,status(account));return true;}
       if(!provider&&req.method==='GET'&&url.pathname==='/v1/payments/wallet'){
         if(ledger){json(res,200,{...status(),...ledger.summary(account)});return true;}
         json(res,200,{...status(),currency:'CNY',balanceNanoCny:null,reservedNanoCny:null,frozenNanoCny:null,availableNanoCny:null,subscription:null,orders:[],refunds:[],charges:[],chargeCount:0,reservations:[],reservationCount:0});return true;

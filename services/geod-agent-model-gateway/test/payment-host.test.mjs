@@ -8,12 +8,12 @@ import {readPaymentHostConfig,paymentCatalogueDigest} from '../payment-host-cand
 import {pricingCandidate} from '../pricing-candidate.mjs';
 import {fixture} from './helpers/payment-fixture.mjs';
 
-async function host({mode='enforced',configured=true}={}){
+async function host({mode='enforced',configured=true,checkoutAccounts}={}){
   const f=await fixture(),secret=randomBytes(32).toString('hex'),token=randomBytes(32).toString('base64url');
   let calls=0,upstream='ok';
   const baseConfig=readConfig({GEOD_AGENT_GATEWAY_SECRET:secret,DEEPSEEK_API_KEY:'fixture-only',GEOD_IDENTITY_ORIGIN:'http://127.0.0.1:41000',
     DEEPSEEK_BASE_URL:'http://127.0.0.1:41001',GEOD_AGENT_DB_PATH:join(f.root,'host-model.sqlite'),GEOD_AGENT_QUOTA_MODE:'unlimited'});
-  const config={...baseConfig,payment:configured?{gateway:f.config,billingMode:mode,maxDailyFen:100000,dbPath:join(f.root,'host-payments.sqlite')}:null};
+  const config={...baseConfig,payment:configured?{gateway:f.config,billingMode:mode,maxDailyFen:100000,dbPath:join(f.root,'host-payments.sqlite'),...(checkoutAccounts?{checkoutAccounts}:{})}:null};
   const fetchImpl=async(url,options)=>{
     if(url.endsWith('/api/geod/oauth/introspect')){
       const body=JSON.parse(options.body);
@@ -40,6 +40,18 @@ async function host({mode='enforced',configured=true}={}){
   const generate=(id=randomUUID())=>request('/api/agent/generations',{method:'POST',value:{generationId:id,conversationId:'fixture-conversation',messages:[{role:'user',content:'payment host fixture'}]}});
   return {f,config,request,paid,generate,get calls(){return calls;},set upstream(value){upstream=value;},async restart(){await new Promise(resolve=>server.close(resolve));server=createGatewayServer(config,{fetchImpl});base=await listen();},async close(){await new Promise(resolve=>server.close(resolve));await f.close();}};
 }
+
+test('acceptance checkout is restricted while other accounts retain wallet and usage access',async()=>{
+ const h=await host({checkoutAccounts:['acceptance-account']});try{
+  const status=(await h.request('/v1/payments/status')).data;assert.equal(status.checkoutEnabled,false);assert.deepEqual(status.products,[]);assert(status.planPreview);
+  assert.deepEqual((await h.request('/v1/payments/products')).data.products,[]);
+  assert.equal((await h.request('/v1/payments/wallet')).status,200);
+  assert.equal((await h.request('/v1/payments/history/usage')).status,200);
+  const refused=await h.request('/v1/payments/orders',{method:'POST',value:{requestKey:'blocked',productId:'ai-credit-10'}});assert.equal(refused.status,409);assert.equal(refused.data.error.code,'PAYMENT_ACCEPTANCE_ONLY');
+  h.config.payment.checkoutAccounts=['host-account'];await h.restart();assert.equal((await h.request('/v1/payments/status')).data.checkoutEnabled,true);
+  assert.equal((await h.request('/v1/payments/orders',{method:'POST',value:{requestKey:'accepted',productId:'ai-credit-10'}})).status,201);
+ }finally{await h.close();}
+});
 
 test('default host keeps unlimited testing and disables all money mutations',async()=>{
   const h=await host({configured:false});try{
