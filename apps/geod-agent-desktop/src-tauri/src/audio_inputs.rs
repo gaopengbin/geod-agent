@@ -73,7 +73,7 @@ fn runtime(app:&AppHandle)->Result<PathBuf,AppError>{
     if let Some(root)=VERIFIED.get(){return Ok(root.clone());}
     let mut roots=vec![];
     if cfg!(debug_assertions){roots.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/audio"));}
-    if let Ok(root)=app.path().resource_dir(){roots.push(root.join("audio-runtime"));}
+    if let Some(root)=crate::runtime_components::root(app,"audio-runtime"){roots.push(root);}
     let root=roots.into_iter().find(|root|root.join("manifest.json").is_file()).ok_or_else(||error("AUDIO_RUNTIME_MISSING","内置音频转写环境缺失，请修复应用"))?;
     if fs::read_to_string(root.join("manifest.json")).ok().as_deref()!=Some(MANIFEST){return Err(error("AUDIO_RUNTIME_INVALID","内置转写环境校验失败"));}
     let value:Value=serde_json::from_str(MANIFEST).map_err(|_|error("AUDIO_RUNTIME_INVALID","音频转写清单无效"))?;

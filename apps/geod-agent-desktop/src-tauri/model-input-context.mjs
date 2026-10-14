@@ -170,7 +170,7 @@ function historyFacts(value){
  if(JSON.stringify(facts).length>3000)return{recordHasTechnicalFacts:true};
  return facts;
 }
-function projectHistory(input,currentUser,catalog){
+function projectHistory(input,currentUser,catalog,nativeResponses=false){
  const original=input,closed=new Map(),calls=new Map();
  original.forEach((item,index)=>{if(callType(item))calls.set(item.call_id,{item,index});if(outputType(item))closed.set(item.call_id,{item,index});});
  const currentClosed=[...closed.values()].filter(v=>v.index>=currentUser).slice(-8),recent=new Set(currentClosed.map(v=>v.index));
@@ -186,10 +186,10 @@ function projectHistory(input,currentUser,catalog){
   if(raw.length<700&&args.length<1000)continue;
   const recordId=catalog.archive(output.item);let value;try{value=JSON.parse(output.item.output);}catch{}
   const summary={archivedHistory:{recordId,tool:call.item.name,exactOriginalAvailable:true,readTool:'runtime_context_read',section:'history'},facts:historyFacts(value)};
-  if(args.length>1000){summary.archivedHistory.argumentsRecordId=catalog.archive(call.item);drop.add(call.index);replace.set(output.index,{type:'message',role:'assistant',content:[{type:'output_text',text:JSON.stringify(summary)}]});}
+  if(args.length>1000&&!(nativeResponses&&call.item.id)){summary.archivedHistory.argumentsRecordId=catalog.archive(call.item);drop.add(call.index);replace.set(output.index,{type:'message',role:'assistant',content:[{type:'output_text',text:JSON.stringify(summary)}]});}
   else replace.set(output.index,{...output.item,output:JSON.stringify(summary)});
  }
- for(const {item,index}of pastAssistants)if(!pin.has(index)&&text(item.content).length>400){const recordId=catalog.archive(item);replace.set(index,{...item,content:[{type:'output_text',text:'Earlier assistant text is archived as '+recordId+'. Recover exact details with runtime_context_read(section:history, recordId); current native task state supersedes old status statements.'}]});}
+ for(const {item,index}of pastAssistants)if(!pin.has(index)&&text(item.content).length>400&&!(nativeResponses&&item.id)){const recordId=catalog.archive(item);replace.set(index,{...item,content:[{type:'output_text',text:'Earlier assistant text is archived as '+recordId+'. Recover exact details with runtime_context_read(section:history, recordId); current native task state supersedes old status statements.'}]});}
  const result=original.flatMap((item,index)=>drop.has(index)?[]:[replace.get(index)??item]);catalog.persist();return result;
 }
 function projectImported(item,catalog){
@@ -233,7 +233,7 @@ function projectDeveloper(item,source,catalog){
  const suffix=projectSkillCatalogue(suffixAt<0?'':content.slice(suffixAt),catalog);
  return{...item,content:[{type:'input_text',text:productPolicy(source,catalog)+'\n'+suffix}]};
 }
-export function projectModelInput(request,{catalog,developerInstructions}){
+export function projectModelInput(request,{catalog,developerInstructions,protocol}){
  const lastUser=[...(request.input??[])].reverse().find(item=>item.role==='user');
  const actual=text(lastUser?.content),expected=catalog.params.input;
  const matchesUser=(value,expected)=>value===expected||value.startsWith('【Imported GeoD conversation history; local tool records remain authoritative】')&&value.endsWith(expected);
@@ -255,9 +255,14 @@ export function projectModelInput(request,{catalog,developerInstructions}){
   if(currentUser>=0){
    catalog.archived.reasoning=(request.input??[]).slice(0,currentUser).filter(item=>item.type==='reasoning');
    for(const item of catalog.archived.reasoning)catalog.archive(item);
-   input=input.filter((item,index)=>index>=currentUser||item.type!=='reasoning');
+   // Responses output item IDs can depend on the preceding opaque reasoning
+   // item, even across user turns. Archiving it is not protocol compaction:
+   // suppliers reject the orphaned message/call with HTTP 400. Keep provider
+   // records intact and let Core perform its own complete-history compaction.
+   const nativeResponses=protocol==='responses';
+   input=input.filter((item,index)=>index>=currentUser||item.type!=='reasoning'||nativeResponses&&(!!item.id||!!item.encrypted_content));
    const projectedCutoff=input.findLastIndex(item=>item.role==='user'&&matchesUser(text(item.content),catalog.turnInput));
-   input=projectHistory(input,projectedCutoff,activeCatalog).map(item=>projectImported(item,activeCatalog));
+   input=projectHistory(input,projectedCutoff,activeCatalog,nativeResponses).map(item=>projectImported(item,activeCatalog));
   }
  }
  if(greetingRequest){

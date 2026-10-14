@@ -2,7 +2,7 @@ import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { fileURLToPath } from "node:url";
-import { createReadStream, cpSync, existsSync, statSync } from "node:fs";
+import { createReadStream, cpSync, existsSync, statSync, readFileSync } from "node:fs";
 import { resolve, sep, extname } from "node:path";
 
 function cesiumAssets(): Plugin {
@@ -30,7 +30,7 @@ function cesiumAssets(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), cesiumAssets()],
+  plugins: [{name:'geod-first-screen',transformIndexHtml:{order:'pre',handler(html){return html.replace('%GEOD_STARTUP_MARKUP%',readFileSync(fileURLToPath(new URL('./src/startup-markup.html',import.meta.url)),'utf8'));}}},react(), tailwindcss(), cesiumAssets()],
   define: { CESIUM_BASE_URL: JSON.stringify("/cesium/") },
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   server: {

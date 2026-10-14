@@ -39,6 +39,7 @@ export function DataTaskDetails({ task, view, permission }: { task: DataDownload
       dataDownloadChanged(task.conversationId, task.id);
     } catch (cause) { setError(errorMessage(cause)); } finally { setBusy(false); }
   }
+  if(task.cleaned)return <div className="task-discarded"><h3>{t("已清理")}</h3><p>{t("任务记录已移出列表，成果文件和缓存仍保留。恢复后可继续查看任务与成果。")}</p><Button size="sm" variant="secondary" disabled={busy} onClick={()=>{setBusy(true);setError('');void dataDownloads.cleanup(task.conversationId,task.id,'restore').then(()=>dataDownloadChanged(task.conversationId)).catch(e=>setError(errorMessage(e))).finally(()=>setBusy(false));}}>{t("恢复任务")}</Button>{error&&<p role="alert">{error}</p>}</div>;
   return <>
     <section className="task-overview"><div className="task-source"><h3>{task.title}</h3><span className={`state-pill state-${task.status}`}>{task.status === "pending" && permission === "fullAccess" ? t("待执行") : reprojecting ? t("转换坐标系") : localize(taskStateLabels[task.status] ?? task.status)}</span></div><p className="task-subtitle">{task.kind === "tiles3d" ? t("3D Tiles · 离线三维数据") : `${t("矢量数据")} · ${outputCrs}`}</p>
       {view === "task" && <>

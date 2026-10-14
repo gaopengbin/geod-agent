@@ -10,7 +10,7 @@ import type { WorkspaceSettings } from "./api";
 import { errorMessage } from "./app-error";
 import { TaskProgressBar, generatingArtifacts } from "./task-progress";
 
-const taskStateLabels: Record<string, string> = { scheduled: "已设定时", pending: "待确认", discarded: "已丢弃", queued: "排队中", downloading: "下载中", paused: "已暂停", processing: "生成成果", verifying: "核验中", completed: "已完成", partial: "部分完成", failed: "失败", cancelled: "已取消", interrupted: "已中断" };
+const taskStateLabels: Record<string, string> = { cleaned: "已清理", scheduled: "已设定时", pending: "待确认", discarded: "已丢弃", queued: "排队中", downloading: "下载中", paused: "已暂停", processing: "生成成果", verifying: "核验中", completed: "已完成", partial: "部分完成", failed: "失败", cancelled: "已取消", interrupted: "已中断" };
 export function TaskQueueView({ tasks, selectedId, permission, working, externalErrors = false, focusPlanIds = [], onClearFocus, onSelect, onAction }: {
   tasks: QueueTask[]; selectedId?: string; permission?: WorkspaceSettings["permission"] | null; working: boolean;
   focusPlanIds?: string[]; onClearFocus?: () => void;
@@ -69,7 +69,7 @@ export function TaskQueueView({ tasks, selectedId, permission, working, external
       <div>{(["start", "discard", "cancel", "restore"] as TaskAction[]).map(kind => {
         const count = eligible(kind).length;
         if (!count) return null;
-        return <Button key={kind} size="sm" variant={kind === "start" ? "primary" : "secondary"} disabled={busy || (kind === "start" && (!permission || (permission !== "fullAccess" && !checked)))} onClick={() => void run(kind)}>{action === kind && <span className="task-spinner"/>}{({start:"开始",discard:"丢弃",cancel:"取消任务",restore:"恢复计划"})[kind]} {count}</Button>;
+        return <Button key={kind} size="sm" variant={kind === "start" ? "primary" : "secondary"} disabled={busy || (kind === "start" && (!permission || (permission !== "fullAccess" && !checked)))} onClick={() => void run(kind)}>{action === kind && <span className="task-spinner"/>}{({start:"开始",discard:"丢弃",cancel:"取消任务",restore:"恢复计划",clean:"清理记录"})[kind]} {count}</Button>;
       })}</div>
       {error && !externalErrors && <p className="warning-text" role="alert">{localize(error)}</p>}
     </div>}

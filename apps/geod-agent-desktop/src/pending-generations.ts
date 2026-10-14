@@ -2,6 +2,7 @@ import type { AgentMessage, BoundaryImport, SourceRegistrationDraft, ImageAttach
 import type {UserInputRecord} from './user-input-records';
 import type {TurnOutcome} from './turn-outcome';
 import type {GenerationTokenReceipt,TurnTokenUsage} from './turn-token-usage';
+import type {CommandAction} from './codex-protocol/v2/CommandAction';
 
 export interface ExtensionProposal { kind: "mcp" | "skill"; id: string; name: string; description: string; detail: string; toolNames?: string[]; sha256?: string; requiresKey?:boolean }
 export interface BackgroundJob { jobId: string; planId: string; sourceName: string; totalTiles: number; zoomLevels: number[]; outputFormats: string[] }
@@ -19,6 +20,10 @@ export interface DisplayMessage {
   details?: string;
   toolName?: string;
   toolStatus?: "running" | "success" | "attention";
+  commandActions?: CommandAction[];
+  durationMs?: number | null;
+  exitCode?: number | null;
+  readOnlyHint?: boolean | null;
   sourceDraft?: SourceRegistrationDraft;
   extensionProposal?: ExtensionProposal;
   backgroundJob?: BackgroundJob;
@@ -29,8 +34,8 @@ export interface DisplayMessage {
   tokenUsage?:TurnTokenUsage;
 }
 export interface QueuedInput{id:string;text:string;images?:ImageAttachment[];documents?:DocumentAttachment[];createdAt:string}
-export interface SavedChat { conversationId: string; messages: AgentMessage[]; display: DisplayMessage[]; pendingId?: string; planId?: string; planIds?: string[]; workspaceDirectory?: string; updatedAt?: string; lastInputTokens?: number; contextCompressed?: boolean; engine?: "codex" | "legacy"; title?:string;forkFromConversationId?:string;queuedInputs?:QueuedInput[];queuePaused?:boolean; archived?:boolean;pinned?:boolean; codexContext?: { inputTokens: number; outputTokens: number; cachedInputTokens: number; modelContextWindow: number | null } }
-export interface CompletedGeneration { messages: AgentMessage[]; display: DisplayMessage[]; planId?: string; planIds?: string[]; lastInputTokens?: number; contextCompressed?: boolean; engine?: SavedChat["engine"]; codexContext?: SavedChat["codexContext"] }
+export interface SavedChat { conversationId: string; messages: AgentMessage[]; display: DisplayMessage[]; pendingId?: string; planId?: string; planIds?: string[]; workspaceDirectory?: string; updatedAt?: string; completedReplyId?:string;readReplyId?:string; lastInputTokens?: number; contextCompressed?: boolean; engine?: "codex" | "legacy"; title?:string;forkFromConversationId?:string;queuedInputs?:QueuedInput[];queuePaused?:boolean; archived?:boolean;pinned?:boolean; codexContext?: { inputTokens: number; outputTokens: number; cachedInputTokens: number; modelContextWindow: number | null } }
+export interface CompletedGeneration { messages: AgentMessage[]; display: DisplayMessage[]; planId?: string; planIds?: string[]; completedReplyId?:string;readReplyId?:string; lastInputTokens?: number; contextCompressed?: boolean; engine?: SavedChat["engine"]; codexContext?: SavedChat["codexContext"] }
 export interface PendingGeneration { conversationId: string; generationId: string; userId: string | null; messages: AgentMessage[]; display?: DisplayMessage[]; boundary?: BoundaryImport | null; boundaryRequired?: boolean; committed?: CompletedGeneration; engine?: "codex" | "legacy" }
 
 export const PENDING_KEY = "geod-agent-pending-generations-0.1";

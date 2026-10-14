@@ -600,11 +600,11 @@ body { background: var(--background); color: var(--app-text); font: 14px/1.5 var
 /* A new conversation starts with a focused composer; the map returns after the first message. */
 .ai-workspace.new-chat .agent-primary { border-right: 0; }
 .agent-primary.agent-start .agent-header { display: none; }
-.agent-start-screen { display: flex; flex: 1; min-height: 0; align-items: center; justify-content: center; overflow-y: auto; padding: 32px clamp(24px, 6vw, 80px); }
-.agent-start-content { width: min(760px, 100%); margin: auto 0; animation: geod-start-enter .58s cubic-bezier(.22, 1, .36, 1) both; }
+.agent-start-screen { display: flex; flex: 1; min-height: 0; align-items: center; justify-content: center; overflow-y: auto; padding: 32px clamp(24px, 6vw, 80px) clamp(80px, 15vh, 144px); }
+.agent-start-content { width: min(760px, 100%); margin: auto 0; animation: geod-start-enter .58s cubic-bezier(.22, 1, .36, 1) backwards; }
 @keyframes geod-start-enter {
   from { opacity: 0; transform: translateY(30px) scale(.96); filter: blur(5px); }
-  to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+  to { opacity: 1; transform: none; filter: none; }
 }
 .agent-start-heading { margin-bottom: 31px; text-align: center; }
 .agent-start-heading h1 { margin: 0; color: var(--app-text); font-size: clamp(24px, 2.4vw, 30px); font-weight: 600; letter-spacing: -.035em; line-height: 1.25; }
@@ -790,6 +790,10 @@ body { background: var(--background); color: var(--app-text); font: 14px/1.5 var
 .source-thumbnail-image { width: 100%; aspect-ratio: 3 / 2; border-radius: 8px; overflow: hidden; background: var(--app-subtle); border: 1px solid var(--app-line); }
 .source-thumbnail-image img { width: 100%; height: 100%; display: block; object-fit: cover; }
 .source-thumbnail-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; gap: 6px; color: var(--app-soft-text); font-size: 11px; }
+.task-network-failure { margin: 14px 0; padding: 12px; border: 1px solid var(--app-line); border-radius: 10px; background: var(--app-subtle); font-size: 13px; line-height: 1.6; }
+.task-network-failure p { margin: 0 0 8px; overflow-wrap: anywhere; }
+.task-network-failure p:not([role=alert]) { color: var(--app-soft-text); }
+.task-network-failure .task-actions { flex-wrap: wrap; }
 .source-thumbnail.is-detailed .source-thumbnail-image { aspect-ratio: 16 / 9; }
 .source-thumbnail-caption { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 6px; color: var(--app-soft-text); font-size: 12px; }
 .source-thumbnail-caption > button { height: 28px; padding-inline: 7px; font-size: 12px; }
@@ -933,6 +937,10 @@ body { background: var(--background); color: var(--app-text); font: 14px/1.5 var
 .ai-channel-empty h3 { color: var(--app-text); font-size: 16px; margin: 0 0 8px; }
 .ai-channel-empty p { line-height: 1.65; margin: 0 0 16px; }
 .ai-default-model { margin-top: 24px; max-width: 500px; }
+.ai-channel-settings-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-top: 28px; padding: 20px 0; border-top: 1px solid var(--app-line); }
+.ai-channel-settings-row h2 { margin: 0; font-size: 14px; font-weight: 600; }
+.ai-channel-settings-row p { margin: 6px 0 0; font-size: 13px; line-height: 1.65; color: var(--app-soft-text); }
+.ai-channel-settings-row > button { flex-shrink: 0; }
 .ai-channel-usage { margin-top: 32px; }
 .ai-channel-usage-table { margin-top: 14px; }
 .ai-channel-usage-table > div { display: grid; grid-template-columns: minmax(0, 1fr) 70px 70px 50px; gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--app-line); font-size: 13px; }
@@ -988,6 +996,7 @@ body { background: var(--background); color: var(--app-text); font: 14px/1.5 var
   .ai-channel-row { gap: 10px; flex-wrap: wrap; }
   .ai-channel-info { flex-basis: calc(100% - 56px); }
   .ai-channel-row-actions { margin-left: 52px; }
+  .ai-channel-settings-row { flex-wrap: wrap; gap: 12px; }
   .ai-channel-usage-table > div { grid-template-columns: minmax(0, 1fr) 52px 52px 30px; gap: 6px; font-size: 12px; }
 }
 .language-dialog { width: min(440px, calc(100vw - 32px)); }
@@ -999,14 +1008,16 @@ body { background: var(--background); color: var(--app-text); font: 14px/1.5 var
 .conversation-history-trigger:hover, .conversation-more:hover { background: var(--color-muted); color: var(--color-foreground); }
 .conversation-row { position: relative; min-width: 0; }
 .conversation-row .conversation-item { width: 100%; display: flex; gap: 6px; }
-.conversation-row .conversation-item > span:not(.conversation-running-dot) { flex: 1; }
+.conversation-row .conversation-item > .conversation-title { flex: 1; }
 .conversation-row .conversation-item > svg { flex: none; }
 .conversation-row .conversation-item > span { min-width: 0; }
 .conversation-row .conversation-more-anchor { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 26px; height: 26px; z-index: 1; }
 .conversation-row .conversation-more { position: static; opacity: 0; }
 .conversation-row:hover .conversation-more, .conversation-row:focus-within .conversation-more { opacity: 1; }
 .conversation-row:hover .conversation-item time, .conversation-row:focus-within .conversation-item time { opacity: 0; }
-.conversation-running-dot { flex: 0 0 6px; width: 6px; height: 6px; border-radius: 50%; background: var(--color-primary); }
+.conversation-running-spinner { color: var(--app-blue); }
+.conversation-unread-dot { flex: 0 0 6px; width: 6px; height: 6px; border-radius: 50%; background: var(--app-blue); }
+@media (prefers-reduced-motion: reduce) { .conversation-running-spinner { animation: none; } }
 .conversation-load-more { width: 100%; min-height: 30px; padding: 4px 12px 4px 28px; border: 0; border-radius: 8px; text-align: left; background: transparent; color: var(--color-muted-foreground); font-size: 12px; cursor: pointer; }
 .conversation-load-more:hover { background: var(--color-muted); color: var(--color-foreground); }
 .conversation-history-dialog { width: min(620px, calc(100vw - 32px)); max-height: calc(100vh - 48px); }

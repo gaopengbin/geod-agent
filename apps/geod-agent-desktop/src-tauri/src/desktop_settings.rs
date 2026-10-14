@@ -1,4 +1,4 @@
-use crate::{background_runtime, cache_management, codex_runtime::CodexState, desktop_backups};
+use crate::{background_runtime, cache_management, codex_runtime::CodexState, desktop_backups, runtime_components::{self, UpdateIndex}};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -37,6 +37,7 @@ struct Downloaded {
     update: Update,
     path: PathBuf,
     sha256: String,
+    components: Option<UpdateIndex>,
 }
 #[derive(Default)]
 pub struct DesktopUpdates {
@@ -256,13 +257,14 @@ pub async fn desktop_update_download(
         .clone()
         .filter(|update| update.version == version)
         .ok_or_else(|| failure("UPDATE_CHANGED", "更新信息已变化，请重新检查。"))?;
-    let mut downloaded = 0u64;
+    let (update, components, transferred, reused) = runtime_components::prepare(update, &events, runtime_components::cache(&app)?, app.path().resource_dir().map_err(|_| failure("UPDATE_COMPONENTS", "无法读取本机运行环境。"))?, |url| crate::network::proxy_for(url).map_err(|_| failure("UPDATE_NETWORK", "无法读取更新网络设置。"))).await?;
+    let mut downloaded = transferred;
     let bytes = update
         .download(
             |chunk, total| {
                 downloaded += chunk as u64;
                 let _ = events
-                    .send(json!({"phase":"downloading","downloaded":downloaded,"total":total}));
+                    .send(json!({"phase":"downloading","downloaded":downloaded,"total":total.map(|n| n + transferred)}));
             },
             || {
                 let _ = events.send(json!({"phase":"verifying"}));
@@ -277,6 +279,7 @@ pub async fn desktop_update_download(
                 "更新下载或签名验证失败，请重新检查后重试。",
             )
         })?;
+    if let Some(index) = &components { runtime_components::verify_download(&bytes, &index.application)?; }
     let sha256 = format!("{:x}", Sha256::digest(&bytes));
     let directory = app
         .path()
@@ -294,10 +297,12 @@ pub async fn desktop_update_download(
         update: update.clone(),
         path: target,
         sha256,
+        components,
     });
-    let _ = events.send(json!({"phase":"ready","downloaded":size}));
-    Ok(json!({"state":"ready","version":update.version,"bytes":size,"verified":true}))
+    let _ = events.send(json!({"phase":"ready","downloaded":size as u64 + transferred}));
+    Ok(json!({"state":"ready","version":update.version,"bytes":size as u64 + transferred,"verified":true,"reusedRuntimes":reused}))
 }
+
 
 fn backup_records(app: &AppHandle, ui_state: Value) -> Result<Value, Value> {
     let root = app
@@ -344,6 +349,7 @@ pub async fn desktop_update_install(
                 download.update.clone(),
                 download.path.clone(),
                 download.sha256.clone(),
+                download.components.clone(),
             )
         })
         .ok_or_else(|| failure("UPDATE_NOT_READY", "请先下载并验证更新。"))?;
@@ -360,6 +366,12 @@ pub async fn desktop_update_install(
             .map_err(|_| failure("UPDATE_STORAGE", "更新文件不可读，请重新下载。"))?;
         if format!("{:x}", Sha256::digest(&bytes)) != downloaded.2 {
             return Err(failure("UPDATE_VERIFY", "更新文件已变化，请重新下载。"));
+        }
+        if let Some(index) = &downloaded.3 {
+            let base = runtime_components::cache(&app)?;
+            for runtime in &index.runtimes {
+                runtime_components::verify(&runtime_components::component_path(&base, &runtime.id, &runtime.manifest_sha256), &runtime.manifest_sha256)?;
+            }
         }
         let mut background=app.state::<background_runtime::BackgroundClient>().begin_maintenance()?;
         app.state::<CodexState>().shutdown();

@@ -8,6 +8,7 @@ const job = (id,state,version=1) => ({jobId:`job-${id}`,planId:id,state,version}
 function fixture() {
   const jobs = new Map(), calls=[];
   const api = {
+    imageryTasksCleanup:async(conversation,ids,action)=>({changed:ids.filter(id=>action==='restore'||action==='clean'||!jobs.has(id)),rejected:ids.filter(id=>action==='discard'&&jobs.has(id)).map(planId=>({planId,message:'任务已启动'}))}),
     jobsForPlan:async id=>jobs.get(id)??null,
     approvalsGrant:async(id,hash)=>{calls.push(['approval',id,hash]);return {approvalId:`approval-${id}`};},
     jobsStart:async(id,hash,approvalId)=>{calls.push(['start',id,hash,approvalId]);if(id==='fails')throw new Error('DISK_INSUFFICIENT');const item=job(id,'queued');jobs.set(id,item);return item;},
@@ -26,6 +27,21 @@ test('discard survives reread, is isolated by account/conversation, and can be r
   assert.throws(()=>assertPlanAvailable(store,'alice','chat-1','a'),/PLAN_DISCARDED/);
   setPlanDiscarded(store,'alice','chat-1','a',false);
   assert.doesNotThrow(()=>assertPlanAvailable(store,'alice','chat-1','a'));
+});
+test('cleanup eligibility excludes live and scheduled tasks, and restores cleaned completed records',()=>{
+  assert(canTaskAction({stored:plan('pending'),job:null,state:'pending'},'clean'));
+  assert(canTaskAction({stored:plan('failed'),job:job('failed','failed'),state:'failed',workerActive:false},'clean'));
+  assert(!canTaskAction({stored:plan('stopping'),job:job('stopping','cancelled'),state:'cancelled',workerActive:true},'clean'));
+  assert(!canTaskAction({stored:plan('scheduled'),job:null,state:'scheduled'},'clean'));
+  assert(!canTaskAction({stored:plan('paused'),job:job('paused','paused'),state:'paused',workerActive:false},'clean'));
+  assert(canTaskAction({stored:plan('cleaned'),job:job('cleaned','completed'),state:'cleaned',workerActive:false},'restore'));
+});
+test('batch cleanup reports partial native failure and preserves existing job objects',async()=>{
+  const {api,jobs}=fixture(),store=memory();jobs.set('done',job('done','completed'));
+  api.imageryTasksCleanup=async(conversation,ids,action)=>ids[0]==='running'?{changed:[],rejected:[{planId:'running',message:'任务仍在运行'}]}:{changed:ids,rejected:[]};
+  const cleaned=await runTaskBatch(api,store,'alice','chat',['done','running','pending'].map(plan),'clean');
+  assert.deepEqual(cleaned.succeeded.map(r=>r.planId),['done','pending']);assert.equal(cleaned.succeeded[0].job.state,'completed');assert.equal(cleaned.failed.length,1);
+  await runTaskBatch(api,store,'alice','chat',[plan('done')],'restore');assert(!discardedPlans(store,'alice','chat').includes('done'));assert.equal(jobs.get('done').state,'completed');
 });
 test('queue includes unstarted plans, interrupted workers and terminal history with truthful progress',()=>{
   const tasks=buildTaskQueue(['a','b','c','d'].map(plan),[job('b','downloading'),job('c','completed')],[],['a'],{'job-b':{job:job('b','downloading',2),workerActive:false,completedTiles:448}});

@@ -15,7 +15,7 @@ import { Bot, ChevronDown, CircleAlert, Clock3, DotsThree, File, Folder, FolderO
 import { open, save as saveFileDialog } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { ConversationRow, ConversationHistory, ConversationEditor, type ConversationAction } from "./conversation-manager";
-import { orderedConversations, exportConversation, importConversation } from "./conversation-history";
+import { orderedConversations, exportConversation, importConversation, canReuseEmptyConversation } from "./conversation-history";
 import { Button } from "@/components/motion/button/base";
 import { UiTooltip } from "./ui-tooltip";
 import { PromptInput } from "@/components/agents/prompt-input";
@@ -68,7 +68,7 @@ import { jobExecutionState, jobStatusFacts } from "./job-runtime";
 import { startPlanJob } from "./job-start";
 import { useBackgroundJobs } from "./use-background-jobs";
 import { TranscriptTaskGroup } from "./transcript-plan-card";
-import { assertPlanAvailable, withPlanTaskLock, type QueueTask } from "./task-queue";
+import { assertPlanAvailable, discardedPlans, setPlanDiscarded, withPlanTaskLock, type QueueTask } from "./task-queue";
 import { defaultPlanTitle, inferPlanPresentations, planCardAnchors, savePlanPresentations } from "./plan-presentation";
 import { usePlanPresentations } from "./use-plan-presentations";
 import { DataInputPanel, vectorAccept, vectorFiles } from "./data-input-panel";
@@ -149,8 +149,8 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
     accountId?readPending(accountChatStore(localStateStore,accountId))?.[conversationId]:undefined));
   const runningIds = sessions.running(accountId??"").map(session=>session.conversationId);
   const aiModels = useAIModels(accountId, conversationId, chatRecords.some(c => c.conversationId === conversationId && c.messages.length > 0));
-  const activeConversationRef = useRef(conversationId);
-  activeConversationRef.current = conversationId;
+  const activeConversationRef = useRef({conversationId,accountId,mainView});
+  activeConversationRef.current = {conversationId,accountId,mainView};
   const presentations = usePlanPresentations(accountId, conversationId);
   useEffect(() => { onConversationChange(conversationId); }, [conversationId, onConversationChange]);
   const [messages, setMessages] = useConversationState<AgentMessage[]>(session,"messages",[]);
@@ -191,7 +191,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
   const [workspace, setWorkspace] = useConversationState<WorkspaceSettings | null>(session,"workspace",null);
   function applyWorkspace(current: WorkspaceSettings | null, id = conversationId) {
     setWorkspace(current);
-    if(activeConversationRef.current===id)onWorkspaceChange?.({ conversationId: id, permission: current?.permission ?? null });
+    if(activeConversationRef.current.conversationId===id)onWorkspaceChange?.({ conversationId: id, permission: current?.permission ?? null });
   }
   const [defaultWorkspaceDirectory, setDefaultWorkspaceDirectory] = useState("");
   const [closedGroups, setClosedGroups] = useState<string[]>([]);
@@ -554,8 +554,12 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
     void api.workspaceGet(conversationId).then(async current => {
       if (cancelled) return;
       applyWorkspace(current);
-      const claim=await api.imageryPlansClaim(conversationId,planIdsRef.current);
+      const planIds=planIdsRef.current;
+      const claim=planIds.length ? await api.imageryPlansClaim(conversationId,planIds) : {bound:[],rejected:[]};
       if(cancelled)return;
+      const legacy=discardedPlans(localStateStore,status.userId??null,conversationId);
+      if(legacy.length){const records=await api.imageryTasksList(conversationId);const pending=records.filter(r=>legacy.includes(r.stored.planId)&&r.recordState==='visible'&&!r.job).map(r=>r.stored.planId);if(pending.length)await api.imageryTasksCleanup(conversationId,pending,'discard');}
+      window.dispatchEvent(new Event('geod-task-queue-change'));
       if(claim.rejected.length)setError(`部分旧任务未能关联到当前工作区：${claim.rejected.map(item=>item.message).join("；")}`);
       setChatRecords(records => records.map(item => item.conversationId === conversationId && item.workspaceDirectory !== current.directory ? { ...item, workspaceDirectory: current.directory } : item));
     }).catch(cause => { if (!cancelled) setError(errorMessage(cause)); });
@@ -600,7 +604,12 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
   useEffect(() => {
     if (accountId && status.state === "connected" && status.userId === accountId && conversationId)
       accountChatStore(localStateStore, accountId).setItem(ACTIVE_CHAT_KEY, conversationId);
-  }, [accountId, status.state, status.userId, conversationId]);
+    const markViewed=()=>{
+      if(accountId&&status.state==='connected'&&status.userId===accountId&&conversationId&&mainView==='conversation'&&document.visibilityState==='visible'&&document.hasFocus())sessions.get(accountId,conversationId).markRead();
+    };
+    markViewed();window.addEventListener('focus',markViewed);document.addEventListener('visibilitychange',markViewed);
+    return()=>{window.removeEventListener('focus',markViewed);document.removeEventListener('visibilitychange',markViewed);};
+  }, [accountId, status.state, status.userId, conversationId,mainView,sessions]);
   useEffect(() => {
     if (!registeredSource || registeredSource.conversationId !== conversationId || handledRegistration.current === registeredSource.eventId || status.state !== "connected" || busy || pendingId || sending.current) return;
     handledRegistration.current = registeredSource.eventId;
@@ -688,22 +697,40 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
     setPlanReady(true); onPlanned(stored,conversationId);
   }
   const [creatingConversation,setCreatingConversation]=useState(false);
-  async function newChat(directory?: string): Promise<boolean> {
-    if(creatingConversation||!accountId)return false;
+  const creatingConversationRef=useRef(false);
+  async function newChat(directory?: string, forceNew=false): Promise<boolean> {
+    if(creatingConversationRef.current||!accountId)return false;
+    const activeId=activeConversationRef.current.conversationId;
+    const saved=chatRecordsRef.current.find(chat=>chat.conversationId===activeId);
+    const activeSession=saved?sessions.get(accountId,activeId):null;
+    const current=saved&&activeSession?{...saved,...activeSession.snapshot()}:null;
+    const target=directory??current?.workspaceDirectory??workspace?.directory;
+    if(!forceNew&&current&&canReuseEmptyConversation(current,target,activeSession?.get('busy',false)||activeSession?.ref('sending',false).current)){
+      onMainViewChange("conversation");
+      if(target){
+        setClosedGroups(groups=>groups.filter(item=>item!==target));
+        if(workspaceList.hidden.includes(target))saveWorkspaceList({...workspaceList,hidden:workspaceList.hidden.filter(item=>item!==target)});
+      }
+      requestAnimationFrame(()=>document.querySelector<HTMLTextAreaElement>('.agent-primary .geod-prompt-input textarea')?.focus({preventScroll:true}));
+      return true;
+    }
+    creatingConversationRef.current=true;
     setCreatingConversation(true);
     try {
       const id = crypto.randomUUID();
-      const target = directory ?? workspace?.directory;
       const nextWorkspace = target ? await api.workspaceSet(id, target, "confirmEach") : await api.workspaceGet(id);
+      if(activeConversationRef.current.accountId!==accountId)return false;
       const next: SavedChat = { conversationId: id, messages: [], display: [], planIds: [], workspaceDirectory: nextWorkspace.directory, updatedAt: new Date().toISOString() };
       setClosedGroups(current => current.filter(item => item !== nextWorkspace.directory));
       if (workspaceList.hidden.includes(nextWorkspace.directory)) saveWorkspaceList({ ...workspaceList, hidden: workspaceList.hidden.filter(path => path !== nextWorkspace.directory) });
       sessions.get(accountId,id,{...conversationSessionSeed(next),workspace:nextWorkspace});
-      setChatRecords(current => [next, ...current]);setConversationId(id);onSelectConversation([],id);
+      chatRecordsRef.current=[next,...chatRecordsRef.current];
+      activeConversationRef.current={...activeConversationRef.current,conversationId:id};
+      setChatRecords(records=>[next,...records]);setConversationId(id);onSelectConversation([],id);
       onMainViewChange("conversation");
       return true;
     } catch (cause) { setError(errorMessage(cause)); return false; }
-    finally { setCreatingConversation(false); }
+    finally { creatingConversationRef.current=false;setCreatingConversation(false); }
   }
   async function forkChat(){
     if(busy||sending.current||pendingId||!workspace||!accountId||engine!=="codex")return;
@@ -725,8 +752,9 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
     }catch(cause){setError(errorMessage(cause));}finally{setBusy(false);}
   }
   function selectChat(chat: SavedChat) {
-    onMainViewChange("conversation");if(chat.conversationId===conversationId||!accountId)return;
+    onMainViewChange("conversation");if(!accountId)return;
     const next=sessions.get(accountId,chat.conversationId,()=>conversationSessionSeed(chat,readPending(chatStore())?.[chat.conversationId]));
+    next.markRead();if(chat.conversationId===conversationId)return;
     setConversationId(chat.conversationId);onSelectConversation(next.get<string[]>("planIds",[]),chat.conversationId);
   }
 
@@ -744,7 +772,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
     if (action === "archive" || action === "restore") {
       if (runningIds.includes(chat.conversationId)) {setError(t("停止回复后可以归档此会话。"));return;}
       changeConversation(chat,{archived:action==="archive"});
-      if(action==="archive"&&chat.conversationId===conversationId){const next=chatRecords.find(item=>item.conversationId!==chat.conversationId&&!item.archived);if(next)selectChat(next);else await newChat();}
+      if(action==="archive"&&chat.conversationId===conversationId){const next=chatRecords.find(item=>item.conversationId!==chat.conversationId&&!item.archived);if(next)selectChat(next);else await newChat(undefined,true);}
       return;
     }
     const format=action==="export-json"?"json":"markdown",content=exportConversation(chat,format);
@@ -761,7 +789,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
     if(runningIds.includes(chat.conversationId))return;
     sessions.forget(accountId??"",chat.conversationId);
     const next=deleteStoredConversation(chatStore(),chat.conversationId);setChatRecords(next);setConversationEditor(null);await flushLocalState();
-    if(chat.conversationId===conversationId){const target=next.find(chat=>!chat.archived);if(target)selectChat(target);else await newChat();}
+    if(chat.conversationId===conversationId){const target=next.find(chat=>!chat.archived);if(target)selectChat(target);else await newChat(undefined,true);}
   }
 
   async function approveExtension(proposal: ExtensionProposal) {
@@ -894,6 +922,17 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
       if (call.function.name.startsWith("agent_tasks_")) return await executeAgentTaskTool(conversationId,call.function.name,args,`${generationId}:${call.id}`);
       if (call.function.name.startsWith("data_schedules_")) return await executeDataScheduleTool(conversationId, call.function.name, args, `${generationId}:${call.id}`);
       if (call.function.name.startsWith("cache_")) return await executeCacheTool(call.function.name, args);
+      if (call.function.name === "imagery_tasks_list") {
+        const records=await api.imageryTasksList(conversationId),active=await api.jobsActive();
+        return {tasks:records.map(r=>({planId:r.stored.planId,sourceName:r.stored.plan.sourceName,recordState:r.recordState,jobId:r.job?.jobId,state:r.job?.state,workerActive:!!r.job&&active.includes(r.job.jobId)}))};
+      }
+      if (call.function.name === "imagery_tasks_cleanup") {
+        if(!Array.isArray(args.planIds)||!args.planIds.every(id=>typeof id==='string')||!['clean','discard','restore'].includes(String(args.action)))return {error:'INVALID_SPEC'};
+        const result=await api.imageryTasksCleanup(conversationId,args.planIds,args.action as 'clean'|'discard'|'restore');
+        if(accountId)for(const id of result.changed)setPlanDiscarded(localStateStore,accountId,conversationId,id,args.action!=='restore');
+        window.dispatchEvent(new Event('geod-task-queue-change'));
+        return result;
+      }
       if (call.function.name === "imagery_recovery_plan") {
         if (args.mode !== "retryMissing" && args.mode !== "exportAvailable") return {error:"INVALID_RECOVERY_MODE"};
         const result = await planImageryRecovery(conversationId, String(args.jobId), args.mode, `${generationId}:${call.id}`);
@@ -1128,9 +1167,10 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
       }
       if (call.function.name === "jobs_list") {
         const jobs = await api.jobsList();
+        const cleanedIds=(await api.imageryTasksList(conversationId)).filter(r=>r.recordState==='cleaned').map(r=>r.stored.planId);
         const active = await api.jobsActive();
         const scheduledIds=(await api.schedulesRuns(conversationId)).map(run=>run.planId);
-        return { jobs: jobs.filter(job => planIdsRef.current.includes(job.planId)||scheduledIds.includes(job.planId)).map(job => ({ jobId: job.jobId, planId: job.planId, state: jobExecutionState(job, active.includes(job.jobId)), ledgerState: job.state, workerActive: active.includes(job.jobId), createdAt: job.createdAt })) };
+        return { jobs: jobs.filter(job => !cleanedIds.includes(job.planId)&&(planIdsRef.current.includes(job.planId)||scheduledIds.includes(job.planId))).map(job => ({ jobId: job.jobId, planId: job.planId, state: jobExecutionState(job, active.includes(job.jobId)), ledgerState: job.state, workerActive: active.includes(job.jobId), createdAt: job.createdAt })) };
       }
       if (call.function.name === "jobs_start") {
         const id = stringArg(args.planId);
@@ -1227,11 +1267,18 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
     }).catch(()=>{/* Unknown results retain the explicit recovery path. */});
     return ()=>{disposed=true;};
   },[pendingId,busy,engine,status.userId,session]);
+  function recordCompletedReply():Pick<SavedChat,'completedReplyId'|'readReplyId'> {
+    const reply=[...displayRef.current].reverse().find(item=>item.role==='assistant'&&item.phase!=='progress'&&!item.streaming&&!item.turnOutcome&&!item.userInput&&item.content.trim());
+    if(!reply)return {};
+    const view=activeConversationRef.current;
+    session.completeReply(reply.id,view.accountId===accountId&&view.conversationId===conversationId&&view.mainView==='conversation'&&document.visibilityState==='visible'&&document.hasFocus());
+    return {completedReplyId:session.get('completedReplyId',''),readReplyId:session.get('readReplyId','')};
+  }
   async function commitFinalGeneration(generationId: string, context: AgentMessage[]) {
     const compacted = boundedContext(context);
     contextCompressedRef.current ||= JSON.stringify(compacted).length < JSON.stringify(context).length;
     setContextCompressed(contextCompressedRef.current);
-    const completed = { engine, ...(engine === "codex" ? { codexContext: codexContext ?? undefined } : {}), messages: compacted, display: displayRef.current, planId: planIdRef.current || undefined, planIds: planIdsRef.current, contextCompressed: contextCompressedRef.current, lastInputTokens: lastInputTokensRef.current ?? undefined };
+    const completed = { engine, ...recordCompletedReply(), ...(engine === "codex" ? { codexContext: codexContext ?? undefined } : {}), messages: compacted, display: displayRef.current, planId: planIdRef.current || undefined, planIds: planIdsRef.current, contextCompressed: contextCompressedRef.current, lastInputTokens: lastInputTokensRef.current ?? undefined };
     commitPending(chatStore(), conversationId, generationId, completed);
     await flushLocalState();
     const updated = persistCompletedChat(chatStore(), { conversationId, ...completed, workspaceDirectory: workspace?.directory, updatedAt: new Date().toISOString() });
@@ -1546,7 +1593,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
         appendDisplay(turnOutcomeMessage(runId,{status:'interrupted',message:"本轮回复已停止。已经启动的本机任务可在后台状态中查看。"}));
       }
       if (result.text) current = [...current, { role: "assistant", content: result.text }];
-      const completed: SavedChat = { conversationId, engine: "codex", messages: current, display: displayRef.current, planId: planIdRef.current || undefined, planIds: planIdsRef.current, workspaceDirectory: workspace?.directory, lastInputTokens: lastInputTokensRef.current ?? undefined, codexContext: currentTokens ?? undefined, updatedAt: new Date().toISOString(),queuePaused:interrupted?true:undefined };
+      const completed: SavedChat = { conversationId, engine: "codex", ...(result.status==='completed'?recordCompletedReply():{}), messages: current, display: displayRef.current, planId: planIdRef.current || undefined, planIds: planIdsRef.current, workspaceDirectory: workspace?.directory, lastInputTokens: lastInputTokensRef.current ?? undefined, codexContext: currentTokens ?? undefined, updatedAt: new Date().toISOString(),queuePaused:interrupted?true:undefined };
       setMessages(completed.messages);
       if (lastGenerationId) commitPending(chatStore(), conversationId, lastGenerationId, completed);
       await flushLocalState();
@@ -1585,6 +1632,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
       <div className="composer-documents"><DocumentAttachments documents={documents} onReview={setReviewAudio} onRemove={busy?undefined:id=>{setDocuments(current=>current.filter(file=>file.id!==id));void api.documentAttachmentDiscard(conversationId,id).catch(cause=>setError(errorMessage(cause)));}}/>{documentsBusy&&(audioBusy?<div className="composer-audio-status" role="status"><Loader2 size={14} className="animate-spin"/><span>{t("正在本机转写音频…")}</span><Button variant="ghost" size="sm" onClick={()=>audioCancels.current.get(conversationId)?.()}>{t("取消转写")}</Button></div>:<small role="status">{t("正在读取文档…")}</small>)}</div>
       {aiModels.error && <div className="ai-channel-error" role="alert"><CircleAlert size={15}/><span>{aiModels.error}</span><Button variant="ghost" size="sm" onClick={() => onMainViewChange("models")}>{t("检查模型配置")}</Button></div>}
       <PromptInput
+        key={conversationId}
         value={draft}
         onValueChange={setDraft}
         hasAttachments={images.length>0||documents.length>0}

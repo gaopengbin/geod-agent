@@ -1,7 +1,7 @@
 import type { Job, StoredPlan } from "./api";
 import { errorMessage } from "./app-error.ts";
 
-export type TaskAction = "start" | "discard" | "cancel" | "restore";
+export type TaskAction = "start" | "discard" | "cancel" | "restore" | "clean";
 type Store = Pick<Storage, "getItem" | "setItem">;
 const PREFIX = "geod-agent-task-queue-1";
 export const taskQueueKey = (account: string, conversation: string) => `${PREFIX}:${encodeURIComponent(account)}:${encodeURIComponent(conversation)}`;
@@ -44,8 +44,9 @@ export interface QueueTask {
 }
 export function taskEnded(task: QueueTask) { return ["discarded", "completed", "partial", "cancelled"].includes(task.state); }
 export function canTaskAction(task: QueueTask, action: TaskAction) {
+  if (action === "clean") return task.state !== "cleaned" && task.state !== "scheduled" && !task.workerActive && (!task.job || ["completed","partial","failed","cancelled"].includes(task.job.state));
   if (action === "start" || action === "discard") return !task.job && task.state === "pending";
-  if (action === "restore") return !task.job && task.state === "discarded";
+  if (action === "restore") return task.state === "cleaned" || (!task.job && task.state === "discarded");
   return !!task.job && ["queued", "downloading", "processing", "paused"].includes(task.job.state);
 }
 export function buildTaskQueue(plans: StoredPlan[], jobs: Job[], activeIds: string[], discarded: string[], snapshots: Record<string, { job: Job | null; workerActive?: boolean; completedTiles?: number; connectionError?: string }> = {}): QueueTask[] {
@@ -60,6 +61,7 @@ export function buildTaskQueue(plans: StoredPlan[], jobs: Job[], activeIds: stri
 }
 
 interface TaskApi {
+  imageryTasksCleanup: (conversationId:string,planIds:string[],action:"discard"|"clean"|"restore") => Promise<{changed:string[];rejected:{planId:string;message:string}[]}>;
   jobsForPlan: (id: string) => Promise<Job | null>;
   approvalsGrant: (id: string, hash: string) => Promise<{ approvalId: string }>;
   jobsStart: (id: string, hash: string, approvalId: string, key: string) => Promise<Job>;
@@ -73,10 +75,11 @@ export async function runTaskBatch(api: TaskApi, store: Store, account: string, 
     try {
       const job = await withPlanTaskLock(account, conversation, stored.planId, async () => {
         const existing = await api.jobsForPlan(stored.planId);
-        if (action === "restore") {
-          if (existing) throw new Error("计划已有作业，请查看作业状态。");
-          setPlanDiscarded(store, account, conversation, stored.planId, false);
-          return null;
+        if (action === "restore" || action === "discard" || action === "clean") {
+          const result=await api.imageryTasksCleanup(conversation,[stored.planId],action);
+          if (!result.changed.includes(stored.planId)) throw new Error(result.rejected[0]?.message ?? "任务状态已变化，请刷新。");
+          setPlanDiscarded(store, account, conversation, stored.planId, action !== "restore");
+          return existing;
         }
         if (action === "cancel") {
           if (!existing || !["queued", "downloading", "processing", "paused"].includes(existing.state)) throw new Error("当前状态不支持取消，请刷新任务。");
@@ -84,10 +87,6 @@ export async function runTaskBatch(api: TaskApi, store: Store, account: string, 
         }
         assertPlanAvailable(store, account, conversation, stored.planId);
         if (existing) throw new Error("计划已有作业，请在任务列表查看，避免重复执行。");
-        if (action === "discard") {
-          setPlanDiscarded(store, account, conversation, stored.planId, true);
-          return null;
-        }
         if (fullAccess) return api.jobsStartAuto(stored.planId, conversation, crypto.randomUUID());
         const approval = await api.approvalsGrant(stored.planId, stored.plan.planHash);
         return api.jobsStart(stored.planId, stored.plan.planHash, approval.approvalId, crypto.randomUUID());

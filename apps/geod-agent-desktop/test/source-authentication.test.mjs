@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import ts from "typescript";
 import { readFileSync } from "node:fs";
 const catalog=JSON.parse(readFileSync(new URL("../../../contracts/source-presets.v1.json",import.meta.url),"utf8"));
-const source=readFileSync(new URL("../src/source-presets.ts",import.meta.url),"utf8").replace(/import catalog from "\.\.\/\.\.\/\.\.\/contracts\/source-presets\.v1\.json";/,`const catalog = ${JSON.stringify(catalog)};`);
+const normalizer=readFileSync(new URL("../src/source-template.ts",import.meta.url),"utf8").replace('export function','function');
+const source=readFileSync(new URL("../src/source-presets.ts",import.meta.url),"utf8").replace(/import catalog from "\.\.\/\.\.\/\.\.\/contracts\/source-presets\.v1\.json";/,`const catalog = ${JSON.stringify(catalog)};`).replace('import { normalizeTileTemplate } from "./source-template";',normalizer);
 const code=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext}}).outputText;
 const { tiandituPreset, separateUrlToken, rasterPreset }=await import(`data:text/javascript;base64,${Buffer.from(code).toString("base64")}`);
 test("pasted credential URL is separated while WMTS parameters and XYZ placeholders survive",()=>{
@@ -13,6 +14,12 @@ test("pasted credential URL is separated while WMTS parameters and XYZ placehold
   assert.throws(()=>separateUrlToken(raw+"&token=second"));
   assert.equal(separateUrlToken("https://tiles.example.org/{z}/{x}/{y}?session_key=local-example", "session_key").token,"local-example");
   assert.throws(()=>separateUrlToken(raw+"#fragment"));
+});
+test("mixed fixed parameters, encoded placeholders and WMTS aliases survive token separation",()=>{
+  const parsed=separateUrlToken('https://tiles.example.org/wmts?LAYER=a%2Bb&STYLE=default&TILEMATRIX=%7BTileMatrix%7D&TILEROW={TileRow}&TILECOL={TileCol}&tk=key%2Bvalue');
+  assert.equal(parsed.url,'https://tiles.example.org/wmts?LAYER=a%2Bb&STYLE=default&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}');
+  assert.equal(parsed.token,'key+value');
+  assert.equal(separateUrlToken('https://example.org/%7bz%7d/%7Bx%7D/{y}?fixed=%7Bunchanged%7D').url,'https://example.org/{z}/{x}/{y}?fixed=%7Bunchanged%7D');
 });
 test("Tianditu presets use credential-free standard Web Mercator tile templates",()=>{
   for(const layer of ["img","cia","vec","cva","cta"]){const p=tiandituPreset(layer);const u=new URL(p.source.urlTemplate);

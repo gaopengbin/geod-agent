@@ -1,6 +1,6 @@
 import { t, localize } from "./i18n";
 // i18n: presentation strings migrated
-import { Activity, ArrowRight, Bot, Check, CheckCircle2, ChevronDown, CircleAlert, Copy } from "./icons";
+import { Activity, ArrowDownToLine, ArrowRight, Bot, Check, CheckCircle2, ChevronDown, ChevronRight, CircleAlert, Copy, FolderOpen, Terminal } from "./icons";
 import "./codex-work.css";
 import { Fragment, memo, useEffect, useId, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
@@ -16,7 +16,7 @@ import type { DisplayMessage, ExtensionProposal } from "./pending-generations";
 import {ImageAttachments} from "./image-attachments";
 import {DocumentAttachments} from "./document-attachments";
 import { collapsePollingHistory, type BackgroundSnapshot } from "./background-jobs";
-import { groupWorkRecords, isTurnWork, uniqueDisplayMessages, type TurnWork } from "./chat-work";
+import { groupWorkRecords, isTurnWork, projectWorkActivities, uniqueDisplayMessages, workRecordState, type TurnWork, type WorkActivity } from "./chat-work";
 import {UserInputRequest} from './user-input-request';
 import type {UserInputDraft} from './user-input-records';
 import {McpKeyDialog} from './mcp-key-dialog';
@@ -52,11 +52,6 @@ function CopyMessage({ content, label = "消息" }: { content: string; label?: s
   </UiTooltip>;
 }
 
-const disclosureMotion = {
-  initial: { height: 0, opacity: 0 }, animate: { height: "auto", opacity: 1 }, exit: { height: 0, opacity: 0 },
-  transition: { duration: .26, ease: [.22, 1, .36, 1] as [number, number, number, number] },
-};
-
 function WorkDetailSection({ label, content }: { label: string; content: string }) {
   const empty = label === "输入" && content.trim() === "{}";
   let format = "文本";
@@ -68,6 +63,14 @@ function WorkDetailSection({ label, content }: { label: string; content: string 
 }
 
 function WorkDetails({ item }: { item: DisplayMessage }) {
+  if (item.itemType === "commandExecution") return <div className="agent-command-panel">
+    <div className="agent-work-code-heading"><span>Shell</span><CopyMessage content={item.content} label={t("命令")}/></div>
+    <ScrollArea className="agent-work-code-area" viewportProps={{"aria-label":t("命令与输出")}}><div className="agent-command-content"><pre className="agent-command-line"><code>$ {item.content}</code></pre>{item.details && <pre className="agent-command-output"><code>{item.details}</code></pre>}</div></ScrollArea>
+    <footer className={`agent-command-result ${item.toolStatus === "attention" ? "attention" : ""}`}>
+      {item.durationMs != null && Number.isFinite(item.durationMs) && item.durationMs >= 0 && <span>{t("用时 {0} 秒", {"0":(item.durationMs / 1000).toLocaleString(undefined,{maximumFractionDigits:1})})}</span>}
+      <span>{item.exitCode != null ? t("退出码 {0}", {"0":String(item.exitCode)}) : t(item.toolStatus === "running" ? "运行中" : item.toolStatus === "success" ? "已完成" : item.toolStatus === "attention" ? "未完成" : "执行记录")}</span>
+    </footer>
+  </div>;
   if (item.monitorTrace || item.itemType === "reasoning") return <ScrollArea className="agent-work-reasoning-area" viewportProps={{ "aria-label": t(item.monitorTrace ? "执行记录详情" : "模型思考详情") }}>
     <div className="agent-work-reasoning agent-work-content geod-message-body">
       {item.monitorTrace
@@ -92,9 +95,13 @@ function WorkDetails({ item }: { item: DisplayMessage }) {
   return <div className="agent-work-detail-sections">{sections.map(section => <WorkDetailSection key={section.label} {...section}/>)}</div>;
 }
 
-function workTitle(item: DisplayMessage) {
+function workTitle(item: DisplayMessage, active = true) {
   if(item.itemType==='reasoning'&&item.toolStatus==='attention')return t('思考已停止');
-   if (item.itemType === "commandExecution") return t("运行命令");
+  if(item.itemType==='reasoning')return t('思考摘要');
+  if (item.itemType === "commandExecution") {
+    const state = workRecordState(item, active);
+    return t(state === "running" ? "正在运行命令" : state === "success" ? "命令已完成" : state === "attention" ? "命令未完成" : "运行命令");
+  }
   // A native MCP server may be named by its local connection ID.
   if (item.itemType === "mcpToolCall" && /^[a-f0-9-]{36} · /i.test(item.content)) return item.content.replace(/^[a-f0-9-]{36} · /i, "MCP 工具 · ");
   return localize(item.content);
@@ -107,43 +114,86 @@ function TurnOutcomeCard({item,onContinue,canContinue}:{item:DisplayMessage;onCo
   </section>;
 }
 
-function WorkRecord({ item, active }: { item: DisplayMessage; active: boolean }) {
-  const [open, setOpen] = useState(false);
+function WorkRecord({ item, active, onInspect, initiallyOpen = false }: { item: DisplayMessage; active: boolean; onInspect: () => void; initiallyOpen?: boolean }) {
+  const [open, setOpen] = useState(initiallyOpen);
   const detailId = useId();
-  const running = active && (item.toolStatus === "running" || item.streaming);
-  const attention = item.toolStatus === "attention" || (!active && item.toolStatus === "running");
+  const state = workRecordState(item, active);
+  const running = state === "running";
+  const attention = state === "attention";
   const reasoning = item.itemType === "reasoning";
   const hasDetails = !!item.details || item.itemType === "commandExecution" || !!item.monitorTrace?.length;
-  const icon = attention ? <CircleAlert size={16}/> : reasoning ? <Activity size={16}/> : running ? <MessageTyping label={t("正在执行")} /> : <CheckCircle2 size={16}/>;
-  if (item.role === "assistant") return <motion.div className={`agent-work-record agent-work-note ${item.streaming ? "is-streaming" : ""}`} initial={active ? { opacity: 0, y: 6 } : false} animate={{ opacity: 1, y: 0 }} transition={{ duration: .24 }}>
-    <span className="agent-work-record-icon"><Activity size={15}/></span><div className="agent-work-content geod-message-body"><MarkdownContent>{item.content}</MarkdownContent></div>
-  </motion.div>;
-  const row = <><span className={`agent-work-record-icon ${running ? "is-running" : ""}`}>{icon}</span><span className="agent-work-record-title">{workTitle(item)}</span>{hasDetails && <ChevronDown size={14} className={open ? "is-open" : ""}/>}</>;
-  return <motion.div className={`agent-work-record ${attention ? "attention" : ""}`} initial={active ? { opacity: 0, y: 6 } : false} animate={{ opacity: 1, y: 0 }} transition={{ duration: .24 }}>
-    {hasDetails ? <Button variant="ghost" size="sm" whileHover={undefined} whileTap={undefined} className="agent-work-record-trigger" aria-expanded={open} aria-controls={detailId} onClick={() => setOpen(!open)}>{row}</Button> : <div className="agent-work-record-heading">{row}</div>}
-    <AnimatePresence initial={false}>{open && <motion.div id={detailId} className="agent-work-record-details" {...disclosureMotion}><WorkDetails item={item}/></motion.div>}</AnimatePresence>
-  </motion.div>;
+  const icon = attention ? <CircleAlert size={15}/> : reasoning ? <Activity size={15}/> : item.itemType === "commandExecution" ? <Terminal size={15}/> : state === "success" ? <CheckCircle2 size={15}/> : <Activity size={15}/>;
+  if (item.role === "assistant") return <div className={`agent-work-note ${item.streaming ? "is-streaming" : ""}`}>
+    <div className="agent-work-content geod-message-body"><MarkdownContent>{item.content}</MarkdownContent></div>
+  </div>;
+  const row = <><span className={`agent-work-record-icon ${running ? "is-running" : ""}`}>{icon}</span><span className="agent-work-record-title">{workTitle(item, active)}</span>{hasDetails && <ChevronDown size={14} className={open ? "is-open" : ""}/>}</>;
+  return <div className={`agent-work-record ${attention ? "attention" : ""} ${running ? "is-running" : ""}`} data-work-record={item.id}>
+    {hasDetails ? <Button variant="ghost" size="sm" whileHover={undefined} whileTap={undefined} className="agent-work-record-trigger" aria-expanded={open} aria-controls={detailId} onClick={() => { if (!open) onInspect(); setOpen(!open); }}>{row}</Button> : <div className="agent-work-record-heading">{row}</div>}
+    <div id={detailId} className="agent-work-record-details" hidden={!open}>{open && <WorkDetails item={item}/>}</div>
+  </div>;
 }
 
-function WorkRecords({ group, active, renderInput }: { group: TurnWork; active: boolean; renderInput: (item: DisplayMessage) => ReactNode }) {
-  const [open, setOpen] = useState(active);
+function ActivityGroup({ activity, active, onInspect }: { activity: WorkActivity; active: boolean; onInspect: () => void }) {
+  const [open, setOpen] = useState(false);
+  const bodyId = useId();
+  const { items, kind } = activity;
+  const running = items.filter(item => workRecordState(item, active) === "running");
+  const attention = items.filter(item => workRecordState(item, active) === "attention");
+  const succeeded = items.every(item => workRecordState(item, active) === "success");
+  const label = kind === "exploration"
+    ? t(running.length ? "正在检查 {0} 项资料" : succeeded ? "已检查 {0} 项资料" : "检查 {0} 项资料", {"0":String(items.length)})
+    : running.length ? workTitle(running.at(-1)!) : items.length === 1 ? workTitle(items[0], active) : t("使用 {0} 项工具", {"0":String(items.length)});
+  return <section className={`agent-activity-group ${running.length ? "is-running" : ""}`} data-activity-group={kind}>
+    <Button variant="ghost" size="sm" whileHover={undefined} whileTap={undefined} className="agent-activity-trigger" aria-expanded={open} aria-controls={bodyId} onClick={() => { if (!open) onInspect(); setOpen(!open); }}>
+      {kind === "exploration" ? <FolderOpen size={15}/> : <Activity size={15}/>}
+      <span className="agent-activity-label">{label}</span>
+      {attention.length > 0 && <span className="agent-activity-attention"><CircleAlert size={13}/>{attention.length}</span>}
+      <ChevronDown size={14} className={open ? "is-open" : ""}/>
+    </Button>
+    <div id={bodyId} className="agent-activity-body" hidden={!open}>
+      {open && items.map(item => <WorkRecord key={item.id} item={item} active={active} onInspect={onInspect}/>)}
+    </div>
+  </section>;
+}
+
+function LiveActivity({ label, reasoning, onInspect, onOpenChange }: { label: string; reasoning?: DisplayMessage; onInspect?: () => void; onOpenChange?: (open:boolean) => void }) {
+  const [open, setOpen] = useState(false);
+  const bodyId = useId();
+  const content = <><span className="agent-activity-shimmer">{label}</span>{reasoning?.details && <ChevronDown size={14} className={open ? "is-open" : ""}/>}</>;
+  return <div className="agent-live-status" role="status" aria-label={t("当前执行状态")}>
+    {reasoning?.details ? <><Button variant="ghost" size="sm" whileHover={undefined} whileTap={undefined} className="agent-live-trigger" aria-expanded={open} aria-controls={bodyId} onClick={() => { if (!open) onInspect?.(); onOpenChange?.(!open); setOpen(!open); }}>{content}</Button><div id={bodyId} hidden={!open}>{open && <WorkDetails item={reasoning}/>}</div></> : <span>{content}</span>}
+  </div>;
+}
+
+function WorkRecords({ group, active, writing, activityLabel, renderInput }: { group: TurnWork; active: boolean; writing: boolean; activityLabel: string; renderInput: (item: DisplayMessage) => ReactNode }) {
+  // An explicit disclosure choice survives completion and continuation. Merely
+  // running a turn uses the automatic expanded -> collapsed transition.
+  const [openChoice, setOpenChoice] = useState<boolean | null>(null);
+  const [inspectedReasoning, setInspectedReasoning] = useState<string>();
+  const open = openChoice ?? active;
   const bodyId = useId();
   const { items } = group;
   const operations = items.filter(item => item.role === "tool" && item.itemType !== "reasoning" && !item.userInput).length;
   const failed = items.some(item => item.toolStatus === "attention" || (!active && item.toolStatus === "running"));
-  // Completion closes the whole turn once; a finished turn can still be reopened.
-  useEffect(() => { setOpen(active); }, [active]);
+  const activities = projectWorkActivities(items, active);
+  const runningTool = activities.some(activity => activity.items.some(item => item.role === "tool" && workRecordState(item, active) === "running"));
+  const reasoning = [...items].reverse().find(item => item.itemType === "reasoning" && item.toolStatus === "running");
+  const label = active ? t("查看执行过程") : t(group.outcome === "completed" ? "处理完成" : group.outcome === "interrupted" ? "执行已停止" : group.outcome ? "本轮未完成" : "执行记录");
+  const onInspect = () => setOpenChoice(true);
   return <section className={`agent-work-records ${active ? "is-active" : ""}`} data-work-turn={group.id} aria-label={t("本轮思考与执行")}>
-    <Button variant="ghost" size="sm" whileHover={undefined} whileTap={undefined} className="agent-work-records-trigger" aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen(!open)}>
-      <span className="agent-work-records-icon"><Activity size={16}/></span>
-      <span className="agent-work-records-label">{t("思考与执行")}</span>
+    {(!active || !open) && <Button variant="ghost" size="sm" whileHover={undefined} whileTap={undefined} className="agent-work-records-trigger" aria-expanded={open} aria-controls={bodyId} onClick={() => setOpenChoice(!open)}>
+      <span className="agent-work-records-label">{label}</span>
       {operations > 0 && <span className="agent-work-count">{operations} {t(" 项操作")}</span>}
-      {!active && failed && <span className="agent-work-warning"><CircleAlert size={14}/>{t("有异常记录")}</span>}
-      <ChevronDown size={14} className={open ? "is-open" : ""}/>
-    </Button>
-    <AnimatePresence initial={false}>{open && <motion.div id={bodyId} className="agent-work-records-body" {...disclosureMotion}>
-      <div className="agent-work-timeline">{items.map(item => item.userInput ? <Fragment key={item.id}>{renderInput(item)}</Fragment> : <WorkRecord key={item.id} item={item} active={active}/>)}</div>
-    </motion.div>}</AnimatePresence>
+      {failed && <span className="agent-work-warning"><CircleAlert size={13}/>{t("有异常记录")}</span>}
+      <ChevronRight size={14} className={open ? "is-open" : ""}/>
+    </Button>}
+    <div id={bodyId} className="agent-work-records-body" hidden={!open}>
+      {open && <div className="agent-work-flow">{activities.map(activity => activity.kind === "input" ? <Fragment key={activity.id}>{renderInput(activity.items[0])}</Fragment>
+        : activity.kind === "exploration" || activity.kind === "tools" ? <ActivityGroup key={activity.id} activity={activity} active={active} onInspect={onInspect}/>
+        : <WorkRecord key={activity.id} item={activity.items[0]} active={active} onInspect={onInspect} initiallyOpen={activity.id === inspectedReasoning}/>)}</div>
+      }
+    </div>
+    {active && !writing && (!open || !runningTool) && <LiveActivity key={reasoning?.id ?? "live"} label={activityLabel} reasoning={reasoning} onInspect={onInspect} onOpenChange={value => setInspectedReasoning(value ? reasoning?.id : undefined)}/>}
   </section>;
 }
 
@@ -187,18 +237,23 @@ function ExtensionReview({ proposal, busy, onApprove,onConfigured,conversationId
 }
 
 export function ChatTranscript({ conversationId, messages, busy, activity, activeTurnId, onReviewSource, onApproveExtension, onConfigureExtension, afterEntry, children, openInputId, onOpenInput, onInputReply, onInputDraft, canAnswerInput, onContinueTurn, canContinueTurn=true, onTokenUsage }: { conversationId: string; messages: DisplayMessage[]; busy: boolean; activity: string; activeTurnId?: string | null; onReviewSource: (draft: SourceRegistrationDraft) => void; onApproveExtension: (proposal: ExtensionProposal) => void; onConfigureExtension?:(old:ExtensionProposal,next:ExtensionProposal)=>void; backgroundJobs?: Record<string, BackgroundSnapshot>; onOpenJob?: (jobId: string) => void; afterEntry?: (id: string) => ReactNode; planTitles?: Record<string, string>; children?: ReactNode;openInputId?:string|null;onOpenInput?:(id:string|null)=>void;onInputReply?:(id:string,value:unknown)=>Promise<void>;onInputDraft?:(id:string,value:UserInputDraft)=>void;canAnswerInput?:(id:string)=>boolean;onContinueTurn?:()=>void;canContinueTurn?:boolean;onTokenUsage?:(id:string,usage:TurnTokenUsage)=>void }) {
+  const [following, setFollowing] = useState(true);
+  const [resumeKey, setResumeKey] = useState(0);
   const entries = groupWorkRecords(collapsePollingHistory(uniqueDisplayMessages(messages)));
   const usageSources=turnUsageSources(messages);
   const tokenFooter=(item:DisplayMessage)=>!item.streaming&&!(activeTurnId&&usageSources[item.id]?.runIds.includes(activeTurnId))&&<TurnTokenUsageFooter key={`usage-${item.id}`} conversationId={conversationId} messageId={item.id} source={usageSources[item.id]??{runIds:[],receipts:[]}} saved={item.tokenUsage} onUsage={onTokenUsage}/>;
   const executionActive = busy || !!activeTurnId;
-  const followKey = messages.filter(item => item.role === "user" || item.userInput?.status === "answered").map(item => item.id).join("|");
+  const followKey = messages.filter(item => item.role === "user" || item.userInput?.status === "answered").map(item => item.id).join("|") + `|resume-${resumeKey}`;
   const liveWorkId = activeWorkId(entries, executionActive, activeTurnId);
   const activityLabel = localize(activity) || t("正在处理…");
+  const writing = messages.some(item => item.role === "assistant" && item.phase === "final" && item.streaming);
+  const hasLiveGroup = entries.some(item => isTurnWork(item) && item.id === liveWorkId);
   const lastCompletedAnswer = [...messages].reverse().find(item => item.role === "assistant" && item.phase !== "progress" && !item.streaming)?.id;
   // Close a reviewed answer once on completion; users can reopen it afterwards.
   useEffect(() => {
     if (messages.some(item => item.id === openInputId && item.userInput && item.userInput.status !== "pending")) onOpenInput?.(null);
   }, [conversationId, lastCompletedAnswer]);
+  useEffect(() => { setFollowing(true); }, [conversationId]);
   const renderInput = (item: DisplayMessage) => <UserInputRequest record={item.userInput!} open={openInputId===item.id} onOpen={open=>onOpenInput?.(open?item.id:null)} onReply={value=>onInputReply?.(item.id,value)??Promise.resolve()} onDraft={value=>onInputDraft?.(item.id,value)} disabled={canAnswerInput?!canAnswerInput(item.id):false}/>;
   let resumableOutcome:string|undefined;
   for(let index=messages.length-1;index>=0;index--){
@@ -206,11 +261,11 @@ export function ChatTranscript({ conversationId, messages, busy, activity, activ
     if(item.role==='user'||item.role==='assistant'&&item.phase==='final')break;
     if(item.turnOutcome){if(!conversationBusyFailure(item.turnOutcome))resumableOutcome=item.id;break;}
   }
-  return <><MessageScroller key={conversationId} className="agent-messages" viewportClassName="agent-messages-viewport" contentClassName="agent-messages-content" label={t("GeoD Agent 工作记录")} busy={executionActive} followKey={followKey}>
-    <motion.div className="agent-transcript-stage" initial={{ opacity: 0, x: 24, scale: 0.985 }} animate={{ opacity: 1, x: 0, scale: 1 }} transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}>
+  return <div className="agent-transcript-view"><MessageScroller key={conversationId} className="agent-messages" viewportClassName="agent-messages-viewport" contentClassName="agent-messages-content" label={t("GeoD Agent 工作记录")} busy={executionActive} followKey={followKey} onFollowChange={setFollowing}>
+    <div className="agent-transcript-stage">
     {messages.length ? <MessageGroup spacing="default" className="geod-message-group">
       {entries.map(item => <Fragment key={item.id}>{isTurnWork(item)
-        ? <WorkRecords key={`work-${conversationId}-${item.id}`} group={item} active={item.id === liveWorkId} renderInput={renderInput}/>
+        ? <WorkRecords key={`work-${conversationId}-${item.items[0]?.id}`} group={item} active={item.id === liveWorkId} writing={writing} activityLabel={activityLabel} renderInput={renderInput}/>
         : item.turnOutcome
         ? conversationBusyFailure(item.turnOutcome) ? null : <div><TurnOutcomeCard item={item} onContinue={item.id===resumableOutcome?onContinueTurn:undefined} canContinue={canContinueTurn&&!executionActive}/><div className="agent-message-actions">{tokenFooter(item)}</div></div>
         : item.userInput
@@ -220,7 +275,7 @@ export function ChatTranscript({ conversationId, messages, busy, activity, activ
         : item.backgroundJob
         ? null
         : item.role === "user"
-        ? <Message key={item.id} from="user" className="geod-message geod-message-user" initial={busy ? { opacity: 0, x: 30, y: 16, scale: 0.9 } : false} animate={{ opacity: 1, x: 0, y: 0, scale: 1 }} transition={{ type: "spring", stiffness: 390, damping: 24, mass: 0.72 }}>
+        ? <Message key={item.id} from="user" className="geod-message geod-message-user" animateIn={busy}>
             <MessageContent><MessageHeader>{t("你")}</MessageHeader>{item.images?.length?<ImageAttachments images={item.images}/>:null}{item.documents?.length?<DocumentAttachments documents={item.documents}/>:null}<MessageBubble variant="soft" animateIn={false} className="geod-message-bubble"><MessageBubbleContent className="geod-message-body">{item.content}</MessageBubbleContent></MessageBubble></MessageContent>
           </Message>
         : item.role === "tool"
@@ -228,15 +283,15 @@ export function ChatTranscript({ conversationId, messages, busy, activity, activ
               <span className="agent-step-icon">{item.toolStatus === "running" ? <MessageTyping label={t("正在调用工具")} /> : item.toolStatus === "attention" ? <CircleAlert size={17} /> : <CheckCircle2 size={17} />}</span>
               <div className="agent-step-content"><span>{item.content}</span>{item.sourceDraft && <div className="agent-source-review"><strong>{item.sourceDraft.source.name}</strong><span>{item.sourceDraft.source.urlTemplate}</span><small>{t("已整理图源配置。请核对服务地址和参数。")}</small><Button type="button" size="sm" variant="outline" onClick={() => onReviewSource(item.sourceDraft!)}>{t("查看配置")}<ArrowRight size={16} /></Button></div>}{item.extensionProposal && <ExtensionReview proposal={item.extensionProposal} busy={busy} onApprove={onApproveExtension} conversationId={conversationId} onConfigured={onConfigureExtension} />}</div>
             </motion.div>
-          : <motion.article className={`agent-work-entry ${item.phase === "progress" ? "progress" : "final"} ${busy && messages.at(-1)?.id === item.id ? "is-live" : ""} ${item.streaming ? "is-streaming" : ""}`} key={item.id} initial={busy ? { opacity: 0, y: 24, scale: 0.975, filter: "blur(5px)" } : false} animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }} transition={{ type: "spring", stiffness: 310, damping: 28, mass: 0.85 }}>
-              {item.phase !== "progress" && <div className="agent-work-label"><Bot size={17} /><span>GeoD Agent</span></div>}
+          : <article className={`agent-work-entry ${item.phase === "progress" ? "progress" : "final"} ${busy && messages.at(-1)?.id === item.id ? "is-live" : ""} ${item.streaming ? "is-streaming" : ""}`} key={item.id} data-slot="message" data-from="assistant">
               <div className="agent-work-content geod-message-body"><MarkdownContent>{item.content}</MarkdownContent></div>
               {item.phase !== "progress" && !item.streaming && <div className="agent-message-actions"><CopyMessage content={item.content}/>{tokenFooter(item)}</div>}
-            </motion.article>}{afterEntry?.(item.id)}</Fragment>)}
+            </article>}{afterEntry?.(item.id)}</Fragment>)}
+      {executionActive && !hasLiveGroup && !writing && <LiveActivity label={activityLabel}/>}
     </MessageGroup> : <div className="agent-welcome"><Bot size={28} /><h3>{t("描述你要获取的影像")}</h3><p>{t("也可以直接说需要什么 Skill 或 MCP 能力，Agent 会查找并准备接入。")}</p></div>}
     {children}
-    </motion.div>
+    </div>
   </MessageScroller>
-    {executionActive && <div className="agent-live-status" role="status" aria-label={t("当前执行状态")} aria-live="polite" aria-atomic="true"><span className="agent-live-status-icon" aria-hidden="true"><MessageTyping/></span><span>{activityLabel}</span></div>}
-  </>;
+    {!following && <Button variant="outline" size="sm" whileHover={undefined} whileTap={undefined} className="agent-jump-latest" onClick={() => { setFollowing(true); setResumeKey(key => key + 1); }}><ArrowDownToLine size={15}/>{t("回到最新")}</Button>}
+  </div>;
 }

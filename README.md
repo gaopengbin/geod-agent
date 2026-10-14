@@ -9,7 +9,7 @@
   <img alt="Windows x64" src="https://img.shields.io/badge/platform-Windows_x64-202124?style=flat-square" />
   <a href="https://github.com/gaopengbin/geod-agent/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/gaopengbin/geod-agent?style=flat-square&color=1a73e8" /></a>
 </p>
-<p align="center"><a href="https://geod.laogao.xyz/agent"><strong>官网</strong></a> · <a href="https://github.com/gaopengbin/geod-agent/releases/tag/v0.2.4"><strong>下载 Windows 正式版</strong></a> · <a href="https://geod.laogao.xyz/agent#demo">观看实录</a> · <a href="https://github.com/gaopengbin/geod-agent/issues">反馈问题</a> · <a href="README.EN.md">English</a></p>
+<p align="center"><a href="https://geod.laogao.xyz/agent"><strong>官网</strong></a> · <a href="https://github.com/gaopengbin/geod-agent/releases/tag/v0.2.5"><strong>下载 Windows 正式版</strong></a> · <a href="https://geod.laogao.xyz/agent#demo">观看实录</a> · <a href="https://github.com/gaopengbin/geod-agent/issues">反馈问题</a> · <a href="README.en.md">English</a></p>
 
 ![GeoD Agent 对话、地图与任务工作区](docs/images/workbench-light-20261008.png)
 
@@ -32,7 +32,9 @@ GeoD Agent 是独立的 Windows 桌面应用。描述区域、数据类型和用
 | **0.2.3** | Windows x64 公开测试版 | [下载安装包](https://geod.laogao.xyz/agent-updates/windows-x86_64/0.2.3/GeoD%20Agent_0.2.3_x64-setup.exe) · [版本说明](docs/releases/0.2.3.md) |
 | **0.2.4** | Windows x64 正式版 | [下载安装包](https://geod.laogao.xyz/agent-updates/windows-x86_64/0.2.4/GeoD%20Agent_0.2.4_x64-setup.exe) · [版本说明](docs/releases/0.2.4.md) |
 
-当前正式版为 **0.2.4**，包含按需模型上下文、任务状态同步、独立登录页、开屏与托盘等改进。源代码以 [MIT 许可证](LICENSE)公开，[GitHub 发行资源](https://github.com/gaopengbin/geod-agent/releases/tag/v0.2.4)可直接下载。全新 Windows 验收尚未完成，具体验证范围见版本说明。
+| **0.2.5** | Windows x64 正式版 | [CDN 下载安装包](https://download.laogao.xyz/agent-updates/windows-x86_64/0.2.5/GeoD%20Agent_0.2.5_x64-setup.exe) · [版本说明](docs/releases/0.2.5.md) |
+
+当前正式版为 **0.2.5**，增加紧凑对话记录、中文输入改进、可恢复任务清理、启动首屏及组件更新，修正 Responses 多轮兼容。源代码以 [MIT 许可证](LICENSE)公开，可接入自己的模型渠道；[GitHub 发行资源](https://github.com/gaopengbin/geod-agent/releases/tag/v0.2.5)作为备用下载。旧版首次升级仍使用完整包，后续可复用未变化的运行环境。具体验证范围见版本说明。
 
 ## 对话能做什么
 

@@ -85,6 +85,8 @@ const labels: Record<string, string> = {
   boundaries_list: "查看会话范围",
   boundaries_combine: "合并裁剪范围",
   plans_get: "核对影像计划",
+  imagery_tasks_list: "查看影像任务记录",
+  imagery_tasks_cleanup: "清理或恢复影像任务",
   jobs_list: "检查本机任务",
   jobs_start: "启动本机下载",
   jobs_get: "检查任务状态",
@@ -112,6 +114,7 @@ const labels: Record<string, string> = {
   data_download_get: "查询数据任务状态",
   data_download_cancel: "取消数据下载",
   data_download_discard: "丢弃数据计划",
+  data_download_cleanup: "清理或恢复数据任务",
   data_download_inspect: "核验数据成果",
   data_download_load: "加载数据成果",
 };

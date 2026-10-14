@@ -3,8 +3,8 @@ import { useCallback, useEffect, useState } from "react";
 import { desktopAvailable, errorMessage } from "./api";
 
 export const AI_CHANNELS_CHANGED = "geod:ai-channels-changed";
-// Keep the integration available for a later release; omit its beta UI for now.
-export const SPONSORED_CHANNELS_VISIBLE = false;
+// The authenticated gateway controls the audience. Never infer a campaign from client flags.
+export const SPONSORED_CHANNELS_VISIBLE = true;
 export interface AIModel { id: string; name: string; contextWindow: number; maxOutputTokens: number; inputModalities: ("text" | "image")[]; thinking: "enabled" | "disabled" | "adaptive" | null }
 export type AIProtocol = "responses" | "chatCompletions" | "anthropic" | "gemini";
 export const protocolName=(protocol:AIProtocol)=>({responses:"Responses",chatCompletions:"Chat Completions",anthropic:"Claude Messages",gemini:"Gemini"})[protocol];

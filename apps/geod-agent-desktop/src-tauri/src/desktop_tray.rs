@@ -13,6 +13,7 @@ pub(crate) struct DesktopTray {
 }
 
 pub(crate) fn show_main(app: &AppHandle) {
+    if !crate::startup_window::ready(app) { return; }
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.unminimize();
         let _ = window.show();

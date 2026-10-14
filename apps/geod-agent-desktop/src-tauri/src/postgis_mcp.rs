@@ -7,7 +7,7 @@ use rmcp::{model::CallToolRequestParams, transport::async_rw::AsyncRwTransport, 
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::{fs, path::{Path, PathBuf}, process::Stdio, time::Duration};
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 use tokio::{io::AsyncReadExt, process::{Child, Command}, task::JoinHandle};
 
 const VERSION: &str = "1.1.0";
@@ -19,7 +19,7 @@ const TABLES: &str = "SELECT n.nspname AS schema,c.relname AS table_name,CASE WH
 fn runtime_root(app: &AppHandle) -> Result<PathBuf, AppError> {
     let mut roots = Vec::new();
     if cfg!(debug_assertions) { roots.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/pgedge")); }
-    if let Ok(root) = app.path().resource_dir() { roots.push(root.join("pgedge-runtime")); }
+    if let Some(root) = crate::runtime_components::root(app, "pgedge-runtime") { roots.push(root); }
     roots.into_iter().find(|root| root.join("pgedge-postgres-mcp.exe").is_file())
         .ok_or_else(|| workspace_error("INPUT_RUNTIME_MISSING", "内置数据库运行环境缺失，请重新准备开发运行环境或修复应用"))
 }

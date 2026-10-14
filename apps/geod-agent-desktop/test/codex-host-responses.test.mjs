@@ -3,7 +3,24 @@ import assert from 'node:assert/strict';
 import {mkdtempSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
-import {createHost,sendGeneration,assertModelCompletion} from '../src-tauri/codex-host.mjs';
+import {createHost,sendGeneration,assertModelCompletion,assertGenerationSettlement} from '../src-tauri/codex-host.mjs';
+
+test('durable rejected and uncertain receipts preserve their reason before checking stream completion',()=>{
+ for(const [state,errorCode] of [['failed','UPSTREAM_REJECTED'],['pending_reconcile','UPSTREAM_MALFORMED'],['pending_reconcile','UPSTREAM_UNKNOWN'],['pending_reconcile','UPSTREAM_INVALID_TOOL']]){
+  const generation={state,errorCode};assert.throws(()=>assertGenerationSettlement(generation),e=>e.code===errorCode&&/[\u3400-\u9fff]/u.test(e.message)&&!e.message.includes('PROVIDER_STREAM_INCOMPLETE'));
+  const chunks=[];assert.throws(()=>sendGeneration({write:c=>chunks.push(c),end(){}},generation,'failed'),e=>e.code===errorCode);assert.equal(chunks.length,0);
+ }
+ assert.throws(()=>assertGenerationSettlement({state:'failed',errorCode:'PRIVATE_PROVIDER_DIAGNOSTIC'}),e=>e.code==='GATEWAY_GENERATION_INCOMPLETE'&&!e.message.includes('PRIVATE'));
+});
+
+test('actual Core does not repeat a native Responses request rejected before a stream starts',{skip:!process.env.GEOD_CODEX_EXE,timeout:60000},async()=>{
+ const home=mkdtempSync(join(tmpdir(),'geod-wire-rejected-'));let listener,models=0,tools=0;
+ const host=await createHost({codex:process.env.GEOD_CODEX_EXE,home,toolsFile:resolve('src-tauri/codex-tools.json'),capabilities:{protocol:'responses',model:'gpt-6-luna',contextWindow:128000,inputModalities:['text']},receive:fn=>{listener=fn;return()=>{};},emit:event=>{
+  if(event.type==='model'){models++;listener({type:'response',requestId:event.requestId,value:{state:'failed',generationId:event.generationId,errorCode:'UPSTREAM_REJECTED'}});}
+  if(event.type==='tool')tools++;
+ }});
+ try{const result=await host.turn({conversationId:'native-rejected-proof',workspace:home,permission:'fullAccess',input:'现在有哪些图源',history:[]});assert.equal(result.status,'failed');assert.equal(models,1);assert.equal(tools,0);assert.match(result.error.message,/供应商拒绝/);assert.doesNotMatch(result.error.message,/PROVIDER_STREAM_INCOMPLETE/);}finally{await host.close();}
+});
 
 test('reasoning-only and output-limited responses cannot complete or execute partial tool calls',()=>{
  for(const result of [{reasoning:'Leg 3 (',content:null,toolCalls:[]},{content:'partial',toolCalls:[],finishReason:'length'},{content:null,toolCalls:[{id:'partial',function:{name:'workspace_status',arguments:'{'}}],finishReason:'length'}]){

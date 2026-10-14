@@ -293,15 +293,23 @@ pub(crate) async fn execute(
         "plan_imagery" | "plan_imagery_batch" => {
             plan(app, conversation, &a, key, tool == "plan_imagery_batch")
         }
+        "imagery_tasks_list" => {
+            let records=crate::imagery_task_cleanup::imagery_tasks_list(app.clone(),state.clone(),services,conversation.into())?;
+            let active=crate::jobs_active(state);
+            Ok(json!({"tasks":records.into_iter().map(|r|json!({"planId":r.stored.plan_id,"sourceName":r.stored.plan.source_name,"recordState":r.record_state,"jobId":r.job.as_ref().map(|j|&j.job_id),"state":r.job.as_ref().map(|j|j.state),"workerActive":r.job.as_ref().is_some_and(|j|active.contains(&j.job_id))})).collect::<Vec<_>>()}))
+        }
+        "imagery_tasks_cleanup" => encode(crate::imagery_task_cleanup::imagery_tasks_cleanup(app.clone(),state,services,conversation.into(),f!("planIds"),f!("action"))),
         "plans_get" => {
             let id: String = f!("planId");
             assert_plan(app, conversation, &id)?;
+            open_store(&state)?.assert_plan_visible(&id)?;
             let saved = open_store(&state)?
                 .get_plan(&id)?
                 .ok_or_else(|| workspace_error("PLAN_NOT_FOUND", "计划不存在"))?;
             Ok(compact_plan(&saved, workspace.permission))
         }
         "jobs_start" => {
+            let visible_id:String=f!("planId");open_store(&state)?.assert_plan_visible(&visible_id)?;
             if workspace.permission != crate::WorkspacePermission::FullAccess {
                 return Err(workspace_error(
                     "APPROVAL_REQUIRED",
@@ -342,8 +350,9 @@ pub(crate) async fn execute(
         }
         "jobs_list" => {
             let jobs = crate::jobs_list(state.clone())?;
+            let store=open_store(&state)?;
             let active = crate::jobs_active(state);
-            let jobs:Vec<_>=jobs.into_iter().filter(|j|assert_plan(app,conversation,&j.plan_id).is_ok()).map(|j|json!({"jobId":j.job_id,"planId":j.plan_id,"state":j.state,"workerActive":active.contains(&j.job_id)})).collect();
+            let jobs:Vec<_>=jobs.into_iter().filter(|j|assert_plan(app,conversation,&j.plan_id).is_ok()&&store.plan_visibility(&j.plan_id).ok().flatten().as_deref()!=Some("cleaned")).map(|j|json!({"jobId":j.job_id,"planId":j.plan_id,"state":j.state,"workerActive":active.contains(&j.job_id)})).collect();
             Ok(json!({"jobs":jobs}))
         }
         "jobs_get" | "jobs_events" | "artifacts_inspect" => {
@@ -473,6 +482,7 @@ pub(crate) async fn execute(
             conversation.into(),
             f!("taskId"),
         )?)),
+        "data_download_cleanup" => Ok(compact_data(&crate::data_jobs::data_download_cleanup(app.clone(),state,services,conversation.into(),f!("taskId"),f!("action"))?)),
         "data_download_discard" => Ok(compact_data(&crate::data_jobs::data_download_discard(
             app.clone(),
             state,
@@ -547,7 +557,7 @@ fn compact_data(task: &crate::data_jobs::DataTask) -> Value {
         let encodings=m["fieldEncodings"].as_object().map(|v|v.iter().take(100).map(|(k,v)|(k.clone(),v.clone())).collect::<serde_json::Map<String,Value>>());
         json!({"bounds":m["bounds"],"featureCount":m["featureCount"],"sourceFeatureCount":m["sourceFeatureCount"],"geometryTypes":m["geometryTypes"],"sourceLayer":m["sourceLayer"],"outputCrs":m["outputCrs"],"fields":fields,"fieldsTruncated":m["fields"].as_array().is_some_and(|v|v.len()>100),"fieldEncodings":encodings,"quality":m["quality"],"failureCount":m["failures"].as_array().map(Vec::len),"warnings":m["warnings"].as_array().map(|v|v.iter().take(10).cloned().collect::<Vec<_>>()).unwrap_or_default(),"dataTimestamp":m["dataTimestamp"],"fileCount":files.len(),"assets":files.iter().take(20).map(|f|json!({"kind":f["kind"],"bytes":f.get("bytes").or_else(||f.get("size")),"sha256":f["sha256"]})).collect::<Vec<_>>(),"assetsTruncated":files.len()>20})
     });
-    json!({"taskId":task.id,"kind":task.kind,"title":task.title,"status":task.status,"planHash":task.plan_hash,"progress":task.progress,"error":task.error,"outputLocation":"当前工作区中的新目录","createdAt":task.created_at,"updatedAt":task.updated_at,"manifest":manifest})
+    json!({"taskId":task.id,"kind":task.kind,"title":task.title,"status":task.status,"cleaned":task.cleaned,"planHash":task.plan_hash,"progress":task.progress,"error":task.error,"outputLocation":"当前工作区中的新目录","createdAt":task.created_at,"updatedAt":task.updated_at,"manifest":manifest})
 }
 fn compact_plan(
     p: &geod_task_engine::ledger::StoredPlan,

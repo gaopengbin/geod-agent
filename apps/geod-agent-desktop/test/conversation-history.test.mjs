@@ -1,9 +1,20 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {exportConversation,importConversation,searchConversations} from '../src/conversation-history.ts';
+import {exportConversation,importConversation,searchConversations,canReuseEmptyConversation} from '../src/conversation-history.ts';
 import {accountChatStore,CHAT_LIST_KEY,deleteStoredConversation,persistCompletedChat,restorePendingChats,savePending} from '../src/pending-generations.ts';
 const storage=()=>{const map=new Map();return{getItem:key=>map.get(key)??null,setItem:(key,value)=>map.set(key,value)};};
 const chat=id=>({conversationId:id,messages:[{role:'user',content:`Search record ${id}`}],display:[{id:`m-${id}`,role:'user',content:`Search record ${id}`}],updatedAt:'2026-10-04T00:00:00Z'});
+test('reopening an unused conversation stays in its workspace and preserves session identity',()=>{
+  const blank={conversationId:'unused',messages:[],display:[],planIds:[],workspaceDirectory:'G:/workspace-a'};
+  assert(canReuseEmptyConversation(blank));assert(canReuseEmptyConversation(blank,'G:/workspace-a'));
+  assert.equal(canReuseEmptyConversation(blank,'G:/workspace-b'),false);
+  for(const state of [{messages:[{role:'user',content:'hello'}]},{display:[{id:'turn',role:'tool',content:'task'}]},
+    {pendingId:'pending'},{planId:'plan'},{planIds:['plan']},{queuedInputs:[{id:'queued',text:'hello',createdAt:''}]},
+    {archived:true},{title:'Named workspace task'},{forkFromConversationId:'previous'}]){
+    assert.equal(canReuseEmptyConversation({...blank,...state}),false,JSON.stringify(state));
+  }
+  assert.equal(canReuseEmptyConversation(blank,undefined,true),false);
+});
 test('more than 30 conversations survive saving, recovery and account isolation',()=>{
   const base=storage(),a=accountChatStore(base,'account-a'),b=accountChatStore(base,'account-b');
   for(let i=0;i<105;i++)persistCompletedChat(a,chat(`history-${i}`));

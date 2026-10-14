@@ -133,7 +133,7 @@ mod fork_storage_tests {
 }
 
 pub(crate) fn bundled_runtime(app: &AppHandle) -> Option<PathBuf> {
-    let mut roots = vec![app.path().resource_dir().ok()?.join("codex-runtime")];
+    let mut roots: Vec<PathBuf> = crate::runtime_components::root(app, "codex-runtime").into_iter().collect();
     if cfg!(debug_assertions) { roots.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/codex")); }
     roots.into_iter().find(|root| ["codex.exe", "node.exe", "codex-command-runner.exe", "codex-windows-sandbox-setup.exe", "codex-code-mode-host.exe", "manifest.json"].iter().all(|file| root.join(file).is_file()))
 }

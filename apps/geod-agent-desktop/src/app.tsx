@@ -31,7 +31,7 @@ import { NetworkDialog } from "./network-dialog";
 import { TaskPanel } from "./task-panel";
 import { useResizableWorkspace, WorkspaceControls, WorkspaceSidebarToggle } from "./resizable-workspace";
 import { buildTaskQueue, runTaskBatch, type QueueTask, type TaskAction } from "./task-queue";
-import { useDiscardedPlans } from "./use-task-queue";
+import { useDiscardedPlans, useImageryTaskRecords } from "./use-task-queue";
 import { usePlanPresentations } from "./use-plan-presentations";
 import { taskGroupTarget } from "./task-summary";
 import type { BackgroundSnapshot } from "./background-jobs";
@@ -168,6 +168,7 @@ export function App() {
   const taskScope = useRef({ accountId, conversationId: mapConversationId });
   taskScope.current = { accountId, conversationId: mapConversationId };
   const discarded = useDiscardedPlans(accountId, mapConversationId);
+  const imageryRecords = useImageryTaskRecords(accountId,mapConversationId);
   const presentations = usePlanPresentations(accountId, mapConversationId);
   useEffect(()=>{setScheduledPlans([]);setScheduleTitles({});setScheduleTemplateIds([]);if(!desktopAvailable||!accountId||!mapConversationId)return;let disposed=false,loading=false;async function load(){if(loading)return;loading=true;try{const [runs,schedules]=await Promise.all([api.schedulesRuns(mapConversationId),api.schedulesList(mapConversationId)]);const ids=[...new Set(runs.map(run=>run.planId).filter((id):id is string=>!!id))];const plans=await Promise.all(ids.map(id=>api.plansGet(id)));if(!disposed){setScheduleTemplateIds(schedules.map(s=>s.templatePlanId).filter((id):id is string=>!!id));setScheduledPlans(plans.filter((plan):plan is StoredPlan=>!!plan));setScheduleTitles(Object.fromEntries(runs.filter(run=>run.planId).map(run=>[run.planId!,`${schedules.find(schedule=>schedule.scheduleId===run.scheduleId)?.name??'定时影像'} · ${new Date(run.scheduledAt).toLocaleDateString(getLocale())}`])));void refreshJobs().catch(cause=>{if(!disposed)setError(errorMessage(cause));});}}catch(cause){if(!disposed)setError(errorMessage(cause));}finally{loading=false;}}void load();const timer=setInterval(()=>void load(),5000);return()=>{disposed=true;clearInterval(timer);};},[accountId,mapConversationId]);
   useEffect(() => { setTaskFocusIds([]); }, [accountId, mapConversationId]);
@@ -252,7 +253,8 @@ export function App() {
         }
         const updated = result.succeeded.find(item => item.planId === selectedPlanId.current);
         if (updated?.job) { setJob(updated.job); setEvents([]); eventSeq.current = 0; setManifest(null); setPreview(null); previewLoaded.current = null; }
-        const labels = { start: "已启动", discard: "已丢弃", cancel: "已请求取消", restore: "已恢复计划" };
+        if(action==='clean'&&result.succeeded.some(item=>item.planId===selectedPlanId.current)){setPlan(null);setJob(null);setEvents([]);setManifest(null);setPreview(null);}
+        const labels = { start: "已启动", discard: "已丢弃", cancel: "已请求取消", restore: "已恢复计划", clean:"已清理任务记录，成果文件保留" };
         if (result.succeeded.length) setNotice(`${labels[action]} ${result.succeeded.length} 项${action === "cancel" ? "，后台将在当前瓦片请求结束后停止。" : "。"}`);
       }
       if (result.failed.length) throw new Error(result.failed.map(item => `${presentations[item.planId]?.title ?? conversationPlans.find(plan => plan.planId === item.planId)?.plan.sourceName ?? "计划"}：${item.message}`).join("\n"));
@@ -348,11 +350,11 @@ export function App() {
     finally { busy.current = false; setWorking(false); }
   }
 
-  const allPlans=[...new Map([...conversationPlans,...scheduledPlans].map(plan=>[plan.planId,plan])).values()];
+  const allPlans=[...new Map([...conversationPlans,...scheduledPlans,...imageryRecords.records.map(r=>r.stored)].map(plan=>[plan.planId,plan])).values()];
   const allPlanIds=allPlans.map(plan=>plan.planId);
   const conversationJobs = jobs.filter(item => allPlanIds.includes(item.planId));
   const queueJobs = job ? [...conversationJobs, job] : conversationJobs;
-  const tasks = buildTaskQueue(allPlans, queueJobs, activeJobs, discarded, taskSnapshots).map(task => ({ ...task, title: presentations[task.stored.planId]?.title ?? scheduleTitles[task.stored.planId] ?? task.stored.plan.sourceName, ...(scheduleTemplateIds.includes(task.stored.planId)&&!task.job?{state: 'scheduled'}:{}) }));
+  const tasks = buildTaskQueue(allPlans, queueJobs, activeJobs, discarded, taskSnapshots).map(task => ({ ...task, title: presentations[task.stored.planId]?.title ?? scheduleTitles[task.stored.planId] ?? task.stored.plan.sourceName, ...(scheduleTemplateIds.includes(task.stored.planId)&&!task.job?{state: 'scheduled'}:{}), ...(()=>{const record=imageryRecords.records.find(r=>r.stored.planId===task.stored.planId);return record&&record.recordState!=='visible'?{state:record.recordState}:{};})() }));
   const latestProgress = [...events].reverse().find(event => event.completedTiles !== undefined && event.totalTiles);
   const mapCompletedTiles = job ? job.state === "completed" ? plan?.plan.totalTiles ?? 0 : latestProgress?.completedTiles ?? 0 : null;
 
@@ -396,7 +398,7 @@ export function App() {
       <aside id="agent-results" className="right-panel task-panel panel-scroll" aria-label={t("任务与成果")} hidden={focusedConversation || !resultsOpen}>
         <TaskPanel key={mapConversationId} conversationId={mapConversationId} onOpenScheduleRun={run=>void openScheduleRun(run).catch(cause=>setError(errorMessage(cause)))} tasks={tasks} focusPlanIds={taskFocusIds} onClearTaskFocus={() => setTaskFocusIds([])} onTaskSelect={selectTask} onTaskAction={taskAction} onStart={startJob} onDiscard={discardPlan} permission={workspaceState?.conversationId === mapConversationId ? workspaceState.permission : null} plan={plan} job={job} events={events} manifest={manifest} jobs={conversationJobs} activeJobs={activeJobs} working={working} error={error} notice={notice}
           onClose={() => { setResultsOpen(false); layout.show("conversation"); }} onClearError={() => setError("")} onClearNotice={() => setNotice("")}
-          onRefresh={() => void refreshJobs().catch(cause => setError(errorMessage(cause)))}
+          onOpenNetwork={() => setNetworkDialogOpen(true)} onRefresh={() => void refreshJobs().catch(cause => setError(errorMessage(cause)))}
           onSelect={item => void selectJob(item)} onResume={() => void resumeJob()} onPause={() => void pauseJob()} onCancel={() => void cancelJob()} />
       </aside>
       <SourcePage active={mainView === "sources"} draft={sourceDraft} reviewing={!!sourceReviewConversationId} onOpenConnections={() => setTiles3dConnections({})} onReturn={() => { setMainView("conversation"); setSourceDraft(null); setSourceReviewConversationId(null); }} onSaved={saved => {

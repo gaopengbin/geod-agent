@@ -3,10 +3,10 @@ import { useRef, useState } from "react";
 import { MorphPopover, MorphPopoverContent, MorphPopoverTrigger } from "@/components/motion/popover-morph";
 import { Button } from "@/components/motion/button/base";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Archive, ArchiveRestore, DotsThree, ArrowDownToLine, PencilSimple, Pin, PinOff, Search, Trash, X, File } from "./icons";
+import { Archive, ArchiveRestore, DotsThree, ArrowDownToLine, PencilSimple, Pin, PinOff, Search, Trash, X, File, Loader2 } from "./icons";
 import { t, getLocale } from "./i18n";
 import type { SavedChat } from "./pending-generations";
-import { conversationTitle, searchConversations } from "./conversation-history";
+import { conversationTitle, searchConversations, conversationActivity } from "./conversation-history";
 import { errorMessage } from "./app-error";
 
 export type ConversationAction = "rename"|"pin"|"archive"|"restore"|"export-json"|"export-md"|"delete";
@@ -16,10 +16,11 @@ export function ConversationRow({ chat, active, time, running, onSelect, onActio
   const [menu,setMenu]=useState(false);
   const title=chat.title||chat.display.find(message=>message.role==="user")?.content.slice(0,34)||t("新对话");
   const action=(value:ConversationAction)=>{setMenu(false);onAction(value);};
+  const activity=conversationActivity(chat,running);
   return <div className={`conversation-row ${active?"is-active":""}`}>
     <button type="button" data-conversation-id={chat.conversationId} className={`conversation-item ${active?"active":""}`} aria-current={active?"page":undefined} onClick={onSelect} title={title}>
-      {running?<span className="conversation-running-dot" aria-label={t("正在运行")}/>:chat.pinned?<Pin size={12} aria-label={t("置顶")}/>:null}
-      <span>{title}</span>{time&&<time dateTime={chat.updatedAt}>{time}</time>}
+      {activity==='running'?<Loader2 size={12} className="conversation-running-spinner animate-spin" role="img" aria-label={t("正在回复")}/>:activity==='unread'?<span className="conversation-unread-dot" role="img" aria-label={t("有未读回复")}/>:chat.pinned?<Pin size={12} aria-label={t("置顶")}/>:null}
+      <span className="conversation-title">{title}</span>{time&&<time dateTime={chat.updatedAt}>{time}</time>}
     </button>
     <MorphPopover open={menu} onOpenChange={setMenu} className="conversation-more-anchor">
       <MorphPopoverTrigger><button type="button" className="conversation-more" aria-label={t("会话操作：{0}",{"0":title})}><DotsThree size={17}/></button></MorphPopoverTrigger>

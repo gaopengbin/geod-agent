@@ -28,6 +28,18 @@ test('prior-turn reasoning is archived on demand while current reasoning, tool r
  const compacted=projectModelInput({...request,input:[...history,message('user','Core internal summary request')]},{catalog,developerInstructions:owned});assert(compacted.input.includes(old),'Core compaction receives all original reasoning');assert(compacted.input.includes(current));
 });
 
+test('Responses keeps opaque prior-turn reasoning and provider output IDs intact across selective history loading',()=>{
+ const input='现在有哪些图源',reasoning={type:'reasoning',id:'rs_previous',encrypted_content:'opaque-provider-state',summary:[]},plain={type:'reasoning',summary:[{type:'summary_text',text:'recoverable plain investigation'}]};
+ const providerMessage={type:'message',id:'msg_previous',role:'assistant',content:[{type:'output_text',text:'earlier supplier output '.repeat(80)}]};
+ const providerCall={type:'function_call',id:'fc_previous',name:'source_configure',call_id:'call_previous',arguments:JSON.stringify({url:'x'.repeat(1800)})},output={type:'function_call_output',call_id:'call_previous',output:JSON.stringify({sourceId:'confirmed-source',status:'ready',log:'x'.repeat(4000)})};
+ const history=[plain,message('user','已确认 Z16 EPSG:4326'),reasoning,providerMessage,providerCall,output,message('assistant','later reply'),message('assistant','latest reply'),message('user',input)],before=JSON.stringify(history);
+ const catalog=new ModelToolCatalog(declared,{input}),projected=projectModelInput({...request,input:history},{catalog,developerInstructions:owned,protocol:'responses'});
+ assert(projected.input.includes(reasoning));assert(projected.input.includes(providerMessage));assert(projected.input.includes(providerCall));assert(!projected.input.includes(plain));
+ const projectedOutput=projected.input.find(i=>i.call_id==='call_previous'&&i.type==='function_call_output');assert(projectedOutput);assert.equal(JSON.parse(projectedOutput.output).facts.sourceId,'confirmed-source');
+ assert.equal(JSON.stringify(history),before,'projection cannot mutate the source Core history');assert(catalog.context({section:'reasoning',limit:16}).entries.some(i=>i.id==='rs_previous'));
+ const chat=projectModelInput({...request,input:history},{catalog:new ModelToolCatalog(declared,{input}),developerInstructions:owned,protocol:'chatCompletions'});assert(!chat.input.includes(reasoning),'chat adapters retain the existing on-demand reasoning behavior');
+});
+
 test('large installed skill inventories load by explicit name or paged discovery without dropping skill rules or permissions',()=>{
  const entries=Array.from({length:120},(_,i)=>'- skill-'+i+': '+('detailed description '.repeat(20))+'(file: /skills/skill-'+i+'/SKILL.md)');
  const instructions=owned+'<skills_instructions>Read SKILL.md before use.\n'+entries.join('\n')+'\n</skills_instructions><permissions instructions>NATIVE RULE</permissions instructions>';

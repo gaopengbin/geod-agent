@@ -52,6 +52,7 @@ export {
   PinOff,
   Puzzle as PuzzlePiece,
   RefreshCw,
+  RotateCcw,
   Save,
   Search,
   Server,

@@ -878,6 +878,24 @@ fn retry_after_delay(header: &HeaderValue) -> Option<Duration> {
     )
 }
 
+fn tile_network_error(error: reqwest::Error) -> CoreError {
+    use std::error::Error;
+    let error = error.without_url();
+    // Inspect the chain to classify the failure, but emit only fixed labels:
+    // provider URLs, query tokens and proxy credentials must never be logged.
+    let mut chain = String::new();
+    let mut cause: Option<&(dyn Error + 'static)> = Some(&error);
+    while let Some(value) = cause { chain.push_str(&value.to_string().to_ascii_lowercase()); cause = value.source(); }
+    let reason = if error.is_timeout() { "TIMEOUT: 图源请求超时" }
+        else if ["certificate", "tls", "ssl"].iter().any(|value| chain.contains(value)) { "TLS: 图源安全连接失败" }
+        else if ["dns", "resolve", "name or service", "nodename"].iter().any(|value| chain.contains(value)) { "DNS: 图源域名解析失败" }
+        else if chain.contains("tunnel") || chain.contains("proxy") { "PROXY: 代理连接失败" }
+        else if error.is_connect() { "CONNECT: 无法连接图源或代理" }
+        else if error.is_body() { "BODY: 影像响应读取中断" }
+        else { "REQUEST: 图源请求失败" };
+    CoreError::new("SOURCE_NETWORK", reason)
+}
+
 async fn get_tile(
     client: &Client,
     url: Url,
@@ -888,7 +906,7 @@ async fn get_tile(
     let original_origin=url.origin();let mut target=url;let mut hops=0;
     let mut response = loop {
         let response=authenticated_request(client,target.clone(),source)?.send().await
-            .map_err(|e|CoreError::new("SOURCE_NETWORK",e.without_url().to_string()))?;
+            .map_err(tile_network_error)?;
         if !response.status().is_redirection(){break response;}
         if hops>=5 {return Err(CoreError::new("SOURCE_REDIRECT_LIMIT","Tile service redirected more than five times"));}
         let location=response.headers().get(reqwest::header::LOCATION).and_then(|value|value.to_str().ok())
@@ -955,7 +973,7 @@ async fn get_tile(
     while let Some(chunk) = response
         .chunk()
         .await
-        .map_err(|e| CoreError::new("SOURCE_NETWORK", e.without_url().to_string()))?
+        .map_err(tile_network_error)?
     {
         if bytes.len() + chunk.len() > MAX_TILE_BYTES {
             return Err(CoreError::new(
@@ -2147,6 +2165,32 @@ mod source_tests {
         assert!((bbox[3] - bbox[1] - world / 4096.0).abs() < 1e-6);
         let preview = preview_tile_url(&source, 12, grid.x_min, grid.y_min).unwrap();
         assert_eq!(preview, url);
+    }
+
+    #[tokio::test]
+    async fn network_failure_keeps_safe_connection_and_timeout_reasons() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        drop(listener);
+        let client = reqwest::Client::builder().no_proxy().timeout(Duration::from_secs(5)).build().unwrap();
+        let error = client.get(format!("http://{address}/?token=private-fixture")).send().await.unwrap_err();
+        let error = tile_network_error(error);
+        assert_eq!(error.code, "SOURCE_NETWORK");
+        assert!(error.message.starts_with("CONNECT:"));
+        assert!(!error.message.contains("private-fixture"));
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let worker = std::thread::spawn(move || {
+            let (_socket, _) = listener.accept().unwrap();
+            std::thread::sleep(Duration::from_millis(300));
+        });
+        let client = reqwest::Client::builder().no_proxy().timeout(Duration::from_millis(100)).build().unwrap();
+        let error = client.get(format!("http://{address}/?token=private-fixture")).send().await.unwrap_err();
+        let error = tile_network_error(error);
+        assert_eq!(error.code, "SOURCE_NETWORK");
+        assert!(error.message.starts_with("TIMEOUT:"));
+        assert!(!error.message.contains("private-fixture"));
+        worker.join().unwrap();
     }
 
     #[test]

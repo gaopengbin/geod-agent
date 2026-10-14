@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {groupWorkRecords, isTurnWork, uniqueDisplayMessages} from '../src/chat-work.ts';
+import {groupWorkRecords, isTurnWork, uniqueDisplayMessages, projectWorkActivities, workRecordState} from '../src/chat-work.ts';
 
 test('restored duplicate events render once with their latest content and stable position',()=>{
   const user={id:'u',role:'user',content:'下载'};
@@ -100,4 +100,51 @@ test('historical polling trace remains inside the same completed turn', () => {
  ]);
  assert.equal(entries.filter(isTurnWork).length,1);
  assert.deepEqual(entries[0].items.map(item=>item.id),['thought','history']);
+});
+
+test('Codex activity projection coalesces adjacent exploration but preserves prose and execution boundaries',()=>{
+ const rows=[
+  {id:'note',role:'assistant',phase:'progress',content:'先检查配置'},
+  {id:'source',role:'tool',toolName:'sources_list',toolStatus:'success',content:'图源列表'},
+  {id:'read',role:'tool',itemType:'commandExecution',commandActions:[{type:'read',path:'boundary.geojson'}],content:'read boundary'},
+  {id:'next-note',role:'assistant',phase:'progress',content:'再计算计划'},
+  {id:'run',role:'tool',itemType:'commandExecution',commandActions:[{type:'unknown'}],content:'generate plan'},
+  {id:'plan-a',role:'tool',toolName:'plan_imagery',content:'生成计划'},
+  {id:'plan-b',role:'tool',toolName:'jobs_start',content:'开始下载'},
+ ];
+ const before=JSON.stringify(rows),groups=projectWorkActivities(rows,true);
+ assert.deepEqual(groups.map(g=>[g.kind,g.items.map(i=>i.id)]),[['note',['note']],['exploration',['source','read']],['note',['next-note']],['record',['run']],['tools',['plan-a','plan-b']]]);
+ assert.equal(JSON.stringify(rows),before);
+});
+
+test('exploration comes from contract metadata, never from command text or an apparent tool name',()=>{
+ const groups=projectWorkActivities([
+  {id:'bad-read',role:'tool',itemType:'commandExecution',content:'cat important.txt; remove-data',commandActions:[{type:'read'},{type:'unknown'}]},
+  {id:'guess',role:'tool',toolName:'read_and_delete',content:'读取文件'},
+  {id:'hint',role:'tool',itemType:'mcpToolCall',readOnlyHint:true,content:'自有工具'},
+ ],false);
+ assert.deepEqual(groups.map(g=>g.kind),['record','tools','exploration']);
+});
+
+test('empty and currently running reasoning do not create duplicate thinking rows; visible completed summaries survive',()=>{
+ const rows=[{id:'empty',role:'tool',itemType:'reasoning',content:'思考'},
+  {id:'live',role:'tool',itemType:'reasoning',toolStatus:'running',details:'服务返回的可见摘要',content:'思考'},
+  {id:'done',role:'tool',itemType:'reasoning',toolStatus:'success',details:'已确认的可见摘要',content:'思考'}];
+ assert.deepEqual(projectWorkActivities(rows,true).map(g=>g.id),['done']);
+ assert.deepEqual(projectWorkActivities(rows,false).map(g=>g.id),['live','done']);
+});
+
+test('restored unknown work is not labelled successful and a stopped in-flight operation stays attention',()=>{
+ assert.equal(workRecordState({role:'tool',content:'旧记录'},false),'recorded');
+ assert.equal(workRecordState({role:'tool',toolStatus:'running'},true),'running');
+ assert.equal(workRecordState({role:'tool',toolStatus:'running'},false),'attention');
+ assert.equal(workRecordState({role:'tool',toolStatus:'attention'},true),'attention');
+});
+
+test('completion disclosure uses the actual final/outcome rather than an idle flag',()=>{
+ const work={id:'op',role:'tool',turnId:'run',content:'处理'};
+ assert.equal(groupWorkRecords([work])[0].outcome,undefined);
+ assert.equal(groupWorkRecords([work,{id:'stream',role:'assistant',turnId:'run',phase:'final',streaming:true,content:'回复'}])[0].outcome,undefined);
+ assert.equal(groupWorkRecords([work,{id:'final',role:'assistant',turnId:'run',phase:'final',content:'回复'}])[0].outcome,'completed');
+ assert.equal(groupWorkRecords([work,{id:'stop',role:'tool',turnId:'run',turnOutcome:{status:'interrupted',message:'用户停止'}}])[0].outcome,'interrupted');
 });

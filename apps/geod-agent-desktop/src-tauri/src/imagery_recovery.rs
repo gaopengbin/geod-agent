@@ -23,7 +23,7 @@ pub struct ClaimFailure { pub plan_id: String, pub code: &'static str, pub messa
 #[derive(Serialize)]
 pub struct ClaimReport { pub bound: Vec<String>, pub rejected: Vec<ClaimFailure> }
 
-fn db(state: &AppState) -> Result<Connection, AppError> {
+pub(crate) fn db(state: &AppState) -> Result<Connection, AppError> {
     let conn = Connection::open(&state.db_path).map_err(storage)?;
     conn.busy_timeout(Duration::from_secs(5)).map_err(storage)?;
     conn.execute_batch("CREATE TABLE IF NOT EXISTS imagery_plan_owners (
@@ -62,6 +62,8 @@ pub(crate) fn bind_created_plan(state: &AppState, owner: &str, conversation_id: 
 
 #[tauri::command]
 pub fn imagery_plans_claim(app: AppHandle, state: State<'_, AppState>, services: State<'_, services::ServiceState>, conversation_id: String, plan_ids: Vec<String>) -> Result<ClaimReport, AppError> {
+    // A new conversation has no historical plans to migrate or workspace to recover.
+    if plan_ids.is_empty() { return Ok(ClaimReport{bound:Vec::new(),rejected:Vec::new()}); }
     if plan_ids.len()>1000 { return Err(workspace_error("INVALID_SPEC", "每次最多迁移 1000 项计划")); }
     // A migration must originate from a saved account-scoped workspace, never
     // from the fallback directory shared by as-yet-unbound conversations.
@@ -129,6 +131,42 @@ pub fn imagery_recovery_plan(app:AppHandle,state:State<'_,AppState>,services:Sta
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test] fn cleanup_is_owned_reversible_and_retains_outputs_and_ledger() {
+        let (dir,state,_,old,job)=fixture();
+        let output=dir.path().join("original");fs::create_dir(&output).unwrap();fs::write(output.join("sentinel"),b"keep").unwrap();
+        let change=|ids,action|crate::imagery_task_cleanup::change(&state,"owner-a","conversation-a",dir.path(),ids,action).unwrap();
+        assert_eq!(change(vec![old.plan_id.clone()],"clean").rejected[0].code,"JOB_STATE_CONFLICT");
+        open_store(&state).unwrap().cancel_inactive_job(&job.job_id).unwrap();
+        let report=change(vec![old.plan_id.clone(),"missing".into(),old.plan_id.clone()],"clean");
+        assert_eq!(report.changed,vec![old.plan_id.clone()]);assert_eq!(report.rejected.len(),1);assert!(report.files_preserved);
+        assert_eq!(open_store(&state).unwrap().plan_visibility(&old.plan_id).unwrap().as_deref(),Some("cleaned"));
+        assert!(open_store(&state).unwrap().assert_plan_visible(&old.plan_id).is_err());
+        let records=crate::imagery_task_cleanup::list(&state,"owner-a","conversation-a",dir.path()).unwrap();assert_eq!(records[0].record_state,"cleaned");assert_eq!(records[0].job.as_ref().unwrap().state,geod_task_engine::ledger::JobState::Cancelled);
+        assert_eq!(crate::task_state_context::snapshot(&state.db_path,"owner-a","conversation-a")["counts"]["cleaned"],1);
+        let wrong=crate::imagery_task_cleanup::change(&state,"other","conversation-a",dir.path(),vec![old.plan_id.clone()],"restore").unwrap();assert_eq!(wrong.rejected[0].code,"PLAN_NOT_OWNED");
+        assert_eq!(change(vec![old.plan_id.clone()],"restore").changed.len(),1);
+        assert_eq!(open_store(&state).unwrap().plan_visibility(&old.plan_id).unwrap(),None);
+        assert_eq!(fs::read(output.join("sentinel")).unwrap(),b"keep");
+        assert_eq!(open_store(&state).unwrap().get_plan(&old.plan_id).unwrap(),Some(old));
+        assert!(!open_store(&state).unwrap().events_after(&job.job_id,0,100).unwrap().is_empty());
+    }
+
+    #[test] fn discarded_plan_cannot_start_even_with_prior_approval() {
+        let (dir,state,_,old,_)=fixture();let mut store=open_store(&state).unwrap();
+        let source=store.get_registered_source(&old.plan.spec.source_id).unwrap().unwrap();
+        let mut spec=old.plan.spec.clone();spec.output_directory=dir.path().join("pending").to_string_lossy().into_owned();
+        let pending=store.create_plan(spec,&source.descriptor,Utc::now()).unwrap();
+        bind_created_plan(&state,"owner-a","conversation-a",dir.path(),&pending.plan_id).unwrap();
+        let approval=store.grant_approval(&pending.plan_id,&pending.plan.plan_hash,"owner-a","test",Utc::now()).unwrap();
+        let schedule=store.create_schedule("owner-a","conversation-a","cleanup-schedule","Cleanup schedule",Some(&pending.plan_id),pending.plan.spec.clone(),Utc::now()+chrono::Duration::hours(1),None,0,Utc::now()).unwrap();
+        assert_eq!(store.set_plan_visibility(&pending.plan_id,Some("cleaned")).unwrap_err().code,"SCHEDULE_CONFLICT");
+        store.set_schedule_enabled("owner-a",&schedule.schedule_id,false,None,Utc::now()).unwrap();
+        assert_eq!(crate::imagery_task_cleanup::change(&state,"owner-a","conversation-a",dir.path(),vec![pending.plan_id.clone()],"discard").unwrap().changed.len(),1);
+        assert_eq!(store.start_job(&pending.plan_id,&pending.plan.plan_hash,&approval.approval_id,"late-start",&source.descriptor,Utc::now()).unwrap_err().code,"PLAN_DISCARDED");
+        store.set_plan_visibility(&pending.plan_id,None).unwrap();
+        assert!(store.start_job(&pending.plan_id,&pending.plan.plan_hash,&approval.approval_id,"late-start",&source.descriptor,Utc::now()).is_ok());
+        assert_eq!(store.set_plan_visibility(&pending.plan_id,Some("cleaned")).unwrap_err().code,"JOB_STATE_CONFLICT");
+    }
     fn fixture() -> (tempfile::TempDir,AppState,WorkspaceSettings,StoredPlan,Job) {
         let dir=tempfile::tempdir().unwrap();
         let state=AppState{db_path:dir.path().join("test.sqlite"),workspace_dir:dir.path().into(),running_jobs:Arc::new(Mutex::new(HashMap::new())),schedule_gate:Mutex::new(())};

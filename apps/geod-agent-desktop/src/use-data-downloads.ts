@@ -32,6 +32,7 @@ export function useDataDownloads(conversationId?: string) {
         if (kind === "start") await dataDownloads.start(conversationId, id, current.planHash, true);
         else if (kind === "discard") await dataDownloads.discard(conversationId, id);
         else if (kind === "cancel") await dataDownloads.cancel(conversationId, id);
+        else if (kind === "clean" || kind === "restore") await dataDownloads.cleanup(conversationId,id,kind);
         else throw new Error("此数据任务不支持该操作");
       } catch (cause) { errors.push(errorMessage(cause)); }
     }

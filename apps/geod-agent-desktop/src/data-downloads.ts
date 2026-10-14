@@ -6,7 +6,7 @@ export interface DataDownloadTask {
   id: string; conversationId: string; kind: "vector" | "tiles3d" | "online"; title: string; status: string; planHash: string;
   request: { kind: string; spec: Record<string, unknown> }; outputDir: string;
   progress: { phase: string; completed: number; total: number; bytes: number; cacheHits: number; failures: number } | null;
-  manifest: Record<string, unknown> | null; error: string | null; createdAt: string; updatedAt: string;
+  manifest: Record<string, unknown> | null; error: string | null; createdAt: string; updatedAt: string; cleaned?:boolean;
 }
 export interface DataDownloadPreview { kind: "vector" | "tiles3d"; resourcePath: string; token: string; bounds?: number[]; featureCount?: number; truncated: boolean }
 export interface DataPreviewEvent {
@@ -29,6 +29,7 @@ export const dataDownloads = {
   start: (conversationId: string, taskId: string, planHash: string, confirmed = false) => invoke<DataDownloadTask>(confirmed ? "data_download_start" : "data_download_start_auto", { conversationId, taskId, planHash, ...(confirmed ? { confirmed: true } : {}) }),
   cancel: (conversationId: string, taskId: string) => invoke<DataDownloadTask>("data_download_cancel", { conversationId, taskId }),
   discard: (conversationId: string, taskId: string) => invoke<DataDownloadTask>("data_download_discard", { conversationId, taskId }),
+  cleanup:(conversationId:string,taskId:string,action:'clean'|'restore')=>invoke<DataDownloadTask>('data_download_cleanup',{conversationId,taskId,action}),
   inspect: (conversationId: string, taskId: string) => invoke<DataDownloadTask>("data_download_inspect", { conversationId, taskId }),
   openDirectory: (conversationId: string, taskId: string) => invoke<void>("data_download_open_directory", { conversationId, taskId }),
   preview: (conversationId: string, taskId: string) => invoke<DataDownloadPreview>("data_download_preview", { conversationId, taskId }),
@@ -36,8 +37,8 @@ export const dataDownloads = {
 export function dataTaskEntry(task: DataDownloadTask): TaskListEntry {
   const spec = task.request.spec, outputs = Array.isArray(spec.outputs) ? spec.outputs.map(v => String(v).toUpperCase()).join(" + ") : "3D Tiles";
   const progress = task.progress;
-  const actions: TaskAction[] = task.status === "pending" ? ["start", "discard"] : ["queued", "downloading", "verifying"].includes(task.status) ? ["cancel"] : [];
-  return { id: task.id, title: task.title, state: task.status, description: `${task.kind === "tiles3d" ? "三维" : "矢量"} · ${outputs}${progress?.total ? ` · ${progress.completed}/${progress.total}` : ""}`,
+  const actions: TaskAction[] = task.cleaned?['restore']:task.status === "pending" ? ["start", "discard","clean"] : ["queued", "downloading", "verifying","cancelling"].includes(task.status) ? ["cancel"] : ['clean'];
+  return { id: task.id, title: task.title, state: task.cleaned?'cleaned':task.status, description: `${task.kind === "tiles3d" ? "三维" : "矢量"} · ${outputs}${progress?.total ? ` · ${progress.completed}/${progress.total}` : ""}`,
     tooltip: `${task.title} · ${new Date(task.createdAt).toLocaleString("zh-CN")}`, actions,
     progress: progress?.total ? progress.completed / progress.total : undefined };
 }
@@ -57,7 +58,7 @@ export async function previewDataTask(conversationId: string, task: DataDownload
 export function compactDataTask(task: DataDownloadTask) {
   const manifest = task.manifest;
   const files = manifest ? (Array.isArray(manifest.assets) ? manifest.assets : Array.isArray(manifest.resources) ? manifest.resources : []) as Record<string, unknown>[] : [];
-  return { taskId: task.id, kind: task.kind, title: task.title, status: task.status, planHash: task.planHash, progress: task.progress, error: task.error,
+  return { taskId: task.id, kind: task.kind, title: task.title, status: task.status, cleaned:task.cleaned, planHash: task.planHash, progress: task.progress, error: task.error,
     outputLocation: "当前工作区中的新目录", createdAt: task.createdAt, updatedAt: task.updatedAt,
     manifest: manifest ? { bounds: manifest.bounds, featureCount: manifest.featureCount, sourceFeatureCount:manifest.sourceFeatureCount, geometryTypes:manifest.geometryTypes, sourceLayer:manifest.sourceLayer, outputCrs:manifest.outputCrs, fields:Array.isArray(manifest.fields)?manifest.fields.slice(0,100):undefined, fieldsTruncated:Array.isArray(manifest.fields)&&manifest.fields.length>100, fieldEncodings:manifest.fieldEncodings&&typeof manifest.fieldEncodings==="object"?Object.fromEntries(Object.entries(manifest.fieldEncodings).slice(0,100)):undefined, quality: manifest.quality,
       failureCount: Array.isArray(manifest.failures) ? manifest.failures.length : undefined,

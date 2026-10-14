@@ -1,4 +1,12 @@
 /* A brief branded intro; the light sweep is decorative, not download progress. */
+.startup-boot { --app-titlebar-height:36px; --app-font:"Segoe UI",system-ui,sans-serif; position:fixed;inset:0;z-index:10000;background:#040a13;color:#edf7ff;opacity:1;transition:opacity 180ms ease; }
+.startup-boot--leaving { opacity:0;pointer-events:none; }
+.startup-boot-titlebar { height:36px;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;padding-left:16px;font:600 13px "Segoe UI",system-ui,sans-serif; }
+.startup-boot-titlebar > div { height:100%;display:flex; }
+.startup-boot-titlebar button { width:44px;height:100%;border:0;background:transparent;color:#b9c9dc;font:18px "Segoe UI",system-ui,sans-serif;cursor:pointer; }
+.startup-boot-titlebar button:hover { background:#162438; }
+.startup-boot-titlebar button:last-child:hover { background:#c22e38;color:white; }
+.startup-boot .startup-splash,.startup-boot .startup-globe,.startup-boot .startup-logo img,.startup-boot .startup-copy { animation:none; }
 .startup-splash {
   --splash-blue: #4fb9ff;
   position: fixed;
@@ -65,6 +73,7 @@
   .startup-caption { bottom: 12px; }
 }
 @media (prefers-reduced-motion: reduce) {
+  .startup-boot { transition:none; }
   .startup-splash, .startup-globe, .startup-logo img, .startup-copy, .startup-orbit-outer, .startup-satellite, .startup-scan, .startup-light span { animation: none; }
   .startup-satellite, .startup-scan, .startup-light { display: none; }
 }

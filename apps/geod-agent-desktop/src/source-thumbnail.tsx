@@ -28,6 +28,7 @@ export function SourceThumbnail({ target, name, detailed = false, refresh = fals
       {image && !error ? <img src={image.url} alt={t("{0}的示例瓦片", {"0": name || "图源"})} onError={() => setError("预览图片无法显示。")} /> : <div className="source-thumbnail-placeholder" title={error || undefined}>
         {desktopAvailable && !error ? <Loader2 size={detailed ? 20 : 16} className="extension-spin"/> : <MapTrifold size={detailed ? 24 : 18}/>}
         <span>{!desktopAvailable ? t("桌面端预览") : error ? t("暂无预览") : t("加载中")}</span>
+        {!detailed && error && <Button type="button" variant="ghost" size="sm" aria-label={t("重试图源预览")} onClick={() => setAttempt(value => value + 1)}><RefreshCw size={14}/>{t("重试")}</Button>}
       </div>}
     </div>
     {detailed && <div className="source-thumbnail-caption">{image && !error ? <span title={`${image.tile.longitude.toFixed(3)}°, ${image.tile.latitude.toFixed(3)}°`}>{t("示例瓦片 · Z")}{image.tile.z}</span> : <span>{error ? t("预览暂不可用") : desktopAvailable ? t("正在读取图源…") : t("在桌面应用中查看实际图源")}</span>}

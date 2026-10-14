@@ -184,9 +184,9 @@ pub(crate) fn routes(command: &str) -> bool {
         "background_command_prepare" | "background_command_list" | "background_command_get" | "background_command_start" | "background_command_stop" | "background_command_write" |
         "ai_schedules_create" | "ai_schedules_list" | "ai_schedules_set_enabled" | "ai_schedules_run_events" | "ai_schedules_cancel_run" | "ai_schedules_retry_run" |
         "jobs_start" | "jobs_start_auto" | "jobs_resume" | "jobs_pause" | "jobs_cancel" |
-        "jobs_get" | "jobs_for_plan" | "jobs_list" | "jobs_active" | "jobs_events" | "artifacts_inspect" |
+        "jobs_get" | "jobs_for_plan" | "jobs_list" | "jobs_active" | "jobs_events" | "artifacts_inspect" | "imagery_tasks_list" | "imagery_tasks_cleanup" |
         "data_download_plan" | "data_download_list" | "data_download_get" | "data_download_start" |
-        "data_download_start_auto" | "data_download_cancel" | "data_download_discard" | "data_download_inspect" |
+        "data_download_start_auto" | "data_download_cancel" | "data_download_discard" | "data_download_cleanup" | "data_download_inspect" |
         "schedules_create" | "schedules_list" | "schedules_set_enabled" | "schedules_runs" | "schedules_cancel_run" |
         "data_schedules_create" | "data_schedules_list" | "data_schedules_set_enabled" | "data_schedules_runs" | "data_schedules_cancel_run" |
         "cache_inventory" | "cache_maintenance_start" | "cache_maintenance_status" | "cache_maintenance_cancel" |
@@ -338,6 +338,8 @@ fn dispatch(app: &AppHandle, endpoint: &Endpoint, command: &str, a: &Value) -> R
         "jobs_get" => encode(crate::jobs_get(state, get!("jobId"))),
         "jobs_for_plan" => encode(crate::jobs_for_plan(state, get!("planId"))),
         "jobs_list" => encode(crate::jobs_list(state)),
+        "imagery_tasks_list" => encode(crate::imagery_task_cleanup::imagery_tasks_list(app.clone(),state,services,get!("conversationId"))),
+        "imagery_tasks_cleanup" => encode(crate::imagery_task_cleanup::imagery_tasks_cleanup(app.clone(),state,services,get!("conversationId"),get!("planIds"),get!("action"))),
         "jobs_active" => Ok(json!(crate::jobs_active(state))),
         "jobs_events" => encode(crate::jobs_events(state, get!("jobId"), get!("afterSeq"))),
         "artifacts_inspect" => encode(crate::artifacts_inspect(state, get!("jobId"))),
@@ -348,6 +350,7 @@ fn dispatch(app: &AppHandle, endpoint: &Endpoint, command: &str, a: &Value) -> R
         "data_download_start_auto" => encode(data_jobs::data_download_start_auto(app.clone(), state, services, get!("conversationId"), get!("taskId"), get!("planHash"))),
         "data_download_cancel" => encode(data_jobs::data_download_cancel(app.clone(), state, services, get!("conversationId"), get!("taskId"))),
         "data_download_discard" => encode(data_jobs::data_download_discard(app.clone(), state, services, get!("conversationId"), get!("taskId"))),
+        "data_download_cleanup" => encode(data_jobs::data_download_cleanup(app.clone(),state,services,get!("conversationId"),get!("taskId"),get!("action"))),
         "data_download_inspect" => encode(data_jobs::data_download_inspect(app.clone(), state, services, get!("conversationId"), get!("taskId"))),
         "schedules_create" => encode(schedules::schedules_create(app.clone(), state, services, get!("conversationId"), get!("planId"), get!("name"), get!("nextRunAt"), get!("repeatSeconds"), get!("maxRetries"), get!("executionId"))),
         "schedules_list" => encode(schedules::schedules_list(state, services, get!("conversationId"))),

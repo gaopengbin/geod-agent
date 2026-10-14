@@ -31,6 +31,7 @@ mod data_jobs;
 mod data_schedules;
 mod data_credentials;
 mod imagery_recovery;
+mod imagery_task_cleanup;
 mod cache_management;
 mod data_asset_protocol;
 mod background_runtime;
@@ -49,8 +50,10 @@ mod export_crs;
 mod agent_tasks;
 mod conversation_files;
 mod desktop_settings;
+mod runtime_components;
 mod desktop_backups;
 mod desktop_tray;
+mod startup_window;
 mod task_state_context;
 mod context_settings;
 mod execution_safety;
@@ -765,7 +768,7 @@ fn start_job_with_approval(
     let mut overlays = store.plan_overlays(&stored.plan.spec, &source.descriptor)?;
     for overlay in &mut overlays { source_auth::resolve(state, overlay)?; }
     let proxy =
-        network::proxy_for(&source.endpoint.url_template).map_err(network_settings_error)?;
+        network::download_proxy_for(&source.endpoint.url_template, "start").map_err(network_settings_error)?;
     let mut active = state
         .running_jobs
         .lock()
@@ -792,7 +795,7 @@ fn start_job_with_approval(
         let job_id = job.job_id.clone();
         tauri::async_runtime::spawn(async move {
             if let Ok(mut store) = TaskStore::open(&db_path) {
-                let _ = store
+                let result = store
                     .run_job_with_projector(
                         &job_id,
                         &source.descriptor,
@@ -808,6 +811,10 @@ fn start_job_with_approval(
                         Some(&export_crs::Projector),
                     )
                     .await;
+                if let Err(error) = result {
+                    eprintln!("GeoD download failure: job={job_id}, code={}, detail={}", error.code,
+                        if error.code == "SOURCE_NETWORK" { error.message.as_str() } else { "see task records" });
+                }
             }
             running_jobs
                 .lock()
@@ -901,6 +908,7 @@ fn jobs_resume(state: State<'_, AppState>, job_id: String) -> Result<Job, AppErr
         .running_jobs
         .lock()
         .expect("running-job mutex poisoned");
+    store.assert_plan_visible(&job.plan_id)?;
     cache_management::ensure_idle()?;
     if active.contains_key(&job_id)
     {
@@ -959,7 +967,7 @@ fn jobs_resume(state: State<'_, AppState>, job_id: String) -> Result<Job, AppErr
         });
     }
     let proxy =
-        network::proxy_for(&source.endpoint.url_template).map_err(network_settings_error)?;
+        network::download_proxy_for(&source.endpoint.url_template, "resume").map_err(network_settings_error)?;
     drop(store);
     let control = Arc::new(WorkerControl::default());
     active.insert(job_id.clone(), Arc::clone(&control));
@@ -968,7 +976,7 @@ fn jobs_resume(state: State<'_, AppState>, job_id: String) -> Result<Job, AppErr
     let running_jobs = Arc::clone(&state.running_jobs);
     tauri::async_runtime::spawn(async move {
         if let Ok(mut store) = TaskStore::open(&db_path) {
-            let _ = store
+            let result = store
                 .run_job_with_projector(
                     &job_id,
                     &source.descriptor,
@@ -984,6 +992,10 @@ fn jobs_resume(state: State<'_, AppState>, job_id: String) -> Result<Job, AppErr
                     Some(&export_crs::Projector),
                 )
                 .await;
+            if let Err(error) = result {
+                eprintln!("GeoD download failure: job={job_id}, code={}, detail={}", error.code,
+                    if error.code == "SOURCE_NETWORK" { error.message.as_str() } else { "see task records" });
+            }
         }
         running_jobs
             .lock()
@@ -1419,6 +1431,12 @@ pub fn run() {
     }
     builder
         .manage(desktop_tray::DesktopTray::default())
+        .manage(startup_window::StartupWindow::default())
+        .on_page_load(|webview,payload| {
+            if webview.label()=="main"&&matches!(payload.event(),tauri::webview::PageLoadEvent::Finished){
+                if let Some(window)=webview.app_handle().get_webview_window("main"){let _=startup_window::show_first(&window);}
+            }
+        })
         .on_window_event(|window, event| {
             desktop_tray::on_window_event(window, event);
             if matches!(event, tauri::WindowEvent::Destroyed) { data_jobs::cancel_all(); cache_management::cancel_all(); }
@@ -1443,6 +1461,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(move |app| {
+            runtime_components::initialize(app.handle());
             python_runtime::initialize(app.handle());
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
@@ -1505,6 +1524,7 @@ pub fn run() {
             if matches!(invoke.message.command(), "background_status" | "background_stop" | "background_start") { return handlers(invoke); }
             let commands: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool = tauri::generate_handler![
             desktop_runtime_capabilities,
+            startup_window::desktop_boot_ready,
             desktop_tray::desktop_tray_locale_set,
             desktop_tray::desktop_quit,
             desktop_settings::desktop_settings_get,
@@ -1551,6 +1571,8 @@ pub fn run() {
             cache_management::cache_relocation_preflight,
             cache_management::cache_relocation_start,
             imagery_recovery::imagery_plans_claim,
+            imagery_task_cleanup::imagery_tasks_list,
+            imagery_task_cleanup::imagery_tasks_cleanup,
             imagery_recovery::imagery_recovery_plan,
             data_schedules::data_schedules_create,
             data_schedules::data_schedules_list,
@@ -1569,6 +1591,7 @@ pub fn run() {
             data_jobs::data_download_start_auto,
             data_jobs::data_download_cancel,
             data_jobs::data_download_discard,
+            data_jobs::data_download_cleanup,
             data_jobs::data_download_inspect,
             data_jobs::data_download_open_directory,
             data_jobs::data_download_preview,

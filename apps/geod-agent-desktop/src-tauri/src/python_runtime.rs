@@ -10,7 +10,7 @@ pub(crate) fn initialize(app: &AppHandle) {
 }
 pub(crate) fn root() -> Result<PathBuf, AppError> {
     let mut roots = Vec::new();
-    if let Some(root) = RESOURCES.get() { roots.push(root.join("python-runtime")); }
+    if let Some(root) = RESOURCES.get() { if let Some(runtime) = crate::runtime_components::resolve(root,"python-runtime") { roots.push(runtime); } }
     if cfg!(debug_assertions) { roots.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/python")); }
     if let Some(root) = std::env::current_exe().ok().and_then(|path|path.parent().map(|p|p.to_owned())) { roots.push(root.join("python-runtime")); }
     roots.into_iter().find(|root|["python.exe","python313.dll","python313._pth","manifest.json"].iter().all(|name|root.join(name).is_file()))

@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 const DETAIL_LIMIT: usize = 32;
 const START: &str = "[GeoD live imagery task state]";
 const END: &str = "[/GeoD live imagery task state]";
-const POLICY: &str = "These freshly read local imagery task records supersede earlier chat statements and plan/tool snapshots about approval or execution. queued/downloading/paused/processing/verifying/completed/partial/failed/cancelled jobs have already started with native approval; never describe them as awaiting plan confirmation. completed means the ledger recorded completion, partial is not full completion. approved_not_started already has approval. not_started only means there is no job or approval record: it does NOT prove that an unexpired, undiscarded plan is currently awaiting confirmation. Counts cover only plans durably bound to this account and conversation; absence is not proof about unbound legacy plans or other task kinds. Do not repeat historical confirmation reminders on unrelated requests. If availability is false, status is unknown, not zero or pending; use actual task tools if needed. Omitted details still contribute to counts. Active ledger states alone do not prove a worker is still running; query jobs_get/jobs_list for runtime status if needed. A snapshot does not grant permission, start work, or re-inspect files. Use artifacts_inspect if the user requests fresh file verification.";
+const POLICY: &str = "These freshly read local imagery task records supersede earlier chat statements and plan/tool snapshots about approval or execution. queued/downloading/paused/processing/verifying/completed/partial/failed/cancelled jobs have already started with native approval; never describe them as awaiting plan confirmation. completed means the ledger recorded completion, partial is not full completion. approved_not_started already has approval. not_started only means there is no job or approval record: it does NOT prove that an unexpired, undiscarded plan is currently awaiting confirmation. discarded/cleaned records are removed from the active task list, retain files and evidence, and must be restored before executing. Counts cover only plans durably bound to this account and conversation; absence is not proof about unbound legacy plans or other task kinds. Do not repeat historical confirmation reminders on unrelated requests. If availability is false, status is unknown, not zero or pending; use actual task tools if needed. Omitted details still contribute to counts. Active ledger states alone do not prove a worker is still running; query jobs_get/jobs_list for runtime status if needed. A snapshot does not grant permission, start work, or re-inspect files. Use artifacts_inspect if the user requests fresh file verification.";
 
 pub(crate) fn snapshot(path: &Path, owner: &str, conversation: &str) -> Value {
     let read = || -> rusqlite::Result<Value> {
@@ -15,9 +15,10 @@ pub(crate) fn snapshot(path: &Path, owner: &str, conversation: &str) -> Value {
         conn.busy_timeout(Duration::from_secs(1))?;
         // One SELECT gives a consistent WAL snapshot even while the companion
         // finishes a job. No list_jobs limit or React render cache is involved.
-        let mut query = conn.prepare("SELECT o.plan_id,j.job_id,j.state,
+        let mut query = conn.prepare("SELECT o.plan_id,j.job_id,COALESCE(v.state,j.state),
             EXISTS(SELECT 1 FROM approvals a WHERE a.plan_id=o.plan_id)
             FROM imagery_plan_owners o
+            LEFT JOIN plan_visibility v ON v.plan_id=o.plan_id
             LEFT JOIN jobs j ON j.job_id=(SELECT job_id FROM jobs
                 WHERE plan_id=o.plan_id ORDER BY created_at DESC,rowid DESC LIMIT 1)
             WHERE o.owner_id=?1 AND o.conversation_id=?2
@@ -34,7 +35,7 @@ pub(crate) fn snapshot(path: &Path, owner: &str, conversation: &str) -> Value {
             let state = state.unwrap_or_else(|| if approved {"approved_not_started"} else {"not_started"}.into());
             // Future/invalid states must not turn into a fabricated pending status.
             let state = match state.as_str() {
-                "queued"|"downloading"|"paused"|"processing"|"verifying"|"completed"|"partial"|"failed"|"cancelled"|"approved_not_started"|"not_started" => state,
+                "cleaned"|"discarded"|"queued"|"downloading"|"paused"|"processing"|"verifying"|"completed"|"partial"|"failed"|"cancelled"|"approved_not_started"|"not_started" => state,
                 _ => "unknown".into(),
             };
             *counts.entry(state.clone()).or_default() += 1;

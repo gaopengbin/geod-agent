@@ -1,6 +1,6 @@
 use reqwest::{ClientBuilder, Proxy, Url};
 use serde::{Deserialize, Serialize};
-use std::{fs, path::PathBuf, sync::OnceLock};
+use std::{fs, path::{Path, PathBuf}, sync::OnceLock};
 
 static SETTINGS_FILE: OnceLock<PathBuf> = OnceLock::new();
 
@@ -33,7 +33,11 @@ pub fn initialize(path: PathBuf) {
 }
 
 pub fn read() -> Result<NetworkSettings, String> {
-    let Some(path) = SETTINGS_FILE.get() else {
+    read_settings(SETTINGS_FILE.get().map(PathBuf::as_path))
+}
+
+fn read_settings(path: Option<&Path>) -> Result<NetworkSettings, String> {
+    let Some(path) = path else {
         return Ok(NetworkSettings::default());
     };
     match fs::read(path) {
@@ -80,6 +84,17 @@ pub fn status_for(settings: NetworkSettings) -> Result<NetworkStatus, String> {
 
 pub fn proxy_for(origin: &str) -> Result<Option<String>, String> {
     resolve(&read()?, origin).map(|(proxy, _)| proxy)
+}
+
+/// Record the decision at worker creation, rather than a later settings probe.
+/// Keep URLs, query tokens and proxy credentials out of the background log.
+pub fn download_proxy_for(origin: &str, phase: &str) -> Result<Option<String>, String> {
+    let settings = read()?;
+    let (proxy, source) = resolve(&settings, origin)?;
+    let host = Url::parse(origin).ok().and_then(|url| url.host_str().map(str::to_owned));
+    eprintln!("GeoD download network: phase={phase}, mode={:?}, source={source}, proxied={}, host={}",
+        settings.mode, proxy.is_some(), host.as_deref().unwrap_or("unknown"));
+    Ok(proxy)
 }
 
 pub fn resolve(
@@ -192,6 +207,51 @@ fn windows_system_proxy() -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn first_launch_and_saved_auto_use_the_same_route_without_activation() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("network-settings.json");
+        let origin = "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+        let first = read_settings(Some(&path)).unwrap();
+        assert_eq!(first.mode, ProxyMode::Auto);
+        assert!(!path.exists());
+        let before = resolve(&first, origin).unwrap();
+        fs::write(&path, serde_json::to_vec(&first).unwrap()).unwrap();
+        let after = resolve(&read_settings(Some(&path)).unwrap(), origin).unwrap();
+        assert_eq!(before, after);
+    }
+
+    #[test]
+    #[ignore = "requires an enabled Windows system proxy and live Esri tiles"]
+    fn live_esri_first_launch_before_and_after_saving_auto() {
+        use geod_core::imagery::{fetch_preview_tile, HttpSource, ProxyRoute};
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("network-settings.json");
+        let source: HttpSource = serde_json::from_value(serde_json::json!({
+            "id": "qa-unsaved-esri", "name": "Esri World Imagery",
+            "attribution": "Esri and contributors", "license": "source terms",
+            "urlTemplate": "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+            "scheme": "XYZ", "tileSize": 256, "networkPolicy": "PublicHttps", "minIntervalMs": 0
+        })).unwrap();
+        let first = read_settings(Some(&path)).unwrap();
+        let before = resolve(&first, &source.url_template).unwrap();
+        assert_eq!(before.1, "Windows 系统代理");
+        assert!(!path.exists());
+        let bytes = tauri::async_runtime::block_on(fetch_preview_tile(
+            &source, 15, 26983, 12375, ProxyRoute::Http(before.0.as_deref().unwrap())
+        )).unwrap();
+        image::load_from_memory(&bytes).unwrap();
+        eprintln!("before save: {} bytes, {}", bytes.len(), before.1);
+        fs::write(&path, serde_json::to_vec(&first).unwrap()).unwrap();
+        let after = resolve(&read_settings(Some(&path)).unwrap(), &source.url_template).unwrap();
+        assert_eq!(before, after);
+        let bytes = tauri::async_runtime::block_on(fetch_preview_tile(
+            &source, 15, 26983, 12375, ProxyRoute::Http(after.0.as_deref().unwrap())
+        )).unwrap();
+        image::load_from_memory(&bytes).unwrap();
+        eprintln!("after save: {} bytes, {}", bytes.len(), after.1);
+    }
 
     #[test]
     fn manual_proxy_is_a_plain_origin_and_loopback_stays_local() {

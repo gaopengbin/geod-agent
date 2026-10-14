@@ -8,6 +8,25 @@ const cache = new Map<string, { at: number; failed: boolean; settled: boolean; p
 let running = 0;
 const waiters: (() => void)[] = [];
 
+/** IPC, disk cache and image decoding must all settle; a stale request cannot own a slot forever. */
+async function bounded<T>(request: Promise<T>, milliseconds: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  try {
+    return await Promise.race([request, new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(message)), milliseconds);
+    })]);
+  } finally { clearTimeout(timer!); }
+}
+
+async function acquireSlot() {
+  if (running < 2) { running++; return; }
+  let grant: () => void;
+  try {
+    await bounded(new Promise<void>(resolve => { grant = () => { running++; resolve(); }; waiters.push(grant); }),
+      60_000, "图源预览排队超时，请重试。");
+  } catch (cause) { const index = waiters.indexOf(grant!); if (index >= 0) waiters.splice(index, 1); throw cause; }
+}
+
 export function thumbnailKey(target: ThumbnailTarget) {
   if ("registered" in target) { const s = target.registered; return JSON.stringify(["source-thumbnail-1", s.id, s.configRevision, s.credentialRefVersion, s.scheme, s.tileSize, s.minZoom, s.maxZoom]); }
   const { source: s, minZoom, maxZoom } = target.draft;
@@ -29,28 +48,28 @@ export function getSourceThumbnail(target: ThumbnailTarget, refresh = false): Pr
 async function loadCached(target: ThumbnailTarget, key: string, refresh: boolean): Promise<SourceThumbnailImage> {
   if ("registered" in target && !refresh) {
     try {
-      const saved = await readCachedThumbnail(key);
+      const saved = await bounded(readCachedThumbnail(key), 3_000, "图源预览缓存读取超时。");
       if (saved) {
         try { if (await hasVisiblePixels(saved.url)) return saved; } catch { /* A damaged image is fetched again. */ }
-        await removeCachedThumbnail(key);
+        void removeCachedThumbnail(key).catch(() => {});
       }
     } catch { /* Cache availability must not prevent a real preview. */ }
   }
   const image = await load(target);
   if ("registered" in target) {
-    try { await writeCachedThumbnail(key, target.registered.id, image); }
+    // Preserve the persisted-cache contract, but never wait indefinitely for disk.
+    try { await bounded(writeCachedThumbnail(key, target.registered.id, image), 3_000, "图源预览缓存保存超时。"); }
     catch { console.warn("图源预览缓存保存失败，当前预览仍可使用。"); }
   }
   return image;
 }
 
 async function load(target: ThumbnailTarget): Promise<SourceThumbnailImage> {
-  if (running >= 2) await new Promise<void>(resolve => waiters.push(resolve));
-  running++;
+  await acquireSlot();
   try {
     let endpoint: HttpSource, minZoom: number, maxZoom: number;
     if ("registered" in target) {
-      const stored = await api.sourcesGet(target.registered.id);
+      const stored = await bounded(api.sourcesGet(target.registered.id), 8_000, "图源配置读取超时，请重试。");
       if (!stored) throw new Error("图源已不存在，请刷新列表。");
       endpoint = stored.endpoint; minZoom = stored.descriptor.minZoom; maxZoom = stored.descriptor.maxZoom;
     } else {
@@ -62,15 +81,16 @@ async function load(target: ThumbnailTarget): Promise<SourceThumbnailImage> {
     if (metadataUrl) {
       // Coverage metadata chooses a representative sample; failure doesn't
       // prevent a service's tile from being tried at the fallback position.
-      try { metadata = await api.sourceThumbnailMetadata(metadataUrl); } catch { /* Use the default sample. */ }
+      try { metadata = await bounded(api.sourceThumbnailMetadata(metadataUrl), 8_000, "图源覆盖范围查询超时。"); } catch { /* Use the default sample. */ }
     }
     const footprints = Array.isArray(metadata?.thumbnailExtents) ? metadata.thumbnailExtents.slice(0, 3) : [];
     const samples = footprints.length ? footprints.map(extent => ({ ...metadata, thumbnailExtent: extent })) : [metadata];
     for (const sample of samples) {
       const tile = thumbnailTile(minZoom, maxZoom, sample);
-      const encoded = "registered" in target
-        ? await api.mapPreviewTile(target.registered.id, null, tile.z, tile.x, tile.y)
-        : await api.sourcePreviewTile(endpoint, tile.z, tile.x, tile.y, target.credential);
+      const encoded = await bounded("registered" in target
+        ? api.mapPreviewTile(target.registered.id, null, tile.z, tile.x, tile.y)
+        : api.sourcePreviewTile(endpoint, tile.z, tile.x, tile.y, target.credential),
+        30_000, "图源预览请求超时，请检查服务地址或网络后重试。");
       const url = thumbnailImageUrl(encoded);
       if (await hasVisiblePixels(url)) return { url, tile };
     }
@@ -80,7 +100,7 @@ async function load(target: ThumbnailTarget): Promise<SourceThumbnailImage> {
 
 async function hasVisiblePixels(url: string): Promise<boolean> {
   const image = new Image(); image.src = url;
-  await image.decode();
+  await bounded(image.decode(), 3_000, "图源预览图片解码超时，请重试。");
   const canvas = document.createElement("canvas"); canvas.width = 32; canvas.height = 32;
   const context = canvas.getContext("2d");
   if (!context) throw new Error("无法读取预览图片。");

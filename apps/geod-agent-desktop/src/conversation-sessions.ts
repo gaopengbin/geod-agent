@@ -41,8 +41,17 @@ export class ConversationSession {
     if(!this.refs.has(key))this.refs.set(key,{current:initial});return this.refs.get(key) as {current:T};
   }
   subscribe=(listener:Listener)=>{this.listeners.add(listener);return()=>this.listeners.delete(listener);};
+  completeReply(replyId:string,viewed:boolean) {
+    if(!replyId)return;
+    this.set('completedReplyId',replyId);
+    if(viewed)this.set('readReplyId',replyId);
+  }
+  markRead() {
+    const replyId=this.get('completedReplyId','');
+    if(replyId)this.set('readReplyId',replyId);
+  }
   snapshot():Partial<SavedChat> {
-    const fields=['messages','display','pendingId','planId','planIds','contextCompressed','lastInputTokens','codexContext'] as const;
+    const fields=['messages','display','pendingId','planId','planIds','contextCompressed','lastInputTokens','codexContext','completedReplyId','readReplyId'] as const;
     const result:Record<string,unknown>={};
     for(const key of fields)if(this.values.has(key))result[key]=this.values.get(key)??undefined;
     const workspace=this.values.get('workspace') as {directory?:string}|null;
@@ -83,6 +92,7 @@ export function conversationSessionSeed(chat?:SavedChat,pending?:PendingGenerati
   let boundary=null,boundaryError='';
   try{boundary=pending?pendingBoundary(pending):null;}catch(error){boundaryError=String(error instanceof Error?error.message:error);}
   return {messages:pending?.messages??saved?.messages??[],display:restoreMcpSetup(restoreUserInputRecords(saved?.display??pending?.display??[])),
+    completedReplyId:saved?.completedReplyId??chat?.completedReplyId??'',readReplyId:saved?.readReplyId??chat?.readReplyId??'',
     pendingId:pending&&!pending.committed?pending.generationId:chat?.pendingId??'',pendingNeedsReview:!!pending&&!pending.committed,
     planId:saved?.planId??'',planIds:saved?chatPlanIds(saved):[],planReady:!!saved?.planId,
     contextCompressed:!!saved?.contextCompressed,lastInputTokens:saved?.lastInputTokens??null,codexContext:saved?.codexContext??null,

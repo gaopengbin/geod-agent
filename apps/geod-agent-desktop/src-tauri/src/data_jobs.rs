@@ -167,6 +167,8 @@ pub(crate) struct DataTask {
     pub kind: String,
     pub title: String,
     pub status: String,
+    #[serde(default)]
+    pub cleaned: bool,
     pub plan_hash: String,
     pub request: DataRequest,
     pub output_dir: String,
@@ -249,9 +251,10 @@ fn open_data_db(path: &Path) -> Result<Connection, AppError> {
           UPDATE data_download_tasks SET status='interrupted',error='应用已关闭，任务可重新启动',updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE status IN ('queued','downloading','verifying','cancelling');").map_err(storage_error)?;
         initialized.insert(path.to_path_buf());
     }
+    db.execute_batch("CREATE TABLE IF NOT EXISTS data_task_visibility(task_id TEXT PRIMARY KEY,updated_at TEXT NOT NULL);").map_err(storage_error)?;
     Ok(db)
 }
-const SELECT:&str="SELECT id,conversation_id,kind,title,status,plan_hash,request_json,output_dir,progress_json,manifest_json,error,created_at,updated_at FROM data_download_tasks";
+const SELECT:&str="SELECT id,conversation_id,kind,title,status,plan_hash,request_json,output_dir,progress_json,manifest_json,error,created_at,updated_at,EXISTS(SELECT 1 FROM data_task_visibility v WHERE v.task_id=data_download_tasks.id) FROM data_download_tasks";
 fn row(row: &rusqlite::Row<'_>) -> rusqlite::Result<DataTask> {
     fn decode<T: serde::de::DeserializeOwned>(
         row: &rusqlite::Row<'_>,
@@ -273,6 +276,7 @@ fn row(row: &rusqlite::Row<'_>) -> rusqlite::Result<DataTask> {
         kind: row.get(2)?,
         title: row.get(3)?,
         status: row.get(4)?,
+        cleaned:row.get(13)?,
         plan_hash: row.get(5)?,
         request: decode(row, 6)?,
         output_dir: row.get(7)?,
@@ -558,6 +562,9 @@ fn start(
     let mut running = active()
         .lock()
         .map_err(|_| storage_error("Data worker lock unavailable"))?;
+    // Cleanup may have won while this start waited for the shared worker lock.
+    let task=get(&db,&owner,conversation,id)?;
+    if task.cleaned {return Err(workspace_error("DATA_TASK_STATE","任务已清理，请先恢复"));}
     if running.contains_key(id) || matches!(task.status.as_str(), "completed" | "partial") {
         return Ok(task);
     }
@@ -597,7 +604,8 @@ fn start(
         )
         .map_err(storage_error)?;
     let control = Arc::new(Control::new());
-    db.execute("UPDATE data_download_tasks SET status='queued',error=NULL,manifest_json=NULL,approved_by=?2,approval_mode=?3,updated_at=?4 WHERE id=?1",params![id,owner,if automatic{"workspace-full-access"}else{"user-confirmed"},Utc::now().to_rfc3339()]).map_err(storage_error)?;
+    let changed=db.execute("UPDATE data_download_tasks SET status='queued',error=NULL,manifest_json=NULL,approved_by=?2,approval_mode=?3,updated_at=?4 WHERE id=?1 AND status IN ('pending','failed','cancelled','interrupted') AND NOT EXISTS(SELECT 1 FROM data_task_visibility v WHERE v.task_id=?1)",params![id,owner,if automatic{"workspace-full-access"}else{"user-confirmed"},Utc::now().to_rfc3339()]).map_err(storage_error)?;
+    if changed!=1{return Err(workspace_error("DATA_TASK_STATE","任务状态已变化或已清理，请刷新任务列表。"));}
     running.insert(id.into(), control.clone());
     drop(running);
     let path = state.db_path.clone();
@@ -802,6 +810,34 @@ pub(crate) fn data_download_discard(
     get(&db, &owner, &conversation_id, &task_id)
 }
 
+#[tauri::command]
+pub(crate) fn data_download_cleanup(app:AppHandle,state:State<'_,AppState>,services:State<'_,services::ServiceState>,conversation_id:String,task_id:String,action:String)->Result<DataTask,AppError>{
+    let workspace=read_workspace(&app,&state,&services,&conversation_id)?;
+    let owner=owner(&services)?;
+    let db=open_data_db(&state.db_path)?;
+    check_binding(&db,&get(&db,&owner,&conversation_id,&task_id)?,&workspace.directory)?;
+    cleanup_record(&db,&owner,&conversation_id,&task_id,&action)
+}
+
+fn cleanup_record(db:&Connection,owner:&str,conversation:&str,id:&str,action:&str)->Result<DataTask,AppError>{
+    if !matches!(action,"clean"|"restore"){return Err(workspace_error("INVALID_SPEC","无效的任务清理操作"));}
+    let _schedule=crate::data_schedules::GATE.lock().map_err(storage_error)?;
+    let running=active().lock().map_err(storage_error)?;
+    let tx=rusqlite::Transaction::new_unchecked(db,rusqlite::TransactionBehavior::Immediate).map_err(storage_error)?;
+    let task=get(&tx,owner,conversation,id)?;
+    if action=="clean"{
+        if running.contains_key(id)||matches!(task.status.as_str(),"queued"|"downloading"|"verifying"|"cancelling"){return Err(workspace_error("DATA_TASK_STATE","请先取消正在运行的任务"));}
+        let has_schedules:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='data_schedules')",[],|r|r.get(0)).map_err(storage_error)?;
+        if has_schedules{
+            let scheduled:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM data_schedules WHERE enabled=1 AND template_task_id=?1) OR EXISTS(SELECT 1 FROM data_schedule_runs WHERE task_id=?1 AND state IN ('queued','waiting_confirmation','running','cancelling'))",[id],|r|r.get(0)).map_err(storage_error)?;
+            if scheduled{return Err(workspace_error("SCHEDULE_CONFLICT","此计划用于定时任务，请先在定时面板取消对应任务"));}
+        }
+        tx.execute("INSERT OR REPLACE INTO data_task_visibility(task_id,updated_at) VALUES(?1,?2)",params![id,Utc::now().to_rfc3339()]).map_err(storage_error)?;
+    }else{tx.execute("DELETE FROM data_task_visibility WHERE task_id=?1",[id]).map_err(storage_error)?;}
+    tx.commit().map_err(storage_error)?;
+    get(db,owner,conversation,id)
+}
+
 fn verified(task: &DataTask) -> Result<Value, AppError> {
     if !matches!(task.status.as_str(), "completed" | "partial") {
         return Err(workspace_error(
@@ -989,11 +1025,19 @@ mod tests {
             get(&db, "owner", "conversation", "task").unwrap().title,
             "区域模型"
         );
+        assert!(cleanup_record(&db,"other","conversation","task","clean").is_err());
+        assert!(cleanup_record(&db,"owner","another","task","clean").is_err());
+        let cleaned=cleanup_record(&db,"owner","conversation","task","clean").unwrap();assert!(cleaned.cleaned);assert_eq!(cleaned.status,"pending");
+        assert!(!cleanup_record(&db,"owner","conversation","task","restore").unwrap().cleaned);
+        db.execute("UPDATE data_download_tasks SET status='completed',manifest_json='{}' WHERE id='task'",[]).unwrap();
+        let completed=cleanup_record(&db,"owner","conversation","task","clean").unwrap();assert!(completed.cleaned);assert_eq!(completed.status,"completed");assert!(completed.manifest.is_some());
+        let restored=cleanup_record(&db,"owner","conversation","task","restore").unwrap();assert!(!restored.cleaned);assert_eq!(restored.status,"completed");
         db.execute(
             "UPDATE data_download_tasks SET status='downloading' WHERE id='task'",
             [],
         )
         .unwrap();
+        assert!(cleanup_record(&db,"owner","conversation","task","clean").is_err());
         drop(db);
         INITIALIZED.get().unwrap().lock().unwrap().remove(&path);
         let reopened = open_data_db(&path).unwrap();

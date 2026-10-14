@@ -17,8 +17,14 @@ import {ModelToolCatalog,SEARCH_TOOL,CONTEXT_TOOL,projectModelInput,modelInputAu
 
 const frame=(res,type,value)=>{if(!res.destroyed)res.write(`event: ${type}\ndata: ${JSON.stringify({type,...value})}\n\n`);};
 const terminalRouteErrors=new Set(['SPONSOR_INVALID','SPONSOR_UNAVAILABLE','SPONSOR_DISABLED','SPONSOR_NOT_STARTED','SPONSOR_ENDED','SPONSOR_CHANGED','SPONSOR_MODEL_MISSING','SPONSOR_IMAGE_UNSUPPORTED']);
-const terminalModelErrors=new Set(['MODEL_OUTPUT_LIMIT','MODEL_EMPTY_RESPONSE','MODEL_CONTENT_FILTERED']);
+const terminalModelErrors=new Set(['MODEL_OUTPUT_LIMIT','MODEL_EMPTY_RESPONSE','MODEL_CONTENT_FILTERED','UPSTREAM_REJECTED','UPSTREAM_MALFORMED','UPSTREAM_INVALID_TOOL','UPSTREAM_UNKNOWN','GATEWAY_GENERATION_INCOMPLETE']);
 const modelError=error=>({code:['SPONSOR_QUOTA_EXCEEDED','QUOTA_EXCEEDED'].includes(error.code)?'insufficient_quota':terminalRouteErrors.has(error.code)||terminalModelErrors.has(error.code)?'invalid_prompt':'geod_gateway_error',message:String(error.message)});
+export function assertGenerationSettlement(generation){
+ if(generation?.state==='settled'&&generation.result)return;
+ const messages={UPSTREAM_REJECTED:'模型供应商拒绝了本次请求，本轮未完成。请检查渠道兼容性；重复继续无法解决请求格式问题。',UPSTREAM_MALFORMED:'模型供应商返回的内容或用量不完整，本次请求待核对；已保留任务状态，未自动重试。',UPSTREAM_INVALID_TOOL:'模型供应商返回了未声明的工具调用，本次请求待核对，未执行该操作。',UPSTREAM_UNKNOWN:'模型请求结果暂未确认，请先检查状态；已保留任务状态，未自动重试。'};
+ const code=Object.hasOwn(messages,generation?.errorCode)?generation.errorCode:'GATEWAY_GENERATION_INCOMPLETE';
+ throw Object.assign(new Error(messages[code]??'模型请求未正常完成，请先检查状态；已保留任务状态。'),{code});
+}
 export function assertModelCompletion(result){
  const code=result?.finishReason==='length'?'MODEL_OUTPUT_LIMIT':result?.finishReason==='content_filter'?'MODEL_CONTENT_FILTERED':!result?.response&&!String(result?.content??'').trim()&&!(result?.toolCalls?.length)?'MODEL_EMPTY_RESPONSE':null;
  if(!code)return;
@@ -27,7 +33,7 @@ export function assertModelCompletion(result){
 }
 const textItem=(id,text,phase)=>({id,type:'message',role:'assistant',status:'completed',phase,content:[{type:'output_text',text,annotations:[]}]});
 export function sendGeneration(res,generation,id,{streamedText='',streamedReasoning=''}={}) {
-  if(generation?.state!=='settled'||!generation.result)throw new Error(generation?.errorCode??'GATEWAY_GENERATION_INCOMPLETE');
+  assertGenerationSettlement(generation);
   const result=generation.result,calls=result.toolCalls??[],output=[];
   assertModelCompletion(result);
   if(result.reasoning||result.providerState)output.push({id:`reason_${id}`,type:'reasoning',summary:result.reasoning?[{type:'summary_text',text:result.reasoning}]:[],...(result.providerState?{encrypted_content:result.providerState}:{})});
@@ -274,7 +280,8 @@ export async function createHost({codex,home,sqliteHome=home,toolsFile,emit,rece
       notify({type:'generation',generationId:generation.generationId,inputTokens:generation.inputTokens,state:generation.state,model:generation.model});
       if(!nativeResponses)for(const call of generation.result?.toolCalls??[])policy.bindCall(call.id,requestRevision);
       if(nativeResponses){
-        if(!wireCompleted||generation?.state!=='settled')throw new Error('PROVIDER_STREAM_INCOMPLETE');
+        assertGenerationSettlement(generation);
+        if(!wireCompleted)throw new Error('PROVIDER_STREAM_INCOMPLETE');
         for(const [type,value]of heldWire)frame(res,type,value);res.end();
       }else sendGeneration(res,generation,id,{streamedText,streamedReasoning});
     }catch(error){
@@ -416,7 +423,7 @@ export async function createHost({codex,home,sqliteHome=home,toolsFile,emit,rece
         if(!capabilities.isolatedWorker)overrides.developerInstructions+=' '+BULK_DATA_POLICY;
         if(params.rtkOutput?.enabled===true&&!capabilities.isolatedWorker)overrides.developerInstructions+=' '+RTK_OUTPUT_POLICY;
         if(!capabilities.isolatedWorker)overrides.developerInstructions+=' Current native conversation export CRS default: '+JSON.stringify(params.outputCrs??null)+'. This is refreshed at each turn. A non-null value was explicitly selected by the human for this conversation; reuse it unless the current request explicitly overrides it. A one-time override never changes that default. Query workspace_status for any preference changed during this turn. A null default requires an interactive CRS choice for a new export unless the human already specified its target CRS or explicitly delegated choosing defaults.';
-        run.modelInput={catalog:new ModelToolCatalog(declared,params,{home}),developerInstructions:overrides.developerInstructions};
+        run.modelInput={catalog:new ModelToolCatalog(declared,params,{home}),developerInstructions:overrides.developerInstructions,protocol:capabilities.protocol};
         const threadKey=params.threadKey??params.conversationId;
         const previous=threadRecord(params.resumeThread??index[threadKey]);
          const dynamicTools=declared.map(({function:t})=>({type:'function',name:t.name,description:t.description,inputSchema:t.parameters}));

@@ -80,7 +80,7 @@ pub(crate) fn parser_root(app: &AppHandle) -> Result<PathBuf, AppError> {
     let mut roots=vec![];
     // Development reads the prepared source resources, including hot parser updates.
     if cfg!(debug_assertions){roots.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/documents"));}
-    if let Ok(root)=app.path().resource_dir(){roots.push(root.join("document-runtime"));}
+    if let Some(root)=crate::runtime_components::root(app,"document-runtime"){roots.push(root);}
     if let Some(root)=std::env::current_exe().ok().and_then(|path|path.parent().map(|p|p.to_owned())){roots.push(root.join("document-runtime"));}
     let root=roots.into_iter().find(|root|root.join("manifest.json").is_file()&&root.join("pypdf/__init__.py").is_file())
         .ok_or_else(||err("ATTACHMENT_RUNTIME", "内置文档解析环境缺失，请修复应用"))?;

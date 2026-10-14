@@ -1,5 +1,6 @@
 import type { SourceCredentialInput, SourceRegistrationDraft } from "./api";
 import catalog from "../../../contracts/source-presets.v1.json";
+import { normalizeTileTemplate } from "./source-template";
 
 export const rasterSourcePresets = catalog.presets;
 export function rasterPreset(id: string): SourceRegistrationDraft {
@@ -27,6 +28,7 @@ export function tiandituPreset(layer: string): SourceRegistrationDraft {
 const secretParameter = /^(tk|token|access_token|api_key|apikey|key|authorization|signature|sig)$/i;
 /** Split a pasted URL without encoding the XYZ placeholders. No value is logged. */
 export function separateUrlToken(raw: string, authenticationParameter?: string): { url: string; parameter?: string; token?: string } {
+  raw = normalizeTileTemplate(raw);
   if (raw.includes("#")) throw new Error("图源地址不能包含 # 片段，请核对服务地址。");
   const question = raw.indexOf("?");
   if (question < 0) return { url: raw };

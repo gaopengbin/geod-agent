@@ -97,17 +97,27 @@ export function PromptInput({
   placeholder = "Ask the agent to do something…",
   "aria-label": ariaLabel = "Prompt",
   onKeyDown,
+  onCompositionStart,
+  onCompositionEnd,
   ...textareaProps
 }: PromptInputProps) {
   const reduce = useReducedMotion() ?? false;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const measurementRef = useRef<HTMLDivElement>(null);
+  const composing = useRef(false);
+  const initialValue = useRef(value ?? defaultValue);
   const [internalValue, setInternalValue] = useState(defaultValue);
   const [internalModel, setInternalModel] = useState(
     defaultModel ?? models[0]?.value,
   );
   const [actionsOpen, setActionsOpen] = useState(false);
   const currentValue = value ?? internalValue;
+  // The browser owns the live editing buffer. React must not rewrite the native
+  // preedit/selection when streaming responses or external-store updates render.
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current;
+    if (!composing.current && textarea && textarea.value !== currentValue) textarea.value = currentValue;
+  }, [currentValue]);
   const currentModelValue = model ?? internalModel;
   const currentModel = models.find(
     (option) => option.value === currentModelValue,
@@ -117,7 +127,8 @@ export function PromptInput({
   const resizeTextarea = useCallback(() => {
     const textarea = textareaRef.current;
     const measurement = measurementRef.current;
-    if (!textarea || !measurement || textarea.value !== currentValue) return;
+    // Changing the caret's layout while an IME owns it can move its candidate window.
+    if (composing.current || !textarea || !measurement || textarea.value !== currentValue) return;
 
     const lineHeight = 24;
     const nextHeight = Math.min(
@@ -153,7 +164,7 @@ export function PromptInput({
   const submit = (event?: FormEvent) => {
     event?.preventDefault();
     const prompt = currentValue.trim();
-    if ((!prompt&&!hasAttachments) || disabled || (loading && !allowSteer)) return;
+    if (composing.current || (!prompt&&!hasAttachments) || disabled || (loading && !allowSteer)) return;
 
     onSubmit?.(prompt, currentModelValue);
     if (value === undefined) setInternalValue("");
@@ -166,7 +177,9 @@ export function PromptInput({
       event.defaultPrevented ||
       event.key !== "Enter" ||
       event.shiftKey ||
-      event.nativeEvent.isComposing
+      composing.current ||
+      event.nativeEvent.isComposing ||
+      event.nativeEvent.keyCode === 229
     ) {
       return;
     }
@@ -192,13 +205,24 @@ export function PromptInput({
       </div>
       <textarea
         ref={textareaRef}
-        value={currentValue}
+        defaultValue={initialValue.current}
         disabled={disabled}
         placeholder={placeholder}
         aria-label={ariaLabel}
         rows={minRows}
         {...textareaProps}
-        onChange={(event) => setValue(event.target.value)}
+        onCompositionStart={event => {
+          composing.current = true;
+          onCompositionStart?.(event);
+        }}
+        onCompositionEnd={event => {
+          composing.current = false;
+          setValue(event.currentTarget.value);
+          onCompositionEnd?.(event);
+        }}
+        onChange={event => {
+          if (!composing.current && !(event.nativeEvent as InputEvent).isComposing) setValue(event.target.value);
+        }}
         onKeyDown={handleKeyDown}
         className="scrollbar-hide block w-full resize-none overflow-y-auto bg-transparent px-2 pt-1.5 text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground/55"
       />

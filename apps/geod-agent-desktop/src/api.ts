@@ -99,6 +99,10 @@ export interface TaskSpec {
 
 export interface PlanTileGrid {
   zoom: number;
+  xMin: number;
+  xMax: number;
+  yMin: number;
+  yMax: number;
   columns: number;
   rows: number;
   tileCount: number;
@@ -271,6 +275,8 @@ export const api = {
   imageryPlansClaim: (conversationId: string, planIds: string[]) => invoke<{bound:string[];rejected:{planId:string;code:string;message:string}[]}>("imagery_plans_claim", { conversationId, planIds }),
   plansForToolExecution: (toolExecutionId: string) => invoke<StoredPlan | null>("plans_for_tool_execution", { toolExecutionId }),
   plansGet: (planId: string) => invoke<StoredPlan | null>("plans_get", { planId }),
+  imageryTasksList: (conversationId: string) => invoke<{stored:StoredPlan;recordState:string;job:Job|null}[]>("imagery_tasks_list", {conversationId}),
+  imageryTasksCleanup: (conversationId:string,planIds:string[],action:"discard"|"clean"|"restore") => invoke<{changed:string[];rejected:{planId:string;code:string;message:string}[];filesPreserved:boolean}>("imagery_tasks_cleanup",{conversationId,planIds,action}),
   approvalsGrant: (planId: string, planHash: string) => invoke<Approval>("approvals_grant", { planId, planHash }),
   jobsStart: (planId: string, planHash: string, approvalId: string, idempotencyKey: string) => invoke<Job>("jobs_start", { planId, planHash, approvalId, idempotencyKey }),
   jobsStartAuto: (planId: string, conversationId: string, idempotencyKey: string) => invoke<Job>("jobs_start_auto", { planId, conversationId, idempotencyKey }),

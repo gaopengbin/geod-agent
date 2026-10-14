@@ -10,7 +10,8 @@ import { desktopAvailable, errorMessage } from "./api";
 import { UiTooltip } from "./ui-tooltip";
 import {availableAIChannels,sponsorAvailability,useSponsorClock,SPONSORED_CHANNELS_VISIBLE,type AISponsor} from './ai-channels';
 import {ExternalLink} from './icons';
-import {ContextSettingsPanel} from './context-settings';
+import {ContextSettingsDialog} from './context-settings';
+import {Settings2} from './icons';
 import {OwnChannelGuide} from './own-channel-guide';
 
 const newModel = (): AIModel => ({ id: "", name: "", contextWindow: 128000, maxOutputTokens: 4096, inputModalities: ["text"], thinking: null });
@@ -97,10 +98,11 @@ export function AIChannelsPage({ active, accountId, conversationId, onReturn }: 
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [contextOpen, setContextOpen] = useState(false);
   async function refresh() { try { setList(await aiChannels.list()); setError(""); } catch (cause) { setError(errorMessage(cause)); } }
   useEffect(() => {
     let current=true;
-    setEditing(null);setList(null);setNotice("");setError("");
+    setEditing(null);setList(null);setNotice("");setError("");setContextOpen(false);
     const reload=()=>{void aiChannels.list().then(value=>{if(current){setList(value);setError("")}}).catch(cause=>{if(current)setError(errorMessage(cause))});};
     if(active&&accountId&&desktopAvailable){
       reload();
@@ -111,17 +113,16 @@ export function AIChannelsPage({ active, accountId, conversationId, onReturn }: 
   }, [active, accountId]);
   async function action(operation: () => Promise<unknown>, message: string) { if (busy) return; setBusy(true); setError(""); try { await operation(); notifyChannelsChanged(); await refresh(); setNotice(message); } catch (cause) { setError(errorMessage(cause)); } finally { setBusy(false); } }
   return <section className="ai-channels-page" hidden={!active} aria-label={t("模型与渠道")}>
-    <header className="ai-channels-page-head"><div><h1>{t("模型与渠道")}</h1><p>{t(SPONSORED_CHANNELS_VISIBLE?"选择 GeoD 托管、赞助模型或自有渠道。":"选择 GeoD 托管或自有渠道。")}</p></div><div><Button variant="ghost" size="sm" onClick={onReturn}>{t("返回对话")}</Button><Button size="sm" disabled={!accountId || busy} onClick={() => { setEditing("new"); setNotice(""); }}><Plus size={16}/>{t("添加渠道")}</Button></div></header>
+    <header className="ai-channels-page-head"><div><h1>{t("模型与渠道")}</h1><p>{t(SPONSORED_CHANNELS_VISIBLE&&list?.sponsors?.length?"选择 GeoD 托管、赞助模型或自有渠道。":"选择 GeoD 托管或自有渠道。")}</p></div><div><Button variant="ghost" size="sm" onClick={onReturn}>{t("返回对话")}</Button><Button size="sm" disabled={!accountId || busy} onClick={() => { setEditing("new"); setNotice(""); }}><Plus size={16}/>{t("添加渠道")}</Button></div></header>
     <ScrollArea key={`${active}:${editing === "new" ? "new" : editing?.id ?? "list"}`} className="ai-channels-scroll"><div className="ai-channels-body">
       {!accountId ? <p className="ai-channel-empty">{t("登录 GeoD 后管理此账号的本机模型配置。")}</p> : editing ? <ChannelForm key={editing === "new" ? "new" : editing.id} channel={editing === "new" ? null : editing} onCancel={() => { setEditing(null); void refresh(); }} onSaved={saved => { setEditing(null); setNotice(`已保存 ${saved.name}，可在会话输入栏选择。`); void refresh(); }}/> : <>
         {error && <p className="ai-channel-error" role="alert"><CircleAlert size={16}/>{localize(error)}</p>}{notice && <p className="ai-channel-notice" role="status"><Check size={16}/>{localize(notice)}</p>}
         <section className="ai-channel-row ai-channel-hosted"><span className="ai-channel-icon"><Bot size={22}/></span><div className="ai-channel-info"><h2>{t("GeoD 托管")}{list?.default.channelId === "hosted" && <span>{t("新对话默认")}</span>}</h2><p>{t("直接使用 GeoD 账号 · 无需填写密钥")}</p></div><Button size="sm" variant="ghost" disabled={busy || !list || list.default.channelId === "hosted"} onClick={() => void action(() => aiChannels.select("default", "hosted", "hosted"), "新对话将使用 GeoD 托管；已有会话与定时任务保留原选择。")}>{t("设为默认")}</Button></section>
-        <ContextSettingsPanel accountId={accountId} conversationId={conversationId}/>
-        {SPONSORED_CHANNELS_VISIBLE&&<><div className="ai-channel-section-heading ai-sponsors-heading"><div><h2>{t("赞助渠道")} <span>{list?.sponsors?.length??0}</span></h2><p>{t("额度由供应方提供，不扣 GeoD 托管额度。")}</p></div><Button size="sm" variant="ghost" disabled={busy} onClick={()=>void action(()=>aiChannels.sponsors(true),'赞助渠道已更新')}><RefreshCw size={14}/>{t("刷新赞助渠道")}</Button></div>
+        {SPONSORED_CHANNELS_VISIBLE&&!!list?.sponsors?.length&&<><div className="ai-channel-section-heading ai-sponsors-heading"><div><h2>{t("赞助渠道")} <span>{list?.sponsors?.length??0}</span></h2><p>{t("额度由供应方提供，不扣 GeoD 托管额度。")}</p></div><Button size="sm" variant="ghost" disabled={busy} onClick={()=>void action(()=>aiChannels.sponsors(true),'赞助渠道已更新')}><RefreshCw size={14}/>{t("刷新赞助渠道")}</Button></div>
         {!list?.sponsors?.length&&<p className="ai-sponsors-empty">{t("当前账号暂无赞助渠道。")}</p>}
         {list?.sponsors?.map(sponsor=><section className={`ai-channel-row ai-sponsor-row${sponsorAvailability(sponsor)!=='active'?' is-disabled':''}`} key={sponsor.id}>
           <span className="ai-channel-icon"><ShieldCheck size={22}/></span><div className="ai-channel-info"><h2>{sponsor.name}<span>{t("赞助")}</span>{sponsorStateLabel(sponsor)&&<span>{t(sponsorStateLabel(sponsor))}</span>}{list.default.channelId===`sponsor:${sponsor.id}`&&<span>{t("新对话默认")}</span>}</h2>{sponsor.description&&<p>{sponsor.description}</p>}<div className="ai-channel-model-names">{sponsor.models.map(model=><span key={model.id}>{model.name}{model.inputModalities.includes('image')&&<em> · {t("支持图片")}</em>}</span>)}</div><small>{t("无需填写密钥 · 用量由网关记录")}</small>{(sponsor.startsAt||sponsor.endsAt)&&<small className="ai-sponsor-period">{sponsor.startsAt&&t("开始：{0}",{'0':activityTime(sponsor.startsAt)})}{sponsor.startsAt&&sponsor.endsAt?' · ':''}{sponsor.endsAt&&t("结束：{0}",{'0':activityTime(sponsor.endsAt)})}</small>}{sponsor.website&&<Button size="sm" variant="ghost" className="ai-sponsor-website" onClick={()=>void action(()=>aiChannels.openSponsorWebsite(sponsor.id),"")}><ExternalLink size={13}/>{t("供应方网站")}</Button>}</div>
-          <div className="ai-sponsor-quota"><strong>{sponsor.usage.quotaEnforced?t("可用 {0} token",{"0":tokens(sponsor.usage.remainingTokens)}):t("不限额度")}</strong><small>{t(sponsor.usage.budgetPeriod==='month'?"本月已用 {0} token":"已用 {0} token",{"0":tokens(sponsor.usage.committedTokens)})}</small>{sponsor.usage.reservedTokens>0&&<small>{t("请求中 {0} token",{"0":tokens(sponsor.usage.reservedTokens)})}</small>}{sponsor.usage.budgetPeriod==='month'&&sponsor.usage.periodEnd&&<small>{t("下次刷新：{0}",{'0':budgetTime(sponsor.usage.periodEnd)})}</small>}{(sponsor.usage.priorReservedTokens??0)>0&&<small>{t("上期请求待核对 {0} token",{'0':tokens(sponsor.usage.priorReservedTokens??0)})}</small>}<Button size="sm" variant="ghost" disabled={busy||sponsorAvailability(sponsor)!=='active'||(sponsor.usage.quotaEnforced&&sponsor.usage.remainingTokens===0)||list.default.channelId===`sponsor:${sponsor.id}`} onClick={()=>void action(()=>aiChannels.select('default',`sponsor:${sponsor.id}`,sponsor.models[0].id),'新对话默认模型已更新')}>{t("设为默认")}</Button></div>
+          <div className="ai-sponsor-quota"><strong>{sponsor.usage.quotaEnforced?t("可用 {0} token",{"0":tokens(sponsor.usage.remainingTokens)}):t("按实际用量记录")}</strong><small>{t(sponsor.usage.budgetPeriod==='month'?"本月已用 {0} token":"已用 {0} token",{"0":tokens(sponsor.usage.committedTokens)})}</small>{sponsor.usage.reservedTokens>0&&<small>{t("请求中 {0} token",{"0":tokens(sponsor.usage.reservedTokens)})}</small>}{sponsor.usage.budgetPeriod==='month'&&sponsor.usage.periodEnd&&<small>{t("下次刷新：{0}",{'0':budgetTime(sponsor.usage.periodEnd)})}</small>}{(sponsor.usage.priorReservedTokens??0)>0&&<small>{t("上期请求待核对 {0} token",{'0':tokens(sponsor.usage.priorReservedTokens??0)})}</small>}<Button size="sm" variant="ghost" disabled={busy||sponsorAvailability(sponsor)!=='active'||(sponsor.usage.quotaEnforced&&sponsor.usage.remainingTokens===0)||list.default.channelId===`sponsor:${sponsor.id}`} onClick={()=>void action(()=>aiChannels.select('default',`sponsor:${sponsor.id}`,sponsor.models[0].id),'新对话默认模型已更新')}>{t("设为默认")}</Button></div>
         </section>)}
         {!!list?.sponsors?.length&&<p className="ai-sponsors-empty">{t("额度以上次刷新为准；渠道变化不会自动切换已保存的任务。")}</p>}</>}
         <div className="ai-channel-section-heading"><h2>{t("自有渠道 ")}<span>{list?.channels.length ?? 0}</span></h2><p>{t("自有渠道用量独立记录，不扣 GeoD 托管额度。")}</p></div>
@@ -132,6 +133,10 @@ export function AIChannelsPage({ active, accountId, conversationId, onReturn }: 
           <div className="ai-channel-row-actions"><Button size="sm" variant="ghost" disabled={busy} onClick={() => setEditing(channel)}>{t("编辑")}</Button><UiTooltip content={t("删除渠道及其系统密钥；保存的定时任务保留记录，执行时提示配置缺失")}><Button aria-label={t("删除 {0}", {"0": channel.name})} size="icon" variant="ghost" disabled={busy} onClick={() => void action(() => aiChannels.remove(channel.id), `已删除 ${channel.name}。`)}><Trash size={16}/></Button></UiTooltip></div>
         </section>)}
         {availableAIChannels(list).length > 0 && <div className="ai-default-model"><Choice label={t("新对话默认模型")} value={modelValue(list!.default.channelId, list!.default.modelId)} disabled={busy} options={[{ value: modelValue("hosted", "hosted"), label: t("GeoD 托管") }, ...availableAIChannels(list).flatMap(c => c.models.map(m => ({ value: modelValue(c.id, m.id), label: `${c.name} · ${m.name}` })))]} onChange={value => { const [channelId, modelId] = JSON.parse(value) as string[]; void action(() => aiChannels.select("default", channelId, modelId), "默认模型已更新；已有会话、子任务和定时任务保留原选择。"); }}/><p>{t("每个会话有自己的选择。定时任务使用创建时的渠道与模型配置。")}</p></div>}
+        <section className="ai-channel-settings-row" aria-label={t('上下文与预算')}>
+          <div><h2>{t('上下文与预算')}</h2><p>{t('调整上下文容量、自动压缩和当前会话费用预算。')}</p></div>
+          <ContextSettingsDialog open={contextOpen} onOpenChange={setContextOpen} accountId={accountId} conversationId={conversationId??'default'} trigger={<Button variant="outline" size="sm"><Settings2 size={15}/>{t('上下文设置')}</Button>}/>
+        </section>
         {!!list?.usage.length && <section className="ai-channel-usage"><h2>{t("自有渠道实际用量")}</h2><p>{t("按服务返回的 Token 记录；费用与余额请到对应服务查看。")}</p><div className="ai-channel-usage-table"><div className="ai-channel-usage-head"><span>{t("渠道 / 模型")}</span><span>{t("输入")}</span><span>{t("输出")}</span><span>{t("请求")}</span></div>{list.usage.map(u => <div key={`${u.channelId}:${u.model}`}><span>{list.channels.find(c => c.id === u.channelId)?.name ?? t("已删除渠道")}<small>{u.model}{u.unknownUsageRequests > 0 ? t(" · {0} 次用量未返回", {"0": u.unknownUsageRequests}) : ""}</small></span><span>{tokens(u.inputTokens)}</span><span>{tokens(u.outputTokens)}</span><span>{u.requests}</span></div>)}</div></section>}
       </>}
     </div></ScrollArea>

@@ -1,5 +1,18 @@
 import type { SavedChat, DisplayMessage } from "./pending-generations";
 
+/** Reopening an unused page keeps its draft and attachments in the same session. */
+export function canReuseEmptyConversation(chat:SavedChat,targetDirectory?:string,running=false):boolean {
+  return !running && !chat.archived && !chat.pendingId && !chat.planId && !chat.planIds?.length
+    && !chat.messages.length && !chat.display.length && !chat.queuedInputs?.length
+    && !chat.title && !chat.forkFromConversationId
+    && (!targetDirectory || chat.workspaceDirectory===targetDirectory);
+}
+
+export function conversationActivity(chat:Pick<SavedChat,'completedReplyId'|'readReplyId'>,running=false):'running'|'unread'|'idle'{
+  if(running)return 'running';
+  return chat.completedReplyId&&chat.completedReplyId!==chat.readReplyId?'unread':'idle';
+}
+
 export function conversationTitle(chat: Pick<SavedChat, "title" | "display">): string {
   return chat.title || chat.display.find(message => message.role === "user")?.content.slice(0, 34) || "新对话";
 }

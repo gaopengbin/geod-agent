@@ -1,6 +1,6 @@
 [package]
 name = "geod-agent-desktop"
-version = "0.2.4"
+version = "0.2.5"
 edition = "2021"
 license = "MIT"
 description = "Independent GeoD Agent desktop application"
@@ -11,6 +11,8 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+sha2 = "0.10"
+serde_json = "1"
 
 [dependencies]
 chrono = { version = "0.4", features = ["serde"] }
@@ -19,6 +21,7 @@ async-trait = "0.1"
 http = "1"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif"] }
 flate2 = "1"
+tar = "0.4"
 fs2 = "0.4"
 tiny_http = "0.12"
 tempfile = "3"

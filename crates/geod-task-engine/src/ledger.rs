@@ -229,9 +229,47 @@ impl TaskStore {
                  COMMIT;",
             )?;
         }
+        // Additive metadata: retain plans, approvals, events and output files.
+        conn.execute_batch("CREATE TABLE IF NOT EXISTS plan_visibility (
+            plan_id TEXT PRIMARY KEY REFERENCES plans(plan_id),
+            state TEXT NOT NULL CHECK(state IN ('discarded','cleaned')),
+            updated_at TEXT NOT NULL);")?;
         let db_path = std::fs::canonicalize(path)
             .map_err(|error| LedgerError::new("STORAGE_ERROR", error.to_string()))?;
         Ok(Self { conn, db_path })
+    }
+
+    pub fn plan_visibility(&self, plan_id: &str) -> Result<Option<String>, LedgerError> {
+        self.conn.query_row("SELECT state FROM plan_visibility WHERE plan_id=?1", [plan_id], |r| r.get(0)).optional().map_err(Into::into)
+    }
+
+    pub fn assert_plan_visible(&self, plan_id: &str) -> Result<(), LedgerError> {
+        if self.plan_visibility(plan_id)?.is_some() {
+            return Err(LedgerError::new("PLAN_DISCARDED", "此任务已丢弃或清理，请先在任务列表恢复"));
+        }
+        Ok(())
+    }
+
+    /// Serialized with start_job; no filesystem deletion, even for completed jobs.
+    pub fn set_plan_visibility(&mut self, plan_id: &str, state: Option<&str>) -> Result<(), LedgerError> {
+        if state.is_some_and(|s| !matches!(s, "discarded" | "cleaned")) {
+            return Err(LedgerError::new("INVALID_SPEC", "Invalid task visibility"));
+        }
+        let tx = self.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let exists: bool = tx.query_row("SELECT EXISTS(SELECT 1 FROM plans WHERE plan_id=?1)", [plan_id], |r| r.get(0))?;
+        if !exists { return Err(LedgerError::new("PLAN_NOT_FOUND", "计划不存在")); }
+        if let Some(state) = state {
+            let jobs: bool = tx.query_row("SELECT EXISTS(SELECT 1 FROM jobs WHERE plan_id=?1)", [plan_id], |r| r.get(0))?;
+            let active: bool = tx.query_row("SELECT EXISTS(SELECT 1 FROM jobs WHERE plan_id=?1 AND state NOT IN ('completed','partial','failed','cancelled'))", [plan_id], |r| r.get(0))?;
+            if active || (state == "discarded" && jobs) {
+                return Err(LedgerError::new("JOB_STATE_CONFLICT", "请先停止任务；丢弃仅适用于未启动计划"));
+            }
+            let scheduled: bool = tx.query_row("SELECT EXISTS(SELECT 1 FROM schedules WHERE enabled=1 AND json_extract(body,'$.templatePlanId')=?1) OR EXISTS(SELECT 1 FROM schedule_runs WHERE json_extract(body,'$.planId')=?1 AND state NOT IN ('succeeded','failed','cancelled'))", [plan_id], |r| r.get(0))?;
+            if scheduled { return Err(LedgerError::new("SCHEDULE_CONFLICT", "此计划用于定时任务，请先在定时面板取消对应任务")); }
+            tx.execute("INSERT INTO plan_visibility(plan_id,state,updated_at) VALUES(?1,?2,?3) ON CONFLICT(plan_id) DO UPDATE SET state=excluded.state,updated_at=excluded.updated_at", params![plan_id,state,Utc::now().to_rfc3339()])?;
+        } else { tx.execute("DELETE FROM plan_visibility WHERE plan_id=?1", [plan_id])?; }
+        tx.commit()?;
+        Ok(())
     }
 
     /// Save technical configuration. Metadata is optional; replacing an existing
@@ -514,6 +552,9 @@ impl TaskStore {
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        if tx.query_row("SELECT EXISTS(SELECT 1 FROM plan_visibility WHERE plan_id=?1)", [plan_id], |r| r.get::<_, bool>(0))? {
+            return Err(LedgerError::new("PLAN_DISCARDED", "此任务已丢弃或清理，请先恢复"));
+        }
         let existing = tx
             .query_row(
                 "SELECT job_id FROM jobs WHERE idempotency_key=?1",

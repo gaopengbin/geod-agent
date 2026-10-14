@@ -26,6 +26,7 @@ import { DataSchedulePanel } from "./data-schedule-panel";
 import { SCHEDULE_FOCUS, pendingScheduleFocus } from "./schedule-navigation";
 import { ImageryRecoveryActions, presentImageryRecovery } from "./imagery-recovery";
 import type { ScheduleRun } from "./api";
+import {ImageryNetworkFailure} from './imagery-network-failure';
 
 const states: Record<string, string> = { queued: "排队中", downloading: "下载中", paused: "已暂停", processing: "生成成果", verifying: "核验中", completed: "已完成", partial: "部分完成", failed: "失败", cancelled: "已取消", interrupted: "已中断" };
 const count = (n: number) => new Intl.NumberFormat("zh-CN").format(n);
@@ -57,9 +58,10 @@ function Disclosure({ label, children }: { label: string; children: React.ReactN
   </section>;
 }
 
-export function TaskPanel({ conversationId, onOpenScheduleRun, plan: stored, permission, job, events, manifest, activeJobs, working, error, notice, onClose, onClearError, onClearNotice, onRefresh, onResume, onPause, onCancel, tasks, focusPlanIds, onClearTaskFocus, onTaskSelect, onTaskAction, onStart, onDiscard }: {
+export function TaskPanel({ conversationId, onOpenScheduleRun, onOpenNetwork, plan: stored, permission, job, events, manifest, activeJobs, working, error, notice, onClose, onClearError, onClearNotice, onRefresh, onResume, onPause, onCancel, tasks, focusPlanIds, onClearTaskFocus, onTaskSelect, onTaskAction, onStart, onDiscard }: {
   conversationId?:string; onOpenScheduleRun?:(run:ScheduleRun)=>void;
   onClose?: () => void;
+  onOpenNetwork?: () => void;
   permission?: WorkspaceSettings["permission"] | null;
   plan: StoredPlan | null; job: Job | null; events: JobEvent[]; manifest: Manifest | null; jobs?: Job[]; activeJobs: string[];
   working: boolean; error: string; notice: string; onClearError: () => void; onClearNotice: () => void;
@@ -114,6 +116,7 @@ export function TaskPanel({ conversationId, onOpenScheduleRun, plan: stored, per
   const artifactBytes = manifest && job && ["completed", "partial"].includes(job.state)
     ? manifest.assets.reduce((sum, asset) => sum + asset.bytes, 0) : null;
   const discarded = tasks.some(task => task.stored.planId === stored?.planId && task.state === "discarded");
+  const cleaned = tasks.some(task => task.stored.planId === stored?.planId && task.state === "cleaned");
   const scheduledTemplate = tasks.some(task => task.stored.planId === stored?.planId && task.state === "scheduled");
   const visibleNotice = notice && !notice.startsWith("任务已入账") && !notice.startsWith("Agent 已生成计划");
   const milestones = taskMilestones(events);
@@ -127,10 +130,11 @@ export function TaskPanel({ conversationId, onOpenScheduleRun, plan: stored, per
     {data.error && <p className="warning-text" role="alert">{data.error}</p>}
     {directoryError && <p className="warning-text" role="alert">{localize(directoryError)}</p>}
     {view==='agents'&&conversationId?<AgentTaskPanel key={conversationId} conversationId={conversationId}/>:view==='commands'&&conversationId?<BackgroundCommandPanel key={conversationId} conversationId={conversationId} permission={permission}/>:view==='schedule'&&conversationId?<><AiSchedulePanel conversationId={conversationId}/><SchedulePanel conversationId={conversationId} plan={dataTask ? null : stored} title={title} onOpenRun={run=>{setView('task');onOpenScheduleRun?.(run);}} onChanged={onRefresh}/><DataSchedulePanel conversationId={conversationId} task={dataTask ?? null} onChanged={data.refresh}/></>:dataTask ? <DataTaskDetails key={dataTask.id} task={dataTask} view={view === "schedule" || view === "commands" || view === "agents" ? "task" : view} permission={permission}/> : !plan ? <p className="task-empty">{t("生成计划后，在这里查看任务进度和成果。")}</p> : <>
-      <section className="task-overview">
+      {cleaned?<div className="task-discarded"><h3>{t("已清理")}</h3><p>{t("任务记录已移出列表，成果文件和缓存仍保留。恢复后可继续查看任务与成果。")}</p><Button variant="secondary" size="sm" disabled={working} onClick={()=>void onTaskAction('restore',[stored!.planId]).catch(()=>{})}>{t("恢复任务")}</Button></div>:<section className="task-overview">
         <div className="task-source"><h3>{title}</h3><span className={`state-pill state-${discarded ? "discarded" : executionState ?? "queued"}`}>{scheduledTemplate?t("定时模板"):discarded ? t("已丢弃") : executionState ? states[executionState] : pendingPlanLabel(permission)}</span></div>
         <p className="task-subtitle">{plan.sourceName}<span>·</span>Z{plan.spec.zoomLevels.join(", ")}<span>·</span>{plan.spec.outputFormats.map(outputFormatLabel).join(" + ")}<span>·</span>{plan.spec.exportOptions?.targetCrs ?? "EPSG:3857"}</p>
         {view === "task" && <>
+        {job?.state==='failed'&&[...events].reverse().find(event=>event.errorCode)?.errorCode==='SOURCE_NETWORK'&&<ImageryNetworkFailure key={job.jobId} stored={stored!} onOpenNetwork={onOpenNetwork}/>}
         {job && conversationId && <ImageryRecoveryActions conversationId={conversationId} job={job} workerActive={running} disabled={working} missingTiles={manifest?.quality.missingTiles} onPlanned={async result => { presentImageryRecovery(conversationId, result); if (result.permission === "fullAccess") await onStart(result.stored); }}/ >}
         {job && <div className="task-progress" aria-busy={generating}>
           <div className="task-progress-caption"><span>{generating && progress.completedTiles === progress.totalTiles && progress.totalTiles > 0 ? t("瓦片下载完成") : progress.completedTiles !== undefined ? t("{0} / {1} 瓦片{2}", {"0": count(progress.completedTiles), "1": count(progress.totalTiles), "2": progress.checkingCache && running ? " · 检查缓存" : ""}) : job.state === "completed" ? t("文件已核验") : t("等待进度")}</span>{generating ? <span className="task-generation-status" role="status"><Loader2 size={14} className="task-phase-spinner" aria-hidden="true"/>{processing ? reprojecting ? t("转换坐标系中…") : t("生成成果中…") : t("核验中…")}</span> : <strong>{Math.round(percent)}%</strong>}</div>
@@ -148,7 +152,7 @@ export function TaskPanel({ conversationId, onOpenScheduleRun, plan: stored, per
         {directoryButton && <div className="task-actions">{directoryButton}</div>}
         {!job && (scheduledTemplate?<div className="task-discarded"><p>{t("这是定时任务的范围和参数模板。到时会生成独立计划与成果目录。")}</p><Button variant="secondary" size="sm" onClick={()=>setView('schedule')}>{t("查看定时任务")}</Button></div>:discarded ? <div className="task-discarded"><p>{t("此计划已从待处理列表移出。")}</p><Button variant="secondary" size="sm" disabled={working} onClick={() => void onTaskAction("restore", [stored!.planId]).catch(() => {})}>{t("恢复计划")}</Button></div> : <PlanReviewCard key={stored!.planId} stored={stored!} compact externalErrors permission={permission} working={working} onStart={onStart} onDiscard={onDiscard}/>)}
         </>}
-      </section>
+      </section>}
       {view === "task" && job?.state === "failed" && events.at(-1)?.errorCode === "DISK_INSUFFICIENT" && <p className="disk-failure">{t("保存位置或缓存空间不足。释放空间后重试，可沿用已有瓦片。")}</p>}
       {view === "results" && (manifest ? <section className="task-artifacts"><div className="task-section-heading"><FileCheck2 size={18} /><h3>{t("成果文件")}</h3><span>{manifest.quality.status === "partial" ? t("部分完成") : t("已核验")}</span></div>{directoryButton && <div className="task-actions">{directoryButton}</div>}{manifest.assets.map(asset => <div className="task-asset" key={asset.id}><div><strong>{asset.kind}</strong><UiTooltip content={displayPath(asset.path)} side="left"><span tabIndex={0}>{displayPath(asset.path).split(/[\\/]/).at(-1)}</span></UiTooltip></div><span>{asset.role==="analysis" ? asset.crs+" · " : ""}{size(asset.bytes)}</span></div>)}{manifest.quality.missingTiles > 0 && <p className="warning-text">{t("缺失 ")}{count(manifest.quality.missingTiles)} {t(" 个瓦片")}</p>}{manifest.quality.warnings.map((warning, index) => <p key={index} className="warning-text">{warning}</p>)}</section> : <p className="task-empty">{t("此任务尚无已核验的成果。完成后会显示文件和核验结果。")}</p>)}
       {view === "input" && <section className="task-input-summary"><h4>{t("裁剪范围")}</h4><dl className="task-detail-list"><div><dt>{t("类型")}</dt><dd>{plan.spec.boundary ? t("多边形 · {0} 个面", {"0": plan.spec.boundary.polygons.length}) : t("矩形范围")}</dd></div><div><dt>{t("坐标系")}</dt><dd>WGS84 / EPSG:4326</dd></div><div><dt>{t("范围")}</dt><dd>{plan.spec.bounds.map(n => n.toFixed(4)).join(", ")}</dd></div></dl><p>{plan.spec.boundary ? t("GeoTIFF、PNG 和 JPEG 按边界裁剪；瓦片容器保留源瓦片。") : t("按计划中的经纬度范围输出。")}</p></section>}

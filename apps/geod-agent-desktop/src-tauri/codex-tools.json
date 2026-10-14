@@ -1528,6 +1528,33 @@
   {
     "type": "function",
     "function": {
+      "name": "data_download_cleanup",
+      "description": "On user request, reversibly clean or restore a vector/3D/online task record in this conversation. Retains files, cache and original job status. Rejects running tasks and scheduled templates. Use actual taskId from data_download_list.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "taskId": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "clean",
+              "restore"
+            ]
+          }
+        },
+        "required": [
+          "taskId",
+          "action"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
       "name": "data_download_inspect",
       "description": "Read back and verify the real files of a finished vector/3D task. Returns the verified manifest summary, including missing data when applicable.",
       "parameters": {
@@ -1558,6 +1585,52 @@
         },
         "required": [
           "taskId"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "imagery_tasks_list",
+      "description": "List this conversation’s imagery plans including unstarted plans, jobs and discarded/cleaned records. Returns planId, recordState and actual job status. Use this for task cleanup; jobs_list alone omits unstarted plans.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "imagery_tasks_cleanup",
+      "description": "On user request, discard unstarted imagery plans, clean pending/failed/completed/cancelled task records, or restore them. Reversible: retains output files, cached tiles and execution evidence. Running/paused tasks and scheduled templates are rejected; stop/cancel them first. Supply actual planIds from imagery_tasks_list, not jobIds. Report changed and rejected separately; never claim files were deleted.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "planIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 1000
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "discard",
+              "clean",
+              "restore"
+            ]
+          }
+        },
+        "required": [
+          "planIds",
+          "action"
         ],
         "additionalProperties": false
       }

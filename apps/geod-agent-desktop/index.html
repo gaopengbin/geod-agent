@@ -5,9 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/png" href="/geod-symbol.png" />
     <title>GeoD Agent</title>
+    <link rel="stylesheet" href="/src/startup-splash.css" />
+    <link rel="preload" as="image" href="/geod-agent-symbol-blue-violet.png" />
   </head>
   <body>
     <div id="root"></div>
+    <div id="geod-startup-boot" class="startup-boot">
+      <header class="startup-boot-titlebar"><span>GeoD Agent</span><div><button data-boot-window="minimize" aria-label="最小化">−</button><button data-boot-window="toggle_maximize" aria-label="最大化">□</button><button data-boot-window="close" aria-label="关闭">×</button></div></header>
+      <section class="startup-splash" role="status" aria-label="GeoD Agent">%GEOD_STARTUP_MARKUP%</section>
+    </div>
+    <script src="/startup-boot.js"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

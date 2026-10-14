@@ -43,6 +43,19 @@ test('native MCP records keep arguments, tool errors and completed results',()=>
  const rows=reduceCodexItems([],'t','item/completed',{item:{type:'mcpToolCall',id:'m',server:'humaps',tool:'search_map_layers',arguments:{query:'China'},status:'failed',error:{message:'timeout'},result:null}});
  assert.equal(rows[0].toolStatus,'attention');assert.deepEqual(JSON.parse(rows[0].details).arguments,{query:'China'});assert.match(rows[0].details,/timeout/);
 });
+test('command lifecycle preserves real exit code, duration and exploration actions without duplicating output',()=>{
+ const item={type:'commandExecution',id:'read',command:'read boundary.geojson',status:'inProgress',commandActions:[{type:'read',name:'boundary.geojson',path:'boundary.geojson'}],durationMs:null,exitCode:null};
+ let rows=reduceCodexItems([],'turn','item/started',{item});
+ rows=reduceCodexItems(rows,'turn','item/commandExecution/outputDelta',{itemId:'read',delta:'actual output'});
+ rows=reduceCodexItems(rows,'turn','item/completed',{item:{...item,status:'failed',durationMs:1240,exitCode:2,aggregatedOutput:null}});
+ assert.equal(rows.length,1);assert.equal(rows[0].exitCode,2);assert.equal(rows[0].durationMs,1240);
+ assert.equal(rows[0].toolStatus,'attention');assert.equal(rows[0].details,'actual output');
+ assert.equal(rows[0].commandActions[0].path,'boundary.geojson');
+});
+test('MCP exploration hint is retained as presentation metadata only',()=>{
+ const rows=reduceCodexItems([],'turn','item/completed',{item:{type:'mcpToolCall',id:'m',tool:'inspect',server:'geo',readOnlyHint:true,durationMs:45,status:'completed',arguments:{},result:{content:[]}}});
+ assert.equal(rows[0].readOnlyHint,true);assert.equal(rows[0].toolName,'inspect');assert.equal(rows[0].durationMs,45);
+});
 test('MCP elicitation preserves boolean false, integer numbers and selected arrays',()=>{
  assert.deepEqual(elicitationContent({properties:{allowed:{type:'boolean'},zoom:{type:'integer',minimum:0,maximum:22},format:{type:'array',items:{enum:['tif','gpkg']}}},required:['allowed','zoom']},{allowed:false,zoom:'12',format:['gpkg']}),{allowed:false,zoom:12,format:['gpkg']});
  assert.throws(()=>elicitationContent({properties:{zoom:{type:'integer',maximum:22}}},{zoom:'24'}),/不符合要求/);

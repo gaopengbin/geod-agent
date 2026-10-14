@@ -206,7 +206,7 @@ class SigningState(unittest.TestCase):
             return Mock(returncode=0)
 
         environment = {"GEOD_UPDATE_ENDPOINT": "https://example.test/latest.json", "GEOD_UPDATE_ARTIFACT_BASE": "https://example.test/0.2.2", "GEOD_UPDATE_PUBLIC_KEY": self.record["publicKey"], "TAURI_SIGNING_PRIVATE_KEY": self.record["privateKey"], "TAURI_SIGNING_PRIVATE_KEY_PASSWORD": "synthetic password", "TAURI_SIGNING_PRIVATE_KEY_PATH": "synthetic old key path"}
-        args = ["build", "--output", str(target), "--signed-update"]
+        args = ["build", "--output", str(target), "--signed-update", "--without-component-updates"]
         signing = Mock()
         signing.candidate_key.return_value = (self.record, vault.public_record(self.record))
         with patch.object(builder, "ROOT", self.root), patch.object(builder, "DESKTOP", desktop), patch.object(builder, "source_config"), patch.object(builder, "release_environment", side_effect=dict), patch.object(builder, "write_stamp", return_value={}), patch.object(builder, "inventory", return_value={"version": "0.2.2", "runtimes": []}), patch.object(builder.subprocess, "run", side_effect=run), patch.object(builder, "sign_module", return_value=signing), patch.object(sys, "argv", args), patch.dict(os.environ, environment), patch("builtins.print"):
@@ -231,7 +231,7 @@ class SigningState(unittest.TestCase):
                 target.mkdir(parents=True)
             return Mock(returncode=0)
         signing = Mock()
-        args = ["build", "--output", str(target), "--signed-update", "--signing-key-source", "environment"]
+        args = ["build", "--output", str(target), "--signed-update", "--signing-key-source", "environment", "--without-component-updates"]
         with patch.object(builder, "ROOT", self.root), patch.object(builder, "DESKTOP", desktop), patch.object(builder, "source_config"), patch.object(builder, "release_environment", side_effect=dict), patch.object(builder, "write_stamp", return_value={}), patch.object(builder, "inventory", return_value={"version": "0.2.2"}), patch.object(builder.subprocess, "run", side_effect=run), patch.object(builder, "sign_module", return_value=signing), patch.object(sys, "argv", args), patch.dict(os.environ, environment), patch("builtins.print"):
             builder.main()
         self.assertEqual(len(children), 3)

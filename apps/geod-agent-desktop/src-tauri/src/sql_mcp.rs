@@ -4,7 +4,7 @@ use rmcp::{model::CallToolRequestParams, transport::async_rw::AsyncRwTransport, 
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::{fs, path::{Component, Path, PathBuf}, process::Stdio, sync::OnceLock, time::Duration};
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 use tokio::{io::AsyncReadExt, process::{Child, Command}, task::JoinHandle};
 
 static VERIFIED: OnceLock<PathBuf> = OnceLock::new();
@@ -14,7 +14,7 @@ pub(crate) fn runtime(app: &AppHandle) -> Result<PathBuf, AppError> {
     if let Some(root) = VERIFIED.get() { return Ok(root.clone()); }
     let mut candidates = vec![];
     if cfg!(debug_assertions) { candidates.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/dbhub")); }
-    if let Ok(path) = app.path().resource_dir() { candidates.push(path.join("dbhub-runtime")); }
+    if let Some(path) = crate::runtime_components::root(app, "dbhub-runtime") { candidates.push(path); }
     let root = candidates.into_iter().find(|path|path.join("manifest.json").is_file()).ok_or_else(||workspace_error("INPUT_RUNTIME_MISSING","内置数据库 MCP 缺失，请准备运行环境或修复应用"))?;
     if fs::read_to_string(root.join("manifest.json")).ok().as_deref()!=Some(MANIFEST) || fs::read_to_string(root.join("dbhub.toml")).ok().as_deref()!=Some(CONFIG) {return Err(workspace_error("INPUT_RUNTIME_INVALID","内置数据库 MCP 校验失败"));}
     let manifest:Value=serde_json::from_str(MANIFEST).map_err(|_|workspace_error("INPUT_RUNTIME_INVALID","数据库 MCP 清单无效"))?;

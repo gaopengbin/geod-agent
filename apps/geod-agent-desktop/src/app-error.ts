@@ -32,6 +32,7 @@ const messages: Record<string, string> = {
   PLAN_STALE: "计划已过期或图源配置已变化，请重新生成计划。",
   PLAN_NOT_FOUND: "计划不存在，请重新生成计划。",
   DISK_INSUFFICIENT: "保存位置或缓存空间不足，请释放空间后重试。",
+  SOURCE_NETWORK: "无法连接到影像图源，请检查图源服务或网络代理后重试。",
   APPROVAL_REQUIRED: "请先确认所选下载计划。",
 };
 

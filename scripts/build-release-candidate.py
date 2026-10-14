@@ -13,6 +13,7 @@ from release_inventory import inventory
 from release_build_identity import release_environment, source_config, write_stamp
 from update_signing_vault import public_environment
 from sign_update_candidate_for_tests import sign_module
+from component_updates import bundle_application, package_components
 
 ROOT = Path(__file__).resolve().parents[1]
 DESKTOP = ROOT / 'apps/geod-agent-desktop'
@@ -74,6 +75,7 @@ def main():
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--installer-compression', choices=['lzma','zlib'], default='lzma')
     parser.add_argument('--signing-key-source', choices=['windows-vault','environment'], default='windows-vault')
+    parser.add_argument('--without-component-updates', action='store_true', help='Build only the legacy full installer')
     args = parser.parse_args()
     target = Path(args.output).resolve()
     if not target.is_relative_to(ROOT / 'artifacts') or not target.name.startswith('release-candidate-'):
@@ -119,8 +121,12 @@ def main():
         if public['publicKey'] != environment['GEOD_UPDATE_PUBLIC_KEY']:
             raise ValueError('The signing identity differs from the public build configuration.')
         signer.sign(installer, private, record['version'])
-        del private
         subprocess.run([node, str(ROOT / 'scripts/update-candidate.mjs'), str(installer), record['version'], environment['GEOD_UPDATE_ARTIFACT_BASE'], str(target)], cwd=ROOT, env=public_env, check=True)
+        if not args.without_component_updates:
+            application = bundle_application(ROOT, target, public_env, settings)
+            package_components(ROOT, target, application, record['version'], environment['GEOD_UPDATE_ARTIFACT_BASE'],
+                               lambda file, version: signer.sign(file, private, version))
+        del private
     print(json.dumps({'candidate': str(target), 'signedUpdate': trust['configured'], 'installed': False, 'published': False}))
 
 if __name__ == '__main__':

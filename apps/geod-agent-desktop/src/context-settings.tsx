@@ -1,4 +1,4 @@
-import {useEffect,useRef,useState} from 'react';
+import {useEffect,useRef,useState,type ReactNode} from 'react';
 import {invoke} from '@tauri-apps/api/core';
 import {Button} from './components/motion/button/base';
 import {api,desktopAvailable,errorMessage} from './api';
@@ -22,8 +22,8 @@ export const contextSettings:ContextSettingsClient={
  set:async(accountId,conversationId,preferences,budgetCredits)=>{await ensureContextRuntime();return invoke('context_settings_set',{accountId,conversationId,preferences,budgetCredits});},
 };
 const changed='geod:context-settings-changed';
-export function ContextSettingsDialog({open,onOpenChange,accountId,conversationId,client=contextSettings}:{open:boolean;onOpenChange:(open:boolean)=>void;accountId:string|null;conversationId:string;client?:ContextSettingsClient}) {
- return <Dialog.Root open={open} onOpenChange={onOpenChange}><Dialog.Portal><Dialog.Overlay className="permission-dialog-overlay"/><Dialog.Content className="permission-dialog context-settings-dialog"><Dialog.Title>{t('上下文设置')}</Dialog.Title><Dialog.Description>{t('设置上下文容量、自动压缩时机，以及当前会话累计费用预算。')}</Dialog.Description><ScrollArea className="context-settings-scroll"><ContextSettingsPanel heading={false} accountId={accountId} conversationId={conversationId} client={client}/></ScrollArea><div className="permission-dialog-actions"><Dialog.Close asChild><Button variant="outline">{t('关闭')}</Button></Dialog.Close></div></Dialog.Content></Dialog.Portal></Dialog.Root>;
+export function ContextSettingsDialog({open,onOpenChange,accountId,conversationId,client=contextSettings,trigger}:{open:boolean;onOpenChange:(open:boolean)=>void;accountId:string|null;conversationId:string;client?:ContextSettingsClient;trigger?:ReactNode}) {
+ return <Dialog.Root open={open} onOpenChange={onOpenChange}>{trigger&&<Dialog.Trigger asChild>{trigger}</Dialog.Trigger>}<Dialog.Portal><Dialog.Overlay className="permission-dialog-overlay"/><Dialog.Content className="permission-dialog context-settings-dialog"><Dialog.Title>{t('上下文设置')}</Dialog.Title><Dialog.Description>{t('设置上下文容量、自动压缩时机，以及当前会话累计费用预算。')}</Dialog.Description><ScrollArea className="context-settings-scroll"><ContextSettingsPanel heading={false} accountId={accountId} conversationId={conversationId} client={client}/></ScrollArea><div className="permission-dialog-actions"><Dialog.Close asChild><Button variant="outline">{t('关闭')}</Button></Dialog.Close></div></Dialog.Content></Dialog.Portal></Dialog.Root>;
 }
 export function ContextSettingsPanel({accountId,conversationId='default',client=contextSettings,heading=true}:{accountId:string|null;conversationId?:string;client?:ContextSettingsClient;heading?:boolean}) {
  const [view,setView]=useState<ContextSettingsView|null>(null),[draft,setDraft]=useState<ContextPreferences>({contextWindowTokens:null,autoCompactPercent:90});

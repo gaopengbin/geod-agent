@@ -11,6 +11,8 @@ export const ERROR_CLASSES={
 };
 const tools={};
 const group=(names,spec)=>{for(const name of names.split(' '))tools[name]={purpose:name,...spec};};
+group('imagery_tasks_list',{effect:'read'});
+group('imagery_tasks_cleanup data_download_cleanup',{effect:'external'});
 group('attachment_list attachment_read sql_connections_list sql_objects_search sql_query data_input_read data_connections_list data_layer_inspect workspace_status workspace_boundaries_list workspace_gis_files_list sources_list plans_get jobs_list jobs_get jobs_events artifacts_inspect extensions_list workspace_skills_list skill_catalog_search skill_source_inspect skill_read mcp_result_read agent_tasks_list agent_tasks_get agent_tasks_read_file data_download_list data_download_get data_download_inspect data_schedules_list cache_inventory cache_verify cache_maintenance_status tiles3d_connections_list tiles3d_connection_test schedules_list boundaries_list',{effect:'read'});
 group('jobs_list jobs_get jobs_events data_download_list data_download_get agent_tasks_list agent_tasks_get schedules_list data_schedules_list cache_maintenance_status',{effect:'read',wait:true});
 group('mcp_registry_search',{effect:'read',purpose:'connector-discovery',conditionScope:'mcp-registry'});

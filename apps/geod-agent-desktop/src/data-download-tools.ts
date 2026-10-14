@@ -30,6 +30,7 @@ export async function executeDataDownloadTool(conversationId: string, name: stri
     : name === "data_download_start" ? await dataDownloads.start(conversationId, id, typeof args.planHash === "string" ? args.planHash : "")
     : name === "data_download_cancel" ? await dataDownloads.cancel(conversationId, id)
     : name === "data_download_discard" ? await dataDownloads.discard(conversationId, id)
+    : name === "data_download_cleanup" ? await dataDownloads.cleanup(conversationId,id,args.action as 'clean'|'restore')
     : name === "data_download_inspect" ? await dataDownloads.inspect(conversationId, id) : null;
   if (!task) throw new Error("数据下载工具不存在");
   dataDownloadChanged(conversationId, task.id); return compactDataTask(task);

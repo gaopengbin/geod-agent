@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "presets": [
-    {"id":"esri-world-imagery","name":"Esri World Imagery","urlTemplate":"https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}","attribution":"Esri and contributors","minZoom":0,"maxZoom":22},
+    {"id":"esri-world-imagery","name":"Esri World Imagery","urlTemplate":"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}","attribution":"Esri and contributors","minZoom":0,"maxZoom":22},
     {"id":"esri-topographic","name":"Esri 地形","urlTemplate":"https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}","attribution":"Esri and contributors","minZoom":0,"maxZoom":19},
     {"id":"esri-street","name":"Esri 街道","urlTemplate":"https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}","attribution":"Esri and contributors","minZoom":0,"maxZoom":19},
     {"id":"osm","name":"OpenStreetMap","urlTemplate":"https://tile.openstreetmap.org/{z}/{x}/{y}.png","attribution":"OpenStreetMap contributors","minZoom":0,"maxZoom":19},

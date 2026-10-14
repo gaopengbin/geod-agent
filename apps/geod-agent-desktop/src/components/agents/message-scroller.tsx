@@ -475,7 +475,7 @@ export function MessageScroller({
         onViewportScroll?.(event);
       }}
       onWheel={(event) => {
-        if (event.deltaY < 0 && !(event.target instanceof Element && event.target.closest(".agent-work-reasoning-area"))) {
+        if (event.deltaY < 0 && !(event.target instanceof Element && event.target.closest(".agent-work-reasoning-area, .agent-work-code-area"))) {
           readerScrolledRef.current = true;
           setFollowing(false);
           leaveLiveEdge();
@@ -493,6 +493,7 @@ export function MessageScroller({
       onClickCapture={(event) => {
         // Reading an expanded execution record should keep its trigger in view.
         if (event.target instanceof Element && event.target.closest("button[aria-expanded], summary")) {
+          readerScrolledRef.current = true;
           leaveLiveEdge(false);
           setFollowing(false);
         }
