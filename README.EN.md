@@ -9,7 +9,7 @@
   <img alt="Windows x64" src="https://img.shields.io/badge/platform-Windows_x64-202124?style=flat-square" />
   <a href="https://github.com/gaopengbin/geod-agent/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/gaopengbin/geod-agent?style=flat-square&color=1a73e8" /></a>
 </p>
-<p align="center"><a href="https://geod.laogao.xyz/en/agent"><strong>Website</strong></a> · <a href="https://github.com/gaopengbin/geod-agent/releases/tag/v0.2.4"><strong>Download Windows release</strong></a> · <a href="https://geod.laogao.xyz/en/agent#demo">Watch demo</a> · <a href="https://github.com/gaopengbin/geod-agent/issues">Report an issue</a> · <a href="README.md">简体中文</a></p>
+<p align="center"><a href="https://geod.laogao.xyz/en/agent"><strong>Website</strong></a> · <a href="https://github.com/gaopengbin/geod-agent/releases/tag/v0.2.5"><strong>Download Windows release</strong></a> · <a href="https://geod.laogao.xyz/en/agent#demo">Watch demo</a> · <a href="https://github.com/gaopengbin/geod-agent/issues">Report an issue</a> · <a href="README.md">简体中文</a></p>
 
 ![Conversation, map and task workspace](docs/images/workbench-light-20261008.png)
 
@@ -32,7 +32,9 @@ Start from an empty conversation: configure imagery sources, prepare an MCP conn
 | **0.2.3** | Public Windows x64 beta | [Download installer](https://geod.laogao.xyz/agent-updates/windows-x86_64/0.2.3/GeoD%20Agent_0.2.3_x64-setup.exe) · [Release notes](docs/releases/0.2.3.md) |
 | **0.2.4** | Windows x64 release | [Download installer](https://geod.laogao.xyz/agent-updates/windows-x86_64/0.2.4/GeoD%20Agent_0.2.4_x64-setup.exe) · [Release notes](docs/releases/0.2.4.md) |
 
-The current release is **0.2.4**, with on-demand model context, current task-state synchronization, a dedicated login screen, startup animation and system tray support. Source code is public under the [MIT license](LICENSE), and [GitHub release assets](https://github.com/gaopengbin/geod-agent/releases/tag/v0.2.4) are available directly. Clean Windows acceptance is pending; see the release notes for the verified scope.
+| **0.2.5** | Windows x64 release | [CDN installer](https://download.laogao.xyz/agent-updates/windows-x86_64/0.2.5/GeoD%20Agent_0.2.5_x64-setup.exe) · [Release notes](docs/releases/0.2.5.md) |
+
+The current release is **0.2.5**, with compact conversation activity, Chinese input improvements, recoverable task cleanup, an earlier startup screen, component reuse during updates and Responses history compatibility fixes. The project is [MIT licensed](LICENSE) and supports your own model providers. [GitHub assets](https://github.com/gaopengbin/geod-agent/releases/tag/v0.2.5) remain an alternative download. Older clients need the full installer for their first upgrade; later updates can reuse unchanged runtimes. See the release notes for verification scope.
 
 ## What can you configure through conversation?
 

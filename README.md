@@ -9,7 +9,7 @@
   <img alt="Windows x64" src="https://img.shields.io/badge/platform-Windows_x64-202124?style=flat-square" />
   <a href="https://github.com/gaopengbin/geod-agent/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/gaopengbin/geod-agent?style=flat-square&color=1a73e8" /></a>
 </p>
-<p align="center"><a href="https://geod.laogao.xyz/agent"><strong>官网</strong></a> · <a href="https://github.com/gaopengbin/geod-agent/releases/tag/v0.2.5"><strong>下载 Windows 正式版</strong></a> · <a href="https://geod.laogao.xyz/agent#demo">观看实录</a> · <a href="https://github.com/gaopengbin/geod-agent/issues">反馈问题</a> · <a href="README.en.md">English</a></p>
+<p align="center"><a href="https://geod.laogao.xyz/agent"><strong>官网</strong></a> · <a href="https://github.com/gaopengbin/geod-agent/releases/tag/v0.2.5"><strong>下载 Windows 正式版</strong></a> · <a href="https://geod.laogao.xyz/agent#demo">观看实录</a> · <a href="https://github.com/gaopengbin/geod-agent/issues">反馈问题</a> · <a href="README.EN.md">English</a></p>
 
 ![GeoD Agent 对话、地图与任务工作区](docs/images/workbench-light-20261008.png)
 
