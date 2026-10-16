@@ -40,8 +40,8 @@ def recipe(spec):
          ['scripts/verify-release-signatures.mjs', 'scripts/update-candidate.mjs', config,
           c+'/latest.json', c+'/component-update.json', c+'/*.exe', c+'/*.tar.gz'], [o+'/signatures.json'])
     step('payload', [python, '-X', 'utf8', 'scripts/release_payload.py', c, o+'/payload.json'],
-         ['scripts/release_payload.py', 'scripts/release_inventory.py', c+'/candidate.json',
-          c+'/*.exe', c+'/installer-payload', c+f'/GeoD-Agent-{version}-windows-x64/geod-agent-desktop.exe'], [o+'/payload.json'])
+         ['scripts/release_payload.py', 'scripts/extract-release-candidate.py', 'scripts/release_inventory.py', c+'/candidate.json',
+          c+'/*.exe', c+f'/GeoD-Agent-{version}-windows-x64/geod-agent-desktop.exe'], [o+'/payload.json', c+'/installer-payload'])
     step('public-files', [python, '-X', 'utf8', 'scripts/release_prepare.py', '--candidate', c,
          '--output', o, '--signatures', o+'/signatures.json', '--notes', notes],
          ['scripts/release_prepare.py', o+'/review.json', o+'/signatures.json', o+'/payload.json', notes,

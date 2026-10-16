@@ -2,6 +2,8 @@
 import argparse
 import json
 from pathlib import Path
+import subprocess
+import sys
 from release_flow import save, sha
 from release_inventory import verify_runtime
 
@@ -14,6 +16,11 @@ def verify(candidate, receipt):
     if sha(installer) != record['artifacts'][installer.name]['sha256']:
         raise ValueError('Installer differs from candidate')
     payload = candidate / 'installer-payload'
+    if not payload.exists():
+        # A newly built candidate has not been unpacked by earlier QA runs.
+        # Extract our hash-verified installer; never install or overwrite it.
+        subprocess.run([sys.executable, '-X', 'utf8', str(Path(__file__).with_name('extract-release-candidate.py')),
+                        str(candidate.resolve())], check=True)
     portable = candidate / f'GeoD-Agent-{version}-windows-x64/geod-agent-desktop.exe'
     installed = (payload / 'geod-agent-desktop.exe').read_bytes()
     portable_bytes = portable.read_bytes()
