@@ -69,3 +69,28 @@ test('native Responses completion waits for durable native settlement',{skip:!pr
   }});
   try{const result=await host.turn({conversationId:'native-wire-proof',workspace:home,permission:'fullAccess',input:'检查工作区然后回答。',history:[]},'native-wire-run');assert.equal(result.status,'completed');assert.equal(result.text,'完成');assert.equal(models,2);assert(settled.has(2),'Turn completion cannot precede final generation settlement');}finally{await host.close();}
 });
+
+test('actual Core resumes a durable tool checkpoint after an uncertain response without replaying unconfirmed calls',{skip:!process.env.GEOD_CODEX_EXE,timeout:60000},async()=>{
+ const home=mkdtempSync(join(tmpdir(),'geod-checkpoint-resume-'));let listener,phase=0,models=0,tools=0;
+ const options={codex:process.env.GEOD_CODEX_EXE,home,toolsFile:resolve('src-tauri/codex-tools.json'),capabilities:{protocol:'responses',model:'gpt-6-luna',contextWindow:128000,inputModalities:['text']},receive:fn=>{listener=fn;return()=>{};},emit:event=>{
+  if(event.type==='model'){
+   models++;
+   if(phase===1)assert(JSON.stringify(event.request).includes('confirmed-project-delivery-checkpoint'),'Confirmed tool state must survive interruption and host restart');
+   const id=`recovery-${models}`;
+   const item=phase===1?{type:'message',id:'final',role:'assistant',status:'completed',phase:'final_answer',content:[{type:'output_text',text:'交付完成',annotations:[]}]}:{type:'function_call',id:`fc-${models}`,status:'completed',call_id:`call-${models}`,name:'workspace_status',arguments:'{}'};
+   listener({type:'wire',requestId:event.requestId,event:'response.created',value:{type:'response.created',response:{id,object:'response',status:'in_progress',output:[]}}});
+   listener({type:'wire',requestId:event.requestId,event:'response.output_item.added',value:{type:'response.output_item.added',output_index:0,item:{...item,status:'in_progress'}}});
+   listener({type:'wire',requestId:event.requestId,event:'response.output_item.done',value:{type:'response.output_item.done',output_index:0,item}});
+   if(models===2){listener({type:'response',requestId:event.requestId,value:{state:'pending_reconcile',generationId:event.generationId,errorCode:'UPSTREAM_UNKNOWN',result:null}});return;}
+   const response={id,object:'response',status:'completed',output:[item],usage:{input_tokens:20,output_tokens:4,total_tokens:24}};
+   listener({type:'wire',requestId:event.requestId,event:'response.completed',value:{type:'response.completed',response}});
+   listener({type:'response',requestId:event.requestId,value:{state:'settled',generationId:event.generationId,result:{content:phase===1?'交付完成':null,toolCalls:[]}}});
+  }
+  if(event.type==='tool'){tools++;listener({type:'response',requestId:event.requestId,value:{result:{status:'confirmed-project-delivery-checkpoint'}}});}
+ }};
+ const params={conversationId:'checkpoint-interruption',workspace:home,permission:'fullAccess',input:'检查工作区并交付',history:[]};
+ let host=await createHost(options),thread;
+ try{const result=await host.turn(params,'interrupted-attempt');thread=result.threadId;assert.equal(result.status,'failed');assert.equal(models,2);assert.equal(tools,1,'Unsettled tool stream must never execute');}finally{await host.close();}
+ phase=1;host=await createHost(options);
+ try{const result=await host.turn({...params,input:'从已保存进度继续'},'resumed-attempt');assert.equal(result.status,'completed');assert.equal(result.text,'交付完成');assert.equal(result.threadId,thread);assert.equal(tools,1);assert.equal(models,3);}finally{await host.close();}
+});

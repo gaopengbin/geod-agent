@@ -1,6 +1,81 @@
 """GIS skill operations; heavy imports occur inside the requested capability."""
 from pathlib import Path
 import json, math, os
+from contextlib import contextmanager
+from uuid import uuid4
+import shutil
+
+@contextmanager
+def raster_scratch(parent):
+    # Windows tempfile directories have an owner-only ACL. Renaming a finished
+    # raster out of one preserves that ACL and prevents the workspace's Codex
+    # process from reading it. Ordinary workspace directories inherit the
+    # existing workspace ACL, as a directly created output does.
+    folder=parent/('.geod-raster-'+uuid4().hex)
+    folder.mkdir()
+    try: yield folder
+    finally: shutil.rmtree(folder)
+
+def convert_raster(dataset, output, options):
+    """Build requested pyramids before COG layout, never update a finished COG."""
+    import rasterio
+    from rasterio.enums import Resampling
+    from rasterio.shutil import copy as raster_copy
+    driver=options.get('driver') or ('COG' if options.get('cog') else 'GTiff')
+    if driver.upper()=='COG': driver='COG'
+    levels=options.get('overview_levels',options.get('overviews'))
+    if levels is not None:
+        if not isinstance(levels,list) or any(type(level) is not int or level<2 for level in levels) or levels!=sorted(set(levels)):
+            raise ValueError('Overview levels must be an increasing list of unique integers >= 2')
+        if levels and driver not in ('GTiff','COG'):
+            raise ValueError('Explicit overviews require GTiff or COG output')
+    method=options.get('overview_resampling','average')
+    try: resampling=Resampling[method]
+    except KeyError: raise ValueError('Unsupported overview resampling method')
+    creation=dict(options.get('creation_options') or {})
+    for key in ('compress','compression','tiled','blockxsize','blockysize','blocksize','predictor','bigtiff','photometric'):
+        if options.get(key) is not None: creation['compress' if key=='compression' else key]=options[key]
+    # Explicit semantic options take precedence over raw driver options.
+    if driver=='COG':
+        creation={key:value for key,value in creation.items() if key.lower() not in ('tiled','blockxsize','blockysize')}
+        if levels is not None:
+            creation={key:value for key,value in creation.items() if key.lower() not in ('overviews','overview_count')}
+            creation['OVERVIEWS']='FORCE_USE_EXISTING' if levels else 'NONE'
+    with raster_scratch(output.parent) as folder:
+        result_dir=Path(folder)/'result';result_dir.mkdir()
+        stage=result_dir/output.name
+        source=dataset
+        if driver=='COG' and levels:
+            prepared=Path(folder)/'pyramid.tif'
+            raster_copy(dataset,prepared,driver='GTiff',COPY_SRC_OVERVIEWS='NO')
+            with rasterio.open(prepared,'r+') as target:
+                target.build_overviews(levels,resampling)
+                target.update_tags(ns='rio_overview',resampling=method)
+            source=prepared
+        raster_copy(source,stage,driver=driver,**creation)
+        if driver=='GTiff' and levels:
+            with rasterio.open(stage,'r+') as target:
+                target.build_overviews(levels,resampling)
+                target.update_tags(ns='rio_overview',resampling=method)
+        with rasterio.open(stage) as target:
+            actual=target.overviews(1)
+            compression=next((value for key,value in creation.items() if key.lower()=='compress'),None)
+            if compression is not None and str(compression).lower()!=(target.compression.value.lower() if target.compression else 'none'):
+                raise ValueError('Output compression does not match the requested compression')
+            # GDAL rounds the raster dimensions at each level. Compare sizes,
+            # rather than assuming the reported factors are exact on tiny rasters.
+            if levels is not None:
+                expected=[(math.ceil(dataset.width/n),math.ceil(dataset.height/n)) for n in levels]
+                observed=[(math.ceil(target.width/n),math.ceil(target.height/n)) for n in actual]
+                if expected!=observed: raise ValueError('Output overview levels do not match the requested pyramid')
+            result={'driver':target.driver,'overviews_built':actual,'compression':target.compression.value if target.compression else None,
+                    'layout':target.tags(ns='IMAGE_STRUCTURE').get('LAYOUT')}
+        # Preserve sidecar georeferencing for formats such as PNG as well.
+        files=list(result_dir.iterdir())
+        if any((output.parent/file.name).exists() for file in files):
+            raise ValueError('Output file or metadata already exists')
+        for file in files: file.rename(output.parent/file.name)
+    return result
 
 def workspace_file(raw, output=False):
     root=Path.cwd().resolve(); path=Path(raw); path=(root/path).resolve() if not path.is_absolute() else path.resolve()
@@ -70,14 +145,8 @@ def raster_operation(name,args):
             return {'bands':result}
         output=workspace_file(args['output'],True)
         if name=='raster_convert':
-            options=args.get('options') or {}; driver=options.get('driver') or ('COG' if options.get('cog') else 'GTiff'); creation={}
-            for key in ('compress','compression','tiled','blockxsize','blockysize','blocksize','predictor','bigtiff'):
-                if options.get(key) is not None: creation['compress' if key=='compression' else key]=options[key]
-            if driver=='COG': creation.pop('tiled',None)
-            raster_copy(dataset,output,driver=driver,**creation)
-            overview=options.get('overview_levels') or options.get('overviews')
-            if isinstance(overview,list) and overview and driver!='COG':
-                with rasterio.open(output,'r+') as target: target.build_overviews(overview,Resampling.nearest)
+            converted=convert_raster(dataset,output,args.get('options') or {})
+            return {'output':str(output.relative_to(Path.cwd().resolve())),'size_bytes':output.stat().st_size,**converted}
         elif name=='raster_reproject':
             src_crs=args.get('src_crs') or dataset.crs
             if src_crs is None: raise ValueError('Source coordinate system is required')

@@ -218,7 +218,8 @@ pub(crate) fn document_attachments_list(app:AppHandle,conversation_id:String)->R
 }
 #[tauri::command]
 pub(crate) async fn document_attachment_read(app:AppHandle,conversation_id:String,id:String,offset:Option<usize>,limit:Option<usize>)->Result<Value,AppError>{
-    let owner=owner(&app)?;let offset=offset.unwrap_or(0);let limit=limit.unwrap_or(12000);
+    let owner=owner(&app)?;if let Some(image)=crate::image_inputs::read_submitted(&app,&owner,&conversation_id,&id)?{return Ok(image);}
+    let offset=offset.unwrap_or(0);let limit=limit.unwrap_or(12000);
     if limit==0||limit>24000{return Err(err("ATTACHMENT_INPUT", "单次读取长度须为 1 至 24000 个字符"));}
     tauri::async_runtime::spawn_blocking(move||{
         let (root,record)=record(&app,&owner,&conversation_id,&id)?;

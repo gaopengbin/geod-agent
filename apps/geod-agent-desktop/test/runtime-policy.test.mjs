@@ -11,6 +11,14 @@ const declared=JSON.parse(readFileSync(new URL('../src-tauri/codex-tools.json',i
 const params={conversationId:'policy-test',input:'下载所选范围，保留确认的参数',permission:'fullAccess',outputCrs:'EPSG:4326'};
 function fixture(){const home=mkdtempSync(join(tmpdir(),'geod-policy-'));let now=100000,signals=[];const policy=new RuntimePolicy(home,declared,{now:()=>now,onSignal:s=>signals.push(s)});policy.begin(params,{inputModalities:['text']});return{home,policy,signals,tick:ms=>now+=ms};}
 
+test('discovery reuses unchanged catalog pages but connection changes and TTL invalidate them',async()=>{
+ const {policy,tick}=fixture();for(const {function:t}of RUNTIME_TOOLS)policy.schemas.set(t.name,t.parameters);let calls=0;const dispatch=async()=>({tools:[{name:'data_download_plan'}],total:1});
+ const call=()=>policy.execute('extensions_list',{query:'vector'},crypto.randomUUID(),async()=>{calls++;return dispatch();});
+ await call();await call();assert.equal(calls,1);
+ policy.setFacts({connectionsRevision:'changed'});await call();assert.equal(calls,2);
+ tick(90001);await call();assert.equal(calls,3);
+});
+
 test('verified native submissions register exact resources automatically without a bookkeeping tool call',async()=>{
  const {policy,home}=fixture();const artifact={quality:{status:'complete',missingTiles:0},assets:[{id:'raster',bytes:100,sha256:'a'.repeat(64)}]};
  await policy.execute('jobs_start',{planId:'native-plan'},'start',async()=>({jobId:'real-job',state:'queued',backgroundResult:{jobId:'real-job',state:'completed',verified:true,artifact}}));

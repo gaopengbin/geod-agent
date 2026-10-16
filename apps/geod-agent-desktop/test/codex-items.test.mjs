@@ -3,6 +3,16 @@ import assert from 'node:assert/strict';
 import {reduceCodexItems} from '../src/codex-items.ts';
 import {elicitationContent} from '../src/codex-elicitation.ts';
 
+test('retryable errors update one reconnect row, preserve prose, and use only service-supplied attempts',()=>{
+ const partial={id:'partial',role:'assistant',phase:'progress',turnId:'r',content:'已读取项目范围。'};
+ let rows=reduceCodexItems([partial],'r','error',{willRetry:true,error:{message:'connection reset'}});
+ assert.equal(rows.length,2);assert.equal(rows[1].connection.attempt,undefined);assert.equal(rows[1].connection.maxAttempts,undefined);
+ rows=reduceCodexItems(rows,'r','error',{willRetry:true,attempt:2,maxAttempts:4,error:{message:'retry'}});
+ assert.equal(rows.length,2);assert.equal(rows[1].id,'connection-r');assert.equal(rows[1].connection.attempt,2);
+ rows=reduceCodexItems(rows,'r','item/agentMessage/delta',{itemId:'answer',delta:'继续处理。'});
+ assert.equal(rows.filter(item=>item.connection).length,0);assert.equal(rows[0].content,partial.content);
+});
+
 test('actual lifecycle completion updates its existing row and preserves failed output',()=>{
  const run={id:'session-start:0:home/hooks.json',eventName:'sessionStart',status:'running',executionMode:'sync',statusMessage:'Reviewed plugin'};
  let rows=reduceCodexItems([],'one','hook/started',{run});

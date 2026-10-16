@@ -57,7 +57,7 @@ export function useResizableWorkspace(mode: WorkspaceMode) {
     const observer = new ResizeObserver(resize); observer.observe(element);
     return () => { observer.disconnect(); if (frame !== null) cancelAnimationFrame(frame); };
   }, []);
-  const { density, rail, key, minimums, defaults } = workspaceArrangement(mode, width, sidebarCollapsed);
+  const { density, rail, tasksOverlay, key, minimums, defaults } = workspaceArrangement(mode, width, sidebarCollapsed);
   const sidebarOverlay = density === "compact" || density === "single";
   const sidebarVisible = sidebarOverlay ? sidebarExpanded : !sidebarCollapsed;
   const saved = preferred[key];
@@ -116,7 +116,7 @@ export function useResizableWorkspace(mode: WorkspaceMode) {
     else { const next = !sidebarCollapsed; setSidebarCollapsed(next); setSidebarExpanded(false); try { localStorage.setItem(sidebarKey, String(next)); } catch { /* Keep the session usable. */ } }
   }
   return { ref, style: { "--workspace-columns": widths.map(n => `${n}px`).join(" "), "--canvas-start": `${widths.slice(0, 2).reduce((a, b) => a + b, 0)}px` } as CSSProperties,
-    attributes: { "data-layout": density, "data-view": view, "data-sidebar-rail": rail, "data-sidebar-expanded": sidebarOverlay && sidebarExpanded },
+    attributes: { "data-layout": density, "data-view": view, "data-sidebar-rail": rail, "data-sidebar-expanded": sidebarOverlay && sidebarExpanded, "data-tasks-overlay": tasksOverlay },
     separators, dragging, density, view, show, sidebarExpanded: sidebarOverlay && sidebarExpanded, setSidebarExpanded, sidebarVisible, toggleSidebar };
 }
 export function WorkspaceSidebarToggle({ layout }: { layout: ReturnType<typeof useResizableWorkspace> }) {

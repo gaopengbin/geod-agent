@@ -1,7 +1,27 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {prepareCodexConversation,conversationBusyFailure,confirmedCreditRejection} from '../src/codex-recovery.ts';
+import {prepareCodexConversation,conversationBusyFailure,confirmedCreditRejection,inspectCodexCheckpoint} from '../src/codex-recovery.ts';
 const idle={busy:false,runId:null,stopping:false};
+
+test('an idle terminal uncertain response unlocks checkpoint continuation without settling or replaying it',async()=>{
+ const generation={generationId:'g',conversationId:'chat',state:'pending_reconcile',result:null,reservedTokens:121040};
+ const client={runtimeCapabilities:async()=>({conversationExecution:true}),agentGenerationGet:async()=>generation,codexConversationStatus:async()=>idle};
+ assert.deepEqual(await inspectCodexCheckpoint(client,'chat','g'),{billingPending:true});
+ assert.equal(generation.state,'pending_reconcile');assert.equal(generation.reservedTokens,121040);assert.equal(generation.result,null);
+ for(const state of ['failed','settled']){generation.state=state;assert.deepEqual(await inspectCodexCheckpoint(client,'chat','g'),{billingPending:false});}
+});
+
+test('checkpoint recovery never interrupts active native work or replays an unfinished remote generation',async()=>{
+ const generation={generationId:'g',conversationId:'chat',state:'pending_reconcile'};
+ const client={runtimeCapabilities:async()=>({conversationExecution:true}),agentGenerationGet:async()=>generation,codexConversationStatus:async()=>idle};
+ for(const status of [{...idle,busy:true},{...idle,stopping:true}])await assert.rejects(inspectCodexCheckpoint({...client,codexConversationStatus:async()=>status},'chat','g'),{code:'CODEX_BUSY'});
+ for(const state of ['reserved','streaming','unknown']){generation.state=state;await assert.rejects(inspectCodexCheckpoint(client,'chat','g'),/仍在处理中/);}
+ generation.state='pending_reconcile';
+ await assert.rejects(inspectCodexCheckpoint(client,'other-chat','g'),/不匹配/);
+ await assert.rejects(inspectCodexCheckpoint(client,'chat','other-generation'),/不匹配/);
+ await assert.rejects(inspectCodexCheckpoint({...client,runtimeCapabilities:async()=>({})},'chat','g'),/重启/);
+ await assert.rejects(inspectCodexCheckpoint({...client,agentGenerationGet:async()=>{throw Error('offline');}},'chat','g'),/offline/);
+});
 test('idle conversation is read without stopping it',async()=>{
  const seen=[];
  await prepareCodexConversation({runtimeCapabilities:async()=>({conversationExecution:true}),codexConversationStatus:async id=>{seen.push(id);return idle;},codexConversationStop:async()=>{throw Error('must not stop');}},'chat');

@@ -273,6 +273,8 @@ export const api = {
   sourcesSave: (endpoint: HttpSource, minZoom: number, maxZoom: number, replaceExisting = false, credential?: SourceCredentialInput) => invoke<SourceDescriptor>("sources_save", { endpoint, minZoom, maxZoom, replaceExisting, credential }),
   plansCreate: (spec: TaskSpec, toolExecutionId: string, conversationId: string) => invoke<StoredPlan>("plans_create", { spec, toolExecutionId, conversationId }),
   imageryPlansClaim: (conversationId: string, planIds: string[]) => invoke<{bound:string[];rejected:{planId:string;code:string;message:string}[]}>("imagery_plans_claim", { conversationId, planIds }),
+  imageryHistoryInspect: (conversationId:string,planIds:string[])=>invoke<import('./plan-reference-recovery').HistoryInspection>('imagery_history_inspect',{conversationId,planIds}),
+  imageryHistoryRestore: (conversationId:string,planIds:string[])=>invoke<import('./plan-reference-recovery').HistoryRestoreReport>('imagery_history_restore',{conversationId,planIds}),
   plansForToolExecution: (toolExecutionId: string) => invoke<StoredPlan | null>("plans_for_tool_execution", { toolExecutionId }),
   plansGet: (planId: string) => invoke<StoredPlan | null>("plans_get", { planId }),
   imageryTasksList: (conversationId: string) => invoke<{stored:StoredPlan;recordState:string;job:Job|null}[]>("imagery_tasks_list", {conversationId}),
@@ -325,6 +327,7 @@ export const api = {
   audioAttachmentDraft:(conversationId:string,id:string)=>invoke<{attachment:DocumentAttachment;text:string;untrustedContent:true}>("audio_attachment_draft",{conversationId,id}),
   audioAttachmentEdit:(conversationId:string,id:string,text:string)=>invoke<DocumentAttachment>("audio_attachment_edit",{conversationId,id,text}),
   documentAttachmentDiscard:(conversationId:string,id:string)=>invoke<void>("document_attachment_discard",{conversationId,id}),
+  conversationAttachmentsList:(conversationId:string)=>invoke<{images:ImageAttachment[];documents:DocumentAttachment[]}>("conversation_attachments_list",{conversationId}),
   documentAttachmentsList:(conversationId:string)=>invoke<DocumentAttachment[]>("document_attachments_list",{conversationId}),
   documentAttachmentRead:(conversationId:string,id:string,offset?:number,limit?:number)=>invoke<DocumentRead>("document_attachment_read",{conversationId,id,offset,limit}),
   codexTurn: (runId: string, conversationId: string, input: string, history: AgentMessage[], onEvent: (event: CodexEvent) => void, images?:ImageAttachment[],documents?:DocumentAttachment[]) => {
@@ -332,6 +335,13 @@ export const api = {
     return invoke<CodexResult>("codex_turn", { runId, conversationId, input, history, events,images:images?.map(image=>image.id),documentIds:documents?.map(document=>document.id) });
   },
   codexCommand: (runId: string, command: Record<string, unknown>) => invoke<void>("codex_command", { runId, command }),
+  codexRunReconnect:(runId:string,conversationId:string,afterSequence:number,onEvent:(event:CodexEvent)=>void)=>{
+    const events=new Channel<CodexEvent>();events.onmessage=onEvent;
+    return invoke<import('./codex-client').CodexRunSnapshot>('codex_run_reconnect',{runId,conversationId,afterSequence,events});
+  },
+  codexFollowupSend:(runId:string,conversationId:string,clientRequestId:string,text:string,displayText:string,images:ImageAttachment[],documents:DocumentAttachment[])=>invoke<import('./pending-generations').FollowupReceipt>('codex_followup_send',{runId,conversationId,clientRequestId,text,displayText,imageIds:images.map(file=>file.id),documentIds:documents.map(file=>file.id)}),
+  codexFollowupStatus:(conversationId:string,clientRequestId:string)=>invoke<import('./pending-generations').FollowupReceipt>('codex_followup_status',{conversationId,clientRequestId}),
+  codexCallbackClaim:(runId:string,conversationId:string,requestId:string)=>invoke<{state:'claimed'|'replied'|'outcome-unknown';response?:Record<string,unknown>}>('codex_callback_claim',{runId,conversationId,requestId}),
   codexConversationStatus: (conversationId:string) => invoke<{busy:boolean;runId:string|null;stopping:boolean}>("codex_conversation_status", {conversationId}),
   codexConversationStop: (conversationId:string) => invoke<{busy:boolean;runId:string|null;stopping:boolean}>("codex_conversation_stop", {conversationId}),
   codexFork:(sourceConversationId:string,conversationId:string,imageIds:string[],documentIds:string[]=[])=>invoke<{threadId:string;sourceThreadId:string;forkedFromId:string;images:[string,ImageAttachment][];documents:DocumentAttachment[]}>("codex_fork",{sourceConversationId,conversationId,imageIds,documentIds}),

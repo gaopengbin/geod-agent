@@ -51,6 +51,15 @@ impl Tiles3dSpec {
     }
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all="camelCase")]
+pub(crate) struct VectorSpec {
+    #[serde(flatten)] pub request: geod_vector::Request,
+    #[serde(default,skip_serializing_if="Option::is_none")] pub connection_id: Option<String>,
+    #[serde(default,skip_serializing_if="Option::is_none")] pub connection_revision: Option<String>,
+}
+impl std::ops::Deref for VectorSpec {type Target=geod_vector::Request;fn deref(&self)->&Self::Target{&self.request}}
+impl std::ops::DerefMut for VectorSpec {fn deref_mut(&mut self)->&mut Self::Target{&mut self.request}}
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(
     tag = "kind",
     content = "spec",
@@ -58,7 +67,7 @@ impl Tiles3dSpec {
     deny_unknown_fields
 )]
 pub(crate) enum DataRequest {
-    Vector(geod_vector::Request),
+    Vector(VectorSpec),
     Tiles3d(Tiles3dSpec),
     Online(crate::online_exports::OnlineSpec),
 }
@@ -88,8 +97,8 @@ impl DataRequest {
         match self {
             Self::Online(r) => Ok((Self::Online(r.validate()?),0)),
             Self::Vector(r) => {
-                let plan = geod_vector::plan(r.clone()).map_err(vector_error)?;
-                Ok((Self::Vector(plan.request), plan.tile_count))
+                let plan = geod_vector::plan(r.request.clone()).map_err(vector_error)?;
+                Ok((Self::Vector(VectorSpec{request:plan.request,connection_id:r.connection_id.clone(),connection_revision:r.connection_revision.clone()}), plan.tile_count))
             }
             Self::Tiles3d(r) => {
                 let url = reqwest::Url::parse(&r.tileset_url)
@@ -252,6 +261,7 @@ fn open_data_db(path: &Path) -> Result<Connection, AppError> {
         initialized.insert(path.to_path_buf());
     }
     db.execute_batch("CREATE TABLE IF NOT EXISTS data_task_visibility(task_id TEXT PRIMARY KEY,updated_at TEXT NOT NULL);").map_err(storage_error)?;
+    crate::download_telemetry::schema(&db)?;
     Ok(db)
 }
 const SELECT:&str="SELECT id,conversation_id,kind,title,status,plan_hash,request_json,output_dir,progress_json,manifest_json,error,created_at,updated_at,EXISTS(SELECT 1 FROM data_task_visibility v WHERE v.task_id=data_download_tasks.id) FROM data_download_tasks";
@@ -366,6 +376,21 @@ pub(crate) fn data_download_plan(
         DataRequest::Vector(spec)=>{let crs=spec.target_crs.as_ref().or(workspace.output_crs.as_ref()).ok_or_else(||workspace_error("OUTPUT_CRS_REQUIRED","请通过选项卡确认成果坐标系"))?;spec.target_crs=Some(crate::export_crs::validate(crs,false)?);},
         DataRequest::Online(spec)=>{let crs=spec.target_crs.as_ref().or(workspace.output_crs.as_ref()).ok_or_else(||workspace_error("OUTPUT_CRS_REQUIRED","请通过选项卡确认成果坐标系"))?;spec.target_crs=Some(crate::export_crs::validate(crs,false)?);},
         _=>{}
+    }
+    if let DataRequest::Vector(spec)=&mut request {
+        if let Some(id)=&spec.connection_id {
+            let connection=crate::data_credentials::bind(&state,&owner,id)?;
+            if connection.kind!="mvt" {return Err(workspace_error("DATA_CONNECTION_INVALID","请选择 MVT 矢量服务连接"));}
+            if spec.connection_revision.as_ref().is_some_and(|r|r!=&connection.revision){return Err(workspace_error("DATA_CONNECTION_CHANGED","连接已更新，请重新生成计划"));}
+            match &mut spec.request.source {
+                geod_vector::Source::Mvt{id,name,url_template,attribution,..}=>{
+                    *id=connection.id.clone();*name=connection.name.clone();*url_template=connection.source_url();
+                    if reqwest::Url::parse(url_template).ok().is_some_and(|u|u.host_str()==Some("api.mapbox.com")){*attribution="© Mapbox © OpenStreetMap".into();}
+                },
+                _=>return Err(workspace_error("DATA_CONNECTION_INVALID","此连接仅适用于 MVT 数据")),
+            }
+            spec.connection_revision=Some(connection.revision);
+        }
     }
     if let DataRequest::Tiles3d(spec) = &mut request {
         if let Some(id) = &spec.connection_id {
@@ -586,6 +611,11 @@ fn start(
     }
     validate_auto_destination(Path::new(&workspace.directory), Path::new(&task.output_dir))?;
     let credential = match &task.request {
+        DataRequest::Vector(spec)=>match (&spec.connection_id,&spec.connection_revision){
+            (Some(id),Some(revision))=>Some(crate::data_credentials::resolve(state,&owner,id,revision)?),
+            (None,None)=>None,
+            _=>return Err(workspace_error("DATA_CONNECTION_INVALID","连接版本缺失，请重新生成计划")),
+        },
         DataRequest::Tiles3d(spec) => match (&spec.connection_id, &spec.connection_revision) {
             (Some(id), Some(revision)) => Some(crate::data_credentials::resolve(
                 state, &owner, id, revision,
@@ -700,11 +730,12 @@ async fn execute(
     match &task.request {
         DataRequest::Online(spec)=>crate::online_exports::run(app,owner,spec,Path::new(&task.output_dir),&task.plan_hash,control.vector.clone(),|phase,completed,total,bytes|report(DataProgress{phase:phase.into(),completed,total,bytes,cache_hits:0,failures:0})).await,
         DataRequest::Vector(request) => {
-            let plan = geod_vector::plan(request.clone()).map_err(|e| e.to_string())?;
+            let plan = geod_vector::plan(request.request.clone()).map_err(|e| e.to_string())?;
             let mut options =
                 geod_vector::RunOptions::new(PathBuf::from(&task.output_dir), cache.to_path_buf());
             options.projector = Some(Arc::new(crate::export_crs::Projector));
             options.network.proxy = proxy;
+            if let Some(credential)=credential{credential.apply_vector(&mut options.network).map_err(|_|"矢量凭证无效，请重新保存连接".to_string())?;}
             options.cancel = control.vector.clone();
             let manifest = geod_vector::run(&plan, options, |p| {
                 report(DataProgress {
@@ -853,7 +884,7 @@ fn verified_files(task: &DataTask) -> Result<Value, AppError> {
         DataRequest::Vector(request) => {
             let manifest =
                 geod_vector::inspect(Path::new(&task.output_dir)).map_err(vector_error)?;
-            let plan = geod_vector::plan(request.clone()).map_err(vector_error)?;
+            let plan = geod_vector::plan(request.request.clone()).map_err(vector_error)?;
             let has_outputs = plan.request.outputs.iter().all(|format| {
                 let kind = match format {
                     geod_vector::OutputFormat::Pbf => "pbf-index",

@@ -24,6 +24,9 @@ import {mcpProvider} from './mcp-provider-presets';
 import {conversationBusyFailure} from './codex-recovery';
 import {turnUsageSources,type TurnTokenUsage} from './turn-token-usage';
 import {TurnTokenUsageFooter} from './turn-token-usage-footer';
+import {inactiveInterrupt} from './queued-inputs';
+import {ConversationDisclosure} from './conversation-disclosure';
+import {ConnectionNotice} from './connection-notice';
 
 // Streaming and layout updates must not reparse every completed Markdown block.
 const MarkdownContent = memo(function MarkdownContent({ children }: { children: string }) {
@@ -109,8 +112,9 @@ function workTitle(item: DisplayMessage, active = true) {
 
 function TurnOutcomeCard({item,onContinue,canContinue}:{item:DisplayMessage;onContinue?:()=>void;canContinue:boolean}) {
   const outcome=item.turnOutcome!;
-  return <section className="agent-turn-outcome" role="status" aria-label={t(outcome.status==='interrupted'?'本轮已停止':'本轮未完成')}>
-    <CircleAlert size={17}/><div><strong>{t(outcome.status==='interrupted'?'本轮已停止':'本轮未完成')}</strong><p>{localize(outcome.message)}</p>{onContinue&&<Button variant="outline" size="sm" disabled={!canContinue} onClick={onContinue}>{t('继续处理')}<ArrowRight size={15}/></Button>}</div>
+  if(outcome.status==='interrupted'||inactiveInterrupt(outcome))return <div className="agent-turn-stopped" role="status">{outcome.durationMs!==undefined?t('你在 {0} 秒后停止了',{'0':String(Math.max(0,Math.round(outcome.durationMs/1000)))}):t('已停止')}</div>;
+  return <section className="agent-turn-outcome" role="status" aria-label={t('本轮未完成')}>
+    <CircleAlert size={17}/><div><strong>{t('本轮未完成')}</strong><p>{localize(outcome.message)}</p>{onContinue&&<Button variant="outline" size="sm" disabled={!canContinue} onClick={onContinue}>{t('继续处理')}<ArrowRight size={15}/></Button>}</div>
   </section>;
 }
 
@@ -126,10 +130,10 @@ function WorkRecord({ item, active, onInspect, initiallyOpen = false }: { item: 
   if (item.role === "assistant") return <div className={`agent-work-note ${item.streaming ? "is-streaming" : ""}`}>
     <div className="agent-work-content geod-message-body"><MarkdownContent>{item.content}</MarkdownContent></div>
   </div>;
-  const row = <><span className={`agent-work-record-icon ${running ? "is-running" : ""}`}>{icon}</span><span className="agent-work-record-title">{workTitle(item, active)}</span>{hasDetails && <ChevronDown size={14} className={open ? "is-open" : ""}/>}</>;
+  const row = <><span className={`agent-work-record-icon ${running ? "is-running" : ""}`}>{icon}</span><span className="agent-work-record-title">{workTitle(item, active)}</span>{state==='stopped'&&<span className="agent-work-count">{t('已停止')}</span>}{hasDetails && <ChevronDown size={14} className={open ? "is-open" : ""}/>}</>;
   return <div className={`agent-work-record ${attention ? "attention" : ""} ${running ? "is-running" : ""}`} data-work-record={item.id}>
     {hasDetails ? <Button variant="ghost" size="sm" whileHover={undefined} whileTap={undefined} className="agent-work-record-trigger" aria-expanded={open} aria-controls={detailId} onClick={() => { if (!open) onInspect(); setOpen(!open); }}>{row}</Button> : <div className="agent-work-record-heading">{row}</div>}
-    <div id={detailId} className="agent-work-record-details" hidden={!open}>{open && <WorkDetails item={item}/>}</div>
+    <ConversationDisclosure open={open} id={detailId} className="agent-work-record-details"><WorkDetails item={item}/></ConversationDisclosure>
   </div>;
 }
 
@@ -150,9 +154,9 @@ function ActivityGroup({ activity, active, onInspect }: { activity: WorkActivity
       {attention.length > 0 && <span className="agent-activity-attention"><CircleAlert size={13}/>{attention.length}</span>}
       <ChevronDown size={14} className={open ? "is-open" : ""}/>
     </Button>
-    <div id={bodyId} className="agent-activity-body" hidden={!open}>
-      {open && items.map(item => <WorkRecord key={item.id} item={item} active={active} onInspect={onInspect}/>)}
-    </div>
+    <ConversationDisclosure open={open} id={bodyId} className="agent-activity-body">
+      {items.map(item => <WorkRecord key={item.id} item={item} active={active} onInspect={onInspect}/>)}
+    </ConversationDisclosure>
   </section>;
 }
 
@@ -161,11 +165,11 @@ function LiveActivity({ label, reasoning, onInspect, onOpenChange }: { label: st
   const bodyId = useId();
   const content = <><span className="agent-activity-shimmer">{label}</span>{reasoning?.details && <ChevronDown size={14} className={open ? "is-open" : ""}/>}</>;
   return <div className="agent-live-status" role="status" aria-label={t("当前执行状态")}>
-    {reasoning?.details ? <><Button variant="ghost" size="sm" whileHover={undefined} whileTap={undefined} className="agent-live-trigger" aria-expanded={open} aria-controls={bodyId} onClick={() => { if (!open) onInspect?.(); onOpenChange?.(!open); setOpen(!open); }}>{content}</Button><div id={bodyId} hidden={!open}>{open && <WorkDetails item={reasoning}/>}</div></> : <span>{content}</span>}
+    {reasoning?.details ? <><Button variant="ghost" size="sm" whileHover={undefined} whileTap={undefined} className="agent-live-trigger" aria-expanded={open} aria-controls={bodyId} onClick={() => { if (!open) onInspect?.(); onOpenChange?.(!open); setOpen(!open); }}>{content}</Button><ConversationDisclosure open={open} id={bodyId}><WorkDetails item={reasoning}/></ConversationDisclosure></> : <span>{content}</span>}
   </div>;
 }
 
-function WorkRecords({ group, active, writing, activityLabel, renderInput }: { group: TurnWork; active: boolean; writing: boolean; activityLabel: string; renderInput: (item: DisplayMessage) => ReactNode }) {
+function WorkRecords({ group, active, writing, activityLabel, renderInput,connecting }: { group: TurnWork; active: boolean; writing: boolean; activityLabel: string; renderInput: (item: DisplayMessage) => ReactNode;connecting:boolean }) {
   // An explicit disclosure choice survives completion and continuation. Merely
   // running a turn uses the automatic expanded -> collapsed transition.
   const [openChoice, setOpenChoice] = useState<boolean | null>(null);
@@ -174,11 +178,11 @@ function WorkRecords({ group, active, writing, activityLabel, renderInput }: { g
   const bodyId = useId();
   const { items } = group;
   const operations = items.filter(item => item.role === "tool" && item.itemType !== "reasoning" && !item.userInput).length;
-  const failed = items.some(item => item.toolStatus === "attention" || (!active && item.toolStatus === "running"));
+  const failed = group.outcome !== 'interrupted' && items.some(item => item.toolStatus === "attention" || (!active && item.toolStatus === "running"));
   const activities = projectWorkActivities(items, active);
   const runningTool = activities.some(activity => activity.items.some(item => item.role === "tool" && workRecordState(item, active) === "running"));
   const reasoning = [...items].reverse().find(item => item.itemType === "reasoning" && item.toolStatus === "running");
-  const label = active ? t("查看执行过程") : t(group.outcome === "completed" ? "处理完成" : group.outcome === "interrupted" ? "执行已停止" : group.outcome ? "本轮未完成" : "执行记录");
+  const label = active ? t("查看执行过程") : group.outcome==='completed'&&group.durationMs!==undefined?t('用时 {0} 秒',{'0':String(Math.round(group.durationMs/1000))}):t(group.outcome === "completed" ? "处理完成" : group.outcome === "interrupted" ? "执行已停止" : group.outcome ? "本轮未完成" : "执行记录");
   const onInspect = () => setOpenChoice(true);
   return <section className={`agent-work-records ${active ? "is-active" : ""}`} data-work-turn={group.id} aria-label={t("本轮思考与执行")}>
     {(!active || !open) && <Button variant="ghost" size="sm" whileHover={undefined} whileTap={undefined} className="agent-work-records-trigger" aria-expanded={open} aria-controls={bodyId} onClick={() => setOpenChoice(!open)}>
@@ -187,13 +191,12 @@ function WorkRecords({ group, active, writing, activityLabel, renderInput }: { g
       {failed && <span className="agent-work-warning"><CircleAlert size={13}/>{t("有异常记录")}</span>}
       <ChevronRight size={14} className={open ? "is-open" : ""}/>
     </Button>}
-    <div id={bodyId} className="agent-work-records-body" hidden={!open}>
-      {open && <div className="agent-work-flow">{activities.map(activity => activity.kind === "input" ? <Fragment key={activity.id}>{renderInput(activity.items[0])}</Fragment>
+    <ConversationDisclosure open={open} id={bodyId} className="agent-work-records-body">
+      <div className="agent-work-flow">{activities.map(activity => activity.kind === "input" ? <Fragment key={activity.id}>{renderInput(activity.items[0])}</Fragment>
         : activity.kind === "exploration" || activity.kind === "tools" ? <ActivityGroup key={activity.id} activity={activity} active={active} onInspect={onInspect}/>
         : <WorkRecord key={activity.id} item={activity.items[0]} active={active} onInspect={onInspect} initiallyOpen={activity.id === inspectedReasoning}/>)}</div>
-      }
-    </div>
-    {active && !writing && (!open || !runningTool) && <LiveActivity key={reasoning?.id ?? "live"} label={activityLabel} reasoning={reasoning} onInspect={onInspect} onOpenChange={value => setInspectedReasoning(value ? reasoning?.id : undefined)}/>}
+    </ConversationDisclosure>
+    {active && !writing && !connecting && (!open || !runningTool) && <LiveActivity key={reasoning?.id ?? "live"} label={activityLabel} reasoning={reasoning} onInspect={onInspect} onOpenChange={value => setInspectedReasoning(value ? reasoning?.id : undefined)}/>}
   </section>;
 }
 
@@ -248,6 +251,7 @@ export function ChatTranscript({ conversationId, messages, busy, activity, activ
   const activityLabel = localize(activity) || t("正在处理…");
   const writing = messages.some(item => item.role === "assistant" && item.phase === "final" && item.streaming);
   const hasLiveGroup = entries.some(item => isTurnWork(item) && item.id === liveWorkId);
+  const connecting=messages.some(item=>item.connection?.state==='reconnecting');
   const lastCompletedAnswer = [...messages].reverse().find(item => item.role === "assistant" && item.phase !== "progress" && !item.streaming)?.id;
   // Close a reviewed answer once on completion; users can reopen it afterwards.
   useEffect(() => {
@@ -265,7 +269,9 @@ export function ChatTranscript({ conversationId, messages, busy, activity, activ
     <div className="agent-transcript-stage">
     {messages.length ? <MessageGroup spacing="default" className="geod-message-group">
       {entries.map(item => <Fragment key={item.id}>{isTurnWork(item)
-        ? <WorkRecords key={`work-${conversationId}-${item.items[0]?.id}`} group={item} active={item.id === liveWorkId} writing={writing} activityLabel={activityLabel} renderInput={renderInput}/>
+        ? <WorkRecords key={`work-${conversationId}-${item.items[0]?.id}`} group={item} active={item.id === liveWorkId} writing={writing} activityLabel={activityLabel} renderInput={renderInput} connecting={connecting}/>
+        : item.connection
+        ? <ConnectionNotice item={item}/>
         : item.turnOutcome
         ? conversationBusyFailure(item.turnOutcome) ? null : <div><TurnOutcomeCard item={item} onContinue={item.id===resumableOutcome?onContinueTurn:undefined} canContinue={canContinueTurn&&!executionActive}/><div className="agent-message-actions">{tokenFooter(item)}</div></div>
         : item.userInput
@@ -287,7 +293,7 @@ export function ChatTranscript({ conversationId, messages, busy, activity, activ
               <div className="agent-work-content geod-message-body"><MarkdownContent>{item.content}</MarkdownContent></div>
               {item.phase !== "progress" && !item.streaming && <div className="agent-message-actions"><CopyMessage content={item.content}/>{tokenFooter(item)}</div>}
             </article>}{afterEntry?.(item.id)}</Fragment>)}
-      {executionActive && !hasLiveGroup && !writing && <LiveActivity label={activityLabel}/>}
+      {executionActive && !hasLiveGroup && !writing && !connecting && <LiveActivity label={activityLabel}/>}
     </MessageGroup> : <div className="agent-welcome"><Bot size={28} /><h3>{t("描述你要获取的影像")}</h3><p>{t("也可以直接说需要什么 Skill 或 MCP 能力，Agent 会查找并准备接入。")}</p></div>}
     {children}
     </div>

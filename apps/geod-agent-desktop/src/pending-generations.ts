@@ -3,6 +3,7 @@ import type {UserInputRecord} from './user-input-records';
 import type {TurnOutcome} from './turn-outcome';
 import type {GenerationTokenReceipt,TurnTokenUsage} from './turn-token-usage';
 import type {CommandAction} from './codex-protocol/v2/CommandAction';
+import {restoreQueuedInputs} from './queued-inputs.ts';
 
 export interface ExtensionProposal { kind: "mcp" | "skill"; id: string; name: string; description: string; detail: string; toolNames?: string[]; sha256?: string; requiresKey?:boolean }
 export interface BackgroundJob { jobId: string; planId: string; sourceName: string; totalTiles: number; zoomLevels: number[]; outputFormats: string[] }
@@ -19,7 +20,7 @@ export interface DisplayMessage {
   itemType?: string;
   details?: string;
   toolName?: string;
-  toolStatus?: "running" | "success" | "attention";
+  toolStatus?: "running" | "success" | "attention" | "stopped";
   commandActions?: CommandAction[];
   durationMs?: number | null;
   exitCode?: number | null;
@@ -32,9 +33,12 @@ export interface DisplayMessage {
   turnOutcome?:TurnOutcome;
   modelReceipts?:GenerationTokenReceipt[];
   tokenUsage?:TurnTokenUsage;
+  turnDurationMs?:number;
+  connection?:{state:'reconnecting'|'unavailable';attempt?:number;maxAttempts?:number;details?:string};
 }
-export interface QueuedInput{id:string;text:string;images?:ImageAttachment[];documents?:DocumentAttachment[];createdAt:string}
-export interface SavedChat { conversationId: string; messages: AgentMessage[]; display: DisplayMessage[]; pendingId?: string; planId?: string; planIds?: string[]; workspaceDirectory?: string; updatedAt?: string; completedReplyId?:string;readReplyId?:string; lastInputTokens?: number; contextCompressed?: boolean; engine?: "codex" | "legacy"; title?:string;forkFromConversationId?:string;queuedInputs?:QueuedInput[];queuePaused?:boolean; archived?:boolean;pinned?:boolean; codexContext?: { inputTokens: number; outputTokens: number; cachedInputTokens: number; modelContextWindow: number | null } }
+export interface FollowupReceipt {state:'sending'|'accepted'|'failed'|'outcome-unknown'|'not-submitted';clientRequestId:string;runId?:string;conversationId?:string;result?:{text?:string;input?:string;code?:string;message?:string}}
+export interface QueuedInput{id:string;text:string;images?:ImageAttachment[];documents?:DocumentAttachment[];createdAt:string;revision?:number;editDraft?:string;delivery?:{state:'sending'|'failed'|'outcome-unknown';clientRequestId:string;runId:string;message?:string}}
+export interface SavedChat { conversationId: string; messages: AgentMessage[]; display: DisplayMessage[]; pendingId?: string; planId?: string; planIds?: string[]; unavailablePlanIds?: string[]; workspaceDirectory?: string; updatedAt?: string; completedReplyId?:string;readReplyId?:string; lastInputTokens?: number; contextCompressed?: boolean; engine?: "codex" | "legacy"; title?:string;forkFromConversationId?:string;queuedInputs?:QueuedInput[];queuePaused?:boolean;nativeRun?:{id:string;sequence:number}|null; archived?:boolean;pinned?:boolean; codexContext?: { inputTokens: number; outputTokens: number; cachedInputTokens: number; modelContextWindow: number | null } }
 export interface CompletedGeneration { messages: AgentMessage[]; display: DisplayMessage[]; planId?: string; planIds?: string[]; completedReplyId?:string;readReplyId?:string; lastInputTokens?: number; contextCompressed?: boolean; engine?: SavedChat["engine"]; codexContext?: SavedChat["codexContext"] }
 export interface PendingGeneration { conversationId: string; generationId: string; userId: string | null; messages: AgentMessage[]; display?: DisplayMessage[]; boundary?: BoundaryImport | null; boundaryRequired?: boolean; committed?: CompletedGeneration; engine?: "codex" | "legacy" }
 
@@ -188,6 +192,8 @@ export function restorePendingChats(store: Store, chats: SavedChat[]): SavedChat
   pending = Object.fromEntries(Object.entries(pending).filter(([id])=>!deleted.has(id)));
   const restored = chats.map(chat => ({
     ...chat,
+    queuedInputs:restoreQueuedInputs(chat.queuedInputs??[]),
+    queuePaused:chat.queuePaused||chat.queuedInputs?.some(item=>item.delivery?.state==='sending'),
     pendingId: pending[chat.conversationId]?.committed ? undefined : pending[chat.conversationId]?.generationId,
     messages: pending[chat.conversationId]?.committed?.messages ?? pending[chat.conversationId]?.messages ?? chat.messages,
     display: pending[chat.conversationId]?.committed?.display ?? ((pending[chat.conversationId]?.display?.length ?? 0) > chat.display.length ? pending[chat.conversationId].display! : chat.display),

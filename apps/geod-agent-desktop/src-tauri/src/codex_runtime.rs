@@ -7,7 +7,7 @@ use services::ServiceError;
 
 type Input = Arc<Mutex<ChildStdin>>;
 pub(crate) type EventSink = Arc<dyn Fn(Value) -> Result<(), ServiceError> + Send + Sync>;
-struct ActiveRun { owner: String, host_key: String, input: Input, cancelled: Arc<AtomicBool>, safety:Arc<Mutex<crate::execution_safety::Guard>> }
+struct ActiveRun { owner: String, conversation:String, host_key: String, input: Input, cancelled: Arc<AtomicBool>, safety:Arc<Mutex<crate::execution_safety::Guard>> }
 struct HostProcess {
     owner: String,
     child: Child, input: Input, route: Arc<Mutex<Option<mpsc::Sender<Value>>>>,
@@ -15,9 +15,9 @@ struct HostProcess {
     #[cfg(windows)] _tree: ProcessTree,
 }
 impl Drop for HostProcess { fn drop(&mut self) { let _ = self.child.kill(); let _ = self.child.wait(); } }
-pub struct CodexState { root: PathBuf, receipt_path:PathBuf, isolated:bool, expected_owner:Option<String>, active: Arc<Mutex<HashMap<String, ActiveRun>>>, hosts: Arc<Mutex<HashMap<String, HostProcess>>>, leases: Arc<Mutex<HashSet<String>>>,maintenance:Arc<AtomicBool> }
+pub struct CodexState { root: PathBuf, receipt_path:PathBuf, isolated:bool, expected_owner:Option<String>, active: Arc<Mutex<HashMap<String, ActiveRun>>>, hosts: Arc<Mutex<HashMap<String, HostProcess>>>, leases: Arc<Mutex<HashSet<String>>>,maintenance:Arc<AtomicBool>, streams:crate::codex_stream::Hub }
 impl CodexState {
-    pub fn new(root: PathBuf) -> Self { Self { receipt_path:root.join("execution-receipts.sqlite"),root,isolated:false,expected_owner:None, active: Arc::new(Mutex::new(HashMap::new())), hosts: Arc::new(Mutex::new(HashMap::new())), leases: Arc::new(Mutex::new(HashSet::new())),maintenance:Arc::new(AtomicBool::new(false)) } }
+    pub fn new(root: PathBuf) -> Self { Self { streams:crate::codex_stream::Hub::new(root.join("run-streams.sqlite")),receipt_path:root.join("execution-receipts.sqlite"),root,isolated:false,expected_owner:None, active: Arc::new(Mutex::new(HashMap::new())), hosts: Arc::new(Mutex::new(HashMap::new())), leases: Arc::new(Mutex::new(HashSet::new())),maintenance:Arc::new(AtomicBool::new(false)) } }
     pub(crate) fn new_isolated(root:PathBuf,receipt_path:PathBuf,owner:String)->Self{let mut state=Self::new(root);state.isolated=true;state.receipt_path=receipt_path;state.expected_owner=Some(owner);state}
     pub(crate) fn shutdown(&self) { self.hosts.lock().unwrap().clear(); }
     pub(crate) fn receipts_path(&self)->PathBuf { self.receipt_path.clone() }
@@ -198,7 +198,8 @@ fn spawn_host(home: &PathBuf, host: &PathBuf, source_hash: String, node: &std::f
         else{paths.extend(std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()));}
         if let Ok(path) = std::env::join_paths(paths) { command.env("PATH", path); }
     }
-    command.arg(host).current_dir(home).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
+    let diagnostics=if cfg!(debug_assertions){fs::File::create(home.join("host-stderr.log")).ok().map(Stdio::from).unwrap_or_else(Stdio::null)}else{Stdio::null()};
+    command.arg(host).current_dir(home).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(diagnostics);
     #[cfg(windows)] { use std::os::windows::process::CommandExt; command.creation_flags(0x0800_0000); }
     let mut child = command.spawn().map_err(|cause| error("CODEX_NODE_UNAVAILABLE", &format!("无法启动配套 Codex 运行环境：{cause}")))?;
     #[cfg(windows)] let tree = match ProcessTree::attach(&child) { Ok(guard) => guard, Err(e) => { let _ = child.kill(); let _ = child.wait(); return Err(e); } };
@@ -228,9 +229,48 @@ pub async fn codex_turn(
     history: Value, events: Channel<Value>, images: Option<Vec<String>>, document_ids: Option<Vec<String>>,
 ) -> Result<Value, ServiceError> {
     let owner=services::current_user_id(&app.state::<services::ServiceState>())?;
+    let prior_images:Vec<String>=history.as_array().into_iter().flatten().filter(|message|message["role"]=="user").flat_map(|message|message["images"].as_array().into_iter().flatten().filter_map(|image|image["id"].as_str().map(str::to_owned))).take(2000).collect();
+    crate::image_inputs::publish(&app,&owner,&conversation_id,&prior_images).map_err(|e|error(e.code,e.message))?;
+    crate::image_inputs::publish(&app,&owner,&conversation_id,images.as_deref().unwrap_or_default()).map_err(|e|error(e.code,e.message))?;
     crate::attachment_inputs::publish(&app,&owner,&conversation_id,&document_ids.unwrap_or_default()).map_err(|e|error(e.code,e.message))?;
-    run_turn(app, runtime.inner(), run_id, conversation_id, input, history,
-        Arc::new(move |value| events.send(value).map_err(|_| error("CODEX_VIEW_CLOSED", "对话界面已关闭，执行已停止"))), images, false, None, None).await
+    let sink=runtime.streams.begin(&owner,&run_id,&conversation_id,Arc::new(move|value|events.send(value).map_err(|_|error("CODEX_VIEW_CLOSED","消息连接已断开"))))?;
+    let result=run_turn(app, runtime.inner(), run_id.clone(), conversation_id, input, history,sink, images, false, None, None).await;
+    runtime.streams.finish(&owner,&run_id,&result)?;result
+}
+
+#[tauri::command]
+pub fn codex_run_reconnect(runtime:State<'_,CodexState>,services:State<'_,services::ServiceState>,run_id:String,conversation_id:String,after_sequence:u64,events:Channel<Value>)->Result<Value,ServiceError>{
+    let owner=services::current_user_id(&services)?;
+    runtime.streams.reconnect(&owner,&run_id,&conversation_id,after_sequence,Arc::new(move|value|events.send(value).map_err(|_|error("CODEX_VIEW_CLOSED","消息连接尚未恢复"))))
+}
+#[tauri::command]
+pub fn codex_callback_claim(runtime:State<'_,CodexState>,services:State<'_,services::ServiceState>,run_id:String,conversation_id:String,request_id:String)->Result<Value,ServiceError>{
+    let owner=services::current_user_id(&services)?;runtime.streams.claim(&owner,&run_id,&conversation_id,&request_id)
+}
+#[tauri::command]
+pub fn codex_followup_status(runtime:State<'_,CodexState>,services:State<'_,services::ServiceState>,conversation_id:String,client_request_id:String)->Result<Value,ServiceError>{
+    runtime.streams.followup(&services::current_user_id(&services)?,&conversation_id,&client_request_id)
+}
+#[tauri::command]
+pub fn codex_followup_send(app:AppHandle,runtime:State<'_,CodexState>,services:State<'_,services::ServiceState>,run_id:String,conversation_id:String,client_request_id:String,text:String,display_text:String,image_ids:Vec<String>,document_ids:Vec<String>)->Result<Value,ServiceError>{
+    let owner=services::current_user_id(&services)?;
+    if client_request_id.is_empty()||client_request_id.len()>160||text.len()>60_000||text.trim().is_empty(){return Err(error("CODEX_INPUT_INVALID","补充消息无效或过长"));}
+    let payload=json!({"text":text,"displayText":display_text,"imageIds":image_ids,"documentIds":document_ids});
+    if runtime.streams.reserve(&owner,&run_id,&conversation_id,&client_request_id,&payload)?{
+        let result=(||{
+            let matches=runtime.active.lock().unwrap().get(&run_id).is_some_and(|run|run.owner==owner&&run.conversation==conversation_id);
+            if !matches{return Err(error("CODEX_TURN_NOT_ACTIVE","当前回复已结束，消息尚未提交"));}
+            crate::image_inputs::publish(&app,&owner,&conversation_id,&image_ids).map_err(|e|error(e.code,e.message))?;
+            let route=crate::ai_channels::selected(&app,&owner,&conversation_id)?;
+            let caps=if route.is_personal()||route.is_sponsored(){route.capabilities()}else{services::codex_capabilities(&app.state::<services::ServiceState>())?};
+            validate_image_capability(&caps,!image_ids.is_empty())?;
+            let images=crate::image_inputs::model_images(&app,&owner,&conversation_id,&image_ids).map_err(|e|error(e.code,e.message))?;
+            crate::attachment_inputs::publish(&app,&owner,&conversation_id,&document_ids).map_err(|e|error(e.code,e.message))?;
+            send_command(runtime.inner(),&owner,&run_id,json!({"type":"steer","text":text,"displayText":display_text,"requestId":client_request_id,"images":images,"imageIds":image_ids,"documentIds":document_ids}))
+        })();
+        if let Err(cause)=result{runtime.streams.failed(&owner,&client_request_id,&cause)?;}
+    }
+    runtime.streams.followup(&owner,&conversation_id,&client_request_id)
 }
 
 pub(crate) async fn run_turn(
@@ -253,6 +293,9 @@ pub async fn codex_fork(app:AppHandle,runtime:State<'_,CodexState>,source_conver
         Ok::<_,ServiceError>((images,documents))
     }).await.map_err(|_|error("CODEX_STORAGE_ERROR","分支图片处理失败"))??;
     Ok(json!({"threadId":result["threadId"],"sourceThreadId":result["sourceThreadId"],"forkedFromId":result["forkedFromId"],"images":images,"documents":documents}))
+}
+fn validate_image_capability(caps:&Value,has_images:bool)->Result<(),ServiceError>{
+    if has_images&&!caps["inputModalities"].as_array().is_some_and(|m|m.iter().any(|v|v=="image")){return Err(error("CHANNEL_IMAGE_UNSUPPORTED","当前模型不支持读取图片，附件已保留，请选择支持图片的模型后发送"));}Ok(())
 }
 async fn run_operation(
     app:AppHandle,runtime:&CodexState,run_id:String,conversation_id:String,input:String,history:Value,events:EventSink,images:Option<Vec<String>>,background:bool,thread_scope:Option<String>,operation_type:&'static str,operation:Value,model_route:Option<crate::ai_channels::RouteSnapshot>,
@@ -291,6 +334,7 @@ async fn run_operation(
         if model_route.owner_id!=owner{return Err(error("AI_CHANNEL_OWNER","任务渠道不属于当前账号"));}
         let _model_route_guard=crate::ai_channels::bind(&app,&run_id,&conversation_id,&model_route)?;
         let mut capabilities = if model_route.is_personal()||model_route.is_sponsored(){model_route.capabilities()}else{services::codex_capabilities(&services)?};
+        validate_image_capability(&capabilities,!images.is_empty())?;
         let context_preferences=crate::context_settings::load(&app.state::<crate::ai_channels::AiChannels>(),&owner)?;
         capabilities=crate::context_settings::apply(capabilities,&context_preferences)?;
         capabilities["isolatedWorker"]=json!(isolated);
@@ -315,6 +359,7 @@ async fn run_operation(
             let ids:Vec<String>=history.as_array().into_iter().flatten().rev().flat_map(|message|message["images"].as_array().into_iter().flatten().filter_map(|image|image["id"].as_str().map(str::to_owned))).take(8).collect();
             history_images=crate::image_inputs::model_images(&app,&owner,&conversation_id,&ids).map_err(|e|error(e.code,e.message))?;
         }
+        validate_image_capability(&capabilities,!history_images.is_empty())?;
         fs::create_dir_all(&home).map_err(|_| error("CODEX_STORAGE_ERROR", "无法创建 Codex 会话目录"))?;
         if operation_type=="fork"{
             if has_thread{return Err(error("CODEX_FORK_CONFLICT","目标会话已经存在"));}
@@ -342,6 +387,7 @@ async fn run_operation(
         let mut policy_geod_source=include_str!("../runtime-policy-geod.mjs").to_owned();
         let mut policy_hook_source=include_str!("../runtime-policy-hook.mjs").to_owned();
         let mut input_context_source=include_str!("../model-input-context.mjs").to_owned();
+        let control_source=include_str!("../codex-control.mjs");
         if cfg!(debug_assertions){
             let source=PathBuf::from(env!("CARGO_MANIFEST_DIR"));
             if let Ok(value)=fs::read_to_string(source.join("runtime-policy.mjs")){policy_source=value;}
@@ -356,7 +402,7 @@ async fn run_operation(
         // MCP reload. Replace the idle owned process when reviewed automation
         // changes; resume the durable thread under the newly exported hooks.
         let tool_source=if isolated{include_str!("../worker-tools.json")}else{include_str!("../codex-tools.json")};
-        let source_hash = format!("{:x}", Sha256::digest(format!("{host_source}\n{hook_source}\n{bulk_source}\n{rtk_source}\n{policy_source}\n{policy_geod_source}\n{policy_hook_source}\n{input_context_source}\n{tool_source}\n{capabilities}\n{}",extensions["pluginHooks"]).as_bytes()));
+        let source_hash = format!("{:x}", Sha256::digest(format!("{host_source}\n{control_source}\n{hook_source}\n{bulk_source}\n{rtk_source}\n{policy_source}\n{policy_geod_source}\n{policy_hook_source}\n{input_context_source}\n{tool_source}\n{capabilities}\n{}",extensions["pluginHooks"]).as_bytes()));
         for (name,source) in [("runtime-policy.mjs",policy_source),("runtime-policy-geod.mjs",policy_geod_source),("runtime-policy-hook.mjs",policy_hook_source)]{
             fs::write(home.join(name),source).map_err(|_|error("CODEX_STORAGE_ERROR","无法准备执行策略运行环境"))?;
         }
@@ -364,6 +410,7 @@ async fn run_operation(
         fs::write(home.join("codex-bulk-data.mjs"),bulk_source).map_err(|_|error("CODEX_STORAGE_ERROR","无法准备本机几何数据传递环境"))?;
         fs::write(home.join("plugin-hook-runner.mjs"),hook_source).map_err(|_|error("CODEX_STORAGE_ERROR","无法准备插件自动化运行环境"))?;
         fs::write(home.join("codex-input-wait.mjs"),include_str!("../codex-input-wait.mjs")).map_err(|_|error("CODEX_STORAGE_ERROR","无法准备问答等待运行环境"))?;
+        fs::write(home.join("codex-control.mjs"),control_source).map_err(|_|error("CODEX_STORAGE_ERROR","无法准备对话控制运行环境"))?;
         fs::write(home.join("model-input-context.mjs"),input_context_source).map_err(|_|error("CODEX_STORAGE_ERROR","无法准备按需模型上下文"))?;
         fs::write(&host, host_source).map_err(|_| error("CODEX_STORAGE_ERROR", "无法准备 Codex 适配层"))?;
         fs::write(&tools, tool_source).map_err(|_| error("CODEX_STORAGE_ERROR", "无法准备 GeoD 工具定义"))?;
@@ -382,7 +429,7 @@ async fn run_operation(
         {
             let mut runs = active.lock().unwrap();
             if runs.contains_key(&run_id) { return Err(error("CODEX_BUSY", "请求编号已经在执行")); }
-            runs.insert(run_id.clone(), ActiveRun { owner:owner.clone(), host_key:host_key.clone(), input: Arc::clone(&stdin), cancelled:cancelled.clone(),safety:safety.clone() });
+            runs.insert(run_id.clone(), ActiveRun { owner:owner.clone(), conversation:conversation_id.clone(),host_key:host_key.clone(), input: Arc::clone(&stdin), cancelled:cancelled.clone(),safety:safety.clone() });
         }
         *route.lock().unwrap() = Some(sender);
         let start = json!({"type":operation_type,"runId":run_id,"options":{"codex":executable,"home":home,"sqliteHome":sqlite_home,"toolsFile":tools,"capabilities":capabilities},"params":{"conversationId":conversation_id,"threadKey":thread_key,"workspace":workspace,"permission":settings.permission,"outputCrs":settings.output_crs,"rtkOutput":if isolated{None}else{crate::rtk_runtime::descriptor(&owner)},"input":input,"history":history,"images":images,"historyImages":history_images,"skillDirectories":extensions["skillDirectories"],"selectedSkills":extensions["selectedSkills"],"mcpServers":extensions["mcpServers"],"pluginHooks":extensions["pluginHooks"],"memory":memory,"background":background,"sourceConversationId":operation["sourceConversationId"],"resumeThread":resume,"sourceThread":source_thread}});
@@ -634,7 +681,7 @@ pub fn codex_command(app:AppHandle,runtime: State<'_, CodexState>, services: Sta
     crate::mcp_interaction::validate_codex_reply(&app,&owner,&run_id,&command)?;
     send_command(runtime.inner(), &owner, &run_id, command)
 }
-pub(crate) fn send_command(runtime: &CodexState, owner: &str, run_id: &str, command: Value) -> Result<(), ServiceError> {
+pub(crate) fn send_command(runtime: &CodexState, owner: &str, run_id: &str, mut command: Value) -> Result<(), ServiceError> {
     if !matches!(command["type"].as_str(), Some("response" | "interrupt" | "steer" | "userInputState")) { return Err(error("CODEX_COMMAND_INVALID", "无效的 Codex 响应")); }
     let runs = runtime.active.lock().unwrap();
     let run=runs.get(run_id).filter(|run| run.owner == owner).ok_or_else(|| error("CODEX_RUN_NOT_FOUND", "本轮对话已结束"))?;
@@ -643,9 +690,11 @@ pub(crate) fn send_command(runtime: &CodexState, owner: &str, run_id: &str, comm
         if guard.reply(id,&command["value"])?{return Ok(());}
         guard.tool_reply(id,&json!([command["value"],command["error"]]));
     }
-    if command["type"]=="interrupt"{run.cancelled.store(true,Ordering::Release);}
+    if command["type"]=="interrupt"&&run.cancelled.swap(true,Ordering::AcqRel){return Ok(());}
     let input = Arc::clone(&run.input);
     drop(runs);
     crate::execution_receipts::replied(&runtime.receipts_path(),owner,run_id,&command).map_err(|e|error(e.code,e.message))?;
+    if command["type"]=="response"{if let Some(id)=command["requestId"].as_str(){runtime.streams.replied(owner,run_id,id,&command)?;}}
+    command["runId"]=json!(run_id);
     write_command(&input, &command)
 }

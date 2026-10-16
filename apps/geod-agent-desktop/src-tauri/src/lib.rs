@@ -22,6 +22,7 @@ mod online_boundary;
 mod boundary_inputs;
 mod schedules;
 mod codex_runtime;
+mod codex_stream;
 mod ai_channels;
 mod sponsored_channels;
 mod raster_protocol;
@@ -31,6 +32,7 @@ mod data_jobs;
 mod data_schedules;
 mod data_credentials;
 mod imagery_recovery;
+mod history_recovery;
 mod imagery_task_cleanup;
 mod cache_management;
 mod data_asset_protocol;
@@ -1406,7 +1408,7 @@ async fn osm_basemap_tile(app: AppHandle, z: u8, x: u32, y: u32) -> Result<Strin
 fn desktop_runtime_capabilities(app: AppHandle) -> serde_json::Value {
     serde_json::json!({"version": env!("CARGO_PKG_VERSION"), "ipcContract": 1, "exportCrs": true,
         "exportOptions": ["targetCrs", "resampling"], "conversationOutputCrs": true,
-        "systemTray": desktop_tray::available(&app),"contextSettings":true,"conversationExecution":true,"executionSafety":true})
+        "systemTray": desktop_tray::available(&app),"contextSettings":true,"conversationExecution":true,"executionSafety":true,"conversationReconnect":true,"followupReceipts":true})
 }
 
 pub fn run() {
@@ -1499,6 +1501,7 @@ pub fn run() {
                         if let Err(error) = store.recover_verifying_jobs() { eprintln!("GeoD artifact recovery failed: {}", error.code); }
                     }
                 });
+                download_telemetry::start(app.handle().clone());
                 schedules::start(app.handle().clone());
                 data_schedules::start(app.handle().clone());
                 ai_schedules::start(app.handle().clone());
@@ -1571,6 +1574,8 @@ pub fn run() {
             cache_management::cache_relocation_preflight,
             cache_management::cache_relocation_start,
             imagery_recovery::imagery_plans_claim,
+            history_recovery::imagery_history_inspect,
+            history_recovery::imagery_history_restore,
             imagery_task_cleanup::imagery_tasks_list,
             imagery_task_cleanup::imagery_tasks_cleanup,
             imagery_recovery::imagery_recovery_plan,
@@ -1678,9 +1683,14 @@ pub fn run() {
             services::credit_history::agent_credit_history_export,
             services::agent_payment_action,
             services::agent_events,
+            download_telemetry::download_telemetry_set,
             services::agent_generation_get,
             codex_runtime::codex_available,
             codex_runtime::codex_turn,
+            codex_runtime::codex_run_reconnect,
+            codex_runtime::codex_callback_claim,
+            codex_runtime::codex_followup_send,
+            codex_runtime::codex_followup_status,
             codex_runtime::codex_fork,
             agent_memory::agent_memory_list,
             agent_memory::agent_memory_save,
@@ -1723,6 +1733,7 @@ pub fn run() {
             mcp_oauth::mcp_oauth_status,
             image_inputs::image_attachment_add,
             image_inputs::image_attachment_preview,
+            image_inputs::conversation_attachments_list,
             attachment_inputs::document_attachment_add,
             attachment_inputs::audio_attachment_draft,
             attachment_inputs::audio_attachment_edit,
@@ -1870,3 +1881,4 @@ mod workspace_tests {
         assert_eq!(boundary.polygon_count, 1);
     }
 }
+mod download_telemetry;

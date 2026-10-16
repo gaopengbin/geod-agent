@@ -7,6 +7,7 @@ export interface TurnWork {
   turnIds: string[];
   items: DisplayMessage[];
   outcome?: "completed" | "interrupted" | "incomplete" | "failed";
+  durationMs?:number;
 }
 export type TranscriptEntry = DisplayMessage | TurnWork;
 export const isTurnWork = (entry: TranscriptEntry): entry is TurnWork => "kind" in entry && entry.kind === "work";
@@ -45,7 +46,7 @@ export function groupWorkRecords(messages: DisplayMessage[]): TranscriptEntry[] 
     const historicalInput = item.userInput && item.userInput.status !== "pending"
       && (completedUsers.has(item.userInput.userMessageId ?? userId ?? "") || completedTurns.has(item.turnId ?? ""));
     const work = (item.role === "tool" || item.phase === "progress") && item.role !== "user"
-      && !item.sourceDraft && !item.extensionProposal && !item.backgroundJob && (!item.userInput || historicalInput) && !item.turnOutcome;
+      && !item.sourceDraft && !item.extensionProposal && !item.backgroundJob && !item.connection && (!item.userInput || historicalInput) && !item.turnOutcome;
     if (work) {
       const turnId = item.turnId ?? item.monitorTrace?.[0]?.turnId;
       const id = turnId ?? legacyTurn;
@@ -67,7 +68,7 @@ export function groupWorkRecords(messages: DisplayMessage[]): TranscriptEntry[] 
       const terminal = item.turnOutcome?.status ?? (item.role === "assistant" && item.phase !== "progress" && !item.streaming ? "completed" : undefined);
       if (terminal) {
         const group = (item.turnId ? turns.get(item.turnId) : undefined) ?? currentGroup;
-        if (group) group.outcome = terminal;
+        if (group) {group.outcome = terminal;group.durationMs=item.turnDurationMs??item.turnOutcome?.durationMs;}
       }
       entries.push(item);
       if ((item.role === "assistant" && item.phase !== "progress") || item.turnOutcome) {
@@ -117,7 +118,8 @@ export function projectWorkActivities(items: DisplayMessage[], active: boolean):
   return activities;
 }
 
-export function workRecordState(item: DisplayMessage, active: boolean): "running" | "attention" | "success" | "recorded" {
+export function workRecordState(item: DisplayMessage, active: boolean): "running" | "attention" | "success" | "recorded" | "stopped" {
+  if(item.toolStatus==='stopped')return 'stopped';
   if (item.toolStatus === "attention" || !active && item.toolStatus === "running") return "attention";
   if (active && (item.toolStatus === "running" || item.streaming)) return "running";
   return item.toolStatus === "success" ? "success" : "recorded";

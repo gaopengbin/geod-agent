@@ -33,7 +33,7 @@
 .resizable-workspace > .map-column { grid-column: 3; }
 .resizable-workspace > .right-panel { grid-column: 4; }
 .ai-workspace.resizable-workspace.results-open .right-panel { position: static; width: auto; max-width: none; box-shadow: none; z-index: auto; }
-.ai-workspace[data-layout="compact"].results-open .right-panel { position: absolute; grid-column: auto; grid-row: auto; top: 0; left: var(--canvas-start); right: 0; bottom: 0; margin: 12px; z-index: 10; animation: inspector-enter var(--app-motion-panel) var(--app-ease); }
+.ai-workspace[data-tasks-overlay="true"].results-open .right-panel { position: absolute; grid-column: auto; grid-row: auto; top: 0; left: var(--canvas-start); right: 0; bottom: 0; margin: 12px; z-index: 10; animation: inspector-enter var(--app-motion-panel) var(--app-ease); }
 .ai-workspace:is([data-layout="overlay"], [data-layout="compact"]):not(.results-open) > .map-column { margin-right: 12px; }
 .ai-workspace[data-layout="single"] > :is(.map-column, .right-panel) { margin: 0; border: 0; border-radius: 0; }
 .ai-workspace[data-layout="single"] .agent-header { padding-inline: 18px; }

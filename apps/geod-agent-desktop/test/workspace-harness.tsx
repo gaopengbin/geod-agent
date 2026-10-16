@@ -9,6 +9,13 @@ import jobTimeline from "./fixtures/job-timeline.json";
 import type { StoredPlan, Job, JobEvent } from "../src/api";
 import { ChatTranscript } from "../src/chat-ui";
 import type { DisplayMessage } from "../src/pending-generations";
+import { PromptInput } from "../src/components/agents/prompt-input";
+import { MessageQueue } from "../src/message-queue";
+import type { QueuedInput } from "../src/pending-generations";
+import { turnOutcomeMessage } from "../src/turn-outcome";
+import { ContextWindow } from "../src/context-window";
+import { contextWindowUsage } from "../src/conversation-context";
+import { ChevronDown, ShieldCheck } from "../src/icons";
 import "../src/styles.css";
 import "../src/theme.css";
 import "../src/workspace.css";
@@ -30,11 +37,22 @@ function Harness() {
   const streaming=new URLSearchParams(location.search).has("stream");
   const [tasks, setTasks] = useState(true);
   const [focus, setFocus] = useState(false);
+  const [busy, setBusy] = useState(new URLSearchParams(location.search).has("busy"));
+  const [queued, setQueued] = useState<QueuedInput[]>([]);
+  const [paused, setPaused] = useState(false);
+  const [rows, setRows] = useState<DisplayMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [submitted, setSubmitted] = useState("");
   const layout = useResizableWorkspace(focus ? "focus" : tasks ? "tasks" : "map");
   return <TooltipProvider><div className="app-shell"><header className="app-header custom-titlebar"><div className="brand"><img src="/geod-symbol.png" alt=""/><strong>GeoD <span>Agent</span></strong></div><div style={{ display: "flex", gap: 8 }}><Button size="sm" variant="ghost" onClick={() => setFocus(!focus)}>新对话视图</Button><Button size="sm" variant="ghost" onClick={() => setTasks(!tasks)}>任务面板</Button></div></header><div ref={layout.ref} style={layout.style} {...layout.attributes} data-render-count={renders.current} className={`workspace ai-workspace resizable-workspace ${focus ? "new-chat" : ""} ${tasks ? "results-open" : ""} ${layout.dragging ? "panels-resizing" : ""}`}>
     <aside className="conversation-sidebar" style={{ padding: 16 }}><strong>新对话</strong><p>图源管理</p><p>技能与连接器</p><p>默认工作区</p></aside>
-    <section className="agent-panel agent-primary"><div className="agent-header"><strong>下载天津影像</strong></div>{streaming?<StreamingTranscript/>:<div style={{ padding: 20, flex: 1 }}>已配置图源，开始执行下载。<p>可以在右侧查看任务进度和成果。</p></div>}<div className="agent-composer"><div className="geod-prompt-input" style={{ padding: 16, minHeight: 100 }}>描述需求、粘贴内容，或添加 GeoJSON 边界</div></div></section>
-    {!focus && <main className="map-column" style={{ background: "var(--app-subtle)", display: "grid", placeItems: "center", color: "var(--app-faint-text)" }}>地图区域</main>}
+    <section className="agent-panel agent-primary">
+      <div className="agent-header"><strong>布局验收 · 演示数据</strong></div>
+      {streaming ? <StreamingTranscript/> : rows.length ? <ChatTranscript conversationId="queue-fixture" messages={rows} busy={busy} activity="正在处理…" onReviewSource={()=>{}} onApproveExtension={()=>{}} onContinueTurn={()=>setSubmitted('不应为主动停止提供继续按钮')}/> : <div style={{padding:20,flex:1}}>验证分割线和输入栏，不会调用模型或启动下载。<p role="status">{submitted}</p></div>}
+      <MessageQueue items={queued} paused={paused} sendingId={null} onPausedChange={setPaused} onRemove={id=>setQueued(items=>items.filter(item=>item.id!==id))} onSendNow={item=>{setRows(old=>[...old,{id:item.id,role:'user',content:item.text}]);setQueued(items=>items.filter(row=>row.id!==item.id));}}/>
+      <div className="agent-composer"><PromptInput className="geod-prompt-input" value={input} onValueChange={setInput} placeholder="描述需求，添加图片、数据网址或矢量范围" models={[{value:"luna",label:"社区赞助 · GPT-6 Luna · 赞助",shortLabel:"GPT-6 Luna · 赞助"}]} model="luna" actions={[{value:"data",label:"添加数据范围"}]} loading={busy} allowSteer loadingSubmitLabel="加入消息队列" onStop={()=>{setBusy(false);setPaused(true);setRows(old=>[...old,turnOutcomeMessage('stopped-fixture',{status:'interrupted',message:'已停止'})]);}} onSubmit={value=>{if(busy)setQueued(items=>[...items,{id:crypto.randomUUID(),text:value,createdAt:new Date().toISOString()}]);else setRows(old=>[...old,{id:crypto.randomUUID(),role:'user',content:value}]);setInput("");}} toolbarContent={<div className="composer-controls"><button type="button" className="composer-permission-trigger full-access" aria-label="工作区权限（布局演示）"><ShieldCheck size={16}/><span>完全访问</span><ChevronDown size={14}/></button><ContextWindow usage={contextWindowUsage([])} compressedBefore={false} lastInputTokens={null}/></div>}/></div>
+    </section>
+    {!focus && <main className="map-column" style={{ background: "var(--app-subtle)", color: "var(--app-faint-text)" }}>地图区域</main>}
     {!focus && tasks && <aside className="right-panel task-panel panel-scroll" aria-label="任务与成果"><TaskPanel tasks={[{stored:plan,job,state:job.state}]} onTaskSelect={() => {}} onTaskAction={async () => {}} onStart={async () => {}} onDiscard={async () => {}} plan={plan} job={job} events={jobTimeline as JobEvent[]} manifest={null} jobs={[job]} activeJobs={[job.jobId]} working={false} error="" notice="任务已入账并开始执行。进度以本机记录为准。" onClearError={() => {}} onClearNotice={() => {}} onRefresh={() => {}} onSelect={() => {}} onResume={() => {}} onPause={() => {}} onCancel={() => {}} /></aside>}
     {layout.separators}
   </div></div></TooltipProvider>;

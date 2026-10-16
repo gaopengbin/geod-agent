@@ -25,6 +25,13 @@
 .agent-work-records-trigger > svg.is-open { transform: rotate(90deg); }
 .agent-work-record-trigger > svg.is-open, .agent-activity-trigger > svg.is-open { transform: rotate(180deg); }
 .agent-work-records-body { min-width: 0; }
+.agent-connection-notice { color:var(--app-muted-text); font-size:13px; min-width:0; }
+.agent-connection-trigger { display:flex; align-items:center; justify-content:flex-start; gap:6px; height:auto; min-height:28px; padding:3px 0; color:inherit; font-size:13px; font-weight:400; }
+.agent-connection-trigger > svg { flex:none; transition:transform .18s; }
+.agent-connection-trigger > svg.is-open { transform:rotate(180deg); }
+.agent-reconnect-count { display:inline-flex; overflow:hidden; height:20px; line-height:20px; font-variant-numeric:tabular-nums; }
+.agent-reconnect-count > span { display:inline-block; }
+.agent-connection-details p { margin:3px 0 8px 20px; color:var(--app-muted-text); font-size:12px; line-height:1.7; white-space:pre-wrap; overflow-wrap:anywhere; }
 .agent-work-records-body[hidden], .agent-work-record-details[hidden], .agent-activity-body[hidden] { display: none; }
 .agent-work-flow { display: flex; flex-direction: column; min-width: 0; gap: 10px; padding-block: 4px; }
 .agent-work-record { position: relative; min-width: 0; font-size: 13px; line-height: 1.65; }

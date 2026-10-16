@@ -8,6 +8,7 @@ import {join,resolve} from 'node:path';
 import {randomUUID,timingSafeEqual,createHash} from 'node:crypto';
 import {pathToFileURL,fileURLToPath} from 'node:url';
 import {inputWaitDeadline} from './codex-input-wait.mjs';
+import {createTurnInterrupt} from './codex-control.mjs';
 import {BULK_DATA_POLICY,compactGeometryRequest,compactGeometryHistory,persistEmbeddedGeometryRequest,persistEmbeddedGeometryHistory} from './codex-bulk-data.mjs';
 export {BULK_DATA_POLICY} from './codex-bulk-data.mjs';
 import {createOutputCompactor,RTK_OUTPUT_POLICY} from './rtk-output.mjs';
@@ -176,11 +177,11 @@ export async function createHost({codex,home,sqliteHome=home,toolsFile,emit,rece
   const indexFile=join(home,'geod-threads.json');
   let index={};try{index=JSON.parse(readFileSync(indexFile,'utf8'));}catch{}
   const threadRecord=value=>typeof value==='string'?{id:value}:value;
-  const notify=value=>emit({...value,...(run?{runId:run.runId}:{})});
+  const notify=value=>emit({...value,runId:value.runId??run?.runId});
   const policy=new RuntimePolicy(home,declared,{onSignal:signal=>notify({type:'policySignal',...signal})});
   const send=value=>child.stdin.write(JSON.stringify(value)+'\n');
   const rpc=(method,params)=>new Promise((resolve,reject)=>{
-    const id=++serial,timer=setTimeout(()=>{rpcPending.delete(id);reject(new Error(`Codex ${method} timed out`));},100000);
+    const id=++serial,timer=setTimeout(()=>{rpcPending.delete(id);reject(Object.assign(new Error(`Codex ${method} timed out`),{code:'CODEX_RPC_TIMEOUT'}));},100000);
     rpcPending.set(id,{resolve,reject,timer});send({id,method,params});
   });
   const ask=(type,data,{requestId=randomUUID(),timeout=type==='request'?600000:180000}={})=>new Promise((resolve,reject)=>{
@@ -189,7 +190,7 @@ export async function createHost({codex,home,sqliteHome=home,toolsFile,emit,rece
   });
   const heartbeat=setInterval(()=>{if(run)notify({type:'heartbeat'});},3000);
   const cancelBackgroundWaits=()=>{for(const [requestId,entry]of callbacks)if(entry.backgroundWait){notify({type:'backgroundWaitCancel',requestId});entry.resolve({error:'BACKGROUND_WAIT_DETACHED',state:'unknown',verified:false});entry.deadline.close();callbacks.delete(requestId);}};
-  const interrupt=async()=>{policy.cancel();cancelBackgroundWaits();if(run)run.interrupt=true;if(run?.turnId)await rpc('turn/interrupt',{threadId:run.threadId,turnId:run.turnId});};
+  const interrupt=createTurnInterrupt({getRun:()=>run,cancel:()=>{policy.cancel();cancelBackgroundWaits();},rpc});
   const refreshFacts=async()=>{if(capabilities.runtimePolicyNative){const facts=await ask('policyState',{}, {timeout:10000});if(facts.error){policy.cancel();throw Object.assign(new Error(facts.message),{code:facts.error});}policy.setFacts(facts);}};
   const server=createServer(async(req,res)=>{
     let streamStarted=false;
@@ -308,6 +309,7 @@ export async function createHost({codex,home,sqliteHome=home,toolsFile,emit,rece
   };
   const unsubscribe=receive(async command=>{
     try {
+      if(command.runId&&command.runId!==run?.runId){if(command.type==='steer')notify({type:'commandError',runId:command.runId,commandType:'steer',requestId:command.requestId,code:'CODEX_TURN_NOT_ACTIVE',message:'原回复已结束，消息尚未提交。'});return;}
       if(command.type==='response'){
         const entry=callbacks.get(command.requestId);if(!entry)return;callbacks.delete(command.requestId);clearTimeout(entry.timer);entry.deadline?.close();entry.close?.();
         command.error?entry.reject(Object.assign(new Error(command.error),{code:command.errorCode})):entry.resolve(command.value);
@@ -317,8 +319,14 @@ export async function createHost({codex,home,sqliteHome=home,toolsFile,emit,rece
       else if(command.type==='interrupt')await interrupt();
       else if(command.type==='policyResume')policy.resume();
        else if(command.type==='backgroundProgress')notify({type:'stage',stage:'backgroundWaiting',message:command.message??'正在等待本机任务完成…'});
-         else if(command.type==='steer'&&run?.turnId){policy.steer(command.text);cancelBackgroundWaits();run.modelInput?.catalog.steer(command.text);await rpc('turn/steer',{threadId:run.threadId,expectedTurnId:run.turnId,input:[{type:'text',text:command.text}]});notify({type:'steered',text:command.text});}
-    }catch(error){notify({type:'commandError',message:String(error.message)});}
+          else if(command.type==='steer'){
+            const active=run;
+            if(!active?.turnId||active.completed||active.interrupt)throw Object.assign(new Error('当前回复已结束，消息将在下一轮发送。'),{code:'CODEX_TURN_NOT_ACTIVE'});
+            await rpc('turn/steer',{threadId:active.threadId,expectedTurnId:active.turnId,input:[{type:'text',text:command.text},...(command.images??[]).map(url=>({type:'image',url,detail:'auto'}))]});
+            policy.steer(command.text);cancelBackgroundWaits();active.modelInput?.catalog.steer(command.text);
+            notify({type:'steered',runId:active.runId,text:command.displayText??command.text,input:command.text,requestId:command.requestId,imageIds:command.imageIds,documentIds:command.documentIds});
+          }
+    }catch(error){notify({type:'commandError',runId:command.runId??run?.runId,commandType:command.type,requestId:command.requestId,outcomeUnknown:error.code==='CODEX_RPC_TIMEOUT'||error.code==='CODEX_PROCESS_ERROR',code:command.type==='steer'&&/no active turn/i.test(String(error.message))?'CODEX_TURN_NOT_ACTIVE':error.code,message:String(error.message)});}
   });
   const boot=async params=>{
     configure(params);
@@ -340,7 +348,7 @@ export async function createHost({codex,home,sqliteHome=home,toolsFile,emit,rece
     });
     createInterface({input:child.stdout}).on('line',async line=>{
       let value;try{value=JSON.parse(line);}catch{return;}
-      if('id'in value&&!value.method){const pending=rpcPending.get(value.id);if(pending){rpcPending.delete(value.id);clearTimeout(pending.timer);value.error?pending.reject(new Error(value.error.message)):pending.resolve(value.result);}return;}
+      if('id'in value&&!value.method){const pending=rpcPending.get(value.id);if(pending){rpcPending.delete(value.id);clearTimeout(pending.timer);value.error?pending.reject(Object.assign(new Error(value.error.message),{code:'CODEX_RPC_REJECTED',rpcCode:value.error.code})):pending.resolve(value.result);}return;}
       if('id'in value&&value.method){
         try{
           if(value.params?.threadId&&run?.threadId&&value.params.threadId!==run.threadId)throw new Error('THREAD_NOT_IN_RUN');
@@ -366,19 +374,22 @@ export async function createHost({codex,home,sqliteHome=home,toolsFile,emit,rece
                }
                return result;
              });
-             send({id:value.id,result:{success:!result?.error,contentItems:[{type:'inputText',text:JSON.stringify(result)}]}});
+             const imageResult=result?.imageContent;
+             if(imageResult&&!capabilities.inputModalities?.includes('image')){send({id:value.id,result:{success:false,contentItems:[{type:'inputText',text:JSON.stringify({error:'CHANNEL_IMAGE_UNSUPPORTED',message:'图片附件存在；当前模型不能读取像素。请选择支持图片的模型，不要推断图片不存在。'})}]}});}
+             else send({id:value.id,result:{success:!result?.error,contentItems:imageResult?[{type:'inputText',text:JSON.stringify({...result,imageContent:undefined})},{type:'inputImage',imageUrl:imageResult}]:[{type:'inputText',text:JSON.stringify(result)}]}});
           }else {const output=await ask('request',{method:value.method,params:value.params},{timeout:value.method==='item/tool/requestUserInput'?0:600000});send({id:value.id,result:output});}
         }catch(error){send({id:value.id,error:{code:-32000,message:String(error.message)}});}return;
       }
       if(!run)return;
       if(value.params?.threadId&&run.threadId&&value.params.threadId!==run.threadId)return;
-      if(value.method==='turn/started'){run.turnId=value.params.turn.id;if(run.interrupt)void interrupt();}
+      if(value.method==='turn/started'){run.turnId=value.params.turn.id;if(run.interrupt)void interrupt().catch(error=>run?.reject(error));}
       if(value.method==='item/agentMessage/delta'){const id=value.params.itemId;run.output.set(id,(run.output.get(id)??'')+value.params.delta);}
       if(value.method==='item/completed'&&value.params.item.type==='agentMessage')run.output.set(value.params.item.id,value.params.item.text);
        if(value.method==='item/completed')policy.coreItemCompleted(value.params.item);
+      if(value.method==='turn/completed')run.completed=true;
       hookGate?.observe(value.method,value.params);
       notify({type:'event',method:value.method,params:value.params});
-      if(value.method==='turn/completed')run.resolve({threadId:run.threadId,...value.params.turn,text:[...run.output.values()].at(-1)??''});
+      if(value.method==='turn/completed'){run.completed=true;run.resolve({threadId:run.threadId,...value.params.turn,text:[...run.output.values()].at(-1)??''});}
     });
     const info=await rpc('initialize',{clientInfo:{name:'geod_agent_desktop',title:'GeoD Agent',version:'0.2.0'},capabilities:{experimentalApi:true}});
     if(!info.userAgent?.includes('/0.159.2 '))throw new Error('此版本需要配套的 Codex 0.159.2 引擎。');
@@ -402,7 +413,7 @@ export async function createHost({codex,home,sqliteHome=home,toolsFile,emit,rece
     async turn(params,runId=randomUUID()){
       if(run)throw new Error('Codex 正在处理上一轮对话');
       let resolveTurn,rejectTurn;const finished=new Promise((resolve,reject)=>{resolveTurn=resolve;rejectTurn=reject;});finished.catch(()=>{});
-      run={runId,params,outputCompactor:createOutputCompactor(params.rtkOutput),output:new Map(),resolve:resolveTurn,reject:rejectTurn,threadId:null,turnId:null,interrupt:false};
+      run={runId,params,startedAt:Date.now(),outputCompactor:createOutputCompactor(params.rtkOutput),output:new Map(),resolve:resolveTurn,reject:rejectTurn,threadId:null,turnId:null,interrupt:false};
        policy.begin({...params,runId},capabilities);
       try{
         await boot(params);notify({type:'capabilities',capabilities:{...capabilities,engine:'Codex',version:'0.159.2'}});
@@ -443,7 +454,7 @@ export async function createHost({codex,home,sqliteHome=home,toolsFile,emit,rece
           :{type:'readOnly',networkAccess:false};
         // Resume can rejoin an already loaded thread; refresh execution permissions per turn.
         const turn=await rpc('turn/start',{threadId:run.threadId,input,cwd:params.workspace,runtimeWorkspaceRoots:[params.workspace],approvalPolicy:overrides.approvalPolicy,sandboxPolicy});run.turnId=turn.turn.id;if(run.interrupt)await interrupt();
-         const outcome=await finished;policy.finish(outcome.status);return outcome;
+          const outcome=await finished;policy.finish(outcome.status);return {...outcome,durationMs:Date.now()-run.startedAt};
       }finally{
         hookGate?.clear();
         for(const entry of callbacks.values()){clearTimeout(entry.timer);entry.deadline?.close();entry.close?.();entry.reject(new Error('Codex turn ended'));}callbacks.clear();run=null;
@@ -475,4 +486,4 @@ async function main(){
 }
 // Node resolves module URLs through directory junctions, while argv keeps the
 // launch path. Packaged development profiles can expose both paths.
-if(process.argv[1]&&pathToFileURL(realpathSync.native(resolve(process.argv[1]))).href===import.meta.url)await main();
+if(process.argv[1]&&realpathSync.native(resolve(process.argv[1]))===realpathSync.native(fileURLToPath(import.meta.url)))await main();

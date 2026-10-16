@@ -1,0 +1,24 @@
+.history-recovery-notice { display:flex; align-items:center; gap:8px; padding:8px 20px; border-bottom:1px solid var(--app-line); color:var(--app-soft-text); font-size:13px; }
+.history-recovery-notice > svg { flex:none; color:var(--app-warning); }
+.history-recovery-notice > span { flex:1; min-width:0; }
+.history-recovery-notice button { flex:none; white-space:nowrap; }
+.dialog.history-recovery-dialog { width:min(580px,calc(100vw - 32px)); max-height:calc(100dvh - 40px); display:flex; flex-direction:column; }
+.history-recovery-dialog .dialog-head { align-items:flex-start; }
+.history-recovery-dialog .dialog-head > div { min-width:0; }
+.history-recovery-dialog .dialog-head > button { flex:none; }
+.history-recovery-dialog .dialog-head p { margin:6px 0 0; line-height:1.6; font-size:13px; color:var(--app-soft-text); }
+.history-recovery-scroll { min-height:0; flex:1; }
+.history-recovery-section + .history-recovery-section { margin-top:20px; padding-top:16px; border-top:1px solid var(--app-line); }
+.history-recovery-section h3 { margin:0 0 8px; font-size:14px; font-weight:600; }
+.history-recovery-section p,.history-recovery-dialog .dialog-body > p { font-size:13px; color:var(--app-soft-text); line-height:1.7; }
+.history-recovery-path { display:block; margin:8px 0 12px; font-size:12px; overflow-wrap:anywhere; color:var(--app-text); }
+.history-recovery-actions,.history-recovery-progress,.history-recovery-success { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
+.history-recovery-details { margin-top:20px; color:var(--app-soft-text); font-size:12px; }
+.history-recovery-details summary { cursor:pointer; padding:4px 0; }
+.history-recovery-details dl { margin:8px 0 0; padding:12px; background:var(--app-subtle); border-radius:8px; }
+.history-recovery-details dt { margin-top:8px; font-weight:600; }
+.history-recovery-details dt:first-child { margin-top:0; }
+.history-recovery-details dd { margin:4px 0 0; overflow-wrap:anywhere; user-select:text; }
+.history-recovery-footer { justify-content:space-between; flex-wrap:wrap; }
+.history-recovery-footer > div { display:flex; flex-wrap:wrap; gap:8px; }
+.history-recovery-dialog .form-error { color:var(--app-warning); }

@@ -88,7 +88,7 @@ function bounded(value,limit=3000){const text=JSON.stringify(value);return text.
 export class RuntimePolicy {
  constructor(home,declared,{now=()=>Date.now(),onSignal=()=>{}}={}){
   this.now=now;this.onSignal=onSignal;this.schemas=new Map(declared.map(({function:t})=>[t.name,t.parameters]));this.home=home;mkdirSync(home,{recursive:true});
-  this.file=join(home,'execution-checkpoint.json');this.results=join(home,'execution-results');mkdirSync(this.results,{recursive:true});this.pending=new Map();this.callRevisions=new Map();this.cancelled=true;this.facts={};
+  this.file=join(home,'execution-checkpoint.json');this.results=join(home,'execution-results');mkdirSync(this.results,{recursive:true});this.discoveryMemo=new Map();this.pending=new Map();this.callRevisions=new Map();this.cancelled=true;this.facts={};
   try{this.state=JSON.parse(readFileSync(this.file,'utf8'));if(this.state.version!==POLICY_VERSION)throw new Error('Unsupported checkpoint version');}
   catch(cause){if(cause.code!=='ENOENT')throw cause;this.state={version:POLICY_VERSION,revision:1,goal:null,requirements:{},operations:{},failures:{},evidence:{},metrics:{executed:0,reused:0,blocked:0,retries:0,strategyReviews:0},stagnation:0};}
   // A pending side effect after a crash is UNKNOWN, not permission to resend.
@@ -209,6 +209,15 @@ export class RuntimePolicy {
   }
   const blocked=Object.values(this.state.failures).find(f=>f.scope===this.failureScope(f,desc)&&['transient','permission','authentication','capability','business'].includes(f.category)&&f.condition===this.condition(f,desc)&&(!f.retryAt||f.retryAt>this.now()));
   if(blocked){this.noProgress(tool,blocked.code,hash([blocked.scope,blocked.category]));this.state.metrics.blocked++;this.audit('condition-blocked',{tool,category:blocked.category});return error('RECOVERY_CONDITION_UNCHANGED','A prerequisite has not changed. Reuse the known failure, obtain the missing condition, or use another valid capability.',{failure:blocked});}
+  // Memoize catalog/contract discovery only. Task status, SQL, file contents,
+  // source availability and remote dataset searches remain live reads.
+  const discovery=tool==='runtime_tools_search'||tool==='extensions_list';
+  const discoveryKey=hash([tool,args,this.state.run?.id,this.state.revision,this.state.contract,this.facts.connectionsRevision,this.state.discoveryRevision]);
+  const memo=this.discoveryMemo.get(discoveryKey);
+  if(discovery&&memo&&memo.until>this.now()){
+    this.state.metrics.reused++;this.noProgress(tool,'UNCHANGED_DISCOVERY','discovery:'+this.state.goal.id);this.audit('discovery-reused',{tool});
+    return {...clean(memo.result),reusedDiscovery:true};
+  }
   if(this.pending.has(operationKey))return this.pending.get(operationKey);
   const work=(async()=>{
     const operation={id:randomUUID(),tool:canonicalTool,state:'pending',goalId,revision,argsHash:hash(canonicalArgs),resource:desc.resource};
@@ -246,6 +255,12 @@ export class RuntimePolicy {
      this.registerResource(canonicalTool,nativeResult,evidenceId,verified);
     if(!seen){this.state.stagnation=0;}else if(desc.effect==='read'&&!desc.wait)this.noProgress(tool,'UNCHANGED_RESULT');
     for(const [key,f]of Object.entries(this.state.failures))if(f.scope===String(desc.conditionScope))delete this.state.failures[key];
+   }
+   if(discovery&&operation.state==='succeeded'){
+     // Discovery can activate contracts and advance discoveryRevision itself.
+     const key=hash([tool,args,this.state.run?.id,this.state.revision,this.state.contract,this.facts.connectionsRevision,this.state.discoveryRevision]);
+     this.discoveryMemo.set(key,{until:this.now()+90000,result:clean(result)});
+     if(this.discoveryMemo.size>100)this.discoveryMemo.delete(this.discoveryMemo.keys().next().value);
    }
    this.audit('result',{tool,operationId:operation.id,state:operation.state});return clean(result);
   })();this.pending.set(operationKey,work);try{return await work;}finally{this.pending.delete(operationKey);}

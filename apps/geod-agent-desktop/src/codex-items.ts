@@ -10,6 +10,12 @@ export const CODEX_HOOK_LABELS: Record<string, string> = {
 
 // Pinned to the generated protocol of the runtime checked by codex-host.
 export function reduceCodexItems(messages: DisplayMessage[], runId: string, method: string, params: Record<string, unknown>): DisplayMessage[] {
+  if(method==='error'&&params.willRetry===true){
+    const id=`connection-${runId}`,error=params.error as {message?:string;additionalDetails?:string}|undefined;
+    const item:DisplayMessage={id,turnId:runId,role:'tool',content:'正在重新连接',connection:{state:'reconnecting',attempt:typeof params.attempt==='number'?params.attempt:undefined,maxAttempts:typeof params.maxAttempts==='number'?params.maxAttempts:undefined,details:error?.additionalDetails||error?.message}};
+    return messages.some(row=>row.id===id)?messages.map(row=>row.id===id?item:row):[...messages,item];
+  }
+  if((method==='item/agentMessage/delta'||method==='turn/completed')&&messages.some(item=>item.turnId===runId&&item.connection))messages=messages.filter(item=>item.turnId!==runId||!item.connection);
   if(method==='turn/completed') {
     const turn=params.turn as {status:string;items?:ThreadItem[]} | undefined;
     if(turn?.status!=='completed')return messages;

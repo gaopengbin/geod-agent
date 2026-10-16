@@ -51,7 +51,7 @@ export class ConversationSession {
     if(replyId)this.set('readReplyId',replyId);
   }
   snapshot():Partial<SavedChat> {
-    const fields=['messages','display','pendingId','planId','planIds','contextCompressed','lastInputTokens','codexContext','completedReplyId','readReplyId'] as const;
+    const fields=['messages','display','pendingId','planId','planIds','contextCompressed','lastInputTokens','codexContext','completedReplyId','readReplyId','nativeRun'] as const;
     const result:Record<string,unknown>={};
     for(const key of fields)if(this.values.has(key))result[key]=this.values.get(key)??undefined;
     const workspace=this.values.get('workspace') as {directory?:string}|null;
@@ -96,5 +96,5 @@ export function conversationSessionSeed(chat?:SavedChat,pending?:PendingGenerati
     pendingId:pending&&!pending.committed?pending.generationId:chat?.pendingId??'',pendingNeedsReview:!!pending&&!pending.committed,
     planId:saved?.planId??'',planIds:saved?chatPlanIds(saved):[],planReady:!!saved?.planId,
     contextCompressed:!!saved?.contextCompressed,lastInputTokens:saved?.lastInputTokens??null,codexContext:saved?.codexContext??null,
-    boundary,error:boundaryError};
+    nativeRun:chat?.nativeRun??null,boundary,error:boundaryError};
 }

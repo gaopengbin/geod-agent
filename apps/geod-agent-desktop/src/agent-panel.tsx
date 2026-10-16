@@ -3,7 +3,7 @@ import {continueTaskContext} from './continue-task';
 import {inheritedImageryCrs,resolvedRevisionQuestions,revisionCrsForQuestions} from './imagery-revision';
 // i18n: presentation strings migrated
 import { localStateStore, flushLocalState } from "./local-state";
-import { TILES3D_CONNECTION_ID, tiles3dConnectionTools, executeTiles3dConnectionTool } from "./data-connection-tools";
+import { TILES3D_CONNECTION_ID, tiles3dConnectionTools, executeTiles3dConnectionTool, openTiles3dConnection } from "./data-connection-tools";
 import { IMAGERY_RECOVERY_PLANNED, planImageryRecovery, type ImageryRecoveryPlan } from "./imagery-recovery";
 import { executeDataScheduleTool, dataScheduleTools, executeCacheTool, cacheTools } from "./maintenance-tools";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ClipboardEvent } from "react";
@@ -21,6 +21,8 @@ import { UiTooltip } from "./ui-tooltip";
 import { PromptInput } from "@/components/agents/prompt-input";
 import { MorphPopover, MorphPopoverContent, MorphPopoverTrigger } from "@/components/motion/popover-morph";
 import { ContextWindow } from "./context-window";
+import { MessageQueue } from "./message-queue";
+import { inactiveInterrupt, queuedRequestId,queueLocked,editQueuedInput,receiptQueuedInputs,readyQueuedInput } from "./queued-inputs";
 import { AccountMenu } from "./account-menu";
 import type { GeoDAuth } from "./geod-auth";
 import { useAIModels, modelValue,availableAIChannels,SPONSORED_CHANNELS_VISIBLE } from "./ai-channels";
@@ -61,11 +63,14 @@ import {userApprovedMcpUrl,reconcileMcpProposals} from './mcp-onboarding';
 import {resolveMcpTarget,prepareMcpConnection} from './mcp-connection';
 import {repairSavedMcpHistory,knownSavedMcpAddress} from './mcp-history-repair';
 import {turnOutcomeMessage,outputFailureCode,modelResponseIssue,orphanedReasoningTurn,recoverTurnOutcome} from './turn-outcome';
-import {prepareCodexConversation,conversationBusyFailure,confirmedCreditRejection} from './codex-recovery';
+import {prepareCodexConversation,conversationBusyFailure,confirmedCreditRejection,inspectCodexCheckpoint} from './codex-recovery';
 import { McpRequestQueue } from "./mcp-request-queue";
 import { backgroundHandoff, backgroundRunning, backgroundStateLabels, type BackgroundSnapshot } from "./background-jobs";
 import { jobExecutionState, jobStatusFacts } from "./job-runtime";
 import { startPlanJob } from "./job-start";
+import { recoverPlanReferences, loadHistoryWorkspace, planRecoveryProblem, recoveryFailure, isPlanRecoveryNotice, type PlanRecoveryProblem } from "./plan-reference-recovery";
+import { HistoryRecovery } from "./history-recovery";
+import { waitForPlanApproval as waitForNativeApproval } from "./plan-approval";
 import { useBackgroundJobs } from "./use-background-jobs";
 import { TranscriptTaskGroup } from "./transcript-plan-card";
 import { assertPlanAvailable, discardedPlans, setPlanDiscarded, withPlanTaskLock, type QueueTask } from "./task-queue";
@@ -88,7 +93,7 @@ import type {ImageAttachment,DocumentAttachment} from "./api";
 import { receiveBoundarySelection } from "./boundary-selection";
 import { scheduleTools, SCHEDULE_CONNECTOR_ID } from "./schedule-tools";
 import { dataDownloadTools, DATA_DOWNLOAD_ID, executeDataDownloadTool } from "./data-download-tools";
-import { accountChatStore, chatPlanIds, CHAT_LIST_KEY, clearPending, commitPending, deleteStoredConversation, importLegacyChats, LEGACY_IMPORT_MARKER, legacyChats, pendingBoundary, persistCompletedChat, readPending, restorePendingChats, savePending, type DisplayMessage, type ExtensionProposal, type SavedChat } from "./pending-generations";
+import { accountChatStore, chatPlanIds, CHAT_LIST_KEY, clearPending, commitPending, deleteStoredConversation, importLegacyChats, LEGACY_IMPORT_MARKER, legacyChats, pendingBoundary, persistCompletedChat, readPending, restorePendingChats, savePending, type DisplayMessage, type ExtensionProposal, type SavedChat, type QueuedInput,type FollowupReceipt } from "./pending-generations";
 
 const WORKSPACE_LIST_KEY = "geod-agent-workspace-list-0.1";
 const ACTIVE_CHAT_KEY = "geod-agent-active-conversation-0.1";
@@ -171,15 +176,26 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
   const skillCandidates = session.ref("skillCandidates",new Map<string, OnlineSkillCandidate | SkillSourceCandidate>());
   const [pendingId, setPendingId] = useConversationState(session,"pendingId","");
   const [pendingNeedsReview, setPendingNeedsReview] = useConversationState(session,"pendingNeedsReview",false);
-  const [followupMode,setFollowupMode]=useConversationState<"queue"|"steer">(session,"followupMode","queue");
-  const [followupMenuOpen,setFollowupMenuOpen]=useConversationState(session,"followupMenuOpen",false);
+  const [queueSendingId,setQueueSendingId]=useConversationState<string|null>(session,"queueSendingId",null);
+  const [stopping,setStopping]=useConversationState(session,"stopping",false);
+  const [nativeRun,setNativeRun]=useConversationState<SavedChat['nativeRun']>(session,'nativeRun',null);
+  const stopRequested=session.ref("stopRequested",false);
+  const resumeQueueAfterStop=session.ref("resumeQueueAfterStop",false);
   const currentChat=chatRecords.find(chat=>chat.conversationId===conversationId);
   const queuedInputs=currentChat?.queuedInputs??[];
   const queuePaused=!!currentChat?.queuePaused;
-  function changeQueue(change:(chat:SavedChat)=>SavedChat){setChatRecords(chats=>chats.map(chat=>chat.conversationId===conversationId?change(chat):chat));}
+  const queueSnapshot=session.ref<Pick<SavedChat,'queuedInputs'|'queuePaused'>|null>('queueSnapshot',null);
+  function changeQueue(change:(chat:SavedChat)=>SavedChat){
+    const chat=chatRecordsRef.current.find(chat=>chat.conversationId===conversationId);if(!chat)return;
+    const next=change({...chat,...queueSnapshot.current});
+    queueSnapshot.current={queuedInputs:next.queuedInputs??[],queuePaused:!!next.queuePaused};
+    const update=queueSnapshot.current;
+    setChatRecords(chats=>chats.map(chat=>chat.conversationId===conversationId?{...chat,...update}:chat));
+  }
   const [planId, setPlanId] = useConversationState(session,"planId","");
   const planIdRef = session.ref("planIdRef",planId);
   const [planIds, setPlanIds] = useConversationState<string[]>(session,"planIds",[]);
+  const [historyProblem,setHistoryProblem]=useConversationState<PlanRecoveryProblem|null>(session,"historyProblem",null);
   const planIdsRef = session.ref<string[]>("planIdsRef",planIds);
   const ownedTasks = conversationTasks.filter(task => planIds.includes(task.stored.planId));
   useEffect(() => {
@@ -276,6 +292,10 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
     if(!item||JSON.stringify(item.tokenUsage)===JSON.stringify(tokenUsage))return;
     replaceDisplay(id,{tokenUsage});
     void persistQuestionTranscript().catch(()=>{});
+  }
+  async function waitForPlanApproval(requestId:string|undefined,approved:()=>Promise<boolean>,activity="等待确认下载计划…"){
+    await pauseUserWait(requestId,true);setLiveActivity(activity);
+    try{await waitForNativeApproval(approved,()=>stopRequested.current||userInputGate.current.cancelled);}finally{await pauseUserWait(requestId,false);}
   }
   async function waitForUserInput(request: CodexRequest,nativeRequestId?:string,toolCallId?:string,nativeReply?:(value:unknown)=>Promise<void>): Promise<unknown> {
     const question=request.method==='item/tool/requestUserInput';
@@ -507,10 +527,10 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
   const [liveActivity, setLiveActivity] = useConversationState(session,"liveActivity","正在思考下一步…");
   const [error, setError] = useConversationState(session,"error","");
   useEffect(()=>{
-    if(busy||sending.current||pendingId||queuePaused||!queuedInputs.length||status.state!=="connected"||status.userId!==accountId||!workspace)return;
-    const next=queuedInputs[0];const timer=window.setTimeout(()=>{if(sending.current)return;changeQueue(chat=>({...chat,queuedInputs:chat.queuedInputs?.filter(item=>item.id!==next.id)}));void send(next.text,next.images??[],true,next.documents??[]);},80);
+    if(busy||sending.current||nativeRun||queueSendingId||pendingId||queuePaused||!queuedInputs.length||status.state!=="connected"||status.userId!==accountId||!workspace)return;
+    const next=readyQueuedInput(queuedInputs);if(!next)return;const timer=window.setTimeout(()=>{if(sending.current||session.get('busy',false)||session.get('stopping',false))return;void send(next.text,next.images??[],true,next.documents??[],undefined,next.id);},80);
     return()=>window.clearTimeout(timer);
-  },[busy,pendingId,queuedInputs,queuePaused,conversationId,status.state,status.userId,accountId,workspace]);
+  },[busy,nativeRun,queueSendingId,pendingId,queuedInputs,queuePaused,conversationId,status.state,status.userId,accountId,workspace]);
   const [planReady, setPlanReady] = useConversationState(session,"planReady",false);
   const sending = session.ref("sending",false);
   const handledRegistration = session.ref<string | null>("handledRegistration",null);
@@ -548,21 +568,35 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
     if (status.state !== "connected") return;
     void api.workspaceDefault().then(value => setDefaultWorkspaceDirectory(value.directory)).catch(cause => setError(errorMessage(cause)));
   }, [status.state, status.userId]);
+  async function checkHistory(cancelled=()=>false):Promise<PlanRecoveryProblem|null> {
+    const historical=chatRecordsRef.current.find(item=>item.conversationId===conversationId);
+    const requested=[...new Set([...planIdsRef.current,...historical?.unavailablePlanIds??[]])];
+    try {
+      const {workspace:current,claim}=await loadHistoryWorkspace(()=>api.workspaceGet(conversationId),ids=>api.imageryPlansClaim(conversationId,ids),requested,historical?.workspaceDirectory);
+      if(cancelled())return null;
+      // Do not let the unbound default folder replace a saved historical path.
+      applyWorkspace(current);
+      const legacy=discardedPlans(localStateStore,status.userId??null,conversationId);
+      if(legacy.length){const records=await api.imageryTasksList(conversationId);const pending=records.filter(r=>legacy.includes(r.stored.planId)&&r.recordState==='visible'&&!r.job).map(r=>r.stored.planId);if(pending.length)await api.imageryTasksCleanup(conversationId,pending,'discard');}
+      if(cancelled())return null;
+      window.dispatchEvent(new Event('geod-task-queue-change'));
+      const references=recoverPlanReferences({planId:planIdRef.current||undefined,planIds:planIdsRef.current,unavailablePlanIds:historical?.unavailablePlanIds},claim);
+      const changed=JSON.stringify(planIdsRef.current)!==JSON.stringify(references.planIds);
+      planIdsRef.current=references.planIds??[];setPlanIds(planIdsRef.current);
+      planIdRef.current=references.planId??"";setPlanId(planIdRef.current);setPlanReady(!!planIdRef.current);
+      if(changed)onSelectConversation(planIdsRef.current,conversationId);
+      const problem=planRecoveryProblem(claim);setHistoryProblem(problem);
+      setError(previous=>isPlanRecoveryNotice(previous)?"":previous);
+      setChatRecords(records => records.map(item => item.conversationId === conversationId ? { ...item,...references, workspaceDirectory: current.directory } : item));
+      return problem;
+    }catch(cause){
+      const problem=recoveryFailure(cause,requested.length);if(!cancelled()){setHistoryProblem(problem);setError(previous=>isPlanRecoveryNotice(previous)?"":previous);}return problem;
+    }
+  }
   useEffect(() => {
     if (status.state !== "connected" || !conversationId) return;
     let cancelled = false;
-    void api.workspaceGet(conversationId).then(async current => {
-      if (cancelled) return;
-      applyWorkspace(current);
-      const planIds=planIdsRef.current;
-      const claim=planIds.length ? await api.imageryPlansClaim(conversationId,planIds) : {bound:[],rejected:[]};
-      if(cancelled)return;
-      const legacy=discardedPlans(localStateStore,status.userId??null,conversationId);
-      if(legacy.length){const records=await api.imageryTasksList(conversationId);const pending=records.filter(r=>legacy.includes(r.stored.planId)&&r.recordState==='visible'&&!r.job).map(r=>r.stored.planId);if(pending.length)await api.imageryTasksCleanup(conversationId,pending,'discard');}
-      window.dispatchEvent(new Event('geod-task-queue-change'));
-      if(claim.rejected.length)setError(`部分旧任务未能关联到当前工作区：${claim.rejected.map(item=>item.message).join("；")}`);
-      setChatRecords(records => records.map(item => item.conversationId === conversationId && item.workspaceDirectory !== current.directory ? { ...item, workspaceDirectory: current.directory } : item));
-    }).catch(cause => { if (!cancelled) setError(errorMessage(cause)); });
+    void checkHistory(()=>cancelled);
     return () => { cancelled = true; };
   }, [status.state, status.userId, conversationId]);
   useEffect(() => {
@@ -913,9 +947,18 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
         if (!reply) return { error: "USER_INPUT_CANCELLED", message: "用户取消了本次操作；未使用默认答案。" };
         return { answers:{...established.reused.answers,...reply.answers}, answeredBy: established.knownFacts?"userAndExistingRequirements":"user", ...(established.knownFacts?{knownFacts:established.knownFacts,reusedPreviousAnswer:true}:{}) };
       }
-      if(call.function.name==="attachment_list")return await api.documentAttachmentsList(conversationId);
+      if(call.function.name==="attachment_list")return await api.conversationAttachmentsList(conversationId);
       if(call.function.name==="attachment_read"){const id=stringArg(args.id);if(!id)return{error:"INVALID_ATTACHMENT_ID"};return await api.documentAttachmentRead(conversationId,id,typeof args.offset==="number"?args.offset:undefined,typeof args.limit==="number"?args.limit:undefined);}
-      if (call.function.name.startsWith("tiles3d_connection")) return await executeTiles3dConnectionTool(call.function.name, args);
+      if (call.function.name.startsWith("tiles3d_connection")) {
+        const profile=await executeTiles3dConnectionTool(call.function.name,args) as Record<string,unknown>;
+        if(call.function.name==="tiles3d_connection_prepare"&&typeof profile.id==="string"&&!profile.credentialReady){
+          const id=profile.id;let closed=false;const close=(event:Event)=>{if((event as CustomEvent).detail?.connectionId===id)closed=true;};
+          window.addEventListener("geod-data-connection-closed",close);openTiles3dConnection(id);
+          let latest=profile;
+          try{await waitForPlanApproval(nativeRequestId,async()=>{const list=await executeTiles3dConnectionTool("tiles3d_connections_list",{}) as {connections:Record<string,unknown>[]};const current=list.connections.find(c=>c.id===id);if(!current)throw new Error("连接已删除");latest=current;if(current.credentialReady)return true;if(closed)throw new Error("凭证填写已取消");return false;},"等待填写连接凭证…");return latest;}finally{window.removeEventListener("geod-data-connection-closed",close);}
+        }
+        return profile;
+      }
       if (call.function.name.startsWith("ai_schedules_")) return await executeAiScheduleTool(conversationId,call.function.name,args,`${generationId}:${call.id}`,context);
       if (call.function.name.startsWith("background_command_")) return await executeBackgroundCommandTool(conversationId,call.function.name,args,`${generationId}:${call.id}`);
       if (call.function.name.startsWith("agent_memory_")) return await executeMemoryTool(conversationId,call.function.name,args);
@@ -939,7 +982,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
         rememberPlan(result.stored, {userMessageId, toolMessageId, dataName: args.mode === "retryMissing" ? "影像补漏" : "缓存影像导出"});
         return {...compactPlan(result.stored, result.permission), originalJobId:result.originalJobId, mode:result.mode};
       }
-      if (call.function.name.startsWith("data_download_")) return await executeDataDownloadTool(conversationId, call.function.name, args, `${generationId}:${call.id}`);
+      if (call.function.name.startsWith("data_download_")) return await executeDataDownloadTool(conversationId, call.function.name, args, `${generationId}:${call.id}`,check=>waitForPlanApproval(nativeRequestId,check));
       if (call.function.name === "sources_list") {
         const sources = await api.sourcesList();
         return { sources: sources.map(source => ({ id: source.id, name: source.displayName, license: source.license, attribution: source.attribution, minZoom: source.minZoom, maxZoom: source.maxZoom })) };
@@ -1047,7 +1090,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
           if(!scheduleTools().tools.some(tool=>tool.name===toolName))return {error:'TOOL_NOT_ALLOWED'};
           return {connectorId,toolName,result:await executeTool({...call,function:{...call.function,name:toolName,arguments:JSON.stringify(toolArgs)}},generationId,context,toolMessageId,nativeRequestId)};
         }
-        if (connectorId === TILES3D_CONNECTION_ID) return {connectorId,toolName,result:await executeTiles3dConnectionTool(toolName,toolArgs as Record<string,unknown>)};
+        if (connectorId === TILES3D_CONNECTION_ID) return {connectorId,toolName,result:await executeTool({...call,function:{...call.function,name:toolName,arguments:JSON.stringify(toolArgs)}},generationId,context,toolMessageId,nativeRequestId)};
         if (connectorId === AI_SCHEDULE_ID) return {connectorId,toolName,result:await executeAiScheduleTool(conversationId,toolName,toolArgs as Record<string,unknown>,`${generationId}:${call.id}`,context)};
         if (connectorId === BACKGROUND_COMMAND_ID) return {connectorId,toolName,result:await executeBackgroundCommandTool(conversationId,toolName,toolArgs as Record<string,unknown>,`${generationId}:${call.id}`)};
         if (connectorId === AGENT_TASK_ID) return {connectorId,toolName,result:await executeAgentTaskTool(conversationId,toolName,toolArgs as Record<string,unknown>,`${generationId}:${call.id}`)};
@@ -1175,6 +1218,18 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
       if (call.function.name === "jobs_start") {
         const id = stringArg(args.planId);
         if (!id || !await ownsPlan(id)) return { error: "PLAN_NOT_IN_CONVERSATION" };
+        if((await api.workspaceGet(conversationId)).permission!=="fullAccess"){
+          const stored=await api.plansGet(id);if(stored)onPlanned(stored,conversationId);
+          const before=await api.jobsForPlan(id);
+          await waitForPlanApproval(nativeRequestId,async()=>{
+            const records=await api.imageryTasksList(conversationId);if(records.some(record=>record.stored.planId===id&&record.recordState!=="visible"&&record.recordState!=="active"))throw new Error("计划已移除，请重新确认任务");
+            const job=await api.jobsForPlan(id);if(!job)return false;
+            return !before||job.version!==before.version||(await api.jobsActive()).includes(job.jobId)||["completed","partial"].includes(job.state);
+          });
+          const job=await api.jobsForPlan(id);if(!job)return {error:"PLAN_NOT_FOUND"};
+          const [events,active]=await Promise.all([api.jobsEvents(job.jobId,0),api.jobsActive()]);
+          onJobStarted(job,conversationId);return {...jobStatusFacts(job,active.includes(job.jobId),events,stored?.plan.totalTiles??0),operation:"user-approved",reused:true};
+        }
         const started = await withPlanTaskLock(accountId ?? '', conversationId, id, async () => {
           assertPlanAvailable(localStateStore, accountId, conversationId, id);
           return startPlanJob(api, id, conversationId, `${generationId}:${call.id}`);
@@ -1289,6 +1344,19 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
     if(outputFailureCode(errorMessage(cause))==='MODEL_CALL_LIMIT'){await persistQuestionTranscript();await releasePending();setError('');return;}
     const saved = readPending(chatStore())?.[conversationId];
     if (saved) removeTransientGeneration(saved.generationId);
+    if(saved?.engine==='codex'&&saved.userId===status.userId){
+      try{
+        const recovery=await inspectCodexCheckpoint(api,conversationId,saved.generationId);
+        if(activeConversationRef.current.accountId!==status.userId||session.get('pendingId','')!==saved.generationId)return;
+        if(recovery.billingPending){
+          // Only the local input lock is released. Native request receipts,
+          // tool checkpoints, task IDs, and the gateway reservation remain.
+          await persistQuestionTranscript();await releasePending();
+          setError('模型连接已中断，原请求仍待费用核对。会话已恢复，可以从已保存进度继续。');
+          return;
+        }
+      }catch{/* A live turn or unavailable evidence retains explicit recovery. */}
+    }
     const rejectedForQuota = cause && typeof cause === "object" && "code" in cause && cause.code === "QUOTA_EXCEEDED";
     if (rejectedForQuota) {
       if (saved) { setMessages(saved.messages); await commitFinalGeneration(saved.generationId, saved.messages); }
@@ -1420,14 +1488,12 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
       userInputGate.current.reset(humanRequests.at(-1) ?? "", humanRequests.slice(0,-1));
       if (saved.userId && saved.userId !== status.userId) throw new Error("此请求属于另一个 GeoD 账号，请切回原账号后核对。");
       if (saved.engine === "codex") {
-        const generation = await api.agentGenerationGet(saved.generationId);
-        if (["reserved", "streaming", "pending_reconcile"].includes(generation.state)) throw new Error("模型请求还在核对中，请稍后检查。已完成的本机工具不会自动重复执行。");
-        const capabilities=await api.runtimeCapabilities();
-        if(!capabilities.conversationExecution)throw new Error('请先重启应用以核对并停止原执行。模型计费结果已保留，本机任务不会重复执行。');
-        await prepareCodexConversation(api,conversationId);
+        const recovery=await inspectCodexCheckpoint(api,conversationId,saved.generationId);
+        if(activeConversationRef.current.accountId!==status.userId||session.get('pendingId','')!==saved.generationId)return;
         setMessages(saved.messages);
+        await persistQuestionTranscript();
         await releasePending();
-        setError("模型请求已核对。Codex 原执行已停止，可以继续提问；本机任务以后台状态为准。");
+        setError(recovery.billingPending?'原请求仍待费用核对，记录已保留。会话已恢复，可以从已保存进度继续。':"模型请求已核对，会话已恢复，可以继续提问；本机任务以后台状态为准。");
         return;
       }
       if (saved.committed) {
@@ -1459,22 +1525,65 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
     catch (cause) { await handleGenerationFailure(cause); }
     finally { setBusy(false); }
   }
-  async function send(value: string,queuedImages?:ImageAttachment[],fromQueue=false,queuedDocuments?:DocumentAttachment[],inputCrsChoice?:ReturnType<typeof crsFromAnswers>) {
-    const text = value.trim()||(documents.length?"请阅读这些文档。":images.length?"请查看这些图片。":"");
-    if (text && sending.current && engine === "codex" && codexRun.current) {
-      if(followupMode==="queue"||images.length||documents.length){
-        if(queuedInputs.length>=20){setError("消息队列最多暂存 20 条，请先移除或等待发送。");return;}
-        const item={id:crypto.randomUUID(),text,images:images.length?images:undefined,documents:documents.length?documents:undefined,createdAt:new Date().toISOString()};changeQueue(chat=>({...chat,queuedInputs:[...(chat.queuedInputs??[]),item]}));setDraft("");setImages([]);setDocuments([]);return;
-      }
-      try { humanRequestRevision.current++; await rememberHumanCrsPreference(text); await api.codexCommand(codexRun.current, { type: "steer", text }); setDraft(""); }
-      catch (cause) { setError(errorMessage(cause)); }
+  function applyFollowupReceipt(receipt:FollowupReceipt){
+    let accepted:QueuedInput|undefined;
+    changeQueue(chat=>{const applied=receiptQueuedInputs(chat.queuedInputs??[],receipt);accepted=applied.accepted;return {...chat,queuedInputs:applied.items.map(item=>item.delivery?.clientRequestId===receipt.clientRequestId&&receipt.state==='failed'&&receipt.result?.code==='CODEX_TURN_NOT_ACTIVE'?{...item,delivery:undefined}:item)};});
+    if(accepted){const id=`queued-${accepted.id}`;if(!displayRef.current.some(row=>row.id===id)){appendDisplay({id,turnId:receipt.runId,role:'user',content:accepted.text,images:accepted.images,documents:accepted.documents});const message:AgentMessage={role:'user',content:receipt.result?.input??accepted.text,images:accepted.images,documents:accepted.documents};setMessages(previous=>[...previous,message]);}}
+    if(receipt.state!=='sending')setQueueSendingId(null);
+  }
+  async function checkQueuedDelivery(item:QueuedInput){
+    if(!item.delivery)return;
+    try{applyFollowupReceipt(await api.codexFollowupStatus(conversationId,item.delivery.clientRequestId));}
+    catch(cause){setError(errorMessage(cause));}
+  }
+  function moveQueuedInput(id:string,offset:number){changeQueue(chat=>{const items=[...(chat.queuedInputs??[])],index=items.findIndex(item=>item.id===id),target=index+offset;if(index<0||target<0||target>=items.length||queueLocked(items[index])||queueLocked(items[target]))return chat;[items[index],items[target]]=[items[target],items[index]];return {...chat,queuedInputs:items};});}
+  async function stopReply() {
+    if(session.get('stopping',false))return;
+    stopRequested.current=true;resumeQueueAfterStop.current=false;setStopping(true);
+    changeQueue(chat=>({...chat,queuePaused:true}));
+    userInputGate.current.cancelled=true;cancelInputRequests(true);setLiveActivity('正在停止…');
+    void api.mcpRequestsCancel(conversationId).catch(cause=>setError(errorMessage(cause)));
+    if(connectionResolve.current)finishConnectionAuthentication({error:{code:'INPUT_CANCELLED',message:'数据库认证已取消'}});
+    if(sqlResolve.current)finishSqlAuthentication({error:{code:'INPUT_CANCELLED',message:'数据库认证已取消'}});
+    const run=codexRun.current??nativeRun?.id;
+    if(run)try{await api.codexCommand(run,{type:'interrupt'});if(!busy)await reconnectNativeRun();}catch(cause){if(!inactiveInterrupt(cause))setError(`停止尚未确认：${errorMessage(cause)}`);setStopping(false);}
+  }
+  async function sendQueuedNow(item:QueuedInput) {
+    if(session.get('queueSendingId',null)||session.get('stopping',false))return;
+    const run=codexRun.current;
+    if(queueLocked(item)){await checkQueuedDelivery(item);return;}
+    if(!sending.current||!run){
+      if(nativeRun){setError('请先重新连接原执行，再发送补充消息。');return;}
+      changeQueue(chat=>({...chat,queuedInputs:[item,...(chat.queuedInputs??[]).filter(row=>row.id!==item.id)],queuePaused:false}));
       return;
     }
-    if (!text || sending.current || session.get("pendingId","") || session.get("imagesBusy",false) || session.get("documentsBusy",false) || status.state !== "connected") return;
-    const attachments=queuedImages??images;const attachedDocuments=queuedDocuments??documents;if(!fromQueue){setImages([]);setDocuments([]);}
-    sending.current = true; setBusy(true); setLiveActivity("正在思考下一步…"); setError(""); if(!fromQueue)setDraft("");
+    if(!(await api.runtimeCapabilities()).followupReceipts){setError('请重启新版应用后再使用立即引导，待发送内容已保留。');return;}
+    if(item.delivery?.state==='failed')item=editQueuedInput(item,item.text);
+    const requestId=queuedRequestId(item),submitted={...item,delivery:{state:'sending' as const,clientRequestId:requestId,runId:run}};
+    changeQueue(chat=>({...chat,queuedInputs:chat.queuedInputs?.map(row=>row.id===item.id?submitted:row)}));
+    setQueueSendingId(item.id);
+    try{await rememberHumanCrsPreference(item.text);applyFollowupReceipt(await api.codexFollowupSend(run,conversationId,requestId,modelUserText(item.text,boundaryRef.current)+documentContext(item.documents??[]),item.text,item.images??[],item.documents??[]));}
+    catch(cause){
+      // An IPC rejection is not proof that Core rejected the message. Keep its ID locked until reconciliation.
+      changeQueue(chat=>({...chat,queuedInputs:chat.queuedInputs?.map(row=>row.id===item.id?{...submitted,delivery:{...submitted.delivery,state:'outcome-unknown',message:errorMessage(cause)}}:row)}));setQueueSendingId(null);
+    }
+  }
+  async function send(value: string,queuedImages?:ImageAttachment[],fromQueue=false,queuedDocuments?:DocumentAttachment[],inputCrsChoice?:ReturnType<typeof crsFromAnswers>,queuedId?:string) {
+    const text = value.trim()||(documents.length?"请阅读这些文档。":images.length?"请查看这些图片。":"");
+    if (text && sending.current && engine === "codex" && !fromQueue) {
+        if(queuedInputs.length>=20){setError("消息队列最多暂存 20 条，请先移除或等待发送。");return;}
+        const item={id:crypto.randomUUID(),text,images:images.length?images:undefined,documents:documents.length?documents:undefined,createdAt:new Date().toISOString()};changeQueue(chat=>({...chat,queuedInputs:[...(chat.queuedInputs??[]),item]}));setDraft("");setImages([]);setDocuments([]);return;
+    }
+    if (!text || sending.current || session.get('nativeRun',null) || session.get("pendingId","") || session.get("imagesBusy",false) || session.get("documentsBusy",false) || status.state !== "connected") return;
+    const attachments=queuedImages??images;const attachedDocuments=queuedDocuments??documents;
+    const selectedModel=availableAIChannels(aiModels.list).find(c=>c.id===aiModels.selection.channelId)?.models.find(m=>m.id===aiModels.selection.modelId);
+    if(attachments.length&&selectedModel&&!selectedModel.inputModalities.includes("image")){setError("当前模型不支持读取图片，附件已保留，请选择支持图片的模型后发送。");return;}
+    if(!fromQueue){setImages([]);setDocuments([]);}
+    sending.current = true;stopRequested.current=false;resumeQueueAfterStop.current=false;setStopping(false); setBusy(true); setLiveActivity("正在思考下一步…"); setError(""); if(!fromQueue)setDraft("");
+    if(queuedId)setQueueSendingId(queuedId);
     setChatRecords(current => current.map(chat => chat.conversationId === conversationId ? { ...chat, updatedAt: new Date().toISOString() } : chat));
-    const visible = [...displayRef.current, { id: crypto.randomUUID(), role: "user" as const, content: boundary ? `${text}\n已附加边界：${boundary.name} · ${boundary.polygonCount} 个面` : text, ...(attachments.length?{images:attachments}:{}),...(attachedDocuments.length?{documents:attachedDocuments}:{}) }];
+    const userId=queuedId?`queued-${queuedId}`:crypto.randomUUID();
+    const visible = [...displayRef.current.filter(item=>item.id!==userId), { id: userId, role: "user" as const, content: boundary ? `${text}\n已附加边界：${boundary.name} · ${boundary.polygonCount} 个面` : text, ...(attachments.length?{images:attachments}:{}),...(attachedDocuments.length?{documents:attachedDocuments}:{}) }];
     userInputGate.current.reset(text, displayRef.current.filter(item=>item.role==="user").map(item=>item.content));
     humanRequestRevision.current++;
     displayRef.current = visible;
@@ -1485,37 +1594,54 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
       if(engine==='codex')await prepareCodexConversation(api,conversationId);
       await rememberHumanCrsPreference(text, visible.at(-1)?.id);
       const installed = await api.extensionsList();
+      if(stopRequested.current){appendDisplay(turnOutcomeMessage(crypto.randomUUID(),{status:'interrupted',message:'已停止'}));await persistQuestionTranscript();return;}
       const activeBoundary = boundaryRef.current;
       const history=session.get<AgentMessage[]>("messages",[]);
       const modelText = modelUserText(text, activeBoundary) + documentContext(attachedDocuments) + continueTaskContext(text,visible) + (engine === "codex" ? "" : skillDiscoveryText(installed.skills));
       const context: AgentMessage[] = [...history, { role: "user", content: modelText, ...(attachments.length?{images:attachments}:{}),...(attachedDocuments.length?{documents:attachedDocuments}:{}) }];
       setMessages(context);
-      if (engine === "codex") await sendWithCodex(modelText, history, context, activeBoundary,attachments,attachedDocuments);
-      else await finishGeneration(await requestGeneration(context, activeBoundary, visible), context);
+      if (engine === "codex") await sendWithCodex(modelText, history, context, activeBoundary,attachments,attachedDocuments,undefined,queuedId);
+      else {const generation=await requestGeneration(context, activeBoundary, visible);if(queuedId)changeQueue(chat=>({...chat,queuedInputs:chat.queuedInputs?.filter(item=>item.id!==queuedId)}));await finishGeneration(generation, context);}
       void api.agentUsage().then(setUsage).catch(() => {});
     } catch (cause) { changeQueue(chat=>({...chat,queuePaused:true}));await handleGenerationFailure(cause); }
     finally {
-      cancelInputRequests(); sending.current = false; setBusy(false);
-      window.setTimeout(()=>{
-        const chat=chatRecordsRef.current.find(chat=>chat.conversationId===conversationId);
-        const next=chat?.queuedInputs?.[0];
-        if(!next||chat?.queuePaused||sending.current||session.get("pendingId",""))return;
-        changeQueue(chat=>({...chat,queuedInputs:chat.queuedInputs?.filter(item=>item.id!==next.id)}));void send(next.text,next.images??[],true,next.documents??[]);
-      },100);
+      cancelInputRequests(); sending.current = false; setBusy(false);setStopping(false);setQueueSendingId(null);
     }
   }
 
-  async function sendWithCodex(input: string, history: AgentMessage[], initial: AgentMessage[], activeBoundary: BoundaryImport | null,attachments:ImageAttachment[]=[],attachedDocuments:DocumentAttachment[]=[]) {
-    const runId = crypto.randomUUID(); codexRun.current = runId;
+  async function sendWithCodex(input: string, history: AgentMessage[], initial: AgentMessage[], activeBoundary: BoundaryImport | null,attachments:ImageAttachment[]=[],attachedDocuments:DocumentAttachment[]=[],resume?:NonNullable<SavedChat['nativeRun']>,queuedId?:string) {
+    const runId = resume?.id??crypto.randomUUID(); codexRun.current = runId;setNativeRun(resume??{id:runId,sequence:0});
     let current = initial;
     let lastGenerationId: string | null = null;
     let toolStopReason: "review" | "unknown" | null = null;
     let currentTokens: CodexTokenUsage | null = codexContext;
     const replyId = (id: string) => `codex-${runId}-${id}`;
     function onEvent(event: CodexEvent) {
-      if (event.type === "stage") { setLiveActivity(event.message); return; }
-      if (event.type === "steered") { appendDisplay({ id: crypto.randomUUID(), role: "user", content: event.text }); current = [...current, { role: "user", content: event.text }]; return; }
-      if (event.type === "commandError") { setError(event.message); return; }
+      if(event.runId&&event.runId!==runId)return;
+      if(event.sequence!==undefined){setNativeRun({id:runId,sequence:event.sequence});if(queuedId){changeQueue(chat=>({...chat,queuedInputs:chat.queuedInputs?.filter(item=>item.id!==queuedId)}));queuedId=undefined;setQueueSendingId(null);}}
+      if(event.type==='connection'){
+        const id=`connection-${runId}`;
+        if(event.state==='connected'){removeDisplay(id);return;}
+        const item:DisplayMessage={id,turnId:runId,role:'tool',content:'',connection:{state:event.state,attempt:event.attempt,details:event.details}};
+        if(displayRef.current.some(row=>row.id===id))replaceDisplay(id,item);else appendDisplay(item);
+        return;
+      }
+      // A click can precede native run registration. Forward it again once the
+      // host is live; both native and Core interrupt handling are idempotent.
+      if(stopRequested.current&&(event.type==='stage'||event.type==='event'&&event.method==='turn/started'))void api.codexCommand(runId,{type:'interrupt'}).catch(cause=>{if(!inactiveInterrupt(cause))setError(errorMessage(cause));});
+      if (event.type === "stage") { setLiveActivity(stopRequested.current?'正在停止…':event.message); return; }
+      if (event.type === "steered") {
+        humanRequestRevision.current++;
+        const queued=queueSnapshot.current?.queuedInputs?.find(item=>item.delivery?.clientRequestId===event.requestId);
+        current=[...current,{role:'user',content:event.input??event.text,images:queued?.images,documents:queued?.documents}];
+        if(event.requestId)applyFollowupReceipt({state:'accepted',clientRequestId:event.requestId,runId,result:event});else appendDisplay({id:crypto.randomUUID(),role:'user',content:event.text});
+        return;
+      }
+      if (event.type === "commandError") {
+        if(event.requestId){applyFollowupReceipt({state:event.outcomeUnknown?'outcome-unknown':'failed',clientRequestId:event.requestId,runId,result:event});return;}
+        if(event.commandType==='interrupt'&&inactiveInterrupt(event)||event.commandType==='steer'&&event.code==='CODEX_TURN_NOT_ACTIVE')return;
+        setError(event.message);return;
+      }
       if (event.type !== "event") return;
       const params = event.params;
       if (event.method === "thread/tokenUsage/updated") {
@@ -1533,6 +1659,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
     try {
       const result = await runCodexTurn(runId, conversationId, input, history, {
         onEvent,
+        followupAttachments:requestId=>queueSnapshot.current?.queuedInputs?.find(item=>item.delivery?.clientRequestId===requestId),
         onRequest: async (request,nativeReply) => {
           if(request.method==='geod/executionReview')return waitForUserInput(request,undefined,undefined,nativeReply);
           if (request.method !== "item/tool/requestUserInput") return waitForUserInput(request);
@@ -1582,24 +1709,28 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
           }
           return { result: output };
         },
-      },attachments,attachedDocuments);
+      },attachments,attachedDocuments,resume?.sequence);
+      removeDisplay(`connection-${runId}`);setNativeRun(null);
+      for(const item of queueSnapshot.current?.queuedInputs??[])if(item.delivery?.runId===runId&&item.delivery.state==='sending')await checkQueuedDelivery(item);
       const interrupted = result.status === "interrupted";
       if(result.status==='completed') {
-        displayRef.current=completeCodexReply(displayRef.current,runId,result);setDisplay(displayRef.current);
+        displayRef.current=completeCodexReply(displayRef.current,runId,result).map(item=>item.turnId===runId&&item.phase==='final'?{...item,turnDurationMs:result.durationMs}:item);setDisplay(displayRef.current);
       }
       if (interrupted) {
-        changeQueue(chat=>({...chat,queuePaused:true}));
-        displayRef.current = displayRef.current.map(item => item.id.startsWith(`codex-${runId}-`) ? { ...item, streaming: false, ...(item.toolStatus === "running" ? { toolStatus: "attention" as const } : {}) } : item); setDisplay(displayRef.current);
-        appendDisplay(turnOutcomeMessage(runId,{status:'interrupted',message:"本轮回复已停止。已经启动的本机任务可在后台状态中查看。"}));
+        changeQueue(chat=>({...chat,queuePaused:!resumeQueueAfterStop.current}));
+        displayRef.current = displayRef.current.map(item => item.id.startsWith(`codex-${runId}-`) ? { ...item, streaming: false, ...(item.toolStatus === "running" ? { toolStatus: "stopped" as const } : {}) } : item); setDisplay(displayRef.current);
+        appendDisplay(turnOutcomeMessage(runId,{status:'interrupted',message:'已停止',durationMs:result.durationMs}));
       }
       if (result.text) current = [...current, { role: "assistant", content: result.text }];
-      const completed: SavedChat = { conversationId, engine: "codex", ...(result.status==='completed'?recordCompletedReply():{}), messages: current, display: displayRef.current, planId: planIdRef.current || undefined, planIds: planIdsRef.current, workspaceDirectory: workspace?.directory, lastInputTokens: lastInputTokensRef.current ?? undefined, codexContext: currentTokens ?? undefined, updatedAt: new Date().toISOString(),queuePaused:interrupted?true:undefined };
+      const completed: SavedChat = { conversationId, engine: "codex",nativeRun:null, ...(result.status==='completed'?recordCompletedReply():{}), messages: current, display: displayRef.current, planId: planIdRef.current || undefined, planIds: planIdsRef.current, workspaceDirectory: workspace?.directory, lastInputTokens: lastInputTokensRef.current ?? undefined, codexContext: currentTokens ?? undefined, updatedAt: new Date().toISOString(),queuePaused:interrupted?!resumeQueueAfterStop.current:undefined };
       setMessages(completed.messages);
       if (lastGenerationId) commitPending(chatStore(), conversationId, lastGenerationId, completed);
       await flushLocalState();
-      setChatRecords(persistCompletedChat(chatStore(), completed)); await releasePending();
+      setChatRecords(persistCompletedChat(chatStore(), {...completed,...queueSnapshot.current})); await releasePending();
       await flushLocalState();
     } catch(cause) {
+      if(['CODEX_CONNECTION_UNKNOWN','CODEX_TOOL_OUTCOME_UNKNOWN'].includes((cause as {code?:string})?.code??'')){await persistQuestionTranscript();throw cause;}
+      setNativeRun(null);
       displayRef.current=displayRef.current.map(item=>item.id.startsWith(`codex-${runId}-`)?{...item,streaming:false,...(item.toolStatus==='running'?{toolStatus:'attention' as const}:{})}:item);
       setDisplay(displayRef.current);
       const message=errorMessage(cause),code=outputFailureCode(message);
@@ -1616,6 +1747,14 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
 
   const groupDirectory = (chat: SavedChat) => chat.workspaceDirectory || defaultWorkspaceDirectory || "默认工作区";
   const directories = [...new Set(chatRecords.filter(chat=>!chat.archived).map(groupDirectory))].filter(directory => !workspaceList.hidden.includes(directory));
+  async function reconnectNativeRun(){
+    const saved=session.get<SavedChat['nativeRun']>('nativeRun',null);if(!saved||sending.current||busy)return;
+    sending.current=true;setBusy(true);setStopping(false);stopRequested.current=false;setError('');
+    const context=session.get<AgentMessage[]>('messages',[]);
+    try{await sendWithCodex('',context,context,boundaryRef.current,[],[],saved);}
+    catch(cause){setError(errorMessage(cause));}
+    finally{sending.current=false;setBusy(false);setStopping(false);setQueueSendingId(null);}
+  }
   const composer = <>
     {documentPasswordRequest&&<DocumentPasswordDialog key={documentPasswordRequest.id} request={documentPasswordRequest}/>}
     {audioSetupOpen&&<AudioSetupDialog hasFiles={pendingAudioFiles.length>0} onClose={()=>setAudioSetupOpen(false)} onReady={()=>{setAudioSetupOpen(false);const files=pendingAudioFiles;setPendingAudioFiles([]);if(files.length)void attachAudio(files).catch(cause=>setError(errorMessage(cause)));}}/>}
@@ -1623,7 +1762,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
     <SqlConnectionDialog open={Boolean(sqlAuthentication)} conversationId={conversationId} initial={sqlAuthentication} onSaved={value=>finishSqlAuthentication(value)} onOpenChange={value=>{if(!value&&sqlResolve.current)finishSqlAuthentication({error:{code:"INPUT_CANCELLED",message:"数据库认证已取消"}});}}/>
     <DataInputPanel key={conversationId} open={dataInputOpen} initialRequest={initialDataInput} initialConnection={connectionAuthentication} onConnection={connectionAuthentication ? value => finishConnectionAuthentication({ connection: { id: value.connection.id, name: value.connection.name }, layers: value.layers, tables: value.tables, mcp: value.mcp, readOnly: true }) : undefined} onOpenChange={value => { setDataInputOpen(value); if (!value) { setInitialDataInput(null); if (connectionResolve.current) finishConnectionAuthentication({ error: { code: "INPUT_CANCELLED", message: "数据库认证已取消" } }); } }} conversationId={conversationId} onBoundary={found => { void attachRange(found).catch(cause => setError(errorMessage(cause))); }} />
     <BoundaryPicker items={savedBoundaries} active={boundary} disabled={busy || !!pendingId} onSelect={async id => { await attachRange(await api.boundariesGet(conversationId, id)); }} onCombine={async ids => { await attachRange(await api.boundariesCombine(conversationId, ids)); }} onClear={() => { boundaryRef.current = null; setBoundary(null); }} onError={cause => setError(errorMessage(cause))}/>
-    {queuedInputs.length>0&&<section className="message-queue" aria-label={t("待发送消息")}><div className="message-queue-head"><span>{queuedInputs.length} {t(" 条待发送")}{queuePaused?t(" · 已暂停"):""}</span><Button variant="ghost" size="sm" onClick={()=>changeQueue(chat=>({...chat,queuePaused:!chat.queuePaused}))}>{queuePaused?t("继续发送"):t("暂停")}</Button></div><div className="message-queue-items">{queuedInputs.map(item=><div key={item.id} className="message-queue-item"><span>{item.text}</span><Button variant="ghost" size="icon" aria-label={t("移除待发送消息：{0}", {"0": item.text.slice(0,20)})} onClick={()=>changeQueue(chat=>({...chat,queuedInputs:chat.queuedInputs?.filter(q=>q.id!==item.id)}))}><X size={14}/></Button></div>)}</div></section>}
+    <MessageQueue items={queuedInputs} paused={queuePaused} sendingId={queueSendingId} canSendNow={!stopping&&(!nativeRun||busy)} onSendNow={item=>void sendQueuedNow(item)} onRemove={id=>changeQueue(chat=>({...chat,queuedInputs:chat.queuedInputs?.filter(item=>item.id!==id||queueLocked(item))}))} onPausedChange={paused=>changeQueue(chat=>({...chat,queuePaused:paused}))} onEdit={(id,text)=>changeQueue(chat=>({...chat,queuedInputs:chat.queuedInputs?.map(item=>item.id===id?editQueuedInput(item,text):item)}))} onMove={moveQueuedInput} onCheck={item=>void checkQueuedDelivery(item)} onEditDraft={(id,text)=>changeQueue(chat=>({...chat,queuedInputs:chat.queuedInputs?.map(item=>item.id===id&&!queueLocked(item)?{...item,editDraft:text}:item)}))}/>
     <div className="agent-composer">
       <input ref={imageFileInput} type="file" accept={imageAccept} multiple hidden aria-label={t("选择图片附件")} onChange={event=>{const files=Array.from(event.target.files??[]);event.target.value="";void attachImages(files).catch(cause=>setError(errorMessage(cause)));}}/>
       <input ref={documentFileInput} type="file" accept={documentAccept} multiple hidden aria-label={t("选择文档附件")} onChange={event=>{const files=Array.from(event.target.files??[]);event.target.value="";void attachDocuments(files).catch(cause=>setError(errorMessage(cause)));}}/>
@@ -1641,9 +1780,10 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
         model={engine === "legacy" ? "legacy" : modelValue(aiModels.selection.channelId, aiModels.selection.modelId)}
         onModelChange={value => { if (value === "manage-models") { onMainViewChange("models"); return; } if (value === "legacy") { changeEngine(value); return; } if (busy || aiModels.loading) return; const [channelId, modelId] = JSON.parse(value) as string[]; void aiModels.select(channelId, modelId).then(() => { changeEngine("codex"); setCodexContext(null); }).catch(cause => setError(errorMessage(cause))); }}
         loading={busy && (engine === "codex" || !!codexRequest)}
+        stopping={stopping}
         allowSteer={engine === "codex" && !!codexRun.current}
-        loadingSubmitLabel={followupMode==="queue"?"加入消息队列":"补充指令"}
-        onStop={engine === "codex" || codexRequest ? () => { userInputGate.current.cancelled = true; cancelInputRequests(true); setLiveActivity('正在停止上一轮…'); void api.mcpRequestsCancel(conversationId).catch(cause=>setError(errorMessage(cause))); if (connectionResolve.current) finishConnectionAuthentication({ error: { code: "INPUT_CANCELLED", message: "数据库认证已取消" } }); if(sqlResolve.current)finishSqlAuthentication({error:{code:"INPUT_CANCELLED",message:"数据库认证已取消"}}); if (codexRun.current) void api.codexCommand(codexRun.current, { type: "interrupt" }).catch(cause => setError(errorMessage(cause))); } : undefined}
+        loadingSubmitLabel="加入消息队列"
+        onStop={!stopping && (engine === "codex" || codexRequest) ? () => void stopReply() : undefined}
         onPaste={pasteIntoComposer}
         placeholder={t("描述需求，添加图片、数据网址或矢量范围")}
         aria-label={t("发送给 GeoD Agent")}
@@ -1668,7 +1808,6 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
             </MorphPopoverContent>
           </MorphPopover>
           <ContextWindow accountId={accountId} conversationId={conversationId} usage={contextUsage} compressedBefore={contextCompressed} lastInputTokens={lastInputTokens} codex={engine === "codex" ? { usage: codexContext } : undefined} />
-          {busy&&engine==="codex"&&<MorphPopover open={followupMenuOpen} onOpenChange={setFollowupMenuOpen}><MorphPopoverTrigger><button type="button" className="composer-followup-trigger" aria-label={t("发送方式：{0}", {"0": followupMode==="queue"?"排队":"补充"})}>{followupMode==="queue"?t("排队"):t("补充")}<ChevronDown size={13}/></button></MorphPopoverTrigger><MorphPopoverContent side="top" align="end" className="composer-permission-menu"><strong>{t("发送后续消息")}</strong><button type="button" aria-pressed={followupMode==="queue"} onClick={()=>{setFollowupMode("queue");setFollowupMenuOpen(false);}}><span><b>{t("排队")}</b><small>{t("当前回复结束后开始下一轮")}</small></span></button><button type="button" aria-pressed={followupMode==="steer"} onClick={()=>{setFollowupMode("steer");setFollowupMenuOpen(false);}}><span><b>{t("补充指令")}</b><small>{t("立即补充到正在处理的请求")}</small></span></button></MorphPopoverContent></MorphPopover>}
         </div>}
       />
     </div>
@@ -1716,6 +1855,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
   </aside><section className={`agent-panel agent-primary ${emptyConversation ? "agent-start" : ""}`} aria-label={t("GeoD Agent 智能助手")} hidden={mainView !== "conversation"}>
     <div className="agent-header"><strong>{currentChat?chatTitle(currentChat):t("新对话")}</strong>{engine==="codex"&&display.some(m=>m.role==="assistant"&&m.phase!=="progress")&&<UiTooltip content={t("复制已完成的对话，创建独立分支")}><Button variant="ghost" size="icon" aria-label={t("创建会话分支")} disabled={busy||!!pendingId||!workspace} onClick={()=>void forkChat()}><GitBranch size={16}/></Button></UiTooltip>}</div>
     {error && <div className="agent-error" role="alert"><CircleAlert size={16} />{localize(error)}</div>}
+    {accountId&&conversationId&&<HistoryRecovery key={`${accountId}:${conversationId}`} conversationId={conversationId} planIds={[...new Set([...planIds,...currentChat?.unavailablePlanIds??[]])]} expectedDirectory={currentChat?.workspaceDirectory} problem={historyProblem} onRecheck={()=>checkHistory()} onTasks={()=>onTaskGroupSelect(planIdsRef.current)}/>}
     {(status.error || auth.error) && <div className="agent-error" role="alert"><CircleAlert size={16} />{localize(status.error || auth.error)}</div>}
     {emptyConversation ? <div className="agent-start-screen"><div className="agent-start-content"><div className="agent-start-heading"><h1>{t("需要什么地理数据？")}</h1><p>{t("影像、矢量或三维数据，描述范围和用途即可。")}</p></div>{composer}</div></div> : desktopAvailable && status.state === "connected" && <>
       <ChatTranscript onTokenUsage={saveTurnTokenUsage} openInputId={openInputId} onOpenInput={setOpenInputId} onInputReply={replyToInput} onInputDraft={updateInputDraft} canAnswerInput={id=>{const request=displayRef.current.find(item=>item.id===id)?.userInput;if(request?.resolution?.kind==='existingPlanCrs'&&inputOrigin(displayRef.current,[...displayRef.current].reverse().find(m=>m.role==='user')?.id)!==request.userMessageId)return false;return !!request&&(codexRequestResolve.current.has(request.requestId)||!busy&&!sending.current);}} planTitles={planTitles} afterEntry={id => {
@@ -1724,11 +1864,12 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
           return task ? [{ ...task, title: presentations[planId].title }] : [];
         });
         return <TranscriptTaskGroup key={`tasks-${id}`} tasks={group} permission={workspace?.permission} onOpen={onTaskGroupSelect}/>;
-      }} backgroundJobs={backgroundJobs} onOpenJob={id => void openBackgroundJob(id)} conversationId={conversationId} messages={display} busy={busy || extensionApprovalBusy} activeTurnId={codexRun.current} activity={liveActivity} onContinueTurn={()=>{if(!busy&&!pendingId&&!sending.current)void send('继续刚才的任务');}} canContinueTurn={!busy&&!pendingId&&!sending.current} onReviewSource={draft => onOpenSources(draft, conversationId)} onApproveExtension={proposal => void approveExtension(proposal)} onConfigureExtension={(old,next)=>{displayRef.current=displayRef.current.map(item=>item.extensionProposal?.id===old.id?{...item,content:`已连接 MCP · ${next.name}，等待确认启用`,extensionProposal:next}:item);setDisplay(displayRef.current);void persistQuestionTranscript().catch(cause=>setError(errorMessage(cause)));}}>
+      }} backgroundJobs={backgroundJobs} onOpenJob={id => void openBackgroundJob(id)} conversationId={conversationId} messages={display} busy={busy || extensionApprovalBusy} activeTurnId={codexRun.current} activity={liveActivity} onContinueTurn={()=>{if(!busy&&!pendingId&&!sending.current&&!nativeRun)void send('继续刚才的任务');}} canContinueTurn={!busy&&!pendingId&&!sending.current&&!nativeRun} onReviewSource={draft => onOpenSources(draft, conversationId)} onApproveExtension={proposal => void approveExtension(proposal)} onConfigureExtension={(old,next)=>{displayRef.current=displayRef.current.map(item=>item.extensionProposal?.id===old.id?{...item,content:`已连接 MCP · ${next.name}，等待确认启用`,extensionProposal:next}:item);setDisplay(displayRef.current);void persistQuestionTranscript().catch(cause=>setError(errorMessage(cause)));}}>
         {codexRequest && <CodexRequestCard key={codexRequest.requestId} request={codexRequest} respond={async value => { await codexRequestResolve.current.get(codexRequest.requestId)?.(value); codexRequestResolve.current.delete(codexRequest.requestId); setCodexRequests(previous => previous.filter(item => item.requestId !== codexRequest.requestId)); if (codexRequest.method === "item/tool/requestUserInput" && !Object.keys((value as {answers?:object})?.answers ?? {}).length) { userInputGate.current.cancelled = true; if (codexRun.current) void api.codexCommand(codexRun.current, { type: "interrupt" }).catch(cause => setError(errorMessage(cause))); } }} />}
         {gisInstallRequest&&<GisInstallCard key={gisInstallRequest.requestId} request={gisInstallRequest} onInstall={()=>void gisInstallFlow.current.install()} onCancel={cancelGisInstall}/>}
         <McpRequestQueue conversationId={conversationId} accountId={accountId}/>
-        {pendingId && pendingNeedsReview && !busy && <div className="agent-recovery-note" role="status"><CircleAlert size={17} /><span>{t("上次请求尚未确认结果，可检查状态后继续。")}</span><Button variant="ghost" size="sm" onClick={checkPending}>{t("检查状态")}</Button></div>}
+        {nativeRun&&!busy&&<div className="agent-recovery-note" role="status"><CircleAlert size={17}/><span>{t('原执行连接已保留，可重新连接查看进度。')}</span><Button variant="ghost" size="sm" onClick={()=>void reconnectNativeRun()}>{t('重新连接')}</Button><Button variant="ghost" size="sm" disabled={stopping} onClick={()=>void stopReply()}>{t('停止原执行')}</Button></div>}
+        {pendingId && pendingNeedsReview && !busy && !nativeRun && <div className="agent-recovery-note" role="status"><CircleAlert size={17} /><span>{t("上次请求尚未确认结果，可检查状态后继续。")}</span><Button variant="ghost" size="sm" onClick={checkPending}>{t("检查状态")}</Button></div>}
       </ChatTranscript>
       {backgroundNotice?.job && <div className="background-job-notice" role="status"><span>{t("后台影像任务")}{localize(backgroundStateLabels[backgroundNotice.job.state])}。{backgroundNotice.job.state === "completed" ? t("成果已核验，可在任务面板查看。") : t("可在任务面板查看详情。")}</span><UiTooltip content={t("关闭通知")}><Button variant="ghost" size="icon" aria-label={t("关闭后台任务通知")} onClick={() => setBackgroundNotice(null)}><X size={16}/></Button></UiTooltip></div>}
       {composer}

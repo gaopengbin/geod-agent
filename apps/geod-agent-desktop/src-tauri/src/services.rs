@@ -1327,6 +1327,10 @@ pub async fn agent_events(state: State<'_, ServiceState>, account_id: String, ev
         "schema_version": 1, "accountId": account_id, "events": events
     })))).await.map_err(|_| error("GATEWAY_ERROR", "Telemetry transport interrupted"))?
 }
+pub(crate) fn send_download_events(state:&ServiceState,account_id:&str,events:Value)->Result<Value,ServiceError>{
+    if current_user_id(state)?!=account_id{return Err(error("ACCOUNT_CHANGED","下载统计账号已切换"));}
+    gateway_call(state,"/api/agent/events",Some(json!({"schema_version":1,"accountId":account_id,"events":events})))
+}
 #[tauri::command]
 pub async fn agent_generation_get(
     app: tauri::AppHandle,

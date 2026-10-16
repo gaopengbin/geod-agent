@@ -2,7 +2,7 @@
 import { localize } from "../../i18n";
 // beui.dev/components/agents/prompt-input
 
-import { ArrowUp, Plus, Square } from "../../icons";
+import { ArrowUp, Plus, Square, Loader2 } from "../../icons";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   type FormEvent,
@@ -61,6 +61,7 @@ export interface PromptInputProps extends Omit<
   onAction?: (action: string) => void;
   onSubmit?: (value: string, model?: string) => void | Promise<void>;
   loading?: boolean;
+  stopping?:boolean;
   allowSteer?: boolean;
   loadingSubmitLabel?:string;
   hasAttachments?: boolean;
@@ -84,6 +85,7 @@ export function PromptInput({
   onAction,
   onSubmit,
   loading = false,
+  stopping = false,
   allowSteer = false,
   loadingSubmitLabel = "补充指令",
   hasAttachments = false,
@@ -123,6 +125,7 @@ export function PromptInput({
     (option) => option.value === currentModelValue,
   );
   const canSubmit = (Boolean(currentValue.trim())||hasAttachments) && !disabled && (!loading || allowSteer);
+  const stopButton=loading&&(!allowSteer||!(currentValue.trim()||hasAttachments)||stopping);
 
   const resizeTextarea = useCallback(() => {
     const textarea = textareaRef.current;
@@ -164,7 +167,7 @@ export function PromptInput({
   const submit = (event?: FormEvent) => {
     event?.preventDefault();
     const prompt = currentValue.trim();
-    if (composing.current || (!prompt&&!hasAttachments) || disabled || (loading && !allowSteer)) return;
+    if (composing.current || stopping || (!prompt&&!hasAttachments) || disabled || (loading && !allowSteer)) return;
 
     onSubmit?.(prompt, currentModelValue);
     if (value === undefined) setInternalValue("");
@@ -235,7 +238,7 @@ export function PromptInput({
                 type="button"
                 variant="ghost"
                 size="icon"
-                disabled={disabled || loading}
+                disabled={disabled || stopping || (loading&&!allowSteer)}
                 aria-label="Add to prompt"
                 className="size-8 rounded-full"
               >
@@ -333,25 +336,24 @@ export function PromptInput({
           </Select>
         ) : null}
 
-        {loading && allowSteer && <Button type="button" size="icon" aria-label={localize("停止回复")} onClick={onStop} disabled={!onStop} className="size-8 rounded-full"><Square className="size-3 fill-current" /></Button>}
         <Button
-          type={loading && !allowSteer ? "button" : "submit"}
+          type={stopButton ? "button" : "submit"}
           size="icon"
-          disabled={loading && !allowSteer ? !onStop : !canSubmit}
-          aria-label={localize(loading && !allowSteer ? "停止回复" : loading ? loadingSubmitLabel : "发送消息")}
-          onClick={loading && !allowSteer ? onStop : undefined}
+          disabled={stopButton ? !onStop||stopping : !canSubmit}
+          aria-label={localize(stopping?'正在停止':stopButton ? "停止回复" : loading ? loadingSubmitLabel : "发送消息")}
+          onClick={stopButton ? onStop : undefined}
           className="ml-auto size-8 rounded-full"
         >
           <AnimatePresence initial={false} mode="popLayout">
             <motion.span
-              key={loading && !allowSteer ? "stop" : "send"}
+              key={stopping?'stopping':stopButton ? "stop" : "send"}
               initial={reduce ? { opacity: 1 } : { opacity: 0, y: 3, scale: 0.8 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={reduce ? { opacity: 0 } : { opacity: 0, y: -3, scale: 0.8 }}
               transition={reduce ? { duration: 0 } : SPRING_SWAP}
               className="grid place-items-center"
             >
-              {loading && !allowSteer ? (
+              {stopping?<Loader2 className="size-4 composer-stopping-icon"/>:stopButton ? (
                 <Square className="size-3 fill-current" />
               ) : (
                 <ArrowUp className="size-4" />

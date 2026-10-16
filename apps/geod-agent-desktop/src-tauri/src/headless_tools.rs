@@ -52,7 +52,7 @@ pub(crate) async fn execute(
     }
     match tool {
         "ask_user" => Err(workspace_error("USER_INPUT_REQUIRED", "此任务需要用户补充需求。后台不会代填答案，请回到会话明确要求后重试。")),
-        "attachment_list"=>encode(crate::attachment_inputs::document_attachments_list(app.clone(),conversation.into())?),
+        "attachment_list"=>crate::image_inputs::conversation_attachments_list(app.clone(),conversation.into()),
         "attachment_read"=>crate::attachment_inputs::document_attachment_read(app.clone(),conversation.into(),f!("id"),f!("offset"),f!("limit")).await,
         "agent_tasks_spawn" => encode(crate::agent_tasks::spawn(app,conversation.into(),key.into(),serde_json::from_value(a).map_err(|_|workspace_error("AGENT_INPUT","子任务参数无效"))?)?),
         "agent_tasks_list" => crate::agent_tasks::list(app,conversation.into()),
@@ -406,6 +406,7 @@ pub(crate) async fn execute(
                 if !bounds.is_null() {
                     spec["bounds"] = bounds.clone();
                 }
+                if kind=="mvt"{if let Some(id)=a["connectionId"].as_str(){spec["connectionId"]=json!(id);}}
                 if let Some(b) = &boundary {
                     spec["boundary"] = json!(b.geometry);
                 }
@@ -417,18 +418,19 @@ pub(crate) async fn execute(
                 if let Some(b)=&boundary{spec["boundary"]=json!(b.geometry);}
                 json!({"kind":"online","spec":spec})
             } else if matches!(kind.as_str(), "mvt" | "osm") {
-                if kind == "mvt" && a["sourceUrl"].as_str().is_none() {
+                if kind == "mvt" && a["sourceUrl"].as_str().is_none() && a["connectionId"].as_str().is_none() {
                     return Err(workspace_error(
                         "DATA_PLAN_INVALID",
                         "请提供 MVT 数据服务地址",
                     ));
                 }
                 let source = if kind == "mvt" {
-                    json!({"type":"mvt","id":"agent-mvt","name":title,"urlTemplate":url,"scheme":"xyz","layers":a.get("layers").cloned().unwrap_or(json!([]))})
+                    json!({"type":"mvt","id":"agent-mvt","name":title,"urlTemplate":a["sourceUrl"].as_str().unwrap_or("https://connection.invalid/{z}/{x}/{y}.pbf"),"scheme":"xyz","layers":a.get("layers").cloned().unwrap_or(json!([]))})
                 } else {
                     json!({"type":"osm","id":"openstreetmap","name":title,"endpoint":url,"tags":a.get("tags").cloned().unwrap_or(json!([]))})
                 };
                 let mut spec = json!({"source":source,"targetCrs":a["targetCrs"],"bounds":bounds,"zoomLevels":a.get("zoomLevels").cloned().unwrap_or(json!([])),"outputs":a.get("outputFormats").cloned().unwrap_or(json!(["geojson","gpkg"])),"allowPartial":a.get("allowPartial").cloned().unwrap_or(json!(false))});
+                if kind=="mvt"{if let Some(id)=a["connectionId"].as_str(){spec["connectionId"]=json!(id);}}
                 if let Some(b) = &boundary {
                     spec["boundary"] = json!(b.geometry);
                 }

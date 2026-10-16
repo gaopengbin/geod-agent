@@ -9,7 +9,7 @@ export async function executeTiles3dConnectionTool(name:string,args:Record<strin
   if (name === "tiles3d_connections_list") return {connections:await invoke(name)};
   if (name === "tiles3d_connection_test") return invoke(name,{connectionId:String(args.connectionId)});
   if (name === "tiles3d_connection_prepare") {
-    return invoke(name,{draft:{name:args.name,kind:args.kind,...(typeof args.tilesetUrl==="string"?{tilesetUrl:args.tilesetUrl}:{}),...(typeof args.assetId==="number"?{assetId:args.assetId}:{}),requiredHeaders:args.requiredHeaders??[]}});
+    return invoke(name,{draft:{name:args.name,kind:args.kind,...(typeof args.tilesetUrl==="string"?{tilesetUrl:args.tilesetUrl}:{}),...(typeof args.assetId==="number"?{assetId:args.assetId}:{}),requiredHeaders:args.requiredHeaders??[],requiredQuery:args.requiredQuery??[]}});
   }
   throw new Error("未知三维连接工具");
 }

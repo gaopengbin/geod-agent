@@ -444,11 +444,11 @@ body { background: var(--background); color: var(--app-text); font: 14px/1.5 var
 .geod-prompt-input { container-type: inline-size; padding: 12px; border-radius: 24px; }
 .geod-prompt-input textarea { font-size: 15px; line-height: 24px; padding: 2px 4px; }
 .geod-prompt-input .prompt-input-toolbar { flex-wrap: nowrap; gap: 3px; min-height: 32px; margin-top: 10px; }
-.geod-prompt-input .prompt-input-toolbar > button:last-child { flex: none; }
-.composer-controls { display: flex; flex: 1; align-items: center; gap: 3px; min-width: 0; }
+.geod-prompt-input .prompt-input-toolbar > button { flex: none; }
+.composer-controls { display: flex; flex: 1 0 auto; align-items: center; gap: 3px; min-width: 0; }
 .composer-controls .context-usage-root { margin-left: auto; }
 .prompt-input-model { flex: 0 1 auto; min-width: 0; }
-.prompt-input-model-trigger { max-width: 180px !important; width: auto !important; padding-inline: 5px !important; gap: 5px; }
+.prompt-input-model-trigger { max-width: min(180px, 100%) !important; width: auto !important; padding-inline: 5px !important; gap: 5px; }
 .prompt-model-short { display: none; }
 .composer-permission-trigger { display: inline-flex; align-items: center; gap: 5px; min-width: 0; min-height: 32px; border: 0; border-radius: 7px; background: transparent; color: var(--app-soft-text); padding: 5px 6px; cursor: pointer; font-size: 14px; white-space: nowrap; }
 .composer-permission-trigger { flex: none; }
@@ -514,16 +514,47 @@ body { background: var(--background); color: var(--app-text); font: 14px/1.5 var
 .agent-primary .agent-header strong { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 15px; font-weight: 500; }
 .agent-primary .agent-header strong { flex:1; }
 .agent-primary .agent-header button { background:transparent; color:var(--app-muted-text); }
-.message-queue { margin:0 24px 8px; padding:8px 10px; border:1px solid var(--app-line); border-radius:12px; background:var(--app-surface); font-size:12px; }
+.message-queue { margin:0 24px 4px; padding:4px 0; border:0; border-radius:10px; background:var(--app-surface); font-size:13px; }
 .message-queue-head { display:flex; align-items:center; gap:8px; color:var(--app-muted-text); }
 .message-queue-head > span { flex:1; }
 .message-queue-head > button { height:24px; font-size:12px; }
-.message-queue-items { max-height:112px; overflow:auto; }
+.message-queue-scroll .geod-scroll-viewport { max-height:min(220px,28dvh); height:auto; }
+.message-queue-items { padding:2px 0; }
 .message-queue-item { display:flex; align-items:center; gap:8px; min-width:0; }
-.message-queue-item > span { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.message-queue-item > .message-queue-preview { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding:5px 0; border:0; background:transparent; text-align:left; color:var(--app-soft-text); font:inherit; cursor:pointer; }
 .message-queue-item > button { width:24px; height:24px; flex:none; }
-.composer-followup-trigger { display:flex; align-items:center; gap:3px; border:0; border-radius:6px; padding:4px; color:var(--app-muted-text); font-size:12px; background:transparent; }
-.composer-followup-trigger:hover { background:var(--app-hover); color:var(--app-text); }
+.message-queue-item small { color:var(--app-muted-text); }
+.agent-turn-stopped { padding:4px 0; color:var(--app-muted-text); font-size:13px; line-height:20px; }
+.message-queue-head,.message-queue-paused { display:flex; align-items:center; gap:8px; min-height:28px; padding:2px 8px; color:var(--app-muted-text); font-size:12px; }
+.message-queue-paused { border-bottom:1px solid var(--app-line); }
+.message-queue-paused > span { flex:1; }
+.message-queue-paused button { height:26px; font-size:12px; flex:none; }
+.message-queue-entry { min-width:0; padding-inline:8px; border-radius:7px; }
+.message-queue-entry:hover { background:var(--app-hover); }
+.message-queue-grip { flex:none; color:var(--app-faint-text); }
+.message-queue-reorder {display:grid;place-items:center;width:20px;height:28px;border:0;background:transparent;color:var(--app-faint-text);cursor:grab;touch-action:none;flex:none;border-radius:4px;}
+.message-queue-reorder:disabled {cursor:default;opacity:.4;}
+.message-queue-reorder:focus-visible {outline:2px solid var(--app-accent);outline-offset:2px;}
+.message-queue-entry.is-reordering {background:var(--app-subtle);border-radius:8px;}
+.message-queue-item { gap:6px; min-height:30px; }
+.message-queue-item > .relative { flex:none; }
+.message-queue-item > button:not(.message-queue-preview) { width:26px; height:26px; }
+.message-queue-item .message-queue-check { width:auto!important; padding-inline:5px; font-size:12px; }
+.message-queue-sending { display:inline-flex; align-items:center; gap:5px; color:var(--app-muted-text); font-size:12px; white-space:nowrap; }
+.message-queue-sending svg,.composer-stopping-icon,.is-reconnecting { animation:geod-control-spin 1.1s linear infinite; }
+.message-queue-delivery-note { margin:0 0 5px 20px; color:var(--app-muted-text); font-size:12px; line-height:1.6; }
+.message-queue-edit { padding:4px 0 8px 20px; }
+.message-queue-edit textarea { width:100%; min-height:72px; max-height:180px; resize:vertical; border:1px solid var(--app-line); border-radius:8px; padding:8px; font:inherit; color:var(--app-text); background:var(--app-surface); scrollbar-width:none; }
+.message-queue-edit > div { display:flex; justify-content:flex-end; gap:6px; padding-top:5px; }
+.message-queue-menu { display:grid; gap:2px; padding:5px; width:160px; background:var(--app-surface); color:var(--app-text); }
+.message-queue-menu button { width:100%; justify-content:flex-start; gap:8px; font-size:13px; }
+.message-queue-dialog { width:min(600px,calc(100vw - 32px)); }
+.message-queue-dialog .dialog-close { position:absolute; top:12px; right:12px; }
+.message-queue-full .geod-scroll-viewport { max-height:60dvh; height:auto; }
+.message-queue-full p { white-space:pre-wrap; overflow-wrap:anywhere; font-size:14px; line-height:1.7; }
+.message-queue :is(button,textarea):focus-visible { outline:2px solid var(--ring); outline-offset:2px; }
+@keyframes geod-control-spin { to { transform:rotate(360deg); } }
+@media(prefers-reduced-motion:reduce){ .message-queue-sending svg,.composer-stopping-icon,.is-reconnecting { animation:none; } }
 .workspace-collapse { display: flex; align-items: center; flex: 1; min-width: 0; min-height: 32px; gap: 8px; padding: 5px 2px; border: 0; border-radius: 7px; background: transparent; color: var(--app-text); text-align: left; font-size: 14px; line-height: 20px; font-weight: 500; }
 .workspace-collapse span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .workspace-collapse em { flex: none; color: var(--app-faint-text); font-size: 12px; font-style: normal; font-weight: 400; }

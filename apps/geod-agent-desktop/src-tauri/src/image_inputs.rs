@@ -38,12 +38,37 @@ pub(crate) fn clone_images(app:&AppHandle,owner:&str,source:&str,target:&str,ids
         let mut seen=std::collections::HashSet::new();
         for id in ids{if !seen.insert(id){continue;}let (mut metadata,bytes)=read(app,owner,source,id)?;let next=Uuid::new_v4().to_string();metadata.id=next.clone();metadata.conversation_id=target.into();
             cloned.push((id.clone(),metadata.clone()));
+            if root.join(format!("{id}.sent")).exists(){fs::write(root.join(format!("{next}.sent")),target).map_err(|_|error("IMAGE_STORAGE","无法复制图片状态"))?;}
             fs::write(root.join(format!("{next}.image")),bytes).and_then(|_|fs::copy(root.join(format!("{id}.preview")),root.join(format!("{next}.preview"))).map(|_|())).and_then(|_|fs::write(root.join(format!("{next}.json")),serde_json::to_vec(&metadata).unwrap())).map_err(|_|error("IMAGE_STORAGE","无法复制分支图片"))?;
         }
         Ok(())
     })();
-    if let Err(e)=result{for (_,metadata) in &cloned{for extension in ["image","preview","json"]{let _=fs::remove_file(root.join(format!("{}.{extension}",metadata.id)));}}return Err(e);}
+    if let Err(e)=result{for (_,metadata) in &cloned{for extension in ["image","preview","json","sent"]{let _=fs::remove_file(root.join(format!("{}.{extension}",metadata.id)));}}return Err(e);}
     Ok(cloned)
+}
+pub(crate) fn publish(app:&AppHandle,owner:&str,conversation:&str,ids:&[String])->Result<(),AppError>{
+    let root=folder(app,owner)?;for id in ids{Uuid::parse_str(id).map_err(|_|error("IMAGE_NOT_FOUND","图片标识无效"))?;let marker=root.join(format!("{id}.sent"));if fs::read_to_string(&marker).ok().as_deref()==Some(conversation){continue;}read(app,owner,conversation,id)?;fs::write(marker,conversation).map_err(|_|error("IMAGE_STORAGE","无法登记图片附件"))?;}Ok(())
+}
+pub(crate) fn list(app:&AppHandle,owner:&str,conversation:&str)->Result<Vec<ImageAttachment>,AppError>{
+    let root=folder(app,owner)?;let mut result=vec![];
+    for file in fs::read_dir(&root).map_err(|_|error("IMAGE_STORAGE","无法读取图片目录"))?{
+        let file=file.map_err(|_|error("IMAGE_STORAGE","无法读取图片目录"))?;let path=file.path();
+        if path.extension().is_none_or(|e|e!="sent") {continue;}
+        if fs::read_to_string(&path).ok().as_deref()!=Some(conversation){continue;}
+        if let Some(id)=path.file_stem().and_then(|v|v.to_str()){result.push(read(app,owner,conversation,id)?.0);}
+    }
+    result.sort_by(|a,b|a.id.cmp(&b.id));Ok(result)
+}
+#[tauri::command]
+pub(crate) fn conversation_attachments_list(app:AppHandle,conversation_id:String)->Result<serde_json::Value,AppError>{
+    let owner=services::current_user_id(&app.state::<services::ServiceState>()).map_err(|e|error(e.code,&e.message))?;
+    let images=list(&app,&owner,&conversation_id)?;let documents=crate::attachment_inputs::document_attachments_list(app,conversation_id)?;
+    Ok(serde_json::json!({"images":images,"documents":documents,"imageReadTool":"attachment_read"}))
+}
+pub(crate) fn read_submitted(app:&AppHandle,owner:&str,conversation:&str,id:&str)->Result<Option<serde_json::Value>,AppError>{
+    if !list(app,owner,conversation)?.iter().any(|image|image.id==id){return Ok(None);}
+    let (metadata,_)=read(app,owner,conversation,id)?;
+    Ok(Some(serde_json::json!({"attachment":metadata,"imageContent":model_images(app,owner,conversation,&[id.into()])?.first(),"untrustedContent":true})))
 }
 #[tauri::command]
 pub(crate) async fn image_attachment_add(app:AppHandle,conversation_id:String,name:String,base64:String)->Result<ImageAttachment,AppError>{

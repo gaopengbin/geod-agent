@@ -76,11 +76,14 @@ export class ModelToolCatalog{
    args.names?.includes(tool.name)||args.group==='all'||(TOOL_GROUPS[args.group]??[]).includes(tool.name)
    ||[...selectedGroups].some(group=>TOOL_GROUPS[group].includes(tool.name))
    ||tokens.some(token=>`${tool.name} ${tool.description}`.toLowerCase().includes(token))));
+  // Explicit names outrank broad group matches, including on a large catalog.
+  const score=({function:t})=>(args.names?.includes(t.name)?1000:0)+tokens.reduce((n,k)=>n+(t.name.toLowerCase()===k?100:t.name.toLowerCase().includes(k)?10:0),0);
+  matches.sort((a,b)=>score(b)-score(a));
   const offset=args.offset??0,limit=args.limit??12,tools=matches.slice(offset,offset+limit);
   for(const {function:tool}of tools)this.enable(tool.name);
   // The next request contains full activated schemas. Repeating them in tool
   // output would copy the same large schema into every subsequent history.
-  return{tools:tools.map(({function:tool})=>({name:tool.name,description:tool.description.slice(0,180),schemaActivated:true})),total:matches.length,nextOffset:offset+tools.length<matches.length?offset+tools.length:null,groups:Object.keys(TOOL_GROUPS),scope:'declared-native-tools',permissionsUnchanged:true};
+  return{tools:tools.map(({function:tool})=>({name:tool.name,description:tool.description.slice(0,180),schemaActivated:true})),total:matches.length,nextOffset:offset+tools.length<matches.length?offset+tools.length:null,groups:Object.keys(TOOL_GROUPS),scope:'declared-native-tools',exhausted:offset+tools.length>=matches.length,discoveryOnly:true,note:'This catalog lists tool contracts, not remote datasets. Repeating this page cannot find new providers; use an activated source/data discovery tool. Explicit requested names are ranked first.',permissionsUnchanged:true};
  }
  context(args){
   let entries=args.section==='history'?[...this.history.values()]:this.archived[args.section]??[];

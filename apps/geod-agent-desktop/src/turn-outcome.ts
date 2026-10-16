@@ -5,6 +5,7 @@ export interface TurnOutcome {
  message:string;
  code?:string;
  generationId?:string;
+ durationMs?:number;
 }
 export function turnOutcomeMessage(turnId:string,outcome:TurnOutcome):DisplayMessage {
  return {id:'turn-outcome-'+turnId,turnId,role:'tool',itemType:'turnOutcome',toolStatus:'attention',content:outcome.message,turnOutcome:outcome};

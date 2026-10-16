@@ -19,6 +19,7 @@ pub(crate) struct ConnectionDraft {
     pub asset_id: Option<u64>,
     #[serde(default)]
     pub required_headers: Vec<String>,
+    #[serde(default)] pub required_query: Vec<String>,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -30,6 +31,7 @@ pub(crate) struct Connection {
     pub tileset_url: Option<String>,
     pub asset_id: Option<u64>,
     pub required_headers: Vec<String>,
+    #[serde(default)] pub required_query: Vec<String>,
     pub credential_ready: bool,
 }
 impl Connection {
@@ -48,12 +50,17 @@ struct Secrets {
     token: Option<String>,
     #[serde(default)]
     headers: BTreeMap<String, String>,
+    #[serde(default)] query: BTreeMap<String,String>,
 }
 pub(crate) struct ResolvedCredential {
     pub connection: Connection,
     secrets: Secrets,
 }
 impl ResolvedCredential {
+    pub(crate) fn apply_vector(self,options:&mut geod_vector::NetworkOptions)->Result<(),AppError>{
+        if self.connection.kind!="mvt" {return Err(error("不是矢量服务凭证"));}
+        options.headers=self.secrets.headers;options.query=self.secrets.query;Ok(())
+    }
     pub(crate) async fn resolve_terrain(self, asset_id: Option<u64>, proxy: Option<&str>) -> Result<geod_tiles3d::ion::TerrainEndpoint, String> {
         if self.connection.kind != "cesiumIon" { return Err("请使用已保存的 Cesium Ion 连接加载 Ion 地形".into()); }
         let mut endpoint = geod_tiles3d::ion::resolve_terrain(asset_id.or(self.connection.asset_id).unwrap_or(0), self.secrets.token.as_deref().unwrap_or(""), proxy).await?;
@@ -156,8 +163,9 @@ fn normalize(mut draft: ConnectionDraft) -> Result<ConnectionDraft, AppError> {
         return Err(error("请输入连接名称"));
     }
     match draft.kind.as_str() {
-        "direct" => {
-            draft.tileset_url = Some(public_url(draft.tileset_url.as_deref().unwrap_or(""))?);
+        "direct" | "mvt" => {
+            let url=public_url(draft.tileset_url.as_deref().unwrap_or(""))?;
+            draft.tileset_url=Some(if draft.kind=="mvt"{url.replace("%7B","{").replace("%7D","}")}else{url});
             draft.asset_id = None;
         }
         "cesiumIon" => {
@@ -168,6 +176,9 @@ fn normalize(mut draft: ConnectionDraft) -> Result<ConnectionDraft, AppError> {
         }
         _ => return Err(error("请选择三维连接类型")),
     }
+    if draft.required_query.len()>32||draft.required_query.iter().any(|n|n.is_empty()||n.len()>100||!n.bytes().all(|b|b.is_ascii_alphanumeric()||b==b'_'||b==b'-')){return Err(error("查询参数名称无效"));}
+    if draft.kind!="mvt"&&!draft.required_query.is_empty(){return Err(error("此服务不支持查询凭证"));}
+    draft.required_query.sort();draft.required_query.dedup();
     if draft.required_headers.len() > 32 {
         return Err(error("最多可配置 32 个请求头"));
     }
@@ -231,7 +242,7 @@ fn resolve_at(
             "请在三维数据连接中填写此连接的凭证",
         ));
     }
-    let secrets = match reference {
+    let secrets:Secrets = match reference {
         None => Secrets::default(),
         Some(reference) => {
             let value = entry(path, owner, &reference)?
@@ -247,6 +258,9 @@ fn resolve_at(
             })?
         }
     };
+    if !connection.required_query.iter().all(|name|secrets.query.contains_key(name))||!connection.required_headers.iter().all(|name|secrets.headers.contains_key(name))||(connection.kind=="cesiumIon"&&secrets.token.as_ref().is_none_or(String::is_empty)){
+        return Err(workspace_error("DATA_CREDENTIAL_REQUIRED","本机凭证不完整，请在数据连接中重新填写"));
+    }
     Ok(ResolvedCredential {
         connection,
         secrets,
@@ -283,11 +297,12 @@ pub(crate) fn tiles3d_connection_prepare(
         id: Uuid::new_v4().to_string(),
         revision: Uuid::new_v4().to_string(),
         name: draft.name,
-        credential_ready: draft.kind == "direct" && draft.required_headers.is_empty(),
+        credential_ready: draft.kind != "cesiumIon" && draft.required_headers.is_empty() && draft.required_query.is_empty(),
         kind: draft.kind,
         tileset_url: draft.tileset_url,
         asset_id: draft.asset_id,
         required_headers: draft.required_headers,
+        required_query: draft.required_query,
     };
     db(&state.db_path)?
         .execute(
@@ -309,6 +324,7 @@ pub(crate) fn tiles3d_connection_save(
     token: Option<String>,
     headers: Option<BTreeMap<String, String>>,
     remove_headers: Option<Vec<String>>,
+    query: Option<BTreeMap<String,String>>,
 ) -> Result<Connection, AppError> {
     let owner = user(&services)?;
     let _guard = GATE.lock().map_err(storage)?;
@@ -361,6 +377,14 @@ pub(crate) fn tiles3d_connection_save(
             secrets.headers.insert(name, value);
         }
     }
+    if let Some(query)=query {
+        if connection.kind!="mvt"||query.len()>32{return Err(error("查询凭证仅适用于 MVT 服务"));}
+        for (name,value) in query {
+            if name.is_empty()||name.len()>100||!name.bytes().all(|b|b.is_ascii_alphanumeric()||b==b'_'||b==b'-')||value.len()>8192||value.chars().any(char::is_control){return Err(error("查询凭证格式无效"));}
+            connection.required_query.push(name.clone());if !value.is_empty(){secrets.query.insert(name,value);}
+        }
+        connection.required_query.sort();connection.required_query.dedup();
+    }
     if serde_json::to_vec(&secrets).map_err(storage)?.len() > 48 * 1024 {
         return Err(error("凭证总长度过大"));
     }
@@ -369,7 +393,7 @@ pub(crate) fn tiles3d_connection_save(
         .extend(secrets.headers.keys().cloned());
     connection.required_headers.sort();
     connection.required_headers.dedup();
-    connection.credential_ready = (connection.kind != "cesiumIon"
+    connection.credential_ready = connection.required_query.iter().all(|n|secrets.query.contains_key(n)) && (connection.kind != "cesiumIon"
         || secrets.token.as_ref().is_some_and(|t| !t.is_empty()))
         && connection
             .required_headers
@@ -382,6 +406,7 @@ pub(crate) fn tiles3d_connection_save(
         ));
     }
     if old_secret_json == serde_json::to_string(&secrets).map_err(storage)?
+        && old_profile.required_query == connection.required_query
         && old_profile.required_headers == connection.required_headers
         && old_profile.credential_ready == connection.credential_ready
     {
@@ -450,6 +475,16 @@ pub(crate) async fn tiles3d_connection_test(
     })
     .await
     .map_err(|_| error("连接检查线程中断"))??;
+    if credential.connection.kind=="mvt" {
+        let raw=credential.connection.source_url().replace("{z}","0").replace("{x}","0").replace("{y}","0");
+        let mut builder=reqwest::Client::builder().gzip(true).timeout(Duration::from_secs(30)).redirect(reqwest::redirect::Policy::none());
+        if let Some(proxy)=proxy{builder=builder.proxy(reqwest::Proxy::all(proxy).map_err(|_|error("代理无效"))?);}
+        let mut request=builder.build().map_err(|_|error("网络初始化失败"))?.get(raw).query(&credential.secrets.query);
+        for (key,value) in credential.secrets.headers{request=request.header(key,value);}
+        let response=request.send().await.map_err(|_|error("矢量服务连接失败，请检查网络和凭证"))?;
+        if !response.status().is_success(){return Err(error(format!("矢量服务返回 HTTP {}",response.status().as_u16())));}
+        return Ok(serde_json::json!({"connected":true,"version":"MVT","sourceUrl":credential.connection.source_url()}));
+    }
     let endpoint = credential
         .resolve(proxy.as_deref())
         .await
@@ -510,6 +545,15 @@ async fn test_endpoint(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn mvt_query_credentials_are_runtime_only_and_placeholders_survive(){
+        let draft=normalize(ConnectionDraft{name:"Authenticated vector".into(),kind:"mvt".into(),tileset_url:Some("https://api.example.com/{z}/{x}/{y}.pbf".into()),asset_id:None,required_headers:vec![],required_query:vec!["access_token".into()]}).unwrap();
+        assert!(draft.tileset_url.as_ref().unwrap().contains("{z}/{x}/{y}"));
+        let connection=Connection{id:"profile".into(),revision:"revision".into(),name:draft.name,kind:draft.kind,tileset_url:draft.tileset_url,asset_id:None,required_headers:vec![],required_query:draft.required_query,credential_ready:true};
+        let public=serde_json::to_string(&connection).unwrap();assert!(!public.contains("synthetic-secret"));
+        let resolved=ResolvedCredential{connection,secrets:Secrets{token:None,headers:BTreeMap::new(),query:BTreeMap::from([("access_token".into(),"synthetic-secret".into())])}};
+        let mut network=geod_vector::NetworkOptions::default();resolved.apply_vector(&mut network).unwrap();assert_eq!(network.query["access_token"],"synthetic-secret");
+    }
     #[tokio::test]
     async fn connection_probe_decodes_real_http_gzip_and_bounds_decoded_json() {
         use flate2::{write::GzEncoder, Compression};
@@ -563,7 +607,7 @@ mod tests {
             kind: "direct".into(),
             tileset_url: Some(url.into()),
             asset_id: None,
-            required_headers: vec![],
+            required_headers: vec![], required_query:vec![],
         };
         for url in [
             "https://user:pass@example.org/t.json",
@@ -584,7 +628,7 @@ mod tests {
             kind: "cesiumIon".into(),
             tileset_url: None,
             asset_id: Some(7),
-            required_headers: vec![],
+            required_headers: vec![], required_query:vec![],
             credential_ready: false,
         };
         database
@@ -617,6 +661,7 @@ mod tests {
         let cleanup = Cleanup(vault);
         let secrets = Secrets {
             token: Some("synthetic-ion-token".into()),
+            query: BTreeMap::new(),
             headers: BTreeMap::from([
                 ("referer".into(), "https://fixture.invalid/".into()),
                 ("x-api-key".into(), "synthetic-header-value".into()),
@@ -634,6 +679,7 @@ mod tests {
             tileset_url: None,
             asset_id: Some(7),
             required_headers: vec!["referer".into(), "x-api-key".into()],
+            required_query: vec![],
             credential_ready: true,
         };
         db(&path)

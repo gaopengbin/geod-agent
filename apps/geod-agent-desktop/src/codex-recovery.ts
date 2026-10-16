@@ -20,6 +20,23 @@ export function conversationBusyFailure(cause:unknown):boolean {
   return value?.code==='CODEX_BUSY'||['此会话正在处理上一轮请求','Codex 正在处理上一轮对话','上一轮仍在停止'].some(message=>text.includes(message));
 }
 
+/** Inspect a terminal uncertain request without releasing its billing receipt,
+ * replaying its response, or stopping a live native turn. */
+export async function inspectCodexCheckpoint(client:Pick<RecoveryClient,'runtimeCapabilities'|'codexConversationStatus'>&{
+  agentGenerationGet:(id:string)=>Promise<{generationId:string;conversationId:string;state:string}>
+},conversationId:string,generationId:string):Promise<{billingPending:boolean}> {
+  if(!(await client.runtimeCapabilities()).conversationExecution)
+    throw new Error('请先重启应用以恢复已保存进度。原请求的费用核对记录会保留。');
+  const [generation,execution]=await Promise.all([client.agentGenerationGet(generationId),client.codexConversationStatus(conversationId)]);
+  if(generation.generationId!==generationId||generation.conversationId!==conversationId)
+    throw new Error('请求记录与当前会话不匹配，无法恢复。');
+  if(execution.busy||execution.stopping)
+    throw Object.assign(new Error('上一轮仍在执行或停止中，请稍后检查状态。'),{code:'CODEX_BUSY'});
+  if(!['settled','failed','pending_reconcile'].includes(generation.state))
+    throw new Error('模型请求仍在处理中，请稍后检查。已完成的本机工具不会自动重复执行。');
+  return {billingPending:generation.state==='pending_reconcile'};
+}
+
 /** Billing rejection before dispatch is terminal, not an uncertain model result.
  * Read server evidence and the native lease; never stop or retry a live turn. */
 export async function confirmedCreditRejection(client:Pick<RecoveryClient,'runtimeCapabilities'|'codexConversationStatus'>&{
