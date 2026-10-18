@@ -351,6 +351,18 @@ fn task_hash(
     Ok(format!("{:x}",Sha256::digest(serde_json::to_vec(&json!({"owner":owner,"conversation":conversation,"title":title,"request":request,"outputDir":output,"workspace":root})).map_err(storage_error)?)))
 }
 
+// Model retries receive new call IDs. Reuse only an identical, still-unapproved
+// proposal in the same account, conversation and physical workspace.
+fn reusable_pending(db:&Connection, owner:&str, conversation:&str, root:&str, title:&str, request:&DataRequest)->Result<Option<DataTask>,AppError>{
+    let serialized=serde_json::to_string(request).map_err(storage_error)?;
+    let mut q=db.prepare(&format!("{SELECT} WHERE owner_id=?1 AND conversation_id=?2 AND status='pending' AND title=?3 AND request_json=?4 AND NOT EXISTS(SELECT 1 FROM data_task_visibility v WHERE v.task_id=data_download_tasks.id) ORDER BY created_at DESC")).map_err(storage_error)?;
+    for task in q.query_map(params![owner,conversation,title,serialized],row).map_err(storage_error)? {
+        let task=task.map_err(storage_error)?;
+        if check_binding(db,&task,root).is_ok(){return Ok(Some(task));}
+    }
+    Ok(None)
+}
+
 #[tauri::command]
 pub(crate) fn data_download_plan(
     app: AppHandle,
@@ -435,6 +447,10 @@ pub(crate) fn data_download_plan(
             ));
         }
         check_binding(&db, &existing, &workspace.directory)?;
+        return Ok(existing);
+    }
+    if let Some(existing)=reusable_pending(db,&owner,&conversation_id,&workspace.directory,title.trim(),&request)?{
+        transaction.commit().map_err(storage_error)?;
         return Ok(existing);
     }
     let id = Uuid::new_v4().to_string();
@@ -1050,6 +1066,15 @@ mod tests {
             failures: 0,
         };
         db.execute("INSERT INTO data_download_tasks(id,owner_id,conversation_id,idempotency_key,kind,title,plan_hash,request_json,output_dir,workspace_root,status,progress_json,created_at,updated_at) VALUES('task','owner','conversation','key','tiles3d','区域模型','hash',?1,'out','root','pending',?2,'now','now')",params![serde_json::to_string(&request).unwrap(),serde_json::to_string(&p).unwrap()]).unwrap();
+        db.execute("UPDATE data_download_tasks SET workspace_root=?1,output_dir=?2",params![root.path().to_string_lossy(),root.path().join("out").to_string_lossy()]).unwrap();
+        let directory=root.path().to_str().unwrap();
+        assert_eq!(reusable_pending(&db,"owner","conversation",directory,"区域模型",&request).unwrap().unwrap().id,"task");
+        assert!(reusable_pending(&db,"other","conversation",directory,"区域模型",&request).unwrap().is_none());
+        assert!(reusable_pending(&db,"owner","other",directory,"区域模型",&request).unwrap().is_none());
+        let elsewhere=tempfile::tempdir().unwrap();
+        assert!(reusable_pending(&db,"owner","conversation",elsewhere.path().to_str().unwrap(),"区域模型",&request).unwrap().is_none());
+        let mut changed=request.clone();if let DataRequest::Tiles3d(spec)=&mut changed{spec.tileset_url="https://another.test/tileset.json".into();}
+        assert!(reusable_pending(&db,"owner","conversation",directory,"区域模型",&changed).unwrap().is_none());
         assert!(get(&db, "other", "conversation", "task").is_err());
         assert!(get(&db, "owner", "another", "task").is_err());
         assert_eq!(
@@ -1059,9 +1084,11 @@ mod tests {
         assert!(cleanup_record(&db,"other","conversation","task","clean").is_err());
         assert!(cleanup_record(&db,"owner","another","task","clean").is_err());
         let cleaned=cleanup_record(&db,"owner","conversation","task","clean").unwrap();assert!(cleaned.cleaned);assert_eq!(cleaned.status,"pending");
+        assert!(reusable_pending(&db,"owner","conversation",directory,"区域模型",&request).unwrap().is_none());
         assert!(!cleanup_record(&db,"owner","conversation","task","restore").unwrap().cleaned);
         db.execute("UPDATE data_download_tasks SET status='completed',manifest_json='{}' WHERE id='task'",[]).unwrap();
         let completed=cleanup_record(&db,"owner","conversation","task","clean").unwrap();assert!(completed.cleaned);assert_eq!(completed.status,"completed");assert!(completed.manifest.is_some());
+        assert!(reusable_pending(&db,"owner","conversation",directory,"区域模型",&request).unwrap().is_none());
         let restored=cleanup_record(&db,"owner","conversation","task","restore").unwrap();assert!(!restored.cleaned);assert_eq!(restored.status,"completed");
         db.execute(
             "UPDATE data_download_tasks SET status='downloading' WHERE id='task'",

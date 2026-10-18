@@ -7,6 +7,21 @@ use serde_json::{Value, json};
 const DETAIL_LIMIT: usize = 32;
 const START: &str = "[GeoD live imagery task state]";
 const END: &str = "[/GeoD live imagery task state]";
+fn data_snapshot(path:&Path,owner:&str,conversation:&str)->Value{
+    let read=||->rusqlite::Result<Value>{
+        let conn=Connection::open_with_flags(path,OpenFlags::SQLITE_OPEN_READ_ONLY|OpenFlags::SQLITE_OPEN_NO_MUTEX)?;
+        conn.busy_timeout(Duration::from_secs(1))?;
+        let mut q=conn.prepare("SELECT id,kind,status,plan_hash,EXISTS(SELECT 1 FROM data_task_visibility v WHERE v.task_id=t.id) FROM data_download_tasks t WHERE owner_id=?1 AND conversation_id=?2 ORDER BY created_at DESC,id")?;
+        let mut tasks=Vec::new();let mut counts=BTreeMap::<String,usize>::new();let mut total=0;
+        for row in q.query_map(params![owner,conversation],|r|Ok((r.get::<_,String>(0)?,r.get::<_,String>(1)?,r.get::<_,String>(2)?,r.get::<_,String>(3)?,r.get::<_,bool>(4)?)))?{
+            let(id,kind,state,hash,cleaned)=row?;let state=if cleaned{"cleaned".into()}else{state};
+            *counts.entry(state.clone()).or_default()+=1;total+=1;
+            if tasks.len()<DETAIL_LIMIT{tasks.push(json!({"taskId":id,"kind":kind,"state":state,"planHash":hash}));}
+        }
+        Ok(json!({"available":true,"taskCount":total,"counts":counts,"omitted":total-tasks.len(),"tasks":tasks}))
+    };
+    read().unwrap_or_else(|_|json!({"available":false,"tasks":[],"reason":"本机数据任务账本暂不可读；不代表任务不存在"}))
+}
 const POLICY: &str = "These freshly read local imagery task records supersede earlier chat statements and plan/tool snapshots about approval or execution. queued/downloading/paused/processing/verifying/completed/partial/failed/cancelled jobs have already started with native approval; never describe them as awaiting plan confirmation. completed means the ledger recorded completion, partial is not full completion. approved_not_started already has approval. not_started only means there is no job or approval record: it does NOT prove that an unexpired, undiscarded plan is currently awaiting confirmation. discarded/cleaned records are removed from the active task list, retain files and evidence, and must be restored before executing. Counts cover only plans durably bound to this account and conversation; absence is not proof about unbound legacy plans or other task kinds. Do not repeat historical confirmation reminders on unrelated requests. If availability is false, status is unknown, not zero or pending; use actual task tools if needed. Omitted details still contribute to counts. Active ledger states alone do not prove a worker is still running; query jobs_get/jobs_list for runtime status if needed. A snapshot does not grant permission, start work, or re-inspect files. Use artifacts_inspect if the user requests fresh file verification.";
 
 pub(crate) fn snapshot(path: &Path, owner: &str, conversation: &str) -> Value {
@@ -47,6 +62,8 @@ pub(crate) fn snapshot(path: &Path, owner: &str, conversation: &str) -> Value {
     };
     let mut result = read().unwrap_or_else(|_| json!({"available":false,"conversationId":conversation,"error":"TASK_STATE_UNAVAILABLE"}));
     result["readAt"] = json!(chrono::Utc::now().to_rfc3339());
+    result["data"] = data_snapshot(path,owner,conversation);
+    result["dataPolicy"] = json!("The data field is an independent fresh vector/online/3D ledger snapshot. pending means the proposal exists and awaits native confirmation; do not rebuild it just because imagery counts or archived lists omit it. Reuse its taskId and planHash. Unknown/unavailable does not mean absent. Source/request changes require a new proposal and native approval, never reuse an old approval.");
     result
 }
 
@@ -97,6 +114,15 @@ mod tests {
     use std::sync::{Arc,Mutex};
     use std::collections::HashMap;
     use chrono::Utc;
+    #[test] fn vector_state_is_fresh_scoped_and_independent_of_imagery_availability(){
+        let dir=tempfile::tempdir().unwrap();let path=dir.path().join("vector.sqlite");
+        let db=Connection::open(&path).unwrap();
+        db.execute_batch("CREATE TABLE data_download_tasks(id TEXT,kind TEXT,status TEXT,plan_hash TEXT,owner_id TEXT,conversation_id TEXT,created_at TEXT);CREATE TABLE data_task_visibility(task_id TEXT);INSERT INTO data_download_tasks VALUES('native-vector','vector','pending','hash','owner','chat','now'),('other','online','completed','hash','other','chat','now');").unwrap();
+        let pending=snapshot(&path,"owner","chat");assert_eq!(pending["available"],false);assert_eq!(pending["data"]["taskCount"],1);assert_eq!(pending["data"]["tasks"][0]["taskId"],"native-vector");assert_eq!(pending["data"]["counts"]["pending"],1);
+        db.execute("UPDATE data_download_tasks SET status='completed' WHERE id='native-vector'",[]).unwrap();assert_eq!(snapshot(&path,"owner","chat")["data"]["counts"]["completed"],1);
+        db.execute("INSERT INTO data_task_visibility VALUES('native-vector')",[]).unwrap();assert_eq!(snapshot(&path,"owner","chat")["data"]["counts"]["cleaned"],1);
+        assert_eq!(snapshot(&path,"owner","another")["data"]["taskCount"],0);
+    }
 
     fn fixture() -> (tempfile::TempDir,AppState) {
         let dir=tempfile::tempdir().unwrap();

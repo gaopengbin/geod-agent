@@ -9,9 +9,10 @@ export function validateEvents(body, now = Date.now()) {
       typeof body.accountId !== 'string' || !Array.isArray(body.events) || !body.events.length || body.events.length > 20) throw new Error('INVALID_EVENTS');
   return body.events.map(event => {
     const at = Date.parse(event?.occurred_at);
-    if (!event || Object.keys(event).sort().join(',') !== 'attempt_id,duration,event_id,occurred_at,reason,state' ||
+    if (!event || Object.keys(event).some(key=>!['attempt_id','duration','event_id','occurred_at','reason','state','download_kind'].includes(key)) ||
         !uuid.test(event.event_id) || !uuid.test(event.attempt_id) || !states.has(event.state) || !durations.has(event.duration) || !reasons.has(event.reason) ||
         typeof event.occurred_at !== 'string' || !/T.*(?:Z|[+-]\d\d:\d\d)$/.test(event.occurred_at) || !Number.isFinite(at) || at < now - 90 * 86400000 || at > now + 300000) throw new Error('INVALID_EVENTS');
+    if(event.download_kind!=null&&!['imagery','vector','online','tiles3d','unknown'].includes(event.download_kind))throw new Error('INVALID_EVENTS');
     return { ...event, occurred_at: new Date(at).toISOString() };
   });
 }
@@ -26,10 +27,11 @@ export function openEventStore(path) {
   ); CREATE INDEX IF NOT EXISTS agent_events_time ON agent_events(occurred_at);
   CREATE TABLE IF NOT EXISTS agent_event_metadata (key TEXT PRIMARY KEY,value TEXT NOT NULL);`);
   db.prepare("INSERT OR IGNORE INTO agent_event_metadata VALUES ('started_at',?)").run(new Date().toISOString());
-  const insert = db.prepare('INSERT OR IGNORE INTO agent_events VALUES (?,?,?,?,?,?,?,?)');
+  if(!db.prepare('PRAGMA table_info(agent_events)').all().some(row=>row.name==='download_kind'))db.exec('ALTER TABLE agent_events ADD COLUMN download_kind TEXT');
+  const insert = db.prepare('INSERT OR IGNORE INTO agent_events(user_id,event_id,attempt_id,state,duration,reason,occurred_at,received_at,download_kind) VALUES (?,?,?,?,?,?,?,?,?)');
   const record = db.transaction((userId, events) => {
     const at = new Date().toISOString(); let accepted = 0;
-    for (const event of events) accepted += insert.run(userId, event.event_id, event.attempt_id, event.state, event.duration, event.reason, event.occurred_at, at).changes;
+    for (const event of events) accepted += insert.run(userId, event.event_id, event.attempt_id, event.state, event.duration, event.reason, event.occurred_at, at,event.download_kind??null).changes;
     db.prepare("DELETE FROM agent_events WHERE received_at < ?").run(new Date(Date.now() - 90 * 86400000).toISOString());
     return { accepted, duplicates: events.length - accepted };
   });

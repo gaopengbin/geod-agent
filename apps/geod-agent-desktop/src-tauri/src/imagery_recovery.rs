@@ -35,6 +35,33 @@ pub(crate) fn db(state: &AppState) -> Result<Connection, AppError> {
     Ok(conn)
 }
 fn storage(error: impl std::fmt::Display) -> AppError { workspace_error("STORAGE_ERROR", error.to_string()) }
+pub(crate) fn proposal_guard()->Result<std::sync::MutexGuard<'static,()>,AppError>{
+    static LOCK:std::sync::Mutex<()>=std::sync::Mutex::new(());
+    LOCK.lock().map_err(storage)
+}
+pub(crate) fn reusable_pending_plan(state:&AppState,owner:&str,conversation:&str,workspace:&Path,spec:&TaskSpec,source:&SourceDescriptor)->Result<Option<StoredPlan>,AppError>{
+    let root=fs::canonicalize(workspace).map_err(storage)?.to_string_lossy().into_owned();
+    let conn=db(state)?;
+    let ids={let mut q=conn.prepare("SELECT o.plan_id FROM imagery_plan_owners o WHERE o.owner_id=?1 AND o.conversation_id=?2 AND o.workspace=?3 AND NOT EXISTS(SELECT 1 FROM jobs j WHERE j.plan_id=o.plan_id) ORDER BY o.bound_at DESC").map_err(storage)?;
+        let rows=q.query_map(params![owner,conversation,root],|r|r.get::<_,String>(0)).map_err(storage)?.collect::<Result<Vec<_>,_>>().map_err(storage)?;rows};
+    let mut store=open_store(state)?;
+    let mut expected=serde_json::to_value(spec).map_err(storage)?;
+    expected.as_object_mut().unwrap().remove("outputDirectory");
+    for id in ids{
+        if store.plan_visibility(&id)?.is_some(){continue;}
+        let Some(old)=store.get_plan(&id)? else{continue};
+        let mut actual=serde_json::to_value(&old.plan.spec).map_err(storage)?;
+        actual.as_object_mut().unwrap().remove("outputDirectory");
+        if actual!=expected{continue;}
+        assert_plan_owner(state,owner,conversation,workspace,&id)?;
+        match store.revalidate_plan(&id,&old.plan.plan_hash,source,Utc::now()){
+            Ok(valid)=>return Ok(Some(valid)),
+            Err(cause) if cause.code=="STORAGE_ERROR"=>return Err(cause.into()),
+            Err(_)=>continue,
+        }
+    }
+    Ok(None)
+}
 
 fn plan_workspace(plan: &StoredPlan, workspace: &Path) -> Result<PathBuf, AppError> {
     let root = fs::canonicalize(workspace).map_err(storage)?;
@@ -180,6 +207,26 @@ mod tests {
         let job=store.start_job(&old.plan_id,&old.plan.plan_hash,&approval.approval_id,"original-start",&source,Utc::now()).unwrap();
         bind_created_plan(&state,"owner-a","conversation-a",dir.path(),&old.plan_id).unwrap();
         (dir,state,workspace,old,job)
+    }
+    #[test] fn identical_pending_proposals_reuse_only_same_owner_workspace_and_current_source(){
+        let (dir,state,_,old,_)=fixture();let mut store=open_store(&state).unwrap();
+        let source=store.get_registered_source(&old.plan.spec.source_id).unwrap().unwrap();
+        let mut spec=old.plan.spec.clone();spec.output_directory=dir.path().join("pending").to_string_lossy().into_owned();
+        let pending=store.create_plan(spec.clone(),&source.descriptor,Utc::now()).unwrap();
+        bind_created_plan(&state,"owner-a","conversation-a",dir.path(),&pending.plan_id).unwrap();
+        spec.output_directory=dir.path().join("retry-output").to_string_lossy().into_owned();
+        let find=|owner:&str,conversation:&str,spec:&TaskSpec|reusable_pending_plan(&state,owner,conversation,dir.path(),spec,&source.descriptor).unwrap();
+        assert_eq!(find("owner-a","conversation-a",&spec).unwrap().plan_id,pending.plan_id);
+        assert!(find("owner-b","conversation-a",&spec).is_none());assert!(find("owner-a","conversation-b",&spec).is_none());
+        let mut changed=spec.clone();changed.zoom_levels=vec![2];assert!(find("owner-a","conversation-a",&changed).is_none());
+        store.set_plan_visibility(&pending.plan_id,Some("cleaned")).unwrap();assert!(find("owner-a","conversation-a",&spec).is_none());
+        store.set_plan_visibility(&pending.plan_id,None).unwrap();
+        let mut endpoint=source.endpoint;endpoint.min_interval_ms=7;
+        let revised=store.save_source(endpoint,0,22,true,Utc::now()).unwrap();
+        assert!(reusable_pending_plan(&state,"owner-a","conversation-a",dir.path(),&spec,&revised).unwrap().is_none());
+        let approval=store.grant_approval(&pending.plan_id,&pending.plan.plan_hash,"owner-a","test",Utc::now()).unwrap();
+        store.start_job(&pending.plan_id,&pending.plan.plan_hash,&approval.approval_id,"start-pending",&source.descriptor,Utc::now()).unwrap();
+        assert!(find("owner-a","conversation-a",&spec).is_none());
     }
     #[test] fn recovery_copies_geometry_formats_and_never_mutates_original_artifacts() {
         let (dir,state,mut workspace,old,job)=fixture();

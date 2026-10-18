@@ -3,6 +3,7 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from "node:crypto";
 import {sponsorBudgetWindow} from './sponsor-budget.mjs';
+import {safeDiagnostic} from '../../packages/codex-protocol/upstream-diagnostics.mjs';
 
 export function openLedger(path, tokenLimit, encryptionSecret, quotaEnforced = true, {now: clock = () => Date.now()} = {}) {
   if (!Number.isSafeInteger(tokenLimit) || tokenLimit <= 0) throw new Error("GEOD_AGENT_TOKEN_LIMIT must be a positive integer");
@@ -44,6 +45,7 @@ export function openLedger(path, tokenLimit, encryptionSecret, quotaEnforced = t
     if (!db.prepare("PRAGMA table_info(model_generations)").all().some(row => row.name === name)) db.exec(`ALTER TABLE model_generations ADD COLUMN ${name} ${type}`);
   }
   const now = timestamp();
+  if(!db.prepare('PRAGMA table_info(model_generations)').all().some(row=>row.name==='upstream_diagnostic'))db.exec('ALTER TABLE model_generations ADD COLUMN upstream_diagnostic TEXT');
   const policyId = `token-policy-0.1-${tokenLimit}${quotaEnforced ? "" : "-unlimited"}`;
   db.prepare("INSERT OR IGNORE INTO quota_policy_versions(policy_id,token_limit,created_at) VALUES (?,?,?)").run(policyId, tokenLimit, now);
   // A process crash may happen after the upstream accepted a request. Keep
@@ -88,11 +90,12 @@ export function openLedger(path, tokenLimit, encryptionSecret, quotaEnforced = t
     entry.run(randomUUID(), userId, generationId, "settle", inputTokens + outputTokens, at);
     return publicGeneration(get.get(userId, generationId), key);
   });
-  const failTx = db.transaction((userId, generationId, code) => {
+  const failTx = db.transaction((userId, generationId, code, diagnostic=null) => {
     const current = get.get(userId, generationId);
     if (!current || !["reserved", "streaming"].includes(current.state)) throw new Error("Generation cannot fail from this state");
     const at = timestamp();
-    db.prepare("UPDATE model_generations SET state='failed',error_code=?,updated_at=? WHERE user_id=? AND generation_id=?").run(code, at, userId, generationId);
+    const safe=safeDiagnostic(diagnostic);
+    db.prepare("UPDATE model_generations SET state='failed',error_code=?,upstream_diagnostic=?,updated_at=? WHERE user_id=? AND generation_id=?").run(code,safe?JSON.stringify(safe):null, at, userId, generationId);
     entry.run(randomUUID(), userId, generationId, "release", -current.reserved_tokens, at);
     return publicGeneration(get.get(userId, generationId), key);
   });
@@ -104,6 +107,7 @@ export function openLedger(path, tokenLimit, encryptionSecret, quotaEnforced = t
     },
     settle: settleTx,
     fail: failTx,
+    recordDiagnostic(userId,generationId,diagnostic){const safe=safeDiagnostic(diagnostic);if(safe)db.prepare('UPDATE model_generations SET upstream_diagnostic=? WHERE user_id=? AND generation_id=?').run(JSON.stringify(safe),userId,generationId);},
     pending(userId, generationId, code) {
       db.prepare("UPDATE model_generations SET state='pending_reconcile',error_code=?,updated_at=? WHERE user_id=? AND generation_id=? AND state='streaming'").run(code, timestamp(), userId, generationId);
       return publicGeneration(get.get(userId, generationId), key);
@@ -163,5 +167,5 @@ function decrypt(value, key) {
   return JSON.parse(Buffer.concat([decipher.update(packed.subarray(28)), decipher.final()]).toString("utf8"));
 }
 function publicGeneration(row, key) {
-  return { generationId: row.generation_id, conversationId: row.conversation_id, state: row.state, model: row.model, billingScope:row.funding_scope||'hosted',...(row.sponsor_id?{providerId:row.sponsor_id,channelId:'sponsor:'+row.sponsor_id,channelRevision:row.sponsor_revision,selectedModel:row.model}:{}),reservedTokens: row.reserved_tokens, inputTokens: row.input_tokens, outputTokens: row.output_tokens, cachedInputTokens: row.cached_input_tokens, reasoningTokens: row.reasoning_tokens, upstreamModel: row.upstream_model, upstreamRequestId: row.upstream_request_id, errorCode: row.error_code, createdAt: row.created_at, updatedAt: row.updated_at, result: row.response_ciphertext ? decrypt(row.response_ciphertext, key) : null };
+  return { generationId: row.generation_id, conversationId: row.conversation_id, state: row.state, model: row.model, billingScope:row.funding_scope||'hosted',...(row.sponsor_id?{providerId:row.sponsor_id,channelId:'sponsor:'+row.sponsor_id,channelRevision:row.sponsor_revision,selectedModel:row.model}:{}),reservedTokens: row.reserved_tokens, inputTokens: row.input_tokens, outputTokens: row.output_tokens, cachedInputTokens: row.cached_input_tokens, reasoningTokens: row.reasoning_tokens, upstreamModel: row.upstream_model, upstreamRequestId: row.upstream_request_id, errorCode: row.error_code, ...(row.upstream_diagnostic?{upstreamDiagnostic:safeDiagnostic(JSON.parse(row.upstream_diagnostic))}:{}), createdAt: row.created_at, updatedAt: row.updated_at, result: row.response_ciphertext ? decrypt(row.response_ciphertext, key) : null };
 }

@@ -1,10 +1,21 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {zoomRevision,inheritedImageryCrs,resolvedRevisionQuestions} from '../src/imagery-revision.ts';
+import {zoomRevision,sourceRevision,inheritedImageryCrs,resolvedRevisionQuestions,revisionCrsForQuestions} from '../src/imagery-revision.ts';
 import {humanCrsIntent,resolveExportCrs} from '../src/export-crs.ts';
 const oldArgs={sourceId:'esri',boundaryId:'range-route',zoom:18,outputFormats:['geotiff'],exportOptions:{targetCrs:'EPSG:4326',compression:'none',buildPyramid:false}};
 const stored={planId:'real-plan',plan:{spec:{kind:'imagery',sourceId:'esri',bounds:[1,2,3,4],boundary:{polygons:[]},zoomLevels:[18],outputFormats:['geotiff'],exportOptions:{targetCrs:'EPSG:4326',compression:'none',buildPyramid:false,resampling:'bilinear'}}}};
 const old=[{id:'download',role:'user',content:'下载这条路线的影像'},{id:'created',role:'tool',toolName:'plan_imagery',details:JSON.stringify({arguments:oldArgs,result:{planId:'real-plan',targetCrs:'EPSG:4326'}}),content:'计划已创建'},{id:'change',role:'user',content:'改成z14\n已附加边界：route.geojson · 1 个面'}];
 const request=(extra={})=>({messages:old,userMessageId:'change',toolName:'plan_imagery',args:{...oldArgs,zoom:14},planIds:['real-plan'],activeBoundary:null,...extra});
+test('changing a source retains an owned task CRS but never inherits an old approval or changed range',async()=>{
+ for(const text of ['换个图源吧','改用另一个图源','图源换成新的','换成备用影像','change source to another provider'])assert.equal(sourceRevision(text),true,text);
+ for(const text of ['“换个图源”只是示例','新建另一个任务换个图源','换源并把范围改成别处'])assert.equal(sourceRevision(text),false,text);
+ const history=[...old.slice(0,2),{id:'change',role:'user',content:'换成备用影像'}];
+ const req=request({messages:history,args:{...oldArgs,sourceId:'independent-provider'}});
+ const inherited=await inheritedImageryCrs(req,async()=>stored);
+ assert.equal(inherited.crs,'EPSG:4326');assert.equal(inherited.resampling,'bilinear');
+ assert.equal((await revisionCrsForQuestions(req,async()=>stored)).crs,'EPSG:4326');
+ for(const args of [{...req.args,boundaryId:'different'},{...req.args,zoom:13},{...req.args,outputFormats:['png']}])assert.equal(await inheritedImageryCrs({...req,args},async()=>stored),null);
+ assert.equal(await inheritedImageryCrs({...req,planIds:[]},async()=>stored),null);
+});
 
 test('only unambiguous single zoom revisions inherit task parameters',()=>{
  for(const text of ['改成z14','请改为 Z14','只把层级改成14，其余参数不变','change zoom to 14'])assert.equal(zoomRevision(text),14,text);

@@ -2,6 +2,7 @@
 // they never belong to the serializable channel snapshot or Codex host process.
 import {codexRequest, codexResult} from './codex-contract.mjs';
 import {ProviderError, providerFail as fail} from './provider-error.mjs';
+import {upstreamDiagnostic} from './upstream-diagnostics.mjs';
 import {nativeProviderRequest,collectNativeProvider,providerTransport} from './provider-native.mjs';
 export {ProviderError} from './provider-error.mjs';
 
@@ -151,7 +152,10 @@ export async function generateProvider(snapshot, apiKey, request, {generationId,
       body: JSON.stringify(body), signal: controller.signal, redirect: 'error',
     });
     // Never surface raw provider error bodies: they may echo request secrets.
-    if (!response.ok) fail('PROVIDER_HTTP_ERROR', response.status);
+    if (!response.ok) {
+      const error=new ProviderError('PROVIDER_HTTP_ERROR',response.status);
+      error.diagnostic=await upstreamDiagnostic(response,body);throw error;
+    }
     if (!response.body || !response.headers.get('content-type')?.startsWith('text/event-stream')) fail('PROVIDER_STREAM_REQUIRED');
     const value = snapshot.protocol === 'responses'
       ? await collectResponses(response.body, onWire) : ['anthropic','gemini'].includes(snapshot.protocol)

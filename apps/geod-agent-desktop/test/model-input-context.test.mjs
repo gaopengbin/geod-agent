@@ -13,6 +13,20 @@ const suffix='<skills_instructions>large catalogue</skills_instructions><permiss
 const message=(role,body)=>({role,content:[{type:'input_text',text:body}]});
 const request={instructions:'real Core base instructions',input:[message('developer',owned+suffix),message('user','<environment_context>workspace</environment_context>'),message('user','old question'),message('assistant','old answer'),message('user','你好，请简短回复，不调用工具。'),message('developer','[GeoD execution checkpoint]\nstate')],tools};
 
+test('archived task lists retain native IDs hashes and states while exact originals remain recoverable',()=>{
+ const input='继续下载',tasks=Array.from({length:20},(_,i)=>({taskId:'saved-'+i,planHash:'hash-'+i,kind:'vector',status:'pending',bounds:Array(400).fill(i),progress:'verbose '.repeat(500)}));
+ const output={type:'function_call_output',call_id:'old-list',output:JSON.stringify({tasks})};
+ const history=[message('user','列出下载任务'),{type:'function_call',name:'data_download_list',call_id:'old-list',arguments:'{}'},output,message('user',input)];
+ const catalog=new ModelToolCatalog(declared,{input}),result=projectModelInput({...request,input:history},{catalog,developerInstructions:owned});
+ const saved=JSON.parse(result.input.find(i=>i.type==='function_call_output').output);
+ assert.equal(saved.facts.tasks[0].taskId,'saved-0');assert.equal(saved.facts.tasks[0].planHash,'hash-0');assert.equal(saved.facts.tasks[0].status,'pending');
+ assert.equal(saved.facts.tasks.length+saved.facts.tasksOmitted,20,'omitted records stay explicit rather than looking absent');
+ assert.equal(saved.archivedHistory.exactOriginalAvailable,true);
+ let restored='',offset=0;do{const page=catalog.context({section:'history',recordId:saved.archivedHistory.recordId,textOffset:offset}).entries[0];restored+=page.text;offset=page.nextTextOffset;}while(offset!==null);
+ assert.deepEqual(JSON.parse(restored).item,output);
+ assert.equal(JSON.parse(output.output).tasks.length,20,'stored source history is never rewritten');
+});
+
 test('closed historic SQL/schedule calls keep their records without activating unrelated tools; unresolved calls retain their contract',()=>{
  const input='下载故宫影像，Z16，EPSG:4326',history=[message('user','old SQL work'),{type:'function_call',name:'sql_query',call_id:'sql-old',arguments:'{"sql":"SELECT 1"}'},{type:'function_call_output',call_id:'sql-old',output:'{"rows":[1]}'},{type:'function_call',name:'schedules_create',call_id:'schedule-old',arguments:'{}'},{type:'function_call_output',call_id:'schedule-old',output:'{"scheduleId":"saved"}'},message('user',input)];
  const catalog=new ModelToolCatalog(declared,{input}),result=projectModelInput({...request,input:[message('developer',owned+suffix),...history]},{catalog,developerInstructions:owned});

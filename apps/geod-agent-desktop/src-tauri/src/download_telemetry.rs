@@ -70,6 +70,7 @@ fn enqueue(
     stamp: &str,
     start: &str,
     reason: &str,
+    kind: &str,
 ) -> Result<(), AppError> {
     let id = uuid::Uuid::new_v4().to_string();
     let reason = if state == "partial" {
@@ -78,7 +79,7 @@ fn enqueue(
         "cancelled"
     } else if state == "failed" {
         let r = reason.to_uppercase();
-        if r.contains("NETWORK") || r.contains("TIMEOUT") {
+        if r.contains("NETWORK") || r.contains("TIMEOUT") || r.contains("网络") || r.contains("超时") {
             "network"
         } else if r.contains("AUTH") {
             "auth"
@@ -91,6 +92,7 @@ fn enqueue(
         "none"
     };
     let body = json!({"event_id":id,"attempt_id":attempt,"occurred_at":stamp,"state":state,"duration":if state=="started"{"unknown"}else{duration(start,stamp)},"reason":reason});
+    let mut body=body;body["download_kind"]=json!(if ["imagery","vector","online","tiles3d"].contains(&kind){kind}else{"unknown"});
     db.execute(
         "INSERT INTO download_outbox(id,owner,body) VALUES(?1,?2,?3)",
         params![id, owner, body.to_string()],
@@ -121,6 +123,14 @@ fn collect(db: &mut Connection) -> Result<(), AppError> {
         rows
     };
     for (seq, owner, resource, state, stamp, reason) in observations {
+        let (kind,reason)=if let Some(id)=resource.strip_prefix("imagery:"){
+            let native:Option<String>=tx.query_row("SELECT body FROM job_events WHERE job_id=?1 ORDER BY seq DESC LIMIT 1",[id],|r|r.get(0)).optional().unwrap_or(None);
+            let error=native.and_then(|s|serde_json::from_str::<Value>(&s).ok()).and_then(|v|v["errorCode"].as_str().map(String::from));
+            ("imagery".to_owned(),error.unwrap_or(reason))
+        }else{
+            let kind:Option<String>=tx.query_row("SELECT kind FROM data_download_tasks WHERE id=?1 AND owner_id=?2",params![resource.strip_prefix("data:").unwrap_or(""),owner],|r|r.get(0)).optional().unwrap_or(None);
+            (kind.unwrap_or_else(||"unknown".into()),reason)
+        };
         if active(&state) || terminal(&state) {
             let previous:Option<(String,String,String)>=tx.query_row("SELECT attempt,state,started FROM download_attempts WHERE owner=?1 AND resource=?2",params![owner,resource],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?))).optional().map_err(storage)?;
             let new_attempt = previous
@@ -137,7 +147,7 @@ fn collect(db: &mut Connection) -> Result<(), AppError> {
                 (a, t, s)
             };
             if new_attempt {
-                enqueue(&tx, &owner, &attempt, "started", &stamp, &start, "")?;
+                enqueue(&tx, &owner, &attempt, "started", &stamp, &start, "",&kind)?;
             }
             if terminal(&state) && !terminal(&old) {
                 enqueue(
@@ -152,6 +162,7 @@ fn collect(db: &mut Connection) -> Result<(), AppError> {
                     &stamp,
                     &start,
                     &reason,
+                    &kind,
                 )?;
             }
             tx.execute("INSERT INTO download_attempts(owner,resource,attempt,state,started) VALUES(?1,?2,?3,?4,?5) ON CONFLICT(owner,resource) DO UPDATE SET attempt=excluded.attempt,state=excluded.state,started=excluded.started",params![owner,resource,attempt,state,start]).map_err(storage)?;
@@ -260,6 +271,12 @@ fn tick(app: &AppHandle) -> Result<(), AppError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test] fn imagery_failures_use_native_error_and_keep_anonymous_kind_without_resource_ids(){
+        let mut db=Connection::open_in_memory().unwrap();schema(&db).unwrap();
+        db.execute_batch("CREATE TABLE job_events(job_id TEXT,seq INTEGER,body TEXT);INSERT INTO job_events VALUES('private-job',1,'{\"errorCode\":\"SOURCE_NETWORK\"}');INSERT INTO download_telemetry_consent VALUES('owner',1,'now');INSERT INTO download_observations(owner,resource,state,stamp) VALUES('owner','imagery:private-job','downloading','2026-10-18T00:00:00Z'),('owner','imagery:private-job','failed','2026-10-18T00:01:00Z');").unwrap();
+        collect(&mut db).unwrap();let body:String=db.query_row("SELECT body FROM download_outbox WHERE json_extract(body,'$.state')='failed'",[],|r|r.get(0)).unwrap();
+        assert!(!body.contains("private-job"));let value:Value=serde_json::from_str(&body).unwrap();assert_eq!(value["download_kind"],"imagery");assert_eq!(value["reason"],"network");
+    }
     #[test]
     fn durable_retry_and_account_isolation() {
         let mut db = Connection::open_in_memory().unwrap();

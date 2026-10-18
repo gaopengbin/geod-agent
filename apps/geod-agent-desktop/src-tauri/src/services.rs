@@ -1329,6 +1329,11 @@ pub async fn agent_events(state: State<'_, ServiceState>, account_id: String, ev
 }
 pub(crate) fn send_download_events(state:&ServiceState,account_id:&str,events:Value)->Result<Value,ServiceError>{
     if current_user_id(state)?!=account_id{return Err(error("ACCOUNT_CHANGED","下载统计账号已切换"));}
+    let mut events=events;
+    // Old gateways reject unknown event fields. Negotiate metadata without
+    // losing legacy delivery; this check never calls a model.
+    let detailed=gateway_call(state,"/api/agent/capabilities",None).ok().is_some_and(|v|v["downloadEventDetails"]==1);
+    if !detailed{if let Some(rows)=events.as_array_mut(){for row in rows{if let Some(obj)=row.as_object_mut(){obj.remove("download_kind");}}}}
     gateway_call(state,"/api/agent/events",Some(json!({"schema_version":1,"accountId":account_id,"events":events})))
 }
 #[tauri::command]

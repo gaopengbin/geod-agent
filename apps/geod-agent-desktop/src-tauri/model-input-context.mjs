@@ -163,14 +163,20 @@ function productRules(source){
 
 const callType=item=>['function_call','custom_tool_call'].includes(item.type);
 const outputType=item=>['function_call_output','custom_tool_call_output'].includes(item.type);
-const FACT_KEYS=new Set('id name kind sourceId boundaryId planId jobId taskId connectionId connectorId state status verified quality bounds zoomLevels outputFormats exportOptions targetCrs crs totalTiles completedTiles missingTiles bytes width height error code recovery retryAfterMs permission canStartWithoutPlanConfirmation relativePath bulkData executionId jsonPointer sha256 defaultOutput outputCrs answeredBy reusedPreviousAnswer'.split(' '));
+const FACT_KEYS=new Set('id name kind sourceId boundaryId planId planHash jobId taskId connectionId connectorId state status verified quality bounds zoomLevels outputFormats exportOptions targetCrs crs totalTiles completedTiles missingTiles bytes width height error code recovery retryAfterMs permission canStartWithoutPlanConfirmation relativePath bulkData executionId jsonPointer sha256 defaultOutput outputCrs answeredBy reusedPreviousAnswer'.split(' '));
 function historyFacts(value){
  if(!value||typeof value!=='object')return {};
  const facts={};for(const [key,v]of Object.entries(value))if(FACT_KEYS.has(key))facts[key]=v;
  // Preserve resource identity and technical choices without replaying catalogs,
  // pixels, coordinate arrays or verbose logs. Exact originals stay recoverable.
  for(const key of ['job','plan','spec','result','manifest'])if(value[key]&&typeof value[key]==='object')facts[key]=historyFacts(value[key]);
- if(JSON.stringify(facts).length>3000)return{recordHasTechnicalFacts:true};
+ for(const key of ['tasks','plans','jobs'])if(Array.isArray(value[key])){facts[key]=value[key].slice(0,16).map(historyFacts);if(value[key].length>16)facts[key+'Omitted']=value[key].length-16;}
+ if(JSON.stringify(facts).length>3000){
+  const identity=new Set('id taskId planId jobId sourceId kind state status error code planHash targetCrs outputCrs permission'.split(' '));
+  const compact=v=>Object.fromEntries(Object.entries(v).filter(([key])=>identity.has(key)));
+  const safe=compact(facts);for(const key of ['tasks','plans','jobs'])if(facts[key]){safe[key]=facts[key].slice(0,8).map(compact);safe[key+'Omitted']=(facts[key+'Omitted']??0)+facts[key].length-safe[key].length;}
+  return{...safe,recordHasTechnicalFacts:true};
+ }
  return facts;
 }
 function projectHistory(input,currentUser,catalog,nativeResponses=false){

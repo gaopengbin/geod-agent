@@ -904,9 +904,9 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
         }
         const accepted=exportCrsChoice.current?.userMessageId===human?.id ? exportCrsChoice.current : answeredCrsChoice(displayRef.current,human?.id);
         const inherited=!accepted?await inheritedImageryCrs({messages:displayRef.current,userMessageId:human?.id,toolName:call.function.name,args,planIds:planIdsRef.current,activeBoundary:boundaryRef.current},api.plansGet):null;
-        const answer=accepted??inherited;
+        let answer=accepted??inherited;
         const raster=call.function.name!=="data_download_plan";
-        const crs=resolveExportCrs(intent,answer?.crs,workspace.outputCrs,userInputGate.current.allowsChoices,raster);
+        let crs=resolveExportCrs(intent,answer?.crs,workspace.outputCrs,userInputGate.current.allowsChoices,raster);
         if(!crs) {
           if(userInputGate.current.waiting) return {error:"USER_INPUT_PENDING",message:"等待用户选择坐标系，不重复询问。"};
           const questions=inputQuestions(exportCrsQuestions.map(question=>({...question,header:t(question.header),question:t(question.question),options:question.options?.map(option=>({...option,label:t(option.label),description:option.description ? t(option.description) : undefined}))})));
@@ -916,7 +916,12 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
           const reply=validatedInputReply(questions,value);
           userInputGate.current.finish(questions,reply);
           await rememberCrsAnswer(questions,reply);
-          return reply ? {error:"REPLAN_AFTER_USER_INPUT",...reply,answeredBy:"user",message:"用户已选择成果坐标系和应用范围。读取答案后重新规划，未执行旧参数。"} : {error:"USER_INPUT_CANCELLED"};
+          if(!reply)return {error:"USER_INPUT_CANCELLED"};
+          // Resume this exact proposal with the validated native answer only.
+          // Sibling calls remain stale in UserInputGate; no stale batch is replayed.
+          const choice=crsFromAnswers(questions,reply);
+          if(!choice)return {error:"OUTPUT_CRS_REQUIRED",message:"成果坐标系尚未明确，请补充有效 EPSG 编号。"};
+          answer=choice;crs=choice.crs;
         }
         if(raster) args.exportOptions={...(args.exportOptions as object ?? {}),targetCrs:crs,...(answer?.resampling?{resampling:answer.resampling}:{})};
         else args.targetCrs=crs;

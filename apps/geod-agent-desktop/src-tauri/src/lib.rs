@@ -638,6 +638,7 @@ fn plans_create(
     let owner = services::current_user_id(&services)
         .map_err(|cause| workspace_error(cause.code, cause.message))?;
     validate_auto_destination(Path::new(&workspace.directory), Path::new(&spec.output_directory))?;
+    let _proposal_guard=imagery_recovery::proposal_guard()?;
     let mut store = open_store(&state)?;
     if let Some(existing) = store.get_plan_for_tool_execution(&tool_execution_id)? {
         imagery_recovery::assert_plan_owner(&state, &owner, &conversation_id, Path::new(&workspace.directory), &existing.plan_id)?;
@@ -652,6 +653,9 @@ fn plans_create(
     let options=spec.export_options.get_or_insert_with(Default::default);
     let crs=options.target_crs.as_ref().or(workspace.output_crs.as_ref()).ok_or_else(||workspace_error("OUTPUT_CRS_REQUIRED","请通过选项卡询问成果坐标系；仅用户明确设置的会话默认可以沿用"))?;
     options.target_crs=Some(export_crs::validate(crs,true)?);
+    if let Some(existing)=imagery_recovery::reusable_pending_plan(&state,&owner,&conversation_id,Path::new(&workspace.directory),&spec,&source.descriptor)?{
+        return Ok(existing);
+    }
     let stored = store.create_plan_for_tool_execution(&tool_execution_id, spec, &source.descriptor, Utc::now())?;
     imagery_recovery::bind_created_plan(&state, &owner, &conversation_id, Path::new(&workspace.directory), &stored.plan_id)?;
     Ok(stored)

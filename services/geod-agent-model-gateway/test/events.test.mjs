@@ -11,6 +11,8 @@ const event = () => ({ event_id: randomUUID(), attempt_id: randomUUID(), occurre
 test('events reject client identity labels, paths, raw errors and unbounded timestamps', () => {
   const body = { schema_version: 1, accountId: 'user-1', events: [event()] };
   assert.equal(validateEvents(body).length, 1);
+  assert.equal(validateEvents({...body,events:[{...event(),download_kind:'vector'}]})[0].download_kind,'vector');
+  assert.throws(()=>validateEvents({...body,events:[{...event(),download_kind:'private-file.tif'}]}));
   for (const extra of [{ audience: 'external' }, { path: 'private' }, { user_id: 'other' }, { reason: 'private failure' }, { occurred_at: '2000-01-01T00:00:00Z' }]) assert.throws(() => validateEvents({ ...body, events: [{ ...event(), ...extra }] }));
 });
 test('authenticated HTTP ingestion deduplicates retries, binds account and persists only safe data', async () => {
@@ -27,10 +29,13 @@ test('authenticated HTTP ingestion deduplicates retries, binds account and persi
     assert.equal((await send({ ...body, accountId: 'wechat-user' })).status, 409);
     assert.equal((await send({ ...body, events: [{ ...event(), filename: 'secret.tif' }] })).status, 400);
     assert.deepEqual(await (await send(body)).json(), { accepted: 1, duplicates: 0 });
+    const detailed={...event(),download_kind:'vector'};
+    assert.deepEqual(await (await send({...body,events:[detailed]})).json(),{accepted:1,duplicates:0});
+    assert.deepEqual(await (await send({...body,events:[detailed]})).json(),{accepted:0,duplicates:1});
     assert.deepEqual(await (await send(body)).json(), { accepted: 0, duplicates: 1 });
     assert.deepEqual(await (await send({ ...body, events: [{ ...body.events[0], event_id: randomUUID() }] })).json(), { accepted: 0, duplicates: 1 });
     const db = new Database(dbPath, { readonly: true });
-    try { const rows = db.prepare('SELECT * FROM agent_events').all(); assert.equal(rows.length, 1); assert.equal(rows[0].user_id, 'geod-only'); assert.equal(db.prepare('SELECT count(*) n FROM model_generations').get().n, 0); }
+    try { const rows = db.prepare('SELECT * FROM agent_events').all(); assert.equal(rows.length, 2); assert.equal(rows[0].user_id, 'geod-only'); assert.equal(rows.find(r=>r.event_id===detailed.event_id).download_kind,'vector');assert.equal(db.prepare('SELECT count(*) n FROM model_generations').get().n, 0); }
     finally { db.close(); }
   } finally { await new Promise(resolve => server.close(resolve)); rmSync(directory, { recursive: true }); }
 });

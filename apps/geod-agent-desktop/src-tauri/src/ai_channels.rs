@@ -914,9 +914,10 @@ fn prepare_worker(state: &AiChannels) -> Result<PathBuf, ServiceError> {
     let bulk_data = include_str!("../../../../packages/codex-protocol/bulk-data.mjs");
     let native=include_str!("../../../../packages/codex-protocol/provider-native.mjs");
     let provider_error=include_str!("../../../../packages/codex-protocol/provider-error.mjs");
+    let upstream_diagnostics=include_str!("../../../../packages/codex-protocol/upstream-diagnostics.mjs");
     let root = state.root.join("protocol").join(format!(
         "{:x}",
-        Sha256::digest(format!("{source}{adapter}{contract}{bulk_data}{native}{provider_error}"))
+        Sha256::digest(format!("{source}{adapter}{contract}{bulk_data}{native}{provider_error}{upstream_diagnostics}"))
     ));
     fs::create_dir_all(&root).map_err(|_| error("AI_CHANNEL_STORAGE", "接口适配层准备失败"))?;
     for (name, text) in [
@@ -926,6 +927,7 @@ fn prepare_worker(state: &AiChannels) -> Result<PathBuf, ServiceError> {
         ("bulk-data.mjs", bulk_data),
         ("provider-native.mjs", native),
         ("provider-error.mjs", provider_error),
+        ("upstream-diagnostics.mjs", upstream_diagnostics),
     ] {
         let path = root.join(name);
         if !path.is_file() {

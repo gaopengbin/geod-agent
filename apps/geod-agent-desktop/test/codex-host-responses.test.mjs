@@ -5,6 +5,12 @@ import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {createHost,sendGeneration,assertModelCompletion,assertGenerationSettlement} from '../src-tauri/codex-host.mjs';
 
+test('provider rejection messages follow recorded causes and never guess format failures',()=>{
+ for(const [reason,expected] of [['balance',/余额不足/],['rate_limit',/过于频繁/],['authentication',/认证失败/],['unknown',/具体原因暂不可用/]]){
+  assert.throws(()=>assertGenerationSettlement({state:'failed',errorCode:'UPSTREAM_REJECTED',upstreamDiagnostic:{reason}}),e=>e.code==='UPSTREAM_REJECTED'&&expected.test(e.message)&&!e.message.includes('格式'));
+ }
+});
+
 test('durable rejected and uncertain receipts preserve their reason before checking stream completion',()=>{
  for(const [state,errorCode] of [['failed','UPSTREAM_REJECTED'],['pending_reconcile','UPSTREAM_MALFORMED'],['pending_reconcile','UPSTREAM_UNKNOWN'],['pending_reconcile','UPSTREAM_INVALID_TOOL']]){
   const generation={state,errorCode};assert.throws(()=>assertGenerationSettlement(generation),e=>e.code===errorCode&&/[\u3400-\u9fff]/u.test(e.message)&&!e.message.includes('PROVIDER_STREAM_INCOMPLETE'));
@@ -19,7 +25,7 @@ test('actual Core does not repeat a native Responses request rejected before a s
   if(event.type==='model'){models++;listener({type:'response',requestId:event.requestId,value:{state:'failed',generationId:event.generationId,errorCode:'UPSTREAM_REJECTED'}});}
   if(event.type==='tool')tools++;
  }});
- try{const result=await host.turn({conversationId:'native-rejected-proof',workspace:home,permission:'fullAccess',input:'现在有哪些图源',history:[]});assert.equal(result.status,'failed');assert.equal(models,1);assert.equal(tools,0);assert.match(result.error.message,/供应商拒绝/);assert.doesNotMatch(result.error.message,/PROVIDER_STREAM_INCOMPLETE/);}finally{await host.close();}
+ try{const result=await host.turn({conversationId:'native-rejected-proof',workspace:home,permission:'fullAccess',input:'现在有哪些图源',history:[]});assert.equal(result.status,'failed');assert.equal(models,1);assert.equal(tools,0);assert.match(result.error.message,/渠道拒绝/);assert.doesNotMatch(result.error.message,/PROVIDER_STREAM_INCOMPLETE/);}finally{await host.close();}
 });
 
 test('reasoning-only and output-limited responses cannot complete or execute partial tool calls',()=>{

@@ -15,6 +15,7 @@ import {createPaymentHostCandidate,readPaymentHostConfig} from './payment-host-c
 import {readWelcomeCreditPolicy} from './welcome-credit-policy.mjs';
 import {creditWalletEnforced} from './payment-host-candidate.mjs';
 import {PaymentError} from './alipay-payment-candidate.mjs';
+import {upstreamDiagnostic} from '../../packages/codex-protocol/upstream-diagnostics.mjs';
 
 const TOOL_NAMES = new Set(["data_connection_connect", "data_layer_inspect", "data_input_read", "data_connections_list", "workspace_status", "workspace_boundaries_list", "workspace_boundary_use", "workspace_gis_files_list", "workspace_skills_list", "workspace_skill_import", "sources_list", "source_configure", "source_registration_prepare", "us_county_boundary", "plan_imagery", "plans_get", "jobs_list", "jobs_start", "jobs_get", "jobs_events", "artifacts_inspect", "extensions_list", "skill_read", "skill_catalog_search", "skill_source_inspect", "skill_connect", "mcp_registry_search", "mcp_connect", "gdal_connect", "mcp_call", "mcp_result_read"]);
 const CORE_TOOLS = [
@@ -294,7 +295,7 @@ export function createGatewayServer(config, { fetchImpl = fetch } = {}) {
       if (request.method === "GET" && url.pathname === "/api/agent/usage") return json(response, 200, ledger.usage(userId));
       if (request.method === 'GET' && url.pathname === '/api/agent/sponsors') return json(response,200,sponsorCatalogue(config.sponsors??[],ledger,userId));
       if (request.method === "GET" && url.pathname === "/api/agent/capabilities") return json(response, 200, {
-        protocol: "geod-codex-v1", model: config.model, provider: "DeepSeek", contextWindow: config.contextWindow,
+        protocol: "geod-codex-v1", model: config.model, provider: "DeepSeek", contextWindow: config.contextWindow,downloadEventDetails:1,
         contextWindowSource: "gatewayConfigured", maxOutputTokens: config.maxOutputTokens,
         reasoning: config.codexThinking === "enabled", inputModalities: ["text"], requestMaxBytes: 4_000_000,
       });
@@ -358,7 +359,8 @@ export function createGatewayServer(config, { fetchImpl = fetch } = {}) {
              onWire:(event,data)=>streamEvent(response,'wire',{event,data}),
            });
          }catch(error){
-           if(error.code==='PROVIDER_HTTP_ERROR'&&error.status<500){ledger.fail(userId,body.generationId,'UPSTREAM_REJECTED');return respond(ledger.get(userId,body.generationId));}
+           if(error.diagnostic)ledger.recordDiagnostic(userId,body.generationId,error.diagnostic);
+           if(error.code==='PROVIDER_HTTP_ERROR'&&error.status<500){ledger.fail(userId,body.generationId,'UPSTREAM_REJECTED',error.diagnostic);return respond(ledger.get(userId,body.generationId));}
            return respond(ledger.pending(userId,body.generationId,error.code?.startsWith('PROVIDER_STREAM')||error.code?.startsWith('CODEX_')?'UPSTREAM_MALFORMED':'UPSTREAM_UNKNOWN'),202);
          }
          if(generated.result.toolCalls.some(call=>![...contract.definitions.values()].some(definition=>definition.name===call.function.name&&(definition.namespace??null)===(call.namespace??null)&&definition.custom===!!call.custom)))return respond(ledger.pending(userId,body.generationId,'UPSTREAM_INVALID_TOOL'),202);
@@ -378,10 +380,12 @@ export function createGatewayServer(config, { fetchImpl = fetch } = {}) {
         return respond(ledger.pending(userId, body.generationId, "UPSTREAM_UNKNOWN"), 202);
       }
       if (!upstream.ok) {
+        const diagnostic=await upstreamDiagnostic(upstream,upstreamBody);
+        ledger.recordDiagnostic(userId,body.generationId,diagnostic);
         if (upstream.status >= 500) {
           return respond(ledger.pending(userId, body.generationId, "UPSTREAM_UNKNOWN"), 202);
         }
-        ledger.fail(userId, body.generationId, "UPSTREAM_REJECTED");
+        ledger.fail(userId, body.generationId, "UPSTREAM_REJECTED",diagnostic);
         if (live) return respond(ledger.get(userId, body.generationId));
         await payments.settlement(userId,ledger.get(userId,body.generationId));
         throw new HttpError(502, "UPSTREAM_REJECTED");
