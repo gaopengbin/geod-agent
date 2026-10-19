@@ -4,6 +4,7 @@ import {createHash} from 'node:crypto';
 import {existsSync,readFileSync,writeFileSync,renameSync,mkdirSync,openSync,fsyncSync,closeSync} from 'node:fs';
 import {join} from 'node:path';
 export const TOOL_GROUPS={
+ workflow:['runtime_workflow_plan','runtime_workflow_run','runtime_workflow_state','runtime_workflow_repair'],
  imagery:['sources_list','workspace_gis_files_list','workspace_boundaries_list','workspace_boundary_use','boundaries_list','boundaries_combine','us_county_boundary','plan_imagery','plan_imagery_batch','plans_get','jobs_list','jobs_start','jobs_get','jobs_events','artifacts_inspect','imagery_recovery_plan'],
  sources:['sources_list','source_configure','source_registration_prepare'],
  map:['data_download_load','extensions_list','mcp_call'],
@@ -16,8 +17,9 @@ export const TOOL_GROUPS={
  cache:['cache_inventory','cache_verify','cache_maintenance_status','cache_maintenance_cancel'],
  commands:['background_command_prepare','background_command_start','background_command_get','background_command_send','background_command_stop'],
 };
-const BASE_TOOLS=['runtime_tools_search','runtime_context_read','ask_user','workspace_status','runtime_task_state','extensions_list','mcp_call','skill_read'];
+const BASE_TOOLS=['runtime_tools_search','runtime_context_read','ask_user','workspace_status','runtime_task_state','runtime_workflow_state','extensions_list','mcp_call','skill_read'];
 const patterns={
+ workflow:/交付|工作流|失败步骤|步骤恢复|\bcog\b|workflow|deliver/i,
  imagery:/影像|卫星|遥感|瓦片|地形|高程|下载|导出|范围|边界|坐标|投影|imagery|satellite|raster|terrain|elevation|download|export|boundar|\bcrs\b|\bepsg\b|\bz\d{1,2}\b/i,
  sources:/图源|地图源|底图|数据源|高德|谷歌|天地图|esri|wayback|amap|mapbox|google|tile.?source|basemap|\bsource\b|\bxyz\b|\bwms\b|\bwmts\b/i,
  map:/地图|地球|场景|镜头|图层|加载|切换|切回|二维|三维|openlayers|cesium|\bmap\b|\bglobe\b|\bscene\b|\b2d\b|\b3d\b|\blayer\b|\bload\b/i,
@@ -83,7 +85,7 @@ export class ModelToolCatalog{
   for(const {function:tool}of tools)this.enable(tool.name);
   // The next request contains full activated schemas. Repeating them in tool
   // output would copy the same large schema into every subsequent history.
-  return{tools:tools.map(({function:tool})=>({name:tool.name,description:tool.description.slice(0,180),schemaActivated:true})),total:matches.length,nextOffset:offset+tools.length<matches.length?offset+tools.length:null,groups:Object.keys(TOOL_GROUPS),scope:'declared-native-tools',exhausted:offset+tools.length>=matches.length,discoveryOnly:true,note:'This catalog lists tool contracts, not remote datasets. Repeating this page cannot find new providers; use an activated source/data discovery tool. Explicit requested names are ranked first.',permissionsUnchanged:true};
+  return{tools:tools.map(({function:tool})=>({name:tool.name,description:tool.description.slice(0,180),schemaActivated:true,...(tool.name.startsWith('runtime_workflow_')?{durableThreadFallback:{tool:'mcp_call',connectorId:'builtin-runtime-workflow',toolName:tool.name,discoverSchema:'extensions_list'}}:{})})),total:matches.length,nextOffset:offset+tools.length<matches.length?offset+tools.length:null,groups:Object.keys(TOOL_GROUPS),scope:'declared-native-tools',exhausted:offset+tools.length>=matches.length,discoveryOnly:true,note:'This catalog lists tool contracts, not remote datasets. Repeating this page cannot find new providers; use an activated source/data discovery tool. Explicit requested names are ranked first.',permissionsUnchanged:true};
  }
  context(args){
   let entries=args.section==='history'?[...this.history.values()]:this.archived[args.section]??[];
@@ -109,12 +111,13 @@ export class ModelToolCatalog{
   const closed=new Set((input??[]).filter(item=>['function_call_output','custom_tool_call_output'].includes(item.type)).map(item=>item.call_id));
   for(const item of input??[])if(['function_call','custom_tool_call'].includes(item.type)&&!closed.has(item.call_id))this.enable(item.name);
   if(this.chatOnly)return [];
+  const refresh=tool=>{const current=this.declared.find(t=>t.function.name===tool.name)?.function;return current?{...tool,description:current.description,parameters:current.parameters}:tool;};
   return(tools??[]).flatMap(tool=>{
    if(tool.type==='namespace'){
-    const members=tool.tools.filter(member=>!this.names.has(member.name)||this.enabled.has(member.name));
+    const members=tool.tools.filter(member=>!this.names.has(member.name)||this.enabled.has(member.name)).map(refresh);
     return members.length?[{...tool,tools:members}]:[];
    }
-   return!this.names.has(tool.name)||this.enabled.has(tool.name)?[tool]:[];
+   return!this.names.has(tool.name)||this.enabled.has(tool.name)?[refresh(tool)]:[];
   });
  }
 }

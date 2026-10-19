@@ -27,11 +27,21 @@ export async function inspectCodexCheckpoint(client:Pick<RecoveryClient,'runtime
 },conversationId:string,generationId:string):Promise<{billingPending:boolean}> {
   if(!(await client.runtimeCapabilities()).conversationExecution)
     throw new Error('请先重启应用以恢复已保存进度。原请求的费用核对记录会保留。');
-  const [generation,execution]=await Promise.all([client.agentGenerationGet(generationId),client.codexConversationStatus(conversationId)]);
-  if(generation.generationId!==generationId||generation.conversationId!==conversationId)
-    throw new Error('请求记录与当前会话不匹配，无法恢复。');
+  const [receipt,execution]=await Promise.all([
+    client.agentGenerationGet(generationId).then(value=>({value,error:null as unknown})).catch(error=>({value:null,error})),
+    client.codexConversationStatus(conversationId),
+  ]);
   if(execution.busy||execution.stopping)
     throw Object.assign(new Error('上一轮仍在执行或停止中，请稍后检查状态。'),{code:'CODEX_BUSY'});
+  // Only confirmed absence plus an idle native lease permits continuation.
+  // Network/auth failures do not prove that the request was never dispatched.
+  if(receipt.error){
+    if((receipt.error as {code?:string})?.code==='GENERATION_NOT_FOUND')return {billingPending:false};
+    throw receipt.error;
+  }
+  const generation=receipt.value!;
+  if(generation.generationId!==generationId||generation.conversationId!==conversationId)
+    throw new Error('请求记录与当前会话不匹配，无法恢复。');
   if(!['settled','failed','pending_reconcile'].includes(generation.state))
     throw new Error('模型请求仍在处理中，请稍后检查。已完成的本机工具不会自动重复执行。');
   return {billingPending:generation.state==='pending_reconcile'};

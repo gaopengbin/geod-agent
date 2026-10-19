@@ -1,0 +1,223 @@
+[
+  {
+    "name": "data_layer_inspect",
+    "description": "Read actual fields, counts and sample attributes from PostgreSQL/PostGIS geometry or geography. Use a discovered table or spatial layer ID. Optional filters are ANDed, use discovered field names and typed values (never SQL); bounds is a WGS84 intersecting extent. Count above maxFeatures is explicitly a lower bound; samples are not the full dataset. Does not attach a clipping boundary. Use data_input_read with the same filters to attach a polygon range.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "connectionId": {
+          "type": "string"
+        },
+        "layer": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        },
+        "bounds": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 4,
+          "maxItems": 4
+        },
+        "maxFeatures": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "filters": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "object",
+            "properties": {
+              "field": {
+                "type": "string"
+              },
+              "op": {
+                "type": "string",
+                "enum": [
+                  "eq",
+                  "ne",
+                  "lt",
+                  "lte",
+                  "gt",
+                  "gte",
+                  "in",
+                  "isNull",
+                  "isNotNull",
+                  "contains",
+                  "startsWith"
+                ]
+              },
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 200
+                  }
+                ]
+              }
+            },
+            "required": [
+              "field",
+              "op"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "connectionId",
+        "layer"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "data_input_read",
+    "description": "Read and attach complete polygon boundaries from one source: public vector/WFS/ArcGIS/OGC Features url, saved onlineConnectionId (with discovered layer ID), workspace relative file, saved PostGIS connectionId, or returned handle. Online ArcGIS IDs and OGC/WFS GeoJSON pages are collected and verified; bounds limits the WGS84 query, maxFeatures is a completeness cap (not truncation). PostgreSQL/PostGIS geometry and geography support ANDed filters with discovered field names and typed values, never SQL. Supports GeoJSON, Shapefile/ZIP, GPKG/SQLite, KML/KMZ, GML, FGB, WKT, CSV WKT. Missing CRS needs known sourceCrs, never guess. Geometry stays native; success attaches the planning boundary.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "relativePath": {
+          "type": "string"
+        },
+        "connectionId": {
+          "type": "string"
+        },
+        "onlineConnectionId": {
+          "type": "string"
+        },
+        "handle": {
+          "type": "string"
+        },
+        "layer": {
+          "type": "string"
+        },
+        "sourceCrs": {
+          "type": "string"
+        },
+        "bounds": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 4,
+          "maxItems": 4
+        },
+        "maxFeatures": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "filters": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "object",
+            "properties": {
+              "field": {
+                "type": "string"
+              },
+              "op": {
+                "type": "string",
+                "enum": [
+                  "eq",
+                  "ne",
+                  "lt",
+                  "lte",
+                  "gt",
+                  "gte",
+                  "in",
+                  "isNull",
+                  "isNotNull",
+                  "contains",
+                  "startsWith"
+                ]
+              },
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 200
+                  }
+                ]
+              }
+            },
+            "required": [
+              "field",
+              "op"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "pageSize": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+]

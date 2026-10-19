@@ -3,6 +3,14 @@ import assert from 'node:assert/strict';
 import {prepareCodexConversation,conversationBusyFailure,confirmedCreditRejection,inspectCodexCheckpoint} from '../src/codex-recovery.ts';
 const idle={busy:false,runId:null,stopping:false};
 
+test('confirmed absent remote request releases only after the native lease is idle',async()=>{
+ const client={runtimeCapabilities:async()=>({conversationExecution:true}),agentGenerationGet:async()=>{throw {code:'GENERATION_NOT_FOUND'};},codexConversationStatus:async()=>idle};
+ assert.deepEqual(await inspectCodexCheckpoint(client,'chat','missing'),{billingPending:false});
+ for(const execution of [{...idle,busy:true},{...idle,stopping:true}])await assert.rejects(inspectCodexCheckpoint({...client,codexConversationStatus:async()=>execution},'chat','missing'),{code:'CODEX_BUSY'});
+ for(const code of ['NETWORK_ERROR','UNAUTHORIZED'])await assert.rejects(inspectCodexCheckpoint({...client,agentGenerationGet:async()=>{throw {code};}},'chat','missing'),{code});
+ await assert.rejects(inspectCodexCheckpoint({...client,codexConversationStatus:async()=>{throw Error('native unavailable');}},'chat','missing'),/native unavailable/);
+});
+
 test('an idle terminal uncertain response unlocks checkpoint continuation without settling or replaying it',async()=>{
  const generation={generationId:'g',conversationId:'chat',state:'pending_reconcile',result:null,reservedTokens:121040};
  const client={runtimeCapabilities:async()=>({conversationExecution:true}),agentGenerationGet:async()=>generation,codexConversationStatus:async()=>idle};

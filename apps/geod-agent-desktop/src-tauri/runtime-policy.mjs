@@ -4,9 +4,11 @@ import {readFileSync,writeFileSync,renameSync,mkdirSync,openSync,closeSync,fsync
 import {join} from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
 import {GEOD_POLICY,ERROR_CLASSES,completionEvidence} from './runtime-policy-geod.mjs';
+import {RuntimeWorkflow,WORKFLOW_TOOLS} from './runtime-workflow.mjs';
 
 export const POLICY_VERSION=1;
 export const RUNTIME_TOOLS=[
+ ...WORKFLOW_TOOLS,
  {type:'function',function:{name:'runtime_task_state',description:'Read the durable execution checkpoint: goal revision, confirmed requirements, unresolved operations, failure recovery conditions and evidence. Page evidence with offset/limit. This is not a download status poll.',parameters:{type:'object',properties:{offset:{type:'integer',minimum:0},limit:{type:'integer',minimum:1,maximum:64}},additionalProperties:false}}},
  {type:'function',function:{name:'runtime_task_update',description:'Propose a new structured goal or explicitly amend requirements. Routine native downloads and their verified completion are registered automatically; do not call this tool just to record completion. expectedRevision prevents stale changes. Proposals cannot grant permissions or verify outputs. An explicit complete requires native evidence. Conversation budget remains cumulative.',parameters:{type:'object',properties:{expectedRevision:{type:'integer',minimum:1},action:{type:'string',enum:['amend','start','complete']},objective:{type:'string',maxLength:2000},deliverables:{type:'array',description:'Exact native jobId/taskId strings only, without prefixes or descriptive labels. Submitted download IDs are bound automatically.',maxItems:32,items:{type:'string',maxLength:200}},evidenceIds:{type:'array',maxItems:32,items:{type:'string'}},invalidateRequirements:{type:'array',maxItems:32,items:{type:'string'}}},required:['expectedRevision','action'],additionalProperties:false}}},
 ];
@@ -86,7 +88,7 @@ export function failureOf(result){
 function bounded(value,limit=3000){const text=JSON.stringify(value);return text.length<=limit?value:{summary:text.slice(0,limit),omitted:true,sha256:hash(value)};}
 
 export class RuntimePolicy {
- constructor(home,declared,{now=()=>Date.now(),onSignal=()=>{}}={}){
+ constructor(home,declared,{now=()=>Date.now(),onSignal=()=>{},verifyArtifact}={}){
   this.now=now;this.onSignal=onSignal;this.schemas=new Map(declared.map(({function:t})=>[t.name,t.parameters]));this.home=home;mkdirSync(home,{recursive:true});
   this.file=join(home,'execution-checkpoint.json');this.results=join(home,'execution-results');mkdirSync(this.results,{recursive:true});this.discoveryMemo=new Map();this.pending=new Map();this.callRevisions=new Map();this.cancelled=true;this.facts={};
   try{this.state=JSON.parse(readFileSync(this.file,'utf8'));if(this.state.version!==POLICY_VERSION)throw new Error('Unsupported checkpoint version');}
@@ -94,10 +96,12 @@ export class RuntimePolicy {
   // A pending side effect after a crash is UNKNOWN, not permission to resend.
   for(const op of Object.values(this.state.operations))if(op.state==='pending'){op.state='unknown';op.recovery='reconcile';}
   this.state.nativeResources??={};this.save();
+  this.workflow=new RuntimeWorkflow(home,{verify:verifyArtifact,nativeEvidence:(tool,args,result)=>{const d=this.descriptor(tool,args);return completionEvidence(d.canonicalTool??tool,d.canonicalArgs??args,unwrap(result));},descriptor:(tool,args)=>this.descriptor(tool,args),knownTool:(tool,args)=>this.schemas.has(tool)&&!(tool==='mcp_call'&&args?.connectorId==='builtin-runtime-workflow')});
  }
  save(){const temporary=this.file+'.tmp';const fd=openSync(temporary,'w');try{writeFileSync(fd,JSON.stringify(this.state));fsyncSync(fd);}finally{closeSync(fd);}renameSync(temporary,this.file);}
  audit(kind,fields={}){this.state.lastDecision={at:this.now(),kind,...fields};this.save();const fd=openSync(join(this.home,'execution-decisions.jsonl'),'a');try{writeFileSync(fd,JSON.stringify({version:POLICY_VERSION,revision:this.state.revision,goalId:this.state.goal?.id,runId:this.state.run?.id,...this.state.lastDecision})+'\n');fsyncSync(fd);}finally{closeSync(fd);}}
  begin(params,capabilities={}){
+  this.workflow.bind(params);
   this.params=params;this.capabilities=capabilities;this.cancelled=false;this.pending.clear();this.callRevisions.clear();
   const key=params.threadKey??params.conversationId;
   if(this.state.conversation&&this.state.conversation!==key)throw new Error('POLICY_SCOPE_MISMATCH');this.state.conversation=key;
@@ -128,10 +132,10 @@ export class RuntimePolicy {
    if(job){op.state='succeeded';op.result={jobId:job.jobId,planId:job.planId,state:job.state,reconciled:true};delete op.recovery;}
   }
  }
- view(){return{version:this.state.version,revision:this.state.revision,goal:this.state.goal,run:this.state.run,requirements:this.state.requirements,contract:this.state.contract,capabilities:{inputModalities:this.capabilities?.inputModalities??['text']},unresolvedOperations:Object.values(this.state.operations).filter(o=>['pending','unknown'].includes(o.state)).map(({id,tool,state,recovery})=>({id,tool,state,recovery})),failures:Object.values(this.state.failures).slice(-12),evidence:Object.values(this.state.evidence).slice(-12),metrics:this.state.metrics,lastDecision:this.state.lastDecision};}
+ view(){return{version:this.state.version,revision:this.state.revision,goal:this.state.goal,run:this.state.run,requirements:this.state.requirements,workflow:this.workflow.view(),contract:this.state.contract,capabilities:{inputModalities:this.capabilities?.inputModalities??['text']},unresolvedOperations:Object.values(this.state.operations).filter(o=>['pending','unknown'].includes(o.state)).map(({id,tool,state,recovery})=>({id,tool,state,recovery})),failures:Object.values(this.state.failures).slice(-12),evidence:Object.values(this.state.evidence).slice(-12),metrics:this.state.metrics,lastDecision:this.state.lastDecision};}
  compactView(){
   const view=this.view(),resources=Object.values(this.state.nativeResources).filter(r=>r.goalId===this.state.goal?.id),submitted=resources.filter(r=>this.state.run?.resourceIds?.includes(r.id));
-  return{version:view.version,revision:view.revision,goal:view.goal,requirements:view.requirements,unresolvedOperations:view.unresolvedOperations,
+  return{version:view.version,revision:view.revision,goal:view.goal,requirements:view.requirements,unresolvedOperations:view.unresolvedOperations,workflow:view.workflow,
    failures:view.failures.map(({code,category,recovery,condition,retryAt})=>({code,category,recovery,condition,retryAt})),
    resources:resources.map(({id,kind,state,verified,evidenceId})=>({id,kind,state,verified,evidenceId})),
    completionRegistration:{automatic:true,scope:'submitted-native-resources',complete:submitted.length>0&&submitted.every(r=>r.verified),ids:submitted.map(r=>r.id)},
@@ -149,6 +153,7 @@ export class RuntimePolicy {
    this.state.goal={id:randomUUID(),revision:1,state:'active',objective:args.objective??this.state.latestUserInput,source:'model-proposal',userInputRevision:this.state.run.inputRevision,deliverables:args.deliverables??[]};
    this.state.requirements=Object.fromEntries(Object.entries(this.state.requirements).filter(([,v])=>v.scope==='conversation'));this.state.stagnation=0;
   }else if(args.action==='complete'){
+   if(this.workflow.state.steps.length&&!this.workflow.view().complete)return error('WORKFLOW_ACCEPTANCE_REQUIRED','The saved delivery still has unfinished or unverified steps. Resume or repair those steps before registering the goal complete.',{workflow:this.workflow.view()});
    const evidence=(args.evidenceIds??[]).map(id=>this.state.evidence[id]);
    if(!this.state.goal.deliverables.length||!evidence.length||evidence.some(e=>!e||e.goalId!==this.state.goal.id||e.verified!==true)||this.state.goal.deliverables.some(id=>!evidence.some(e=>e.resourceIds?.includes(id)))||Object.values(this.state.operations).some(o=>o.state==='unknown'||o.state==='pending'))return error('COMPLETION_EVIDENCE_REQUIRED','Declare the required native job/task IDs as deliverables. Every deliverable needs verified native evidence; a final reply or partial output is insufficient.');
    this.state.goal.state='complete';this.state.goal.acceptedEvidence=args.evidenceIds;
@@ -176,15 +181,42 @@ export class RuntimePolicy {
   if(failure.category==='authentication'||failure.category==='capability')return hash({...base,connections:this.facts.connectionsRevision,discovery:this.state.discoveryRevision,conditionScope:descriptor.conditionScope});
    return hash({...base,...(failure.category==='business'?{objectState:this.facts.imagery?.tasks?.filter(t=>descriptor.resource.includes(t.planId)||descriptor.resource.includes(t.jobId))}: {})});
  }
- async execute(tool,args,callId,dispatch){
+ async reconcileWorkflow(tool,args){
+  const desc=this.descriptor(tool,args),canonical=desc.canonicalTool??tool,values=desc.canonicalArgs??args;
+  const op=Object.values(this.state.operations).find(o=>o.goalId===this.state.goal.id&&o.tool===canonical&&o.argsHash===hash(values)&&o.state==='succeeded');
+  if(!op)return null;
+  let result=op.resultRef?JSON.parse(readFileSync(join(this.results,op.resultRef),'utf8')):op.result;
+  if(['jobs_start','data_download_start'].includes(canonical)&&result){
+   const kind=canonical==='jobs_start'?'imagery':'data',id=kind==='imagery'?result.jobId:result.taskId??result.id;
+   if(!id)return null;const checked=await this.workflow.verify({kind:'native',resourceKind:kind,resourceId:id});
+   if(!checked.verified)return null;result={...result,backgroundResult:checked};
+  }
+  return result?(tool==='mcp_call'?{connectorId:args.connectorId,toolName:args.toolName,result}:result):null;
+ }
+ async execute(tool,args,callId,dispatch,workflowStep=false){
   args=clean(args);const schema=this.schemas.get(tool);
   if(this.cancelled)return error('EXECUTION_CANCELLED','The run was cancelled; no new operation was dispatched.');
   if(this.callRevisions.has(callId)&&this.callRevisions.get(callId)!==this.state.revision)return error('TASK_REVISION_CHANGED','This call was generated before a user correction or confirmed requirement changed. Replan from the current checkpoint.');
   if(!schema)return error('TOOL_NOT_ALLOWED','Use a tool from the current contract.');
    const unsupported=unsupportedSchemaErrors(schema);if(unsupported.length){this.state.metrics.blocked++;this.noProgress(tool,'TOOL_SCHEMA_UNSUPPORTED','schema:'+tool);this.audit('unsupported-contract',{tool});return error('TOOL_SCHEMA_UNSUPPORTED','This tool contract uses validation constraints that the runtime cannot safely enforce. Refresh the capability or use a supported tool.',{constraints:unsupported});}
   const invalid=schemaErrors(args,schema);if(invalid.length){this.state.metrics.blocked++;this.noProgress(tool,'TOOL_ARGUMENT_INVALID',hash([tool,'parameter']));this.audit('schema-rejected',{tool});return error('TOOL_ARGUMENT_INVALID','Arguments failed the declared schema.',{constraints:invalid});}
+  // Stable MCP entry for durable Core threads created before workflow tools existed.
+  if(tool==='mcp_call'&&args.connectorId==='builtin-runtime-workflow'){
+   if(!WORKFLOW_TOOLS.some(t=>t.function.name===args.toolName))return error('TOOL_NOT_ALLOWED','Use an actual runtime workflow tool.');
+   return this.execute(args.toolName,args.arguments,callId,dispatch,workflowStep);
+  }
   if(tool==='runtime_task_state'){const all=Object.values(this.state.evidence),offset=args.offset??Math.max(0,all.length-12),limit=args.limit??12;return{...this.view(),evidence:all.slice(offset,offset+limit),evidencePage:{offset,total:all.length,nextOffset:offset+limit<all.length?offset+limit:null}};}if(tool==='runtime_task_update')return this.update(args);
   if(this.state.goal.state==='complete')return error('TASK_ALREADY_COMPLETE','The declared goal has passed native evidence checks. Return its summary. For new user work, start a new goal revision before using more tools.');
+  if(tool==='runtime_workflow_plan'){const result=this.workflow.plan(args);this.audit('workflow-plan',{workflowId:result.workflowId});return result;}
+  if(tool==='runtime_workflow_repair'){const result=this.workflow.repair(args);this.audit('workflow-repair',{stepId:args.stepId});return result;}
+  if(tool==='runtime_workflow_state'){const step=args.stepId?this.workflow.step(args.stepId):null;return{...this.workflow.view(),...(step?{step:Object.fromEntries(['id','title','dependsOn','tool','arguments','acceptance','state','recovery'].map(k=>[k,step[k]]))}:{}),...(step&&args.includeResult&&step.receipt?{result:this.workflow.result(step),acceptanceResult:this.workflow.acceptanceResult(step)}:{})};}
+  if(tool==='runtime_workflow_run'){
+   const result=await this.workflow.run(args.stepId,(name,arguments_,stepId)=>this.execute(name,arguments_,callId+':'+stepId,(v,id)=>dispatch(v,id,name),true),{cancelled:()=>this.cancelled,reconcile:(s,a)=>this.reconcileWorkflow(s.tool,a)});
+   if(result.error)this.noProgress(tool,result.error,'workflow:'+args.stepId+':'+this.workflow.state.revision+':'+result.error);
+   if(result.state==='completed'){const id=hash(['workflow',this.workflow.state.id,args.stepId,this.workflow.step(args.stepId)?.receipt]);this.state.evidence[id]={id,goalId:this.state.goal.id,tool:'runtime_workflow_run',resourceIds:[this.workflow.state.id+':'+args.stepId],verified:true,source:'native-workflow-acceptance',summary:{stepId:args.stepId,checks:result.checks}};}
+   this.audit('workflow-step',{stepId:args.stepId,state:result.state??'blocked'});return result;
+  }
+  if(!workflowStep){const stepId=this.workflow.match(tool,args);if(stepId){const result=await this.workflow.run(stepId,(_name,v)=>this.execute(tool,v,callId,dispatch,true),{cancelled:()=>this.cancelled,reconcile:(s,a)=>this.reconcileWorkflow(s.tool,a)});this.audit('workflow-bound-tool',{stepId,state:result.state??'blocked'});return result.result&&!result.error?result.result:result;}}
   const desc=this.descriptor(tool,args);
   if(tool==='mcp_call'){
    if(!desc.schema)return error('TOOL_DISCOVERY_REQUIRED','Discover this connector and its current tool schema first.');
@@ -246,6 +278,7 @@ export class RuntimePolicy {
    else{
     operation.state='succeeded';operation.expiresAt=Date.parse(result?.expiresAt??result?.plan?.expiresAt??'')||null;
     if(desc.effect!=='read'&&desc.effect!=='interactive'){operation.resultRef=operationKey+'.json';const destination=join(this.results,operation.resultRef),temporary=destination+'.tmp';writeFileSync(temporary,JSON.stringify(unwrap(result)));renameSync(temporary,destination);}
+    if(tool==='extensions_list'&&(!args.query||/workflow|runtime_workflow|步骤|验收|交付/i.test(args.query)))result={...result,connectors:[...(result?.connectors??[]),{connectorId:'builtin-runtime-workflow',name:'任务步骤与验收',enabled:true,availableTools:WORKFLOW_TOOLS.map(t=>t.function.name),tools:args.query?WORKFLOW_TOOLS.map(t=>({name:t.function.name,description:t.function.description,inputSchema:t.function.parameters})):[]}]};
     this.learn(tool,args,result);
     const evidenceHash=hash([desc.purpose,desc.resource,result]);
     const seen=Object.values(this.state.evidence).some(e=>e.fingerprint===evidenceHash);

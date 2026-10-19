@@ -262,7 +262,7 @@
     "type": "function",
     "function": {
       "name": "data_input_read",
-      "description": "Read and attach a polygon boundary from one source: a user supplied HTTP(S) vector file / WFS GetFeature / ArcGIS query / OGC API Features items URL, a relative workspace vector filename, saved PostGIS connectionId, or a handle returned by this tool. Supports GeoJSON, Shapefile with sidecars or ZIP, GPKG/SQLite, KML/KMZ, GML, FGB, WKT and CSV WKT. Returns layer choices for multi-layer inputs; repeat with layer and the returned handle/connectionId. Supply sourceCrs only when known or explicitly provided; never guess a missing CRS. Points/lines cannot be clipping boundaries. Whole geometry remains on desktop. On success the boundary is attached to plan_imagery. Do not ask for manual GeoJSON conversion.",
+      "description": "Read and attach complete polygon boundaries from one source: public vector/WFS/ArcGIS/OGC Features url, saved onlineConnectionId (with discovered layer ID), workspace relative file, saved PostGIS connectionId, or returned handle. Online ArcGIS IDs and OGC/WFS GeoJSON pages are collected and verified; bounds limits the WGS84 query, maxFeatures is a completeness cap (not truncation). PostgreSQL/PostGIS geometry and geography support ANDed filters with discovered field names and typed values, never SQL. Supports GeoJSON, Shapefile/ZIP, GPKG/SQLite, KML/KMZ, GML, FGB, WKT, CSV WKT. Missing CRS needs known sourceCrs, never guess. Geometry stays native; success attaches the planning boundary.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -275,6 +275,9 @@
           "connectionId": {
             "type": "string"
           },
+          "onlineConnectionId": {
+            "type": "string"
+          },
           "handle": {
             "type": "string"
           },
@@ -283,6 +286,91 @@
           },
           "sourceCrs": {
             "type": "string"
+          },
+          "bounds": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 4,
+            "maxItems": 4
+          },
+          "maxFeatures": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "filters": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "type": "object",
+              "properties": {
+                "field": {
+                  "type": "string"
+                },
+                "op": {
+                  "type": "string",
+                  "enum": [
+                    "eq",
+                    "ne",
+                    "lt",
+                    "lte",
+                    "gt",
+                    "gte",
+                    "in",
+                    "isNull",
+                    "isNotNull",
+                    "contains",
+                    "startsWith"
+                  ]
+                },
+                "value": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "boolean"
+                          }
+                        ]
+                      },
+                      "minItems": 1,
+                      "maxItems": 200
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "field",
+                "op"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "pageSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000
           }
         },
         "additionalProperties": false
@@ -348,7 +436,7 @@
     "type": "function",
     "function": {
       "name": "data_layer_inspect",
-      "description": "Read a PostgreSQL table or PostGIS layer's actual columns/types, feature count and sample attribute records. Use a returned table ID (schema.table) or spatial layer ID (schema.table.geometry_column). Works for points, lines and polygons; does not attach a clipping boundary. Geometry remains native. Count over 10,000 is explicitly a lower bound, and sample records are not the complete dataset. Use data_input_read to attach a polygon layer as the planning range.",
+      "description": "Read actual fields, counts and sample attributes from PostgreSQL/PostGIS geometry or geography. Use a discovered table or spatial layer ID. Optional filters are ANDed, use discovered field names and typed values (never SQL); bounds is a WGS84 intersecting extent. Count above maxFeatures is explicitly a lower bound; samples are not the full dataset. Does not attach a clipping boundary. Use data_input_read with the same filters to attach a polygon range.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -362,6 +450,86 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 10
+          },
+          "bounds": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 4,
+            "maxItems": 4
+          },
+          "maxFeatures": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "filters": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "type": "object",
+              "properties": {
+                "field": {
+                  "type": "string"
+                },
+                "op": {
+                  "type": "string",
+                  "enum": [
+                    "eq",
+                    "ne",
+                    "lt",
+                    "lte",
+                    "gt",
+                    "gte",
+                    "in",
+                    "isNull",
+                    "isNotNull",
+                    "contains",
+                    "startsWith"
+                  ]
+                },
+                "value": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "boolean"
+                          }
+                        ]
+                      },
+                      "minItems": 1,
+                      "maxItems": 200
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "field",
+                "op"
+              ],
+              "additionalProperties": false
+            }
           }
         },
         "required": [

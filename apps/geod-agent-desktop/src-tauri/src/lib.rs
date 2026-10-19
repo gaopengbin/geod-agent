@@ -60,6 +60,7 @@ mod task_state_context;
 mod context_settings;
 mod execution_safety;
 mod background_wait;
+mod workflow_verify;
 
 use base64::Engine;
 use chrono::Utc;
