@@ -174,6 +174,66 @@ class GeoDReportTests(unittest.TestCase):
         self.assertAlmostEqual(results['complete_rate'], 1/3)
         self.assertEqual(results['start_cohort_results'], {'completed': 1, 'failed': 1, 'pending': 1})
 
+    def test_observed_downloads_are_reported_without_a_metadata_table(self):
+        with fixture_database(self.paths['desktop']) as db:
+            for state, at in [('started','2026-10-01T00:00:00Z'), ('completed','2026-10-01T00:01:00Z')]:
+                props = json.dumps({'attempt_id':'private-attempt','state':state,'duration':'10-60s','reason':'none'})
+                db.execute('INSERT INTO events VALUES(?,?,?,?,?,?)', ('download_task_state',at,'private-install','s1',at,props))
+        original = Path(self.paths['desktop']).read_bytes()
+        result = self.collect()
+        downloads = result['sources']['desktop']['metrics']['downloads']
+        self.assertEqual(downloads['status'], 'recording')
+        self.assertEqual(downloads['counts'], {'completed':1})
+        self.assertEqual(downloads['observed_starts'], 1)
+        self.assertEqual(downloads['complete_rate'], 1)
+        self.assertIsNone(downloads['started_at_bj'])
+        self.assertEqual(downloads['start_time_source'], 'observed_events')
+        self.assertEqual(downloads['first_observed_at_bj'], '2026-10-01T08:00:00+08:00')
+        self.assertIn('缺少采集开始标记', report_module.html_report(result))
+        self.assertIn('不等于正式接入时间', report_module.html_report(result))
+        self.assertIn('不等于正式接入时间', report_module.markdown_report(result))
+        self.assertNotIn('服务接入时间：None', report_module.markdown_report(result))
+        self.assertNotIn('旧桌面下载结果尚未开始采集', json.dumps(result,ensure_ascii=False))
+        self.assertNotIn('private-attempt', json.dumps(result))
+        self.assertNotIn('private-install', report_module.html_report(result))
+        self.assertEqual(original, Path(self.paths['desktop']).read_bytes())
+
+    def test_empty_or_bad_metadata_does_not_hide_observed_downloads(self):
+        with fixture_database(self.paths['desktop']) as db:
+            db.execute('CREATE TABLE telemetry_metadata(key,value)')
+            props = json.dumps({'attempt_id':'a','state':'failed','duration':'unknown','reason':'disk'})
+            db.execute('INSERT INTO events VALUES(?,?,?,?,?,?)', ('download_task_state','2026-10-01T00:00:00Z','d','s','2026-10-01T00:00:00Z',props))
+        for marker in [None, 'bad timestamp', '2026-10-03T00:00:00Z']:
+            with self.subTest(marker=marker):
+                with fixture_database(self.paths['desktop']) as db:
+                    db.execute('DELETE FROM telemetry_metadata')
+                    if marker:
+                        db.execute('INSERT INTO telemetry_metadata VALUES(?,?)', ('download_lifecycle_started_at',marker))
+                downloads = self.collect()['sources']['desktop']['metrics']['downloads']
+                self.assertEqual(downloads['status'], 'recording')
+                self.assertEqual(downloads['counts'], {'failed':1})
+                self.assertIsNone(downloads['started_at_bj'])
+                self.assertIsNone(downloads['complete_rate'])
+
+    def test_past_observation_keeps_empty_current_window_recording_without_inventing_activity(self):
+        with fixture_database(self.paths['desktop']) as db:
+            props=json.dumps({'attempt_id':'a','state':'completed','duration':'under_10s','reason':'none'})
+            db.execute('INSERT INTO events VALUES(?,?,?,?,?,?)', ('download_task_state','2026-09-24T00:00:00Z','d','s','2026-09-24T00:00:00Z',props))
+        downloads = self.collect()['sources']['desktop']['metrics']['downloads']
+        self.assertEqual(downloads['status'], 'recording')
+        self.assertEqual(downloads['observed_starts'], 0)
+        self.assertEqual(downloads['counts'], {})
+        self.assertIsNone(downloads['complete_rate'])
+        self.assertEqual(downloads['first_observed_at_bj'], '2026-09-24T08:00:00+08:00')
+
+    def test_future_or_invalid_lifecycle_records_do_not_establish_collection(self):
+        with fixture_database(self.paths['desktop']) as db:
+            for state, attempt, at in [('started','a','2026-10-03T00:00:00Z'),('unknown','b','2026-10-01T00:00:00Z'),('completed','','2026-10-01T00:00:00Z')]:
+                props=json.dumps({'attempt_id':attempt,'state':state,'duration':'unknown','reason':'none'})
+                db.execute('INSERT INTO events VALUES(?,?,?,?,?,?)', ('download_task_state',at,'d','s',at,props))
+        downloads = self.collect()['sources']['desktop']['metrics']['downloads']
+        self.assertEqual(downloads, {'status':'not_instrumented','counts':None})
+
     def test_agent_downloads_use_geoD_labels_and_export_no_ids(self):
         self.identity['users'][0]['analyticsAudience'] = 'internal'
         self.write_identity()
