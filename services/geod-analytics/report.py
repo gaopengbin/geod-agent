@@ -78,11 +78,18 @@ def auth_report(store, start, until):
             'failure_reasons': [{'action': key[0], 'reason': key[1], 'events': count} for key,count in sorted(failure_reasons.items())]}
 
 
-def download_report(records, started_at, start, until):
-    if not started_at or timestamp(started_at) >= until:
-        return {'status': 'not_instrumented', 'counts': None}
+def download_report(records, started_at, start, until, first_observed_at=None):
+    try:
+        declared_start = timestamp(started_at) if started_at else None
+    except (ValueError, TypeError, AttributeError):
+        declared_start = None
+    if declared_start and declared_start >= until:
+        declared_start = None
     # Join only random attempts within each source identity, then discard all IDs.
     starts, outcomes = {}, {}
+    observed = timestamp(first_observed_at) if first_observed_at else None
+    if observed and observed >= until:
+        observed = None
     for record in sorted(records, key=lambda row: timestamp(row['occurred_at'])):
         at = timestamp(record['occurred_at'])
         if at >= until:
@@ -93,16 +100,25 @@ def download_report(records, started_at, start, until):
         key = (record['identity'], props.get('attempt_id'))
         if not key[1]:
             continue
+        observed = min(observed, at) if observed else at
         if props['state'] == 'started':
             starts.setdefault(key, at)
         else:
             outcomes[key] = (at, props)
+    # Deployed collectors may predate the metadata table. Real lifecycle events
+    # establish observation, without inventing a declared instrumentation date.
+    if not declared_start and not observed:
+        return {'status': 'not_instrumented', 'counts': None}
     cohort = {key for key, at in starts.items() if start <= at < until}
     counts = Counter(props['state'] for at, props in outcomes.values() if start <= at < until)
     durations = Counter(props.get('duration', 'unknown') for at, props in outcomes.values() if start <= at < until)
     reasons = Counter(props.get('reason', 'unknown') for at, props in outcomes.values() if start <= at < until and props['state'] in ('failed', 'partial', 'completed_with_gaps'))
     cohort_results = Counter(outcomes[key][1]['state'] if key in outcomes else 'pending' for key in cohort)
-    return {'status': 'recording', 'started_at_bj': latest_bj(started_at), 'observed_starts': len(cohort),
+    return {'status': 'recording',
+            'started_at_bj': latest_bj(declared_start.isoformat()) if declared_start else None,
+            'first_observed_at_bj': latest_bj(observed.isoformat()) if observed else None,
+            'start_time_source': 'metadata' if declared_start else 'observed_events',
+            'observed_starts': len(cohort),
             'counts': dict(counts), 'durations': dict(durations), 'failure_reasons': dict(reasons),
             'start_cohort_results': dict(cohort_results),
             'complete_rate': cohort_results['completed'] / len(cohort) if cohort else None}
@@ -179,7 +195,14 @@ def event_report(path, start, until, website=False):
             metadata_rows = rows(connection, "SELECT value FROM telemetry_metadata WHERE key='download_lifecycle_started_at'") if connection.execute("PRAGMA table_info(telemetry_metadata)").fetchall() else []
             metadata = metadata_rows[0]['value'] if metadata_rows else None
             lifecycle = rows(connection, "SELECT install_id identity,occurred_at,properties_json FROM events WHERE event_name='download_task_state' AND julianday(occurred_at)>=julianday(?) AND julianday(occurred_at)<julianday(?)", parameters)
-            summary['downloads'] = download_report([dict(row, properties=json.loads(row['properties_json'])) for row in lifecycle], metadata, start, until)
+            first_observed = first(connection,
+                "SELECT min(occurred_at) first_observed FROM events WHERE event_name='download_task_state' "
+                "AND julianday(occurred_at)<julianday(?) AND json_valid(properties_json) "
+                "AND json_extract(properties_json,'$.attempt_id') IS NOT NULL "
+                "AND json_extract(properties_json,'$.attempt_id')!='' "
+                "AND json_extract(properties_json,'$.state') IN ('started','completed','completed_with_gaps','partial','failed','cancelled')",
+                (until.isoformat(),))['first_observed']
+            summary['downloads'] = download_report([dict(row, properties=json.loads(row['properties_json'])) for row in lifecycle], metadata, start, until, first_observed)
             summary["download_workflows"] = rows(connection,
                 f"SELECT coalesce(json_extract(properties_json,'$.workflow'),'unknown') workflow,count(*) tasks "
                 f"FROM {table} WHERE {predicate} AND event_name='download_task_created' GROUP BY workflow", parameters)
@@ -294,10 +317,19 @@ def markdown_report(report):
         downloads = metrics.get('downloads')
         extra += ['', '## ' + label, '']
         if downloads and downloads['status'] == 'recording':
-            extra += [f"服务接入时间：{downloads['started_at_bj']}；本期开始观测：{downloads['observed_starts']}", '', '| 终态 | 尝试数 |', '|---|---:|']
+            if downloads.get('start_time_source') == 'observed_events':
+                coverage = f"缺少采集开始标记；首次保留观测：{downloads['first_observed_at_bj']}。该时间不等于正式接入时间。"
+            else:
+                coverage = f"服务接入时间：{downloads['started_at_bj']}"
+            extra += [coverage, f"本期开始观测：{downloads['observed_starts']}", '', '| 终态 | 尝试数 |', '|---|---:|']
             extra += [f'| {state} | {count} |' for state,count in downloads['counts'].items()]
             rate = downloads['complete_rate']
             extra += ['', '同批完整完成率：' + (f'{rate:.1%}' if rate is not None else '无可计算样本')]
+            extra += ['', '| 同批尝试结果 | 数量 |', '|---|---:|']
+            extra += [f'| {state} | {count} |' for state,count in downloads['start_cohort_results'].items()]
+            if downloads['failure_reasons']:
+                extra += ['', '| 失败或部分完成类别 | 尝试数 |', '|---|---:|']
+                extra += [f'| {reason} | {count} |' for reason,count in downloads['failure_reasons'].items()]
         else:
             extra += ['尚未开始采集或来源不可用；不计为零。']
     return "\n".join([
@@ -344,7 +376,11 @@ def html_report(report):
             return '<h3>下载结果</h3><p class="warning">尚未开始采集；结果不可用，不是零次。</p>'
         labels = {'completed':'完整完成','partial':'部分完成','completed_with_gaps':'部分完成','failed':'失败','cancelled':'取消','pending':'尚未观测到结果'}
         rate = downloads['complete_rate']
-        body = '<h3>下载结果</h3><p class="freshness">服务接入时间：' + escape(time_label(downloads['started_at_bj'])) + '</p>'
+        if downloads.get('start_time_source') == 'observed_events':
+            coverage = '缺少采集开始标记；首次保留观测：' + time_label(downloads.get('first_observed_at_bj')) + '。该时间不等于正式接入时间。'
+        else:
+            coverage = '服务接入时间：' + time_label(downloads['started_at_bj'])
+        body = '<h3>下载结果</h3><p class="freshness">' + escape(coverage) + '</p>'
         body += table(['本期终态','观测尝试'], [[labels[key], downloads['counts'].get(key,0)] for key in ('completed','partial','completed_with_gaps','failed','cancelled') if key != ('partial' if 'completed_with_gaps' in downloads['counts'] else 'completed_with_gaps')])
         body += '<p>本期观测开始：<b>' + escape(downloads['observed_starts']) + '</b>；同批完整完成率：<b>' + escape(f'{rate:.1%}' if rate is not None else '无可计算样本') + '</b></p>'
         body += table(['同批尝试结果','数量'], [[labels[key], count] for key,count in downloads['start_cohort_results'].items()])
@@ -352,7 +388,7 @@ def html_report(report):
             duration_labels = {'unknown':'无法确定','under_10s':'不足 10 秒','10-60s':'10 秒至 1 分钟','1-5m':'1 至 5 分钟','5-30m':'5 至 30 分钟','30m+':'30 分钟以上'}
             body += table(['终态耗时区间','尝试'], [[duration_labels.get(key,key), count] for key,count in downloads['durations'].items()])
         if downloads['failure_reasons']:
-            reason_labels = {'network':'网络','auth':'认证','disk':'磁盘','permission':'权限','missing_tiles':'缺失瓦片','unknown':'未分类'}
+            reason_labels = {'network':'网络/图源服务','auth':'认证/Token','disk':'存储/磁盘','permission':'权限/使用限制','missing_tiles':'缺失瓦片/无覆盖','unknown':'未分类'}
             body += table(['失败或部分完成类别','尝试'], [[reason_labels.get(key,key),count] for key,count in downloads['failure_reasons'].items()])
         return body
     cards = ''.join(f'<article><span>{escape(label)}</span><strong>{escape(value)}</strong><small>{escape(detail)}</small></article>' for label, value, detail in [
