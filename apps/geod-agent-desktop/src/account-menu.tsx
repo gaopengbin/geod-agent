@@ -10,15 +10,17 @@ import { api, type AccountProfile, type ModelUsage, type PaymentSnapshot } from 
 import { AccountAvatar } from "./account-avatar";
 import { CREDITS_CHANGED, formatCredits } from "./credits";
 import { useEffect, useRef, useState } from "react";
+import { UiTooltip } from "./ui-tooltip";
 
 function tokens(value: number) {
   return `${(value / 1000).toLocaleString(getLocale(), { maximumFractionDigits: 1 })}K`;
 }
 
-export function AccountMenu({ open, onOpenChange, connected, userId, profile, profileError, onProfileRefresh, usage, busy, theme, onModels, onNetwork, onCache, onTheme, onLogout, telemetryEnabled, onTelemetry }: {
+export function AccountMenu({ open, onOpenChange, connected, userId, profile, profileError, onProfileRefresh, usage, busy, theme, onModels, onNetwork, onCache, onTheme, onLogout, telemetryEnabled, onTelemetry, activityEnabled=false, onActivity }: {
   open: boolean; onOpenChange: (value: boolean) => void; connected: boolean; userId: string | null; usage: ModelUsage | null;
   busy: boolean; theme: "light" | "dark"; onNetwork: () => void; onCache: () => void; onTheme: () => void; onLogout: () => void;
   telemetryEnabled: boolean; onTelemetry: () => void; onModels: () => void;
+  activityEnabled?: boolean; onActivity?: () => void;
   profile: AccountProfile | null; profileError: boolean; onProfileRefresh: (force?: boolean) => Promise<void>;
 }) {
   const currentProfile = connected && profile?.accountId === userId ? profile : null;
@@ -83,6 +85,7 @@ export function AccountMenu({ open, onOpenChange, connected, userId, profile, pr
       <button type="button" onClick={() => action(onTheme)}>{theme === "light" ? <Moon size={16} aria-hidden="true"/> : <Sun size={16} aria-hidden="true"/>} {theme === "light" ? t("深色外观") : t("浅色外观")}</button>
       <button type="button" aria-pressed={telemetryEnabled} onClick={onTelemetry}><ChartNoAxesColumn size={16} aria-hidden="true"/>{t("下载使用统计：")}{telemetryEnabled ? t("已开启") : t("已关闭")}</button>
       <p className="account-menu-usage">{t("开启后，任务状态、耗时区间和错误类别会关联当前 GeoD 账号；不发送文件路径、坐标或对话内容，可随时关闭。")}</p>
+      {connected&&onActivity&&<><UiTooltip side="right" content={t("自愿开启后，启动、自有渠道调用结果与可用 Token 用量会关联当前账号；不发送对话、模型名称、渠道地址或密钥。关闭会清除待上传记录，已发送的请求可能完成。下载统计单独控制。")}><button type="button" aria-pressed={activityEnabled} onClick={onActivity}><ChartNoAxesColumn size={16} aria-hidden="true"/>{t("Agent 使用统计：")}{activityEnabled?t("已开启"):t("已关闭")}</button></UiTooltip><p className="account-menu-usage">{t("自愿关联当前账号的活跃与自有渠道用量，不上传对话或密钥；下载统计独立控制。")}</p></>}
       {connected && <button type="button" className="account-menu-logout" disabled={busy} onClick={() => action(onLogout)}><LogOut size={16} aria-hidden="true"/>{t("退出登录")}</button>}
     </MorphPopoverContent>
   </MorphPopover></div>;

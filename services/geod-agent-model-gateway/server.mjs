@@ -8,6 +8,7 @@ import { resolve } from "node:path";
 import { openLedger } from "./ledger.mjs";
 import {readSponsors,sponsorCatalogue,sponsorRoute,sponsorReservation,SponsorError} from './sponsors.mjs';
 import { openEventStore, validateEvents } from "./events-store.mjs";
+import { openActivityStore, validateActivity } from "./activity-store.mjs";
 import { MessageError, openMessageStore } from "./messages-store.mjs";
 import { withRangeTools } from "../../packages/codex-protocol/range-tools.mjs";
 import { codexRequest, codexResult, ContractError } from "../../packages/codex-protocol/codex-contract.mjs";
@@ -252,6 +253,7 @@ export function createGatewayServer(config, { fetchImpl = fetch } = {}) {
   // retain their independent budgets; the ordinary test policy stays unlimited.
   const ledger = openLedger(config.dbPath, config.tokenLimit, config.secret, creditWalletEnforced(config)?false:config.quotaEnforced);
   const eventStore = openEventStore(config.dbPath);
+  const activityStore = openActivityStore(config.dbPath);
   const messageStore = openMessageStore(config.dbPath);
   const eventRates = new Map();
   const authenticate=async request=>{
@@ -259,7 +261,7 @@ export function createGatewayServer(config, { fetchImpl = fetch } = {}) {
     catch(cause){const safe=publicError(cause);throw new PaymentError(safe.code,safe.code,safe.status);}
   };
   let payments;
-  try{payments=createPaymentHostCandidate(config,ledger,authenticate);}catch(cause){messageStore.close();eventStore.close();ledger.close();throw cause;}
+  try{payments=createPaymentHostCandidate(config,ledger,authenticate);}catch(cause){messageStore.close();eventStore.close();activityStore.close();ledger.close();throw cause;}
   const server = createServer(async (request, response) => {
     try {
       const url = new URL(request.url, "http://localhost");
@@ -284,7 +286,7 @@ export function createGatewayServer(config, { fetchImpl = fetch } = {}) {
         if (body?.accountId !== userId) throw new HttpError(409, 'ACCOUNT_CHANGED');
         return json(response, 200, messageStore.markRead(userId, body.clientVersion, body.messageIds, product));
       }
-      if (request.method === 'POST' && url.pathname === '/api/agent/events') {
+      if (request.method === 'POST' && ['/api/agent/events','/api/agent/activity'].includes(url.pathname)) {
         const minute = Math.floor(Date.now() / 60000);
         for (const [id, rate] of eventRates) if (rate.minute !== minute) eventRates.delete(id);
         const rate = eventRates.get(userId) ?? { minute, count: 0 };
@@ -293,13 +295,14 @@ export function createGatewayServer(config, { fetchImpl = fetch } = {}) {
         const body = await readJson(request, 16384);
         if (body?.accountId !== userId) throw new HttpError(409, 'ACCOUNT_CHANGED');
         let events;
-        try { events = validateEvents(body); } catch { throw new HttpError(400, 'INVALID_EVENTS'); }
-        return json(response, 202, eventStore.record(userId, events));
+        const activity=url.pathname==='/api/agent/activity';
+        try { events = activity?validateActivity(body):validateEvents(body); } catch { throw new HttpError(400, 'INVALID_EVENTS'); }
+        return json(response, 202, (activity?activityStore:eventStore).record(userId, events));
       }
       if (request.method === "GET" && url.pathname === "/api/agent/usage") return json(response, 200, ledger.usage(userId));
       if (request.method === 'GET' && url.pathname === '/api/agent/sponsors') return json(response,200,sponsorCatalogue(config.sponsors??[],ledger,userId));
       if (request.method === "GET" && url.pathname === "/api/agent/capabilities") return json(response, 200, {
-        protocol: "geod-codex-v1", model: config.model, provider: "DeepSeek", contextWindow: config.contextWindow,downloadEventDetails:1,
+        protocol: "geod-codex-v1", model: config.model, provider: "DeepSeek", contextWindow: config.contextWindow,downloadEventDetails:1,agentActivityEvents:1,
         contextWindowSource: "gatewayConfigured", maxOutputTokens: config.maxOutputTokens,
         reasoning: config.codexThinking === "enabled", inputModalities: ["text"], requestMaxBytes: 4_000_000,
       });
@@ -427,7 +430,7 @@ export function createGatewayServer(config, { fetchImpl = fetch } = {}) {
       return json(response, safe.status, { error: safe.code });
     }
   });
-  server.on("close", () => { payments.close(); messageStore.close(); eventStore.close(); ledger.close(); });
+  server.on("close", () => { payments.close(); messageStore.close(); eventStore.close(); activityStore.close(); ledger.close(); });
   return server;
 }
 

@@ -838,9 +838,8 @@ async fn model_catalog(base: &str, protocol:&str, key: &str) -> Result<Value, Se
     Ok(json!({"models":models,"catalogueReadable":true}))
 }
 fn save_generation(state: &AiChannels, owner: &str, value: &Value) -> Result<(), ServiceError> {
-    state
-        .db()?
-        .execute(
+    let db=state.db()?;
+    db.execute(
             "INSERT OR REPLACE INTO generations VALUES(?,?,?,?,?)",
             params![
                 owner,
@@ -851,6 +850,8 @@ fn save_generation(state: &AiChannels, owner: &str, value: &Value) -> Result<(),
             ],
         )
         .map_err(storage)?;
+    // Best effort only. An analytics failure cannot fail a model request.
+    let _=crate::activity_telemetry::record_generation(&db,owner,value);
     Ok(())
 }
 pub(crate) fn generation_get(

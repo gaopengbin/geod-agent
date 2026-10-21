@@ -27,6 +27,7 @@ import { AccountMenu } from "./account-menu";
 import type { GeoDAuth } from "./geod-auth";
 import { useAIModels, modelValue,availableAIChannels,SPONSORED_CHANNELS_VISIBLE } from "./ai-channels";
 import { useDownloadTelemetry } from "./use-download-telemetry";
+import { useActivityTelemetry } from "./use-activity-telemetry";
 import { ChatTranscript } from "./chat-ui";
 import {recordGenerationTokenUsage,type TurnTokenUsage} from './turn-token-usage';
 import { ExtensionStorePage } from "./extension-store";
@@ -164,6 +165,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
   const backgroundIds = [...ledgerJobs.filter(job => accountPlanIds.has(job.planId)).map(job => job.jobId), ...chatRecords.flatMap(chat => chat.display.flatMap(item => item.backgroundJob ? [item.backgroundJob.jobId] : [])), ...display.flatMap(item => item.backgroundJob ? [item.backgroundJob.jobId] : [])];
   const backgroundJobs = useBackgroundJobs(accountId, backgroundIds, setBackgroundNotice);
   const downloadTelemetry = useDownloadTelemetry(accountId, backgroundJobs);
+  const activityTelemetry = useActivityTelemetry(accountId);
   useEffect(() => onBackgroundSnapshots(backgroundJobs), [backgroundJobs, onBackgroundSnapshots]);
   useEffect(() => setBackgroundNotice(null), [accountId]);
   useEffect(() => {
@@ -1856,7 +1858,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
       </div>;
     })}</div>
     {legacyImportReady && <div className="conversation-legacy-import"><p>{t("发现旧版未归属账号的本机对话。")}</p><button type="button" onClick={importOlderChats} disabled={busy}>{t("导入到当前账号")}</button></div>}
-    <AccountMenu open={accountMenuOpen} onOpenChange={setAccountMenuOpen} connected={status.state === "connected"} userId={status.userId} profile={auth.profile} profileError={auth.profileError} onProfileRefresh={auth.refreshProfile} usage={usage} busy={busy||runningIds.length>0} theme={theme} onModels={() => onMainViewChange("models")} onNetwork={onOpenNetwork} onCache={onOpenCache} onTheme={onToggleTheme} onLogout={() => void logout()} telemetryEnabled={downloadTelemetry.enabled} onTelemetry={downloadTelemetry.toggle}/>
+    <AccountMenu open={accountMenuOpen} onOpenChange={setAccountMenuOpen} connected={status.state === "connected"} userId={status.userId} profile={auth.profile} profileError={auth.profileError} onProfileRefresh={auth.refreshProfile} usage={usage} busy={busy||runningIds.length>0} theme={theme} onModels={() => onMainViewChange("models")} onNetwork={onOpenNetwork} onCache={onOpenCache} onTheme={onToggleTheme} onLogout={() => void logout()} telemetryEnabled={downloadTelemetry.enabled} onTelemetry={downloadTelemetry.toggle} activityEnabled={activityTelemetry.enabled} onActivity={activityTelemetry.toggle}/>
   </aside><section className={`agent-panel agent-primary ${emptyConversation ? "agent-start" : ""}`} aria-label={t("GeoD Agent 智能助手")} hidden={mainView !== "conversation"}>
     <div className="agent-header"><strong>{currentChat?chatTitle(currentChat):t("新对话")}</strong>{engine==="codex"&&display.some(m=>m.role==="assistant"&&m.phase!=="progress")&&<UiTooltip content={t("复制已完成的对话，创建独立分支")}><Button variant="ghost" size="icon" aria-label={t("创建会话分支")} disabled={busy||!!pendingId||!workspace} onClick={()=>void forkChat()}><GitBranch size={16}/></Button></UiTooltip>}</div>
     {error && <div className="agent-error" role="alert"><CircleAlert size={16} />{localize(error)}</div>}

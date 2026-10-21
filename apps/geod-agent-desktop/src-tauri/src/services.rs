@@ -1336,6 +1336,10 @@ pub(crate) fn send_download_events(state:&ServiceState,account_id:&str,events:Va
     if !detailed{if let Some(rows)=events.as_array_mut(){for row in rows{if let Some(obj)=row.as_object_mut(){obj.remove("download_kind");}}}}
     gateway_call(state,"/api/agent/events",Some(json!({"schema_version":1,"accountId":account_id,"events":events})))
 }
+pub(crate) fn send_activity_events(state:&ServiceState,account_id:&str,events:Value)->Result<Value,ServiceError>{
+    if current_user_id(state)?!=account_id{return Err(error("ACCOUNT_CHANGED","使用统计账号已切换"));}
+    gateway_call(state,"/api/agent/activity",Some(json!({"schema_version":1,"accountId":account_id,"events":events})))
+}
 #[tauri::command]
 pub async fn agent_generation_get(
     app: tauri::AppHandle,

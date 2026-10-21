@@ -1507,6 +1507,7 @@ pub fn run() {
                     }
                 });
                 download_telemetry::start(app.handle().clone());
+                activity_telemetry::start(app.handle().clone());
                 schedules::start(app.handle().clone());
                 data_schedules::start(app.handle().clone());
                 ai_schedules::start(app.handle().clone());
@@ -1689,6 +1690,7 @@ pub fn run() {
             services::agent_payment_action,
             services::agent_events,
             download_telemetry::download_telemetry_set,
+            activity_telemetry::agent_activity_set,
             services::agent_generation_get,
             codex_runtime::codex_available,
             codex_runtime::codex_turn,
@@ -1887,3 +1889,4 @@ mod workspace_tests {
     }
 }
 mod download_telemetry;
+mod activity_telemetry;

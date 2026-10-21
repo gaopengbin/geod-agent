@@ -2573,5 +2573,8 @@
   "未找到原文件夹，请连接原磁盘，或选择原来的文件夹。": "The original folder was not found. Reconnect the drive or choose the original folder.",
   "所选文件夹与原工作区不同。请恢复原文件夹的位置；此会话的任务归属保持原样。": "The selected folder is not the original workspace. Restore the folder to its original location. This conversation’s task ownership is preserved.",
   "恢复的是备份中的任务记录；成果完整性可在任务面板中核验。": "Task records were restored from backup. Verify output files in the task panel.",
-  "恢复前快照": "Snapshot before recovery"
+  "恢复前快照": "Snapshot before recovery",
+  "Agent 使用统计：": "Agent usage statistics: ",
+  "自愿开启后，启动、自有渠道调用结果与可用 Token 用量会关联当前账号；不发送对话、模型名称、渠道地址或密钥。关闭会清除待上传记录，已发送的请求可能完成。下载统计单独控制。": "Opt in to associate app sessions, personal provider call outcomes and available token usage with this account. No conversations, model names, provider URLs or keys are sent. Turning this off clears pending records; in-flight requests may finish. Download statistics are controlled separately.",
+  "自愿关联当前账号的活跃与自有渠道用量，不上传对话或密钥；下载统计独立控制。": "Opt in to account-linked activity and personal provider usage. No conversations or keys. Download statistics are controlled separately."
 }
