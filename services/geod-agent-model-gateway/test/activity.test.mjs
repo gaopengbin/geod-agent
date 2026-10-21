@@ -6,8 +6,20 @@ import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createGatewayServer} from '../server.mjs';
-import {validateActivity} from '../activity-store.mjs';
+import {validateActivity,openActivityStore} from '../activity-store.mjs';
 const event=()=>({event_id:randomUUID(),kind:'personal_model',state:'completed',reason:'none',occurred_at:new Date().toISOString(),input_tokens:123,output_tokens:4,usage_known:true});
+
+test('first observed client is once per account across devices and opt-in resets',()=>{
+ const store=openActivityStore(':memory:');
+ try{
+  const e={...event(),kind:'app_first_seen',state:'started',usage_known:false,input_tokens:null,output_tokens:null};
+  const body={schema_version:1,accountId:'a',events:[e]};validateActivity(body);
+  assert.deepEqual(store.record('a',[e]),{accepted:1,duplicates:0});
+  assert.deepEqual(store.record('a',[{...e,event_id:randomUUID()}]),{accepted:0,duplicates:1});
+  assert.equal(store.record('b',[{...e,event_id:randomUUID()}]).accepted,1);
+  assert.throws(()=>validateActivity({...body,events:[{...e,usage_known:true,input_tokens:1,output_tokens:2}]}));
+ }finally{store.close();}
+});
 test('activity rejects raw private data and does not invent unknown token usage',()=>{
  const body={schema_version:1,accountId:'geod-only',events:[event()]};assert.equal(validateActivity(body).length,1);
  for(const extra of [{model:'private'},{channel_url:'secret'},{prompt:'private'},{reason:'raw failure'},{input_tokens:-1},{input_tokens:1.5},{usage_known:false},{occurred_at:'2000-01-01T00:00:00Z'}])assert.throws(()=>validateActivity({...body,events:[{...event(),...extra}]}));

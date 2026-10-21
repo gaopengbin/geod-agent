@@ -15,7 +15,7 @@ def collect(hours=48,until=None,accounts='/srv/laogao/data/geod-studio/accounts/
     if not 1<=hours<=2160:raise ValueError('Invalid hours')
     until=until or datetime.now(BJ);start=until-timedelta(hours=hours)
     store=json.loads(Path(accounts).read_text(encoding='utf8'))
-    users=[u for u in store['users'] if u.get('email','').lower() not in {'1804287165@qq.com','pengbingao@gmail.com'} and u.get('analyticsAudience')!='internal' and stamp(u['createdAt'])<until]
+    users=[u for u in store['users'] if u.get('email','').lower() not in {'1804287165@qq.com','pengbingao@gmail.com'} and u.get('analyticsAudience')!='internal' and u.get('isTestAccount') is not True and stamp(u['createdAt'])<until]
     db=sqlite3.connect(Path(ledger).resolve().as_uri()+'?mode=ro',uri=True);db.row_factory=sqlite3.Row
     db.execute('PRAGMA query_only=ON');db.execute('BEGIN')
     tables={r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}

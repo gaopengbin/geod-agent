@@ -139,6 +139,7 @@ fn tick(app: &AppHandle, session: &str) -> Result<(), AppError> {
     }
     {
         let tx = db.unchecked_transaction().map_err(storage)?;
+        enqueue(&tx, &owner, "first-observed-client", "started", "app_first_seen", &Value::Null).map_err(storage)?;
         enqueue(&tx, &owner, session, "started", "app_session", &Value::Null).map_err(storage)?;
         tx.commit().map_err(storage)?;
     }
@@ -188,6 +189,15 @@ fn tick(app: &AppHandle, session: &str) -> Result<(), AppError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn first_observation_requires_consent_and_is_locally_deduplicated() {
+        let db=Connection::open_in_memory().unwrap();schema(&db).unwrap();
+        enqueue(&db,"a","first-observed-client","started","app_first_seen",&Value::Null).unwrap();
+        assert_eq!(db.query_row("SELECT count(*) FROM activity_outbox",[],|r|r.get::<_,i64>(0)).unwrap(),0);
+        set(&db,"a",true).unwrap();
+        for _ in 0..2 {enqueue(&db,"a","first-observed-client","started","app_first_seen",&Value::Null).unwrap();}
+        assert_eq!(db.query_row("SELECT count(*) FROM activity_outbox",[],|r|r.get::<_,i64>(0)).unwrap(),1);
+    }
     #[test]
     fn outbox_survives_restart_and_disabling_one_account_preserves_the_other() {
         let path =
