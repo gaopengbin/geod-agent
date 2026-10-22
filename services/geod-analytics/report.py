@@ -124,6 +124,36 @@ def download_report(records, started_at, start, until, first_observed_at=None):
             'complete_rate': cohort_results['completed'] / len(cohort) if cohort else None}
 
 
+def token_diagnostics_report(records):
+    # Last terminal per random attempt; no persistent identity leaves the report.
+    finals = {}
+    for row in sorted(records, key=lambda r: timestamp(r['occurred_at'])):
+        p = row['properties']
+        if p.get('state') in ('completed','completed_with_gaps','failed','cancelled') and p.get('attempt_id'):
+            finals[(row['identity'], p['attempt_id'])] = row
+    fields = ('provider','phase','token_source','configured_tokens','used_tokens','token_switches','recovered_switches','settings_updates','last_rejection_status','tokens_exhausted','error_code','http_status')
+    enums = {'provider':('tianditu','other','unknown'), 'phase':('prepare','base_download','overlay_download','composite','export','unknown'), 'token_source':('builtin','user'), 'error_code':('none','cancelled','all_tokens_unavailable','access_denied','rate_limited','invalid_tile','tile_too_large','storage_failed','redirect_denied','offline_forbidden','missing_tiles','network','auth','permission','disk','unknown')}
+    groups = Counter(); legacy = 0
+    for row in finals.values():
+        p = row['properties']
+        valid = p.get('diagnostic_version') == 1 and all(p.get(k) in v for k,v in enums.items())
+        valid = valid and all(type(p.get(k)) is int and 0 <= p[k] <= 65535 for k in ('configured_tokens','used_tokens','token_switches','recovered_switches','settings_updates'))
+        valid = valid and type(p.get('tokens_exhausted')) is bool and p.get('last_rejection_status') in (0,401,403,429) and type(p.get('http_status')) is int and 0 <= p['http_status'] <= 599
+        if not valid:
+            legacy += 1
+            continue
+        # Version is used solely as an aggregate category, never a raw source or error.
+        version = str(row.get('app_version','unknown'))
+        if len(version) > 32 or any(c not in '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.+_-' for c in version): version = 'unknown'
+        groups[(version,p['state'],*(p[k] for k in fields))] += 1
+    details = [dict(zip(('version','state',*fields), key), attempts=count) for key,count in sorted(groups.items())]
+    return {'status':'recording' if details else 'no_observations', 'diagnosed_terminal_attempts':sum(groups.values()),
+            'terminal_without_diagnostics':legacy, 'details':details,
+            'switched_attempts':sum(r['attempts'] for r in details if r['token_switches'] > 0),
+            'recovered_attempts':sum(r['attempts'] for r in details if r['recovered_switches'] > 0),
+            'exhausted_attempts':sum(r['attempts'] for r in details if r['tokens_exhausted'])}
+
+
 def identity_report(path, start, until):
     store = json.loads(Path(path).read_text(encoding="utf-8"))
     # Never serialize the store, email, password hashes, tokens, or user IDs.
@@ -194,7 +224,9 @@ def event_report(path, start, until, website=False):
         else:
             metadata_rows = rows(connection, "SELECT value FROM telemetry_metadata WHERE key='download_lifecycle_started_at'") if connection.execute("PRAGMA table_info(telemetry_metadata)").fetchall() else []
             metadata = metadata_rows[0]['value'] if metadata_rows else None
-            lifecycle = rows(connection, "SELECT install_id identity,occurred_at,properties_json FROM events WHERE event_name='download_task_state' AND julianday(occurred_at)>=julianday(?) AND julianday(occurred_at)<julianday(?)", parameters)
+            has_version = any(r['name'] == 'app_version' for r in rows(connection, 'PRAGMA table_info(events)'))
+            version_column = "app_version" if has_version else "'unknown' app_version"
+            lifecycle = rows(connection, f"SELECT install_id identity,occurred_at,properties_json,{version_column} FROM events WHERE event_name='download_task_state' AND julianday(occurred_at)>=julianday(?) AND julianday(occurred_at)<julianday(?)", parameters)
             first_observed = first(connection,
                 "SELECT min(occurred_at) first_observed FROM events WHERE event_name='download_task_state' "
                 "AND julianday(occurred_at)<julianday(?) AND json_valid(properties_json) "
@@ -203,6 +235,7 @@ def event_report(path, start, until, website=False):
                 "AND json_extract(properties_json,'$.state') IN ('started','completed','completed_with_gaps','partial','failed','cancelled')",
                 (until.isoformat(),))['first_observed']
             summary['downloads'] = download_report([dict(row, properties=json.loads(row['properties_json'])) for row in lifecycle], metadata, start, until, first_observed)
+            summary['token_diagnostics'] = token_diagnostics_report([dict(row, properties=json.loads(row['properties_json'])) for row in lifecycle])
             summary["download_workflows"] = rows(connection,
                 f"SELECT coalesce(json_extract(properties_json,'$.workflow'),'unknown') workflow,count(*) tasks "
                 f"FROM {table} WHERE {predicate} AND event_name='download_task_created' GROUP BY workflow", parameters)
@@ -391,6 +424,21 @@ def html_report(report):
             reason_labels = {'network':'网络/图源服务','auth':'认证/Token','disk':'存储/磁盘','permission':'权限/使用限制','missing_tiles':'缺失瓦片/无覆盖','unknown':'未分类'}
             body += table(['失败或部分完成类别','尝试'], [[reason_labels.get(key,key),count] for key,count in downloads['failure_reasons'].items()])
         return body
+    def token_diagnostics_panel(diagnostics):
+        body = '<h3>天地图 Token 与任务失败诊断</h3><p class="freshness">仅新版本且同意上报的任务；旧记录缺失字段表示未采集，不等于零。实际使用数按本次尝试发过请求的不同 Token 计数，含设置更新前后的值；不采集 Token 本身。</p>'
+        if not diagnostics or diagnostics['status'] != 'recording':
+            return body + '<p class="warning">本期尚无带诊断字段的终态样本。</p>'
+        body += table(['诊断终态','发生切换','切换后取片成功','全部不可用','未带诊断的终态'], [[diagnostics[k] for k in ('diagnosed_terminal_attempts','switched_attempts','recovered_attempts','exhausted_attempts','terminal_without_diagnostics')]])
+        phases = {'prepare':'准备','base_download':'主图下载','overlay_download':'注记下载','composite':'叠加合成','export':'导出','unknown':'未知'}
+        outcomes = {'completed':'完成','completed_with_gaps':'有缺块','failed':'失败','cancelled':'取消'}
+        codes = {'none':'无','cancelled':'取消','all_tokens_unavailable':'所有配置 Token 被拒绝','access_denied':'访问被拒绝','rate_limited':'限流或等待过长','invalid_tile':'无效瓦片响应','tile_too_large':'瓦片响应过大','storage_failed':'存储写入失败','redirect_denied':'重定向被拒绝','offline_forbidden':'离线使用受限','missing_tiles':'无覆盖或缺块','network':'网络','auth':'其他鉴权','permission':'权限','disk':'存储','unknown':'未分类'}
+        body += table(['版本 / 结果','阶段 / 图源类别','配置 / 使用','切换 / 恢复','设置更新','最后拒绝 / 最终 HTTP','最终原因','次数'], [
+            [r['version']+' / '+outcomes[r['state']], phases[r['phase']]+' / '+{'tianditu':'天地图','other':'其他处理或图源','unknown':'未知'}[r['provider']],
+             ('共享' if r['token_source']=='builtin' else '自配')+f" {r['configured_tokens']} / {r['used_tokens']}", f"{r['token_switches']} / {r['recovered_switches']}",
+             r['settings_updates'], f"{r['last_rejection_status'] or '无'} / {r['http_status'] or '无'}", codes[r['error_code']],r['attempts']]
+            for r in diagnostics['details']])
+        return body + '<p class="freshness">恢复表示切换后至少成功取得并校验一张瓦片，不保证整个任务完成。401/403/429 为服务响应，不能仅凭状态码断定密钥无效或日额度耗尽。</p>'
+
     cards = ''.join(f'<article><span>{escape(label)}</span><strong>{escape(value)}</strong><small>{escape(detail)}</small></article>' for label, value, detail in [
         ('GeoD 累计账号', metric('accounts', 'total_accounts'), 'GeoD Studio / Agent 账号服务'),
         ('本期新账号', metric('accounts', 'new_accounts'), '服务端实际创建'),
@@ -430,7 +478,7 @@ def html_report(report):
                 body += table(['事件','次数','匿名 ID'], [[event_labels.get(r['event_name'],r['event_name']),r['events'],r['anonymous_ids']] for r in metrics['event_counts']])
                 if name=='website' and metrics['download_failure_reasons']:
                     body += '<h3>网页下载失败原因</h3>' + table(['原因','次数'], [['需要登录' if r['reason']=='auth_required' else r['reason'],r['events']] for r in metrics['download_failure_reasons']])
-                if name == 'desktop': body += downloads_panel(metrics.get('downloads'))
+                if name == 'desktop': body += downloads_panel(metrics.get('downloads')) + token_diagnostics_panel(metrics.get('token_diagnostics'))
             elif name=='agent':
                 body += '<p>已结算 token：<b>' + escape(metrics['settled_tokens']) + '</b></p>'
                 state_labels = {'settled':'已结算','failed':'失败','pending_reconcile':'待对账','streaming':'处理中','reserved':'已预留'}
