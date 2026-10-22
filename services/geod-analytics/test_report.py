@@ -71,6 +71,36 @@ class GeoDReportTests(unittest.TestCase):
     def collect(self):
         return report_module.collect(self.paths, 7, self.until)
 
+    def test_token_diagnostics_deduplicate_attempts_preserve_missing_and_export_no_ids(self):
+        props = {'attempt_id':'private-attempt','state':'failed','reason':'auth','diagnostic_version':1,
+                 'provider':'tianditu','phase':'overlay_download','token_source':'user','configured_tokens':3,
+                 'used_tokens':3,'token_switches':2,'recovered_switches':1,'settings_updates':0,
+                 'last_rejection_status':429,'tokens_exhausted':True,'error_code':'all_tokens_unavailable','http_status':429,
+                 'token':'private-secret','url':'https://private.test'}
+        def record(properties):
+            return {'identity':'private-install','occurred_at':'2026-10-01T02:00:00Z','app_version':'3.6.17','properties':properties}
+        results = report_module.token_diagnostics_report([record(props),record(props),record(dict(props,attempt_id='old',diagnostic_version=None))])
+        self.assertEqual(results['diagnosed_terminal_attempts'],1)
+        self.assertEqual(results['terminal_without_diagnostics'],1)
+        self.assertEqual(results['switched_attempts'],1)
+        self.assertEqual(results['recovered_attempts'],1)
+        self.assertEqual(results['exhausted_attempts'],1)
+        self.assertNotIn('private',json.dumps(results))
+        self.assertNotIn('https',json.dumps(results))
+        collected=self.collect()
+        collected['sources']['desktop']['metrics']['token_diagnostics']=results
+        rendered=report_module.html_report(collected)
+        self.assertIn('所有配置 Token 被拒绝',rendered)
+        self.assertIn('切换后取片成功',rendered)
+        self.assertNotIn('private-secret',rendered)
+
+    def test_old_or_malformed_diagnostics_are_not_zero_token_samples(self):
+        old={'identity':'x','occurred_at':'2026-10-01T02:00:00Z','properties':{'attempt_id':'x','state':'completed'}}
+        result=report_module.token_diagnostics_report([old])
+        self.assertEqual(result['status'],'no_observations')
+        self.assertEqual(result['terminal_without_diagnostics'],1)
+        self.assertEqual(result['details'],[])
+
     def test_wechat_accounts_and_events_cannot_change_geod_results(self):
         before = self.collect()
         with fixture_database(self.paths['website']) as db:
