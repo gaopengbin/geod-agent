@@ -10,6 +10,13 @@ import {codexRequest} from '../../../packages/codex-protocol/codex-contract.mjs'
 const declared=JSON.parse(readFileSync(new URL('../src-tauri/codex-tools.json',import.meta.url)));
 const params={conversationId:'policy-test',input:'下载所选范围，保留确认的参数',permission:'fullAccess',outputCrs:'EPSG:4326'};
 function fixture(){const home=mkdtempSync(join(tmpdir(),'geod-policy-'));let now=100000,signals=[];const policy=new RuntimePolicy(home,declared,{now:()=>now,onSignal:s=>signals.push(s)});policy.begin(params,{inputModalities:['text']});return{home,policy,signals,tick:ms=>now+=ms};}
+test('a refusal from one remote feature endpoint does not block independent sources',async()=>{
+ const {policy}=fixture();let called=0;
+ await policy.execute('data_input_read',{url:'https://denied.test/a'},'denied',async()=>({error:'PERMISSION_DENIED'}));
+ const other=await policy.execute('data_input_read',{url:'https://available.test/a'},'other',async()=>{called++;return{featureCount:5};});
+ assert.equal(called,1);assert.equal(other.featureCount,5);
+ const same=await policy.execute('data_input_read',{url:'https://denied.test/a'},'same',async()=>{throw Error('must not dispatch');});assert.equal(same.error,'RECOVERY_CONDITION_UNCHANGED');
+});
 
 test('discovery reuses unchanged catalog pages but connection changes and TTL invalidate them',async()=>{
  const {policy,tick}=fixture();for(const {function:t}of RUNTIME_TOOLS)policy.schemas.set(t.name,t.parameters);let calls=0;const dispatch=async()=>({tools:[{name:'data_download_plan'}],total:1});

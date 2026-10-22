@@ -61,6 +61,7 @@ export function compactDataTask(task: DataDownloadTask) {
   return { taskId: task.id, kind: task.kind, title: task.title, status: task.status, cleaned:task.cleaned, planHash: task.planHash, progress: task.progress, error: task.error,
     outputLocation: "当前工作区中的新目录", createdAt: task.createdAt, updatedAt: task.updatedAt,
     manifest: manifest ? { bounds: manifest.bounds, featureCount: manifest.featureCount, sourceFeatureCount:manifest.sourceFeatureCount, geometryTypes:manifest.geometryTypes, sourceLayer:manifest.sourceLayer, outputCrs:manifest.outputCrs, fields:Array.isArray(manifest.fields)?manifest.fields.slice(0,100):undefined, fieldsTruncated:Array.isArray(manifest.fields)&&manifest.fields.length>100, fieldEncodings:manifest.fieldEncodings&&typeof manifest.fieldEncodings==="object"?Object.fromEntries(Object.entries(manifest.fieldEncodings).slice(0,100)):undefined, quality: manifest.quality,
+      verification: manifest.verification, dissolved: manifest.dissolved, attributePolicy: manifest.attributePolicy,
       failureCount: Array.isArray(manifest.failures) ? manifest.failures.length : undefined,
       warnings: Array.isArray(manifest.warnings) ? manifest.warnings.slice(0, 10) : [], dataTimestamp: manifest.dataTimestamp,
       fileCount: files.length, assets: files.slice(0, 20).map(asset => ({ kind: asset.kind, bytes: asset.bytes ?? asset.size, sha256: asset.sha256 })),

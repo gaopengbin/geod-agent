@@ -16,6 +16,21 @@ test('provider classifications retain structure and safe reasons without provide
  assert.equal(safeDiagnostic({httpStatus:400,reason:'arbitrary-user-text'}),null);
 });
 
+test('unusable tool results and missing usage retain safe protocol diagnostics and release once',async()=>{
+ const folder=mkdtempSync(join(tmpdir(),'geod-protocol-rejection-')),path=join(folder,'ledger.sqlite');let calls=0;
+ const config=readConfig({GEOD_AGENT_GATEWAY_SECRET:'s'.repeat(40),DEEPSEEK_API_KEY:'private-project-key',GEOD_IDENTITY_ORIGIN:'https://identity.test',GEOD_AGENT_DB_PATH:path,GEOD_AGENT_QUOTA_MODE:'unlimited'});
+ const server=createGatewayServer(config,{fetchImpl:async url=>{
+  if(String(url).startsWith('https://identity.test'))return Response.json({active:{userId:'protocol-user',clientId:'geod-agent-desktop',scope:'geod:agent',expiresAt:Date.now()+60000}});
+  const n=calls++;const chunk={id:'provider-protocol-'+n,...(n<2?{usage:{prompt_tokens:200,completion_tokens:20}}:{}),choices:[{delta:{content:null,...(n<2?{tool_calls:[{index:0,...(n===0?{id:'call-1'}:{}),type:'function',function:{name:n===0?'invented_export':'declared_tool',arguments:'{}'}}]}:{})},finish_reason:'stop'}]};return new Response('data: '+JSON.stringify(chunk)+'\n\ndata: [DONE]\n\n',{headers:{'content-type':'text/event-stream'}});
+ }});await new Promise(r=>server.listen(0,'127.0.0.1',r));
+ const generate=async id=>{const r=await fetch(`http://127.0.0.1:${server.address().port}/api/agent/codex/generations/stream`,{method:'POST',headers:{authorization:'Bearer '+'A'.repeat(43),'content-type':'application/json'},body:JSON.stringify({generationId:id,conversationId:'protocol-conversation',request:{input:[{role:'user',content:'private prompt'}],tools:[{type:'function',name:'declared_tool',parameters:{type:'object',properties:{}}}]}})});return(await r.text()).split('\n\n').filter(x=>x.includes('event: generation')).map(x=>JSON.parse(x.match(/data: (.+)/)[1]))[0];};
+ try{
+  for(let i=0;i<3;i++){const r=await generate('protocol-'+i);assert.equal(r.state,'failed');assert.equal(r.errorCode,i<2?'UPSTREAM_INVALID_TOOL':'UPSTREAM_MALFORMED');assert.equal(r.upstreamDiagnostic.protocol.stage,i<2?'tool_contract':'stream_parse');assert.doesNotMatch(JSON.stringify(r.upstreamDiagnostic),/private prompt|private-project-key/);}
+  await generate('protocol-2');assert.equal(calls,3);
+  const db=new Database(path,{readonly:true});try{assert.equal(db.prepare("SELECT count(*) n FROM usage_ledger WHERE kind='release'").get().n,3);assert.equal(db.prepare("SELECT count(*) n FROM usage_ledger WHERE kind='settle'").get().n,0);}finally{db.close();}
+ }finally{await new Promise(r=>server.close(r));rmSync(folder,{recursive:true,force:true});}
+});
+
 test('three upstream rejections are durably explained, released once and never retried on replay',async()=>{
  const folder=mkdtempSync(join(tmpdir(),'geod-provider-rejection-')),path=join(folder,'ledger.sqlite');let calls=0;
  const config=readConfig({GEOD_AGENT_GATEWAY_SECRET:'s'.repeat(40),DEEPSEEK_API_KEY:'private-project-key',GEOD_IDENTITY_ORIGIN:'https://identity.test',GEOD_AGENT_DB_PATH:path,GEOD_AGENT_QUOTA_MODE:'unlimited'});

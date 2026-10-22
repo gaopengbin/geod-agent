@@ -7,6 +7,14 @@ import {RuntimePolicy,RUNTIME_TOOLS} from '../src-tauri/runtime-policy.mjs';
 import {mkdtempSync} from 'node:fs';import {tmpdir} from 'node:os';import {join} from 'node:path';
 
 const declared=[...JSON.parse(readFileSync(new URL('../src-tauri/codex-tools.json',import.meta.url))),SEARCH_TOOL,CONTEXT_TOOL];
+test('boundary/vector export discovery ranks an executable native route before broad catalog pages',()=>{
+ const c=new ModelToolCatalog(declared,{input:'export administrative boundaries'});
+ for(const query of ['export boundary vector gpkg','行政区融合导出','GeoPackage']){
+  const page=c.search({query,limit:3});assert.equal(page.tools[0].name,'data_download_plan');assert.equal(page.capabilityRoutes[0].savedGeometry.kind,'boundary');
+ }
+ const one=c.search({query:'GeoPackage',limit:3}),two=c.search({query:'GeoPackage',limit:3});
+ assert.equal(one.discoveryFingerprint,two.discoveryFingerprint);assert.deepEqual(two.newlyActivated,[]);
+});
 const tools=declared.map(({function:f})=>({type:'function',...f}));
 const owned=`You are GeoD Agent. Reply in the user's language. Use real tools. For requests to switch to 2D/3D use the actual map. For explicitly requested later or recurring AI use schedules. For explicitly requested long-running workspace commands use background commands. Independent file analysis subtasks have restricted workspaces. GeoD explicit memory is managed only on explicit human request. ${USER_INPUT_POLICY} Keep native permission checks and confirmed defaults.`;
 const suffix='<skills_instructions>large catalogue</skills_instructions><permissions instructions>KEEP PERMISSIONS EXACT</permissions instructions>';

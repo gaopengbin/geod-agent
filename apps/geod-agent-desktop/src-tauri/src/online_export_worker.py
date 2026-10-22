@@ -12,7 +12,7 @@ import pandas as pd
 import pyogrio
 from pyproj import CRS, Transformer
 from shapely.geometry import mapping, shape, box
-from shapely.ops import transform
+from shapely.ops import transform, unary_union
 
 
 class ExportError(Exception):
@@ -151,13 +151,22 @@ def export(request):
     source_count = len(features)
     transformer = Transformer.from_crs(crs, "EPSG:4326", always_xy=True)
     geometries = [transform(transformer.transform, g) if g is not None else None for g in geometries]
-    if any(g is not None and (not g.is_valid or (not g.is_empty and (not all(math.isfinite(v) for v in g.bounds) or g.bounds[0] < -180 or g.bounds[2] > 180 or g.bounds[1] < -90 or g.bounds[3] > 90))) for g in geometries):
+    valid_geometry = lambda g: g.is_valid or (request.get("dissolve") and g.geom_type == "MultiPolygon" and all(p.is_valid for p in g.geoms))
+    if any(g is not None and (not valid_geometry(g) or (not g.is_empty and (not all(math.isfinite(v) for v in g.bounds) or g.bounds[0] < -180 or g.bounds[2] > 180 or g.bounds[1] < -90 or g.bounds[3] > 90))) for g in geometries):
         raise ExportError("几何无效或转换后的坐标超出 WGS84 范围")
     mask = shape(request["boundary"]) if request.get("boundary") else box(*request["bounds"]) if request.get("bounds") else None
     if mask is not None:
         selected = [i for i, g in enumerate(geometries) if g is not None and not g.is_empty and g.intersects(mask)]
         features = [features[i] for i in selected]
         geometries = [geometries[i] for i in selected]
+    if request.get("dissolve"):
+        if not geometries or any(g is None or g.is_empty or g.geom_type not in ("Polygon", "MultiPolygon") for g in geometries):
+            raise ExportError("融合需要非空的有效面数据")
+        merged = unary_union(geometries)
+        if merged.is_empty or not merged.is_valid or merged.geom_type not in ("Polygon", "MultiPolygon"):
+            raise ExportError("融合未生成有效面，未提交成果")
+        features = [{"type": "Feature", "properties": {"sourceFeatureCount": source_count}}]
+        geometries = [merged]
     for feature, geometry in zip(features, geometries):
         feature["geometry"] = mapping(geometry) if geometry is not None else None
         feature.pop("bbox", None)
@@ -195,7 +204,7 @@ def export(request):
         if path.stat().st_size > 256 * 1024 * 1024:
             raise ExportError("单个导出文件超过 256 MiB")
         assets.append({"path": path.name, "kind": kind, "size": path.stat().st_size, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
-    return {"featureCount": len(features), "sourceFeatureCount": source_count, "sourceCrs": str(CRS(crs)), "outputCrs": target.to_string(), "bounds": bounds, "fields": fields, "geometryTypes": sorted({g.geom_type for g in geometries if g is not None}), "previewFeatureCount": min(1000, len(features)), "previewTruncated": len(features) > 1000, "fieldEncodings": encodings, "sourceIdField": source_id, "warnings": warnings, "assets": assets}
+    return {"featureCount": len(features), "sourceFeatureCount": source_count, "dissolved": bool(request.get("dissolve")), "attributePolicy": "union-source-count" if request.get("dissolve") else "preserve", "sourceCrs": str(CRS(crs)), "outputCrs": target.to_string(), "bounds": bounds, "fields": fields, "geometryTypes": sorted({g.geom_type for g in geometries if g is not None}), "verification": {"engine": "managed-gdal", "formatReadback": True, "featureCount": True, "crs": True, "geometry": True, "attributes": True, "independentSystemGdalRequired": False}, "previewFeatureCount": min(1000, len(features)), "previewTruncated": len(features) > 1000, "fieldEncodings": encodings, "sourceIdField": source_id, "warnings": warnings, "assets": assets}
 
 
 if __name__ == "__main__":

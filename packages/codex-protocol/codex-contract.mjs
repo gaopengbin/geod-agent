@@ -87,7 +87,8 @@ export function codexRequest(request) {
 export function codexResult(message, definitions, {finishReason} = {}) {
   const toolCalls = (message.tool_calls ?? []).map(call => {
     const definition = definitions.get(call.function?.name);
-    if (!definition || typeof call.function?.arguments !== 'string' || typeof call.id !== 'string') fail('CODEX_UNDECLARED_TOOL');
+    if (!definition || typeof call.function?.arguments !== 'string' || typeof call.id !== 'string' || !call.id) fail('CODEX_UNDECLARED_TOOL');
+    try{JSON.parse(call.function.arguments);}catch{fail('CODEX_CUSTOM_INPUT_INVALID');}
     let input;
     if (definition.custom) {
       try { input = JSON.parse(call.function.arguments).input; } catch { fail('CODEX_CUSTOM_INPUT_INVALID'); }

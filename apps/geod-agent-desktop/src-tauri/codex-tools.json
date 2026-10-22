@@ -1481,7 +1481,7 @@
     "type": "function",
     "function": {
       "name": "data_download_plan",
-      "description": "Create a persistent native download plan for MVT/PBF vector tiles, OpenStreetMap features, or a recursive 3D Tiles dataset. Downloads run on the user device and appear in the task list. Does not execute yet. Use an actual public service URL; never include credentials. MVT supports pbf,mbtiles,geojson,gpkg; OSM supports geojson,gpkg; 3D Tiles writes a self-contained offline bundle. bounds is required for vectors, optional for full 3D datasets. Use a saved boundaryId for polygon selection, including holes and separated regions. Vector GeoJSON/GPKG retains whole intersecting features; PBF/MBTiles retains selected whole tiles. 3D selects intersecting tile bounding volumes and retains whole models, not mesh clipping. For Cesium Ion or authenticated 3D services, first discover/prepare tiles3d connections and supply connectionId; secret values stay in the native store. Name the task by region and data. Pending plans can be started with data_download_start only in fullAccess; confirmEach waits for UI confirmation.",
+      "description": "Export saved administrative boundaries directly with kind=boundary, sourceBoundaryId from boundaries_list/boundaries_combine, outputFormats=[gpkg] or [geojson], and dissolve=true to remove internal borders. This uses the saved geometry, needs no URL, external GDAL executable, Python environment probing or repeated remote download. Online features also support dissolve=true. Create a persistent native download plan for MVT/PBF vector tiles, OpenStreetMap features, or a recursive 3D Tiles dataset. Downloads run on the user device and appear in the task list. Does not execute yet. Use an actual public service URL; never include credentials. MVT supports pbf,mbtiles,geojson,gpkg; OSM supports geojson,gpkg; 3D Tiles writes a self-contained offline bundle. bounds is required for vectors, optional for full 3D datasets. Use a saved boundaryId for polygon selection, including holes and separated regions. Vector GeoJSON/GPKG retains whole intersecting features; PBF/MBTiles retains selected whole tiles. 3D selects intersecting tile bounding volumes and retains whole models, not mesh clipping. For Cesium Ion or authenticated 3D services, first discover/prepare tiles3d connections and supply connectionId; secret values stay in the native store. Name the task by region and data. Pending plans can be started with data_download_start only in fullAccess; confirmEach waits for UI confirmation.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -1491,11 +1491,20 @@
               "mvt",
               "osm",
               "tiles3d",
-              "online"
+              "online",
+              "boundary"
             ]
           },
           "name": {
             "type": "string"
+          },
+          "sourceBoundaryId": {
+            "type": "string",
+            "description": "Actual saved boundary ID in this conversation. Required for kind=boundary. This is the source geometry, not a clipping mask."
+          },
+          "dissolve": {
+            "type": "boolean",
+            "description": "Explicitly union all polygon features into one feature; preserves holes and islands, replaces per-feature attributes with source count. Default false."
           },
           "sourceUrl": {
             "type": "string",

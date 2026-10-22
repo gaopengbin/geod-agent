@@ -74,18 +74,21 @@ export class ModelToolCatalog{
  search(args){
   const tokens=String(args.query??'').toLowerCase().split(/[\s_\-]+/u).filter(token=>token.length>1);
   const selectedGroups=new Set(Object.entries(patterns).filter(([,pattern])=>pattern.test(args.query??'')).map(([group])=>group));
+  const exporting=/导出|写出|export|geopackage|gpkg|geojson|dissolv|融合|矢量转换/i.test(args.query??'');
   const matches=this.declared.filter(({function:tool})=>tool.name!=='runtime_tools_search'&&(
-   args.names?.includes(tool.name)||args.group==='all'||(TOOL_GROUPS[args.group]??[]).includes(tool.name)
+   args.names?.includes(tool.name)||exporting&&tool.name==='data_download_plan'||args.group==='all'||(TOOL_GROUPS[args.group]??[]).includes(tool.name)
    ||[...selectedGroups].some(group=>TOOL_GROUPS[group].includes(tool.name))
    ||tokens.some(token=>`${tool.name} ${tool.description}`.toLowerCase().includes(token))));
   // Explicit names outrank broad group matches, including on a large catalog.
-  const score=({function:t})=>(args.names?.includes(t.name)?1000:0)+tokens.reduce((n,k)=>n+(t.name.toLowerCase()===k?100:t.name.toLowerCase().includes(k)?10:0),0);
+  const score=({function:t})=>(args.names?.includes(t.name)?1000:0)+(exporting&&t.name==='data_download_plan'?500:0)+tokens.reduce((n,k)=>n+(t.name.toLowerCase()===k?100:t.name.toLowerCase().includes(k)?10:t.description.toLowerCase().includes(k)?2:0),0);
   matches.sort((a,b)=>score(b)-score(a));
   const offset=args.offset??0,limit=args.limit??12,tools=matches.slice(offset,offset+limit);
+  const newlyActivated=tools.filter(({function:t})=>!this.enabled.has(t.name)).map(({function:t})=>t.name);
   for(const {function:tool}of tools)this.enable(tool.name);
+  const capabilityRoutes=exporting&&this.names.has('data_download_plan')?[{tool:'data_download_plan',savedGeometry:{kind:'boundary',source:'sourceBoundaryId',outputs:['geojson','gpkg'],dissolve:true},remoteFeatures:{kind:'online',outputs:['geojson','gpkg'],dissolve:true},permission:'native task approval',runtime:'managed GIS component, not system Python or ogr2ogr'}]:[];
   // The next request contains full activated schemas. Repeating them in tool
   // output would copy the same large schema into every subsequent history.
-  return{tools:tools.map(({function:tool})=>({name:tool.name,description:tool.description.slice(0,180),schemaActivated:true,...(tool.name.startsWith('runtime_workflow_')?{durableThreadFallback:{tool:'mcp_call',connectorId:'builtin-runtime-workflow',toolName:tool.name,discoverSchema:'extensions_list'}}:{})})),total:matches.length,nextOffset:offset+tools.length<matches.length?offset+tools.length:null,groups:Object.keys(TOOL_GROUPS),scope:'declared-native-tools',exhausted:offset+tools.length>=matches.length,discoveryOnly:true,note:'This catalog lists tool contracts, not remote datasets. Repeating this page cannot find new providers; use an activated source/data discovery tool. Explicit requested names are ranked first.',permissionsUnchanged:true};
+  return{newlyActivated,capabilityRoutes,discoveryFingerprint:createHash('sha256').update(JSON.stringify(tools.map(t=>t.function))).digest('hex'),tools:tools.map(({function:tool})=>({name:tool.name,description:tool.description.slice(0,180),schemaActivated:true,...(tool.name.startsWith('runtime_workflow_')?{durableThreadFallback:{tool:'mcp_call',connectorId:'builtin-runtime-workflow',toolName:tool.name,discoverSchema:'extensions_list'}}:{})})),total:matches.length,nextOffset:offset+tools.length<matches.length?offset+tools.length:null,groups:Object.keys(TOOL_GROUPS),scope:'declared-native-tools',exhausted:offset+tools.length>=matches.length,discoveryOnly:true,note:'This catalog lists tool contracts, not remote datasets. Repeating this page cannot find new providers; use an activated source/data discovery tool. Explicit requested names are ranked first.',permissionsUnchanged:true};
  }
  context(args){
   let entries=args.section==='history'?[...this.history.values()]:this.archived[args.section]??[];

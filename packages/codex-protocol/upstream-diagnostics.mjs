@@ -6,8 +6,15 @@ export function safeDiagnostic(value){
  const token=v=>typeof v==='string'&&/^[A-Za-z0-9_.:-]{1,100}$/.test(v)&&!/^sk-|^Bearer|^AKID/i.test(v)?v:null;
  const shape=value.requestShape??{};
  const codes=new Set(['invalid_api_key','insufficient_balance','insufficient_quota','rate_limit_exceeded','invalid_request_error','context_length_exceeded','permission_denied','model_not_found','invalid_request','authentication_error','invalid_parameter','invalid_parameter_error']);
- return {version:1,httpStatus:value.httpStatus,reason:value.reason,providerCode:codes.has(value.providerCode)?value.providerCode:null,requestId:token(value.requestId),retryAfterSeconds:Number.isSafeInteger(value.retryAfterSeconds)&&value.retryAfterSeconds>=0?Math.min(value.retryAfterSeconds,86400):null,
+ const stages=new Set(['stream_parse','message_shape','tool_contract','provider_result']);
+ const protocolCodes=new Set(['CODEX_UNDECLARED_TOOL','CODEX_CUSTOM_INPUT_INVALID','PROVIDER_STREAM_INCOMPLETE','PROVIDER_STREAM_INVALID','INVALID_USAGE_OR_MESSAGE','INVALID_TOOL_CONTRACT']);
+ const protocol=stages.has(value.protocol?.stage)?{stage:value.protocol.stage,code:protocolCodes.has(value.protocol.code)?value.protocol.code:'INVALID_TOOL_CONTRACT',usagePresent:value.protocol.usagePresent===true,returnedTools:(Array.isArray(value.protocol.returnedTools)?value.protocol.returnedTools:[]).filter(n=>typeof n==='string'&&/^[a-z][a-z0-9_]{0,63}$/.test(n)&&!n.startsWith('sk_')).slice(0,12)}:null;
+ return {version:1,httpStatus:value.httpStatus,reason:value.reason,providerCode:codes.has(value.providerCode)?value.providerCode:null,requestId:token(value.requestId),...(protocol?{protocol}:{}),retryAfterSeconds:Number.isSafeInteger(value.retryAfterSeconds)&&value.retryAfterSeconds>=0?Math.min(value.retryAfterSeconds,86400):null,
   requestShape:{messages:Number.isSafeInteger(shape.messages)?shape.messages:0,tools:Number.isSafeInteger(shape.tools)?shape.tools:0,images:Number.isSafeInteger(shape.images)?shape.images:0,lastRole:['system','user','assistant','tool'].includes(shape.lastRole)?shape.lastRole:null,maxOutputTokens:Number.isSafeInteger(shape.maxOutputTokens)?shape.maxOutputTokens:null}};
+}
+export function protocolDiagnostic(response,request,{stage,code,payload}={}){
+ const calls=payload?.choices?.[0]?.message?.tool_calls;
+ return safeDiagnostic({httpStatus:response?.status??200,reason:stage==='tool_contract'?'tools_invalid':'messages_invalid',requestId:response?.headers?.get('x-request-id')??response?.headers?.get('request-id')??payload?.id,protocol:{stage,code,usagePresent:Number.isSafeInteger(payload?.usage?.prompt_tokens)&&Number.isSafeInteger(payload?.usage?.completion_tokens),returnedTools:(Array.isArray(calls)?calls:[]).map(c=>c?.function?.name)},requestShape:{messages:request?.messages?.length??0,tools:request?.tools?.length??0,lastRole:request?.messages?.at(-1)?.role,maxOutputTokens:request?.max_tokens}});
 }
 export async function upstreamDiagnostic(response,request={}){
  let payload,reader;

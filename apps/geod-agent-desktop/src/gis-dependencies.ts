@@ -5,7 +5,7 @@ export function gisRequirement(name:string,args:Record<string,unknown>,onFailure
     return onFailure||crs&&crs!=='EPSG:3857'?{id:'gis-raster-convert',reason:'按已选坐标系导出影像',requireTools:false}:null;
   }
   if(name==='data_download_plan'&&args.kind!=='tiles3d'){
-    return args.kind==='online'||onFailure||args.targetCrs&&args.targetCrs!=='EPSG:4326'?{id:'gis-vector-convert',reason:'读取并导出矢量数据',requireTools:false}:null;
+    return ['online','boundary'].includes(String(args.kind))||onFailure||args.targetCrs&&args.targetCrs!=='EPSG:4326'?{id:'gis-vector-convert',reason:'读取并导出矢量数据',requireTools:false}:null;
   }
   if(onFailure&&name==='data_input_read')return{id:'gis-import',reason:'读取当前数据范围',requireTools:false};
   return null;

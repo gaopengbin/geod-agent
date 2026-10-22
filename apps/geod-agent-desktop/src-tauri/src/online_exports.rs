@@ -10,10 +10,24 @@ use tokio::io::AsyncWriteExt;
 fn default_max()->usize{10_000}
 fn default_page()->usize{500}
 fn default_outputs()->Vec<String>{vec!["geojson".into(),"gpkg".into()]}
+fn is_false(value:&bool)->bool{!*value}
+
+#[cfg(test)]mod compatibility_tests{
+    use super::*;
+    #[test]fn old_online_request_fingerprints_do_not_change_when_optional_export_capabilities_are_added(){
+        let old=json!({"sourceUrl":"https://example.org/features.geojson","onlineConnectionId":null,"connectionRevision":null,"layer":null,"sourceCrs":null,"targetCrs":"EPSG:4326","bounds":null,"boundary":null,"maxFeatures":10000,"pageSize":500,"outputs":["geojson","gpkg"]});
+        let spec:OnlineSpec=serde_json::from_value(old.clone()).unwrap();let encoded=serde_json::to_value(&spec).unwrap();assert_eq!(old,encoded);
+        assert!(spec.validate().is_ok());
+        let mut invalid=spec;invalid.source_boundary_id=Some("unbound-range".into());assert!(invalid.validate().is_err());
+    }
+}
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all="camelCase",deny_unknown_fields)]
 pub(crate) struct OnlineSpec {
+    #[serde(default,skip_serializing_if="Option::is_none")] pub source_boundary_id:Option<String>,
+    #[serde(default,skip_serializing_if="Option::is_none")] pub source_boundary:Option<geod_task_engine::boundary_store::StoredBoundary>,
+    #[serde(default,skip_serializing_if="is_false")] pub dissolve:bool,
     pub source_url:Option<String>,
     pub online_connection_id:Option<String>,
     pub connection_revision:Option<String>,
@@ -37,7 +51,8 @@ impl OnlineSpec {
         Ok(())
     }
     pub(crate) fn validate(&self)->Result<Self,AppError>{
-        if self.source_url.is_some()==self.online_connection_id.is_some() || self.online_connection_id.is_some()!=self.connection_revision.is_some(){return Err(workspace_error("DATA_PLAN_INVALID","请选择已保存的在线连接或公开数据网址"));}
+        if usize::from(self.source_url.is_some())+usize::from(self.online_connection_id.is_some())+usize::from(self.source_boundary_id.is_some())!=1 || self.online_connection_id.is_some()!=self.connection_revision.is_some() || self.source_boundary_id.is_some()!=self.source_boundary.is_some(){return Err(workspace_error("DATA_PLAN_INVALID","请选择已保存范围、在线连接或公开数据网址之一"));}
+        if let Some(source)=&self.source_boundary {if self.source_boundary_id.as_deref()!=Some(source.summary.boundary_id.as_str()){return Err(workspace_error("DATA_PLAN_INVALID","范围快照与来源不一致"));}let mut geometry=source.geometry.clone();geometry.normalize().map_err(|e|workspace_error("DATA_PLAN_INVALID",e.0))?;}
         if let Some(url)=&self.source_url{online_inputs::public_url(url)?;}
         if self.layer.as_ref().is_some_and(|v|v.trim().is_empty()||v.len()>256||v.chars().any(char::is_control))||self.source_crs.as_ref().is_some_and(|v|v.len()>128||v.chars().any(char::is_control)){return Err(workspace_error("DATA_PLAN_INVALID","在线图层或坐标系无效"));}
         let mut result=self.clone();
@@ -84,10 +99,13 @@ pub(crate) async fn run(app:AppHandle,owner:String,spec:&OnlineSpec,output:&Path
     let parent=output.parent().ok_or("成果目录无效")?.canonicalize().map_err(|_|"工作区不可用")?;
     if output.exists(){return Err("成果目录已存在，未覆盖原文件".into());}
     report("downloading",0,0,0);
-    let retrieved=tokio::select!{
+    let retrieved=if let Some(source)=&spec.source_boundary {
+        let collection=json!({"type":"FeatureCollection","features":[{"type":"Feature","properties":{"name":source.summary.name,"sourceBoundaryId":source.summary.boundary_id},"geometry":{"type":"MultiPolygon","coordinates":source.geometry.polygons}}]});
+        ("boundary.geojson".into(),serde_json::to_vec(&collection).map_err(|_|"范围快照不可读")?,json!({"featureCount":1,"protocol":"saved-boundary","sourceName":source.summary.name,"complete":true}))
+    }else{tokio::select!{
         value=online_inputs::read_bound(&app,owner,spec.source_url.clone(),spec.online_connection_id.clone(),spec.connection_revision.clone().unwrap_or_default(),spec.layer.as_deref(),online_inputs::ReadOptions{bounds:spec.bounds,max_features:Some(spec.max_features),page_size:Some(spec.page_size)})=>value.map_err(|e|e.message)?,
         _=cancelled(cancel.clone())=>return Err("任务已取消".into()),
-    };
+    }};
     let (name,bytes,info)=retrieved;
     let extension=Path::new(&name).extension().and_then(|s|s.to_str()).unwrap_or("").to_ascii_lowercase();
     if !["json","geojson","gml"].contains(&extension.as_str()){return Err("在线下载当前支持 GeoJSON、ArcGIS 要素和 WFS GML；其他文件请从数据输入导入".into());}
@@ -99,7 +117,7 @@ pub(crate) async fn run(app:AppHandle,owner:String,spec:&OnlineSpec,output:&Path
         fs::write(&source,&bytes).map_err(|_|"在线数据暂存失败")?;
         let total=info["featureCount"].as_u64().unwrap_or(0);
         report(if spec.target_crs.as_deref().is_some_and(|c|c!="EPSG:4326"){"reprojecting"}else{"packaging"},0,total,bytes.len() as u64);
-        let mut manifest=worker(json!({"inputPath":source,"directory":stage,"sourceCrs":spec.source_crs,"targetCrs":spec.target_crs,"storageLayer":if info["remoteLayer"]==true{Value::Null}else{json!(spec.layer)},"maxFeatures":spec.max_features,"expectedFeatures":info["featureCount"],"bounds":spec.bounds,"boundary":spec.boundary,"outputs":spec.outputs}),cancel.clone()).await?;
+        let mut manifest=worker(json!({"inputPath":source,"directory":stage,"sourceCrs":spec.source_crs,"targetCrs":spec.target_crs,"storageLayer":if info["remoteLayer"]==true{Value::Null}else{json!(spec.layer)},"maxFeatures":spec.max_features,"expectedFeatures":info["featureCount"],"bounds":spec.bounds,"boundary":spec.boundary,"outputs":spec.outputs,"dissolve":spec.dissolve}),cancel.clone()).await?;
         fs::remove_file(source).map_err(|_|"暂存数据清理失败")?;
         manifest["schemaVersion"]=json!(1);manifest["kind"]=json!("online");manifest["planHash"]=json!(plan_hash);manifest["sourceFingerprint"]=json!(spec.fingerprint()?);
         manifest["createdAt"]=json!(chrono::Utc::now().to_rfc3339());manifest["protocol"]=info["protocol"].clone();manifest["sourceLayer"]=info["sourceLayer"].clone();manifest["sourceName"]=info["sourceName"].clone();manifest["complete"]=info["complete"].clone();manifest["failures"]=json!([]);

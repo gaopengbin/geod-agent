@@ -351,14 +351,18 @@ fn task_hash(
     Ok(format!("{:x}",Sha256::digest(serde_json::to_vec(&json!({"owner":owner,"conversation":conversation,"title":title,"request":request,"outputDir":output,"workspace":root})).map_err(storage_error)?)))
 }
 
-// Model retries receive new call IDs. Reuse only an identical, still-unapproved
-// proposal in the same account, conversation and physical workspace.
-fn reusable_pending(db:&Connection, owner:&str, conversation:&str, root:&str, title:&str, request:&DataRequest)->Result<Option<DataTask>,AppError>{
+// Call IDs and display titles are not task identity. Deserialize old requests
+// before comparing so newly introduced default fields cannot duplicate plans.
+fn reusable_pending(db:&Connection, owner:&str, conversation:&str, root:&str, _title:&str, request:&DataRequest)->Result<Option<DataTask>,AppError>{
     let serialized=serde_json::to_string(request).map_err(storage_error)?;
-    let mut q=db.prepare(&format!("{SELECT} WHERE owner_id=?1 AND conversation_id=?2 AND status='pending' AND title=?3 AND request_json=?4 AND NOT EXISTS(SELECT 1 FROM data_task_visibility v WHERE v.task_id=data_download_tasks.id) ORDER BY created_at DESC")).map_err(storage_error)?;
-    for task in q.query_map(params![owner,conversation,title,serialized],row).map_err(storage_error)? {
+    let mut q=db.prepare(&format!("{SELECT} WHERE owner_id=?1 AND conversation_id=?2 AND status IN ('pending','queued','downloading','verifying','completed','partial','failed','interrupted') AND NOT EXISTS(SELECT 1 FROM data_task_visibility v WHERE v.task_id=data_download_tasks.id) ORDER BY created_at DESC")).map_err(storage_error)?;
+    for task in q.query_map(params![owner,conversation],row).map_err(storage_error)? {
         let task=task.map_err(storage_error)?;
-        if check_binding(db,&task,root).is_ok(){return Ok(Some(task));}
+        if serde_json::to_string(&task.request).map_err(storage_error)?!=serialized{continue;}
+        if check_binding(db,&task,root).is_ok(){
+            if task.status=="completed" && verified_files(&task).is_err(){continue;}
+            return Ok(Some(task));
+        }
     }
     Ok(None)
 }
@@ -421,7 +425,12 @@ pub(crate) fn data_download_plan(
             spec.connection_revision = Some(connection.revision);
         }
     }
-    if let DataRequest::Online(spec)=&mut request{spec.bind(&app,&owner)?;}
+    if let DataRequest::Online(spec)=&mut request{
+        // Caller snapshots cannot replace the actual conversation-bound source.
+        spec.source_boundary=if let Some(id)=&spec.source_boundary_id {Some(crate::boundary_inputs::boundaries_get(state.clone(),conversation_id.clone(),id.clone())?)}else{None};
+        if spec.source_boundary.is_some(){spec.source_crs=Some("EPSG:4326".into());}
+        spec.bind(&app,&owner)?;
+    }
     let (request, total) = request.validate()?;
     let mut connection = open_data_db(&state.db_path)?;
     let transaction = connection
@@ -576,12 +585,6 @@ fn start(
 ) -> Result<DataTask, AppError> {
     let workspace = read_workspace(app, state, services, conversation)?;
     let owner = owner(services)?;
-    if automatic && workspace.permission != WorkspacePermission::FullAccess {
-        return Err(workspace_error(
-            "APPROVAL_REQUIRED",
-            "当前工作区要求在任务卡片确认下载计划",
-        ));
-    }
     let db = open_data_db(&state.db_path)?;
     let task = get(&db, &owner, conversation, id)?;
     check_binding(&db, &task, &workspace.directory)?;
@@ -608,6 +611,9 @@ fn start(
     if task.cleaned {return Err(workspace_error("DATA_TASK_STATE","任务已清理，请先恢复"));}
     if running.contains_key(id) || matches!(task.status.as_str(), "completed" | "partial") {
         return Ok(task);
+    }
+    if automatic && workspace.permission != WorkspacePermission::FullAccess {
+        return Err(workspace_error("APPROVAL_REQUIRED","当前工作区要求在任务卡片确认下载计划"));
     }
     if !matches!(
         task.status.as_str(),
@@ -1069,6 +1075,7 @@ mod tests {
         db.execute("UPDATE data_download_tasks SET workspace_root=?1,output_dir=?2",params![root.path().to_string_lossy(),root.path().join("out").to_string_lossy()]).unwrap();
         let directory=root.path().to_str().unwrap();
         assert_eq!(reusable_pending(&db,"owner","conversation",directory,"区域模型",&request).unwrap().unwrap().id,"task");
+        assert_eq!(reusable_pending(&db,"owner","conversation",directory,"改过名字仍是同一请求",&request).unwrap().unwrap().id,"task");
         assert!(reusable_pending(&db,"other","conversation",directory,"区域模型",&request).unwrap().is_none());
         assert!(reusable_pending(&db,"owner","other",directory,"区域模型",&request).unwrap().is_none());
         let elsewhere=tempfile::tempdir().unwrap();

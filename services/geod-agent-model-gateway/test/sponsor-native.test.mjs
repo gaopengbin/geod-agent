@@ -73,7 +73,7 @@ for(const protocol of ['chatCompletions','responses','anthropic','gemini'])test(
     const second=await send('protocol-next-generation',{...request,input:[...request.input,...history,{type:'function_call_output',call_id:'call_native',output:'真实值42'}]});assert.equal(second.at(-1).value.result.content,'实际文件值 42');assert.equal(requests.length,2);
     const usage=await(await fetch(base+'/api/agent/usage',{headers})).json();assert.equal(usage.committedTokens,0);
     const updated=await(await fetch(base+'/api/agent/sponsors',{headers})).json();assert.equal(updated.sponsors[0].usage.committedTokens,220);
-    bad='missingUsage';const missing=await send('protocol-missing-usage',request);assert.equal(missing.at(-1).value.state,'pending_reconcile');assert.equal((await(await fetch(base+'/api/agent/sponsors',{headers})).json()).sponsors[0].usage.committedTokens,220);
-    if(protocol==='responses'){bad='undeclared';round=0;const invalid=await send('protocol-undeclared-tool',request);assert.equal(invalid.at(-1).value.state,'pending_reconcile');assert.equal(invalid.at(-1).value.result,null);}
+    bad='missingUsage';const missing=await send('protocol-missing-usage',request);assert.equal(missing.at(-1).value.state,'failed');assert(missing.at(-1).value.upstreamDiagnostic.protocol);assert.equal((await(await fetch(base+'/api/agent/sponsors',{headers})).json()).sponsors[0].usage.committedTokens,220);
+    if(protocol==='responses'){bad='undeclared';round=0;const invalid=await send('protocol-undeclared-tool',request);assert.equal(invalid.at(-1).value.state,'failed');assert.equal(invalid.at(-1).value.result,null);}
   }finally{if(gateway)await close(gateway);await close(upstream);await close(identity);rmSync(folder,{recursive:true,force:true});}
 });

@@ -411,9 +411,9 @@ pub(crate) async fn execute(
                     spec["boundary"] = json!(b.geometry);
                 }
                 json!({"kind":"tiles3d","spec":spec})
-            } else if kind=="online"{
+            } else if kind=="online"||kind=="boundary"{
                 let mut spec=json!({"outputs":a.get("outputFormats").cloned().unwrap_or(json!(["geojson","gpkg"])),"maxFeatures":a.get("maxFeatures").cloned().unwrap_or(json!(10000)),"pageSize":a.get("pageSize").cloned().unwrap_or(json!(500))});
-                for key in ["sourceUrl","onlineConnectionId","layer","sourceCrs","targetCrs"]{if let Some(value)=a.get(key){spec[key]=value.clone();}}
+                for key in ["sourceUrl","onlineConnectionId","layer","sourceCrs","targetCrs","sourceBoundaryId","dissolve"]{if let Some(value)=a.get(key){spec[key]=value.clone();}}
                 if !bounds.is_null(){spec["bounds"]=bounds.clone();}
                 if let Some(b)=&boundary{spec["boundary"]=json!(b.geometry);}
                 json!({"kind":"online","spec":spec})
@@ -455,7 +455,7 @@ pub(crate) async fn execute(
             let mut result = compact_data(&task);
             result["permission"] = json!(workspace.permission);
             result["requiresPlanConfirmation"] =
-                json!(workspace.permission != crate::WorkspacePermission::FullAccess);
+                json!(matches!(task.status.as_str(),"pending"|"failed"|"cancelled"|"interrupted") && workspace.permission != crate::WorkspacePermission::FullAccess);
             result["bounds"] = bounds;
             Ok(result)
         }

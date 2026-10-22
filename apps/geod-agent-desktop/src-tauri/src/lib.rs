@@ -535,7 +535,9 @@ async fn us_county_boundary(
     } else {
         county_name.trim().to_string()
     };
-    let query = format!("STATE='{}' AND BASENAME='{}'", state_fips, county);
+    // Census exposes both a short BASENAME and the official NAME including
+    // County/Parish/Borough. Accept either instead of forcing model retries.
+    let query = format!("STATE='{}' AND (BASENAME='{}' OR NAME='{}')", state_fips, county, county);
     let target = "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/State_County/MapServer/11/query";
     let proxy = network::proxy_for(target)
         .map_err(|cause| workspace_error("NETWORK_SETTINGS_ERROR", cause))?;

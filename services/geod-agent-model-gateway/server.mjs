@@ -17,7 +17,7 @@ import {createPaymentHostCandidate,readPaymentHostConfig} from './payment-host-c
 import {readWelcomeCreditPolicy} from './welcome-credit-policy.mjs';
 import {creditWalletEnforced} from './payment-host-candidate.mjs';
 import {PaymentError} from './alipay-payment-candidate.mjs';
-import {upstreamDiagnostic} from '../../packages/codex-protocol/upstream-diagnostics.mjs';
+import {upstreamDiagnostic,protocolDiagnostic} from '../../packages/codex-protocol/upstream-diagnostics.mjs';
 
 const TOOL_NAMES = new Set(["data_connection_connect", "data_layer_inspect", "data_input_read", "data_connections_list", "workspace_status", "workspace_boundaries_list", "workspace_boundary_use", "workspace_gis_files_list", "workspace_skills_list", "workspace_skill_import", "sources_list", "source_configure", "source_registration_prepare", "us_county_boundary", "plan_imagery", "plans_get", "jobs_list", "jobs_start", "jobs_get", "jobs_events", "artifacts_inspect", "extensions_list", "skill_read", "skill_catalog_search", "skill_source_inspect", "skill_connect", "mcp_registry_search", "mcp_connect", "gdal_connect", "mcp_call", "mcp_result_read"]);
 const CORE_TOOLS = [
@@ -174,7 +174,8 @@ async function collectStream(upstream, onContent, onTool, { codex = false, onRea
     }
     if (buffer.length > 100_000) throw new Error("Upstream event too large");
   }
-  if (!done || !Number.isSafeInteger(usage?.prompt_tokens) || usage.prompt_tokens < 0 || !Number.isSafeInteger(usage?.completion_tokens) || usage.completion_tokens < 0) throw new Error("Incomplete upstream stream");
+  if(!done)throw Object.assign(new Error('Incomplete upstream stream'),{code:'PROVIDER_STREAM_INCOMPLETE',upstreamRequestId:upstreamId});
+  if(!Number.isSafeInteger(usage?.prompt_tokens)||usage.prompt_tokens<0||!Number.isSafeInteger(usage?.completion_tokens)||usage.completion_tokens<0)throw Object.assign(new Error('Invalid upstream usage'),{code:'INVALID_USAGE_OR_MESSAGE',upstreamRequestId:upstreamId});
   return { id: upstreamId, usage, choices: [{ finish_reason: finishReason, message: { content: content || null, ...(codex ? { reasoning_content: reasoning || null } : {}), tool_calls: [...calls.entries()].sort((a, b) => a[0] - b[0]).map(([, call]) => call) } }] };
 }
 async function readJson(request, maxBytes = 196_608) {
@@ -368,10 +369,11 @@ export function createGatewayServer(config, { fetchImpl = fetch } = {}) {
          }catch(error){
            if(error.diagnostic)ledger.recordDiagnostic(userId,body.generationId,error.diagnostic);
            if(error.code==='PROVIDER_HTTP_ERROR'&&error.status<500){ledger.fail(userId,body.generationId,'UPSTREAM_REJECTED',error.diagnostic);return respond(ledger.get(userId,body.generationId));}
+           if(error.code?.startsWith('PROVIDER_STREAM')||error.code?.startsWith('CODEX_'))return respond(ledger.fail(userId,body.generationId,'UPSTREAM_MALFORMED',error.diagnostic??protocolDiagnostic(null,{}, {stage:'provider_result',code:error.code})));
            return respond(ledger.pending(userId,body.generationId,error.code?.startsWith('PROVIDER_STREAM')||error.code?.startsWith('CODEX_')?'UPSTREAM_MALFORMED':'UPSTREAM_UNKNOWN'),202);
          }
-         if(generated.result.toolCalls.some(call=>![...contract.definitions.values()].some(definition=>definition.name===call.function.name&&(definition.namespace??null)===(call.namespace??null)&&definition.custom===!!call.custom)))return respond(ledger.pending(userId,body.generationId,'UPSTREAM_INVALID_TOOL'),202);
-         if(!generated.usageKnown)return respond(ledger.pending(userId,body.generationId,'UPSTREAM_MALFORMED'),202);
+         if(generated.result.toolCalls.some(call=>![...contract.definitions.values()].some(definition=>definition.name===call.function.name&&(definition.namespace??null)===(call.namespace??null)&&definition.custom===!!call.custom)))return respond(ledger.fail(userId,body.generationId,'UPSTREAM_INVALID_TOOL',protocolDiagnostic(null,{}, {stage:'tool_contract',code:'INVALID_TOOL_CONTRACT'})));
+         if(!generated.usageKnown)return respond(ledger.fail(userId,body.generationId,'UPSTREAM_MALFORMED',protocolDiagnostic(null,{}, {stage:'provider_result',code:'INVALID_USAGE_OR_MESSAGE'})));
          return respond(ledger.settle(userId,body.generationId,generated.inputTokens,generated.outputTokens,typeof generated.id==='string'?generated.id:null,generated.result,{
            cachedInputTokens:generated.cachedInputTokens,reasoningTokens:generated.reasoningTokens,upstreamModel:generated.model??selectedModel,
          }));
@@ -401,18 +403,20 @@ export function createGatewayServer(config, { fetchImpl = fetch } = {}) {
       try { payload = live
         ? await collectStream(upstream, fragment => streamEvent(response, "content_delta", { text: fragment }), (name, index) => streamEvent(response, "tool_start", { name, index }), { codex, onReasoning: text => streamEvent(response, "reasoning_delta", { text }) })
         : await upstream.json(); }
-      catch {
-        return respond(ledger.pending(userId, body.generationId, "UPSTREAM_MALFORMED"), 202);
+      catch(error) {
+        // Absorb provider uncertainty for unusable results; no valid tool
+        // proposal was delivered and the customer's hold must be released.
+        return respond(ledger.fail(userId,body.generationId,'UPSTREAM_MALFORMED',protocolDiagnostic(upstream,upstreamBody,{stage:'stream_parse',code:error.code??'PROVIDER_STREAM_INVALID',payload:{id:error.upstreamRequestId}})));
       }
       const usage = payload?.usage;
       const message = payload?.choices?.[0]?.message;
       if (!Number.isSafeInteger(usage?.prompt_tokens) || usage.prompt_tokens < 0 || !Number.isSafeInteger(usage?.completion_tokens) || usage.completion_tokens < 0 || !message || !(typeof message.content === "string" || message.content === null)) {
-        return respond(ledger.pending(userId, body.generationId, "UPSTREAM_MALFORMED"), 202);
+        return respond(ledger.fail(userId,body.generationId,'UPSTREAM_MALFORMED',protocolDiagnostic(upstream,upstreamBody,{stage:'message_shape',code:'INVALID_USAGE_OR_MESSAGE',payload})));
       }
       const toolCalls = Array.isArray(message.tool_calls) ? message.tool_calls.filter(call => validId(call.id) && call.type === "function" && TOOL_NAMES.has(call.function?.name) && typeof call.function.arguments === "string").slice(0, 4) : [];
       let result;
       try { result = codex ? codexResult(message, contract.definitions, {finishReason:payload.choices?.[0]?.finish_reason}) : { role: "assistant", content: typeof message.content === "string" ? message.content.slice(0, 16000) : null, toolCalls }; }
-      catch { return respond(ledger.pending(userId, body.generationId, "UPSTREAM_INVALID_TOOL"), 202); }
+      catch(error) { return respond(ledger.fail(userId,body.generationId,'UPSTREAM_INVALID_TOOL',protocolDiagnostic(upstream,upstreamBody,{stage:'tool_contract',code:error.code??'INVALID_TOOL_CONTRACT',payload}))); }
       if (codex) result.usage = { cachedInputTokens: usage.prompt_cache_hit_tokens ?? usage.prompt_tokens_details?.cached_tokens ?? 0, reasoningTokens: usage.completion_tokens_details?.reasoning_tokens ?? 0 };
       const settled = ledger.settle(userId, body.generationId, usage.prompt_tokens, usage.completion_tokens, typeof payload.id === "string" ? payload.id : null, result, {
         cachedInputTokens: usage.prompt_cache_hit_tokens ?? usage.prompt_tokens_details?.cached_tokens,

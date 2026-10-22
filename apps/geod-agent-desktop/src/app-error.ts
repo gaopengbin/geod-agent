@@ -29,6 +29,9 @@ export function runtimeUpdateError() {
 }
 
 const messages: Record<string, string> = {
+  UPSTREAM_INVALID_TOOL: "模型返回的工具调用无效，本次请求未扣费，可以保留任务状态后重试。",
+  UPSTREAM_MALFORMED: "模型返回不完整或格式异常，本次请求未扣费，可以保留任务状态后重试。",
+  UNUSABLE_RESULT_WAIVED: "这次异常模型请求已免扣费，预留额度已释放，可以继续原任务。",
   PLAN_STALE: "计划已过期或图源配置已变化，请重新生成计划。",
   PLAN_NOT_FOUND: "计划不存在，请重新生成计划。",
   DISK_INSUFFICIENT: "保存位置或缓存空间不足，请释放空间后重试。",

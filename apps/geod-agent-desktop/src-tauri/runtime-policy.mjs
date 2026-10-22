@@ -171,7 +171,10 @@ export class RuntimePolicy {
    const native=GEOD_POLICY.nativeConnectors.includes(args.connectorId)&&GEOD_POLICY.tools[args.toolName]?this.descriptor(args.toolName,args.arguments):null;
    return native?{...native,schema:contract?.inputSchema,canonicalTool:args.toolName,canonicalArgs:args.arguments}:{purpose:'mcp:'+args.toolName,resource:args.connectorId,schema:contract?.inputSchema,effect:contract?.annotations?.readOnlyHint===true?'read':contract?.annotations?.idempotentHint===true?'external':'opaque',conditionScope:args.connectorId};
   }
-  const spec=GEOD_POLICY.tools[tool]??{effect:'external',purpose:tool};
+  const spec={...(GEOD_POLICY.tools[tool]??{effect:'external',purpose:tool})};
+  // A denied remote URL must not disable every other data source. Hash the
+  // exact request without exposing service URLs or embedded credentials.
+  if(tool==='data_input_read')spec.conditionScope='data-input:'+hash(args);
   return{...spec,resource:spec.resource?spec.resource.map(k=>args[k]??null):['planId','jobId','taskId','scheduleId','connectionId','boundaryId','sourceId'].filter(k=>args[k]!==undefined).map(k=>args[k]),conditionScope:spec.conditionScope??spec.purpose??tool};
  }
  failureScope(failure,desc){return failure.category==='business'?hash([desc.conditionScope,desc.resource]):['parameter','capability','internal'].includes(failure.category)?hash([desc.conditionScope,desc.purpose]):String(desc.conditionScope);}
@@ -231,7 +234,7 @@ export class RuntimePolicy {
   const unknown=Object.values(this.state.operations).find(op=>op.state==='unknown'&&op.tool===canonicalTool&&op.argsHash===hash(canonicalArgs));
   if(unknown)return error('OPERATION_RECONCILIATION_REQUIRED','A previous submission with these arguments has an unknown outcome; reconcile its native receipt first.',{operationId:unknown.id});
   if(desc.effect!=='read'&&desc.effect!=='interactive'&&prior){
-   if(desc.effect!=='opaque'&&prior.state==='succeeded'&&(!prior.expiresAt||prior.expiresAt>this.now())){this.state.metrics.reused++;this.audit('operation-reused',{tool,operationId:prior.id});return rewrap(prior.resultRef?JSON.parse(readFileSync(join(this.results,prior.resultRef),'utf8')):clean(prior.result));}
+   if(canonicalTool!=='data_download_plan'&&desc.effect!=='opaque'&&prior.state==='succeeded'&&(!prior.expiresAt||prior.expiresAt>this.now())){this.state.metrics.reused++;this.audit('operation-reused',{tool,operationId:prior.id});return rewrap(prior.resultRef?JSON.parse(readFileSync(join(this.results,prior.resultRef),'utf8')):clean(prior.result));}
    if(['pending','unknown'].includes(prior.state))return error('OPERATION_RECONCILIATION_REQUIRED','The previous submission may have taken effect. Read its native status/receipt before resubmitting.',{operationId:prior.id});
   }
   if(tool==='ask_user'){
@@ -280,13 +283,22 @@ export class RuntimePolicy {
     if(desc.effect!=='read'&&desc.effect!=='interactive'){operation.resultRef=operationKey+'.json';const destination=join(this.results,operation.resultRef),temporary=destination+'.tmp';writeFileSync(temporary,JSON.stringify(unwrap(result)));renameSync(temporary,destination);}
     if(tool==='extensions_list'&&(!args.query||/workflow|runtime_workflow|步骤|验收|交付/i.test(args.query)))result={...result,connectors:[...(result?.connectors??[]),{connectorId:'builtin-runtime-workflow',name:'任务步骤与验收',enabled:true,availableTools:WORKFLOW_TOOLS.map(t=>t.function.name),tools:args.query?WORKFLOW_TOOLS.map(t=>({name:t.function.name,description:t.function.description,inputSchema:t.function.parameters})):[]}]};
     this.learn(tool,args,result);
+    if(tool==='extensions_list'&&/boundar|行政|范围|矢量|vector|geojson|gpkg|geopackage|export|导出/i.test(args.query??'')){
+     const names=['us_county_boundary','boundaries_list','boundaries_combine','data_download_plan','data_download_start','data_download_inspect'];
+     result={...result,nativeCapabilities:names.filter(name=>this.schemas.has(name)).map(name=>({name,parameters:this.schemas.get(name)})),nativeExportRoute:{tool:'data_download_plan',kind:'boundary',sourceBoundaryId:'actual saved boundary ID',outputFormats:['gpkg'],dissolve:true,source:'saved native geometry, no remote layer URL needed',runtime:'managed GIS component; no system Python/Conda/ogr2ogr installation required'}};
+    }
     const evidenceHash=hash([desc.purpose,desc.resource,result]);
     const seen=Object.values(this.state.evidence).some(e=>e.fingerprint===evidenceHash);
     // Only adapter-defined result fields count as verified completion evidence.
     const verified=completionEvidence(canonicalTool,canonicalArgs,unwrap(result));
     const evidenceId=hash([goalId,evidenceHash]),nativeResult=unwrap(result);this.state.evidence[evidenceId]={id:evidenceId,goalId,tool,fingerprint:evidenceHash,resourceIds:[nativeResult?.jobId,nativeResult?.taskId].filter(Boolean),verified,summary:bounded(result,600),source:'tool-receipt'};
      this.registerResource(canonicalTool,nativeResult,evidenceId,verified);
-    if(!seen){this.state.stagnation=0;}else if(desc.effect==='read'&&!desc.wait)this.noProgress(tool,'UNCHANGED_RESULT');
+    if(tool==='runtime_tools_search'&&result.discoveryFingerprint){
+     this.state.discoveryPages??={};const known=this.state.discoveryPages[result.discoveryFingerprint];
+     if(known&&!result.newlyActivated?.length){result={...result,reusedDiscovery:true,previousQueries:known.queries,note:result.note+' This capability page is unchanged; follow capabilityRoutes or the next page instead of rephrasing the same search.'};this.noProgress(tool,'UNCHANGED_DISCOVERY','discovery:'+result.discoveryFingerprint);}
+     else if(!seen)this.state.stagnation=0;
+     this.state.discoveryPages[result.discoveryFingerprint]={queries:(known?.queries??0)+1};
+    }else if(!seen){this.state.stagnation=0;}else if(desc.effect==='read'&&!desc.wait)this.noProgress(tool,'UNCHANGED_RESULT');
     for(const [key,f]of Object.entries(this.state.failures))if(f.scope===String(desc.conditionScope))delete this.state.failures[key];
    }
    if(discovery&&operation.state==='succeeded'){
