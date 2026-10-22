@@ -9,6 +9,7 @@ import {createPaymentCandidateHandler} from './payment-http-candidate.mjs';
 import {pricingCandidate} from './pricing-candidate.mjs';
 import {handleCreditHistory} from './credit-history.mjs';
 import {monthlyPlanPolicy,monthlyPlanPreview,isMonthlyTier} from './monthly-plans.mjs';
+import {defaultSponsorInfo} from './default-sponsor.mjs';
 
 export function paymentCatalogueDigest(products=paymentProductsCandidate){
   if(!Array.isArray(products)||!products.length)throw new PaymentError('PAYMENT_CONFIG_INVALID','Server catalogue required');
@@ -65,7 +66,8 @@ export function createPaymentHostCandidate(config,modelLedger,authenticate){
     ...(options?.products?{products:options.products}:{}),loadGeneration:(account,id)=>modelLedger.get(account,id)}):null;
   const checkoutAllowed=account=>!options?.checkoutAccounts||options.checkoutAccounts.includes(account);
   const status=account=>({candidate:true,checkoutEnabled:!!provider&&checkoutAllowed(account),environment:provider?.environment??(ledger?'credits-only':'disabled'),fixture:provider?.fixture??false,
-    billingMode:enforced?'prepaid':config.quotaEnforced===false?'unlimited-test':'token-quota',
+    billingMode:defaultSponsorInfo(config,account)?'unlimited-test':enforced?'prepaid':config.quotaEnforced===false?'unlimited-test':'token-quota',
+    ...(defaultSponsorInfo(config,account)?{hostedCampaign:defaultSponsorInfo(config,account)}:{}),
     pricingVersion:pricingCandidate.version,pricesApproved:options?.catalogueApproved===true,
     catalogueSha256:ledger&&!provider?null:paymentCatalogueDigest(ledger?.products()??paymentProductsCandidate),
     welcomeCreditEnabled:!!welcomeCredit,welcomeCreditStatus:ledger?.welcomeStatus()??null,creditHistoryEnabled:!!ledger,paymentHistoryEnabled:!!ledger,

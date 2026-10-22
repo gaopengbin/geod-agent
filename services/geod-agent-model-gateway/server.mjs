@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 import { openLedger } from "./ledger.mjs";
 import {readSponsors,sponsorCatalogue,sponsorRoute,sponsorReservation,SponsorError} from './sponsors.mjs';
+import {readDefaultSponsor,defaultSponsorRoute,defaultSponsorInfo} from './default-sponsor.mjs';
 import { openEventStore, validateEvents } from "./events-store.mjs";
 import { openActivityStore, validateActivity } from "./activity-store.mjs";
 import { MessageError, openMessageStore } from "./messages-store.mjs";
@@ -102,6 +103,7 @@ export function readConfig(env = process.env) {
   if (!Number.isSafeInteger(contextWindow) || contextWindow < 16000 || contextWindow > 1000000 || !Number.isSafeInteger(maxOutputTokens) || maxOutputTokens < 256 || maxOutputTokens > 32768 || maxOutputTokens >= contextWindow || !["enabled", "disabled"].includes(codexThinking)) throw new Error("Codex model capabilities are invalid");
   const payment=readPaymentHostConfig(env);
   const welcomeCredit=readWelcomeCreditPolicy(env,{quotaEnforced:quotaMode==='enforced',payment});
+  const sponsors=readSponsors(env),defaultSponsor=readDefaultSponsor(env,sponsors);
   return {
     host, port, secret, apiKey, model,
     identityOrigin: safeUrl(env.GEOD_IDENTITY_ORIGIN, "GEOD_IDENTITY_ORIGIN"),
@@ -109,7 +111,7 @@ export function readConfig(env = process.env) {
     dbPath: resolve(env.GEOD_AGENT_DB_PATH || "./data/agent-model.sqlite"),
     tokenLimit,
     quotaEnforced: quotaMode === "enforced",
-    contextWindow, maxOutputTokens, codexThinking,sponsors:readSponsors(env),payment,welcomeCredit,
+    contextWindow, maxOutputTokens, codexThinking,sponsors,defaultSponsor,payment,welcomeCredit,
   };
 }
 function json(response, status, value) {
@@ -306,6 +308,7 @@ export function createGatewayServer(config, { fetchImpl = fetch } = {}) {
         protocol: "geod-codex-v1", model: config.model, provider: "DeepSeek", contextWindow: config.contextWindow,downloadEventDetails:1,agentActivityEvents:1,
         contextWindowSource: "gatewayConfigured", maxOutputTokens: config.maxOutputTokens,
         reasoning: config.codexThinking === "enabled", inputModalities: ["text"], requestMaxBytes: 4_000_000,
+        ...(defaultSponsorInfo(config,userId)??{}),
       });
       const match = url.pathname.match(/^\/api\/agent\/generations\/([A-Za-z0-9_-]{8,80})$/);
       if (request.method === "GET" && match) {
@@ -318,7 +321,7 @@ export function createGatewayServer(config, { fetchImpl = fetch } = {}) {
       const body = await readJson(request, codex ? 48_000_000 : 196_608);
       if (!validId(body?.generationId) || !validId(body?.conversationId)) throw new HttpError(400, "INVALID_GENERATION");
       const contract = codex ? codexRequest(body.request) : null;
-      const sponsored=sponsorRoute(config.sponsors??[],body.sponsor,userId);
+      const sponsored=body.sponsor!=null?sponsorRoute(config.sponsors??[],body.sponsor,userId):(codex?defaultSponsorRoute(config,userId):null);
       if(sponsored&&!codex)throw new SponsorError(400,'SPONSOR_CODEX_REQUIRED');
        if(sponsored&&contract?.hasImages&&!sponsored.model.inputModalities.includes('image'))throw new SponsorError(400,'SPONSOR_IMAGE_UNSUPPORTED');
        if(!sponsored&&contract?.hasImages&&config.model!=="deepseek-flash")throw new HttpError(400,"MODEL_IMAGE_UNSUPPORTED");
