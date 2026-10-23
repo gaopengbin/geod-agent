@@ -48,35 +48,62 @@ pub struct ServiceConfig {
 struct Flow {
     pending: bool,
     error: Option<String>,
+    generation: u64,
 }
+// First-time email registration can outlast the old two-minute callback window.
+const AUTH_WAIT_TIMEOUT: Duration = Duration::from_secs(10 * 60);
 #[derive(Debug)]
 struct FlowReservation {
     flow: Arc<Mutex<Flow>>,
+    generation: u64,
     transferred: bool,
 }
 impl FlowReservation {
     fn acquire(flow: &Arc<Mutex<Flow>>) -> Result<Self, ServiceError> {
+        Self::start(flow, false)
+    }
+
+    fn start(flow: &Arc<Mutex<Flow>>, replace: bool) -> Result<Self, ServiceError> {
         let mut current = flow.lock().expect("flow mutex poisoned");
-        if current.pending {
+        if current.pending && !replace {
             return Err(error("AUTH_IN_PROGRESS", "GeoD 登录流程已在进行"));
         }
+        current.generation = current.generation.wrapping_add(1);
         current.pending = true;
         current.error = None;
         Ok(Self {
             flow: Arc::clone(flow),
+            generation: current.generation,
             transferred: false,
         })
     }
 
     fn fail(&mut self, message: &str) {
         let mut current = self.flow.lock().expect("flow mutex poisoned");
-        current.pending = false;
-        current.error = Some(message.into());
+        if current.generation == self.generation {
+            current.pending = false;
+            current.error = Some(message.into());
+        }
+        self.transferred = true;
+    }
+
+    fn finish(&mut self) {
+        let mut current = self.flow.lock().expect("flow mutex poisoned");
+        if current.generation == self.generation {
+            current.pending = false;
+            current.error = None;
+        }
         self.transferred = true;
     }
 
     fn transfer(mut self) {
         self.transferred = true;
+    }
+
+    fn ensure_current(&self) -> Result<(), ServiceError> {
+        let current = self.flow.lock().expect("flow mutex poisoned");
+        if current.pending && current.generation == self.generation { return Ok(()); }
+        Err(error("AUTH_SUPERSEDED", "此授权已被新的登录替代，请使用最新打开的授权页面"))
     }
 }
 impl Drop for FlowReservation {
@@ -447,10 +474,16 @@ fn complete_flow(
     config: ServiceConfig,
     flow: Arc<Mutex<Flow>>,
     credential_lock: Arc<Mutex<()>>,
+    generation: u64,
+    wait_timeout: Duration,
 ) {
-    let deadline = Instant::now() + Duration::from_secs(120);
-    let mut completed = false;
+    let deadline = Instant::now() + wait_timeout;
+    let mut reservation = FlowReservation { flow: Arc::clone(&flow), generation, transferred: false };
     while Instant::now() < deadline {
+        {
+            let current = flow.lock().expect("flow mutex poisoned");
+            if !current.pending || current.generation != generation { return; }
+        }
         match listener.accept() {
             Ok((mut stream, _)) => {
                 let _ = stream.set_nonblocking(false);
@@ -523,16 +556,14 @@ fn complete_flow(
                         .json()
                         .map_err(|_| error("INVALID_TOKEN_RESPONSE", "身份服务响应无效"))?;
                     let tokens = token_response(value, config.identity_origin.clone())?;
-                    let _guard = credential_lock.lock().expect("credential mutex poisoned");
-                    let _shared = lock_credentials(&config.identity_origin)?;
-                    write_tokens(&tokens)
+                    commit_authorization(&flow, generation, &credential_lock, &tokens)
                 })();
                 send_page(&mut stream, outcome.is_ok());
-                let mut current = flow.lock().expect("flow mutex poisoned");
-                current.pending = false;
-                current.error = outcome.err().map(|error| error.message);
-                completed = true;
-                break;
+                match outcome {
+                    Ok(()) => reservation.finish(),
+                    Err(cause) => reservation.fail(&cause.message),
+                }
+                return;
             }
             Err(ref error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                 thread::sleep(Duration::from_millis(100))
@@ -540,29 +571,55 @@ fn complete_flow(
             Err(_) => break,
         }
     }
-    if !completed {
-        let mut current = flow.lock().expect("flow mutex poisoned");
-        current.pending = false;
-        current.error = Some("登录等待已超时，请重试".into());
+    reservation.fail("登录等待已超时，请点击登录重新发起授权，无需重启软件");
+}
+
+fn commit_authorization(
+    flow: &Arc<Mutex<Flow>>, generation: u64, credential_lock: &Mutex<()>, tokens: &Tokens,
+) -> Result<(), ServiceError> {
+    // Retrying and committing serialize here: a superseded callback must never
+    // replace credentials written by the user's newer browser authorization.
+    let current = flow.lock().expect("flow mutex poisoned");
+    if !current.pending || current.generation != generation {
+        return Err(error("AUTH_SUPERSEDED", "此授权已被新的登录替代，请使用最新打开的授权页面"));
     }
+    let _guard = credential_lock.lock().expect("credential mutex poisoned");
+    let _shared = lock_credentials(&tokens.identity_origin)?;
+    write_tokens(tokens)
 }
 
 #[tauri::command]
 pub fn auth_begin(
     app: AppHandle,
     state: State<'_, ServiceState>,
+    restart: Option<bool>,
 ) -> Result<AuthStatus, ServiceError> {
+    let mut reservation = if restart.unwrap_or(false) {
+        FlowReservation::start(&state.flow, true)?
+    } else {
+        FlowReservation::acquire(&state.flow)?
+    };
     let config = load_config(&state.config_path)?;
-    {
+    let saved = {
         let _guard = state
             .credential_lock
             .lock()
             .expect("credential mutex poisoned");
-        if read_tokens(&config.identity_origin)?.is_some() {
-            return Err(error("AUTH_ACTIVE", "请先退出当前 GeoD 账号"));
+        let _shared = lock_credentials(&config.identity_origin)?;
+        read_tokens(&config.identity_origin)?
+    };
+    // A callback can have completed just before the retry click. Adopt that
+    // account instead of opening a second browser flow or demanding a logout.
+    if saved.is_some() {
+        match authenticated_tokens(&state, &config) {
+            Ok(tokens) => {
+                reservation.finish();
+                return Ok(AuthStatus { state: "connected", user_id: Some(tokens.user_id), error: None });
+            }
+            Err(cause) if matches!(cause.code, "AUTH_EXPIRED" | "AUTH_REQUIRED") => {}
+            Err(cause) => { reservation.fail(&cause.message); return Err(cause); }
         }
     }
-    let mut reservation = FlowReservation::acquire(&state.flow)?;
     if let Err(cause) = ensure_identity_available(&config.identity_origin) {
         reservation.fail(&cause.message);
         return Err(cause);
@@ -598,12 +655,14 @@ pub fn auth_begin(
         .append_pair("code_challenge", &challenge)
         .append_pair("code_challenge_method", "S256")
         .append_pair("state", &nonce);
+    reservation.ensure_current()?;
     if app.opener().open_url(url.as_str(), None::<&str>).is_err() {
         reservation.fail("无法打开系统浏览器");
         return Err(error("BROWSER_UNAVAILABLE", "无法打开系统浏览器"));
     }
     let flow = Arc::clone(&state.flow);
     let credential_lock = Arc::clone(&state.credential_lock);
+    let generation = reservation.generation;
     thread::Builder::new()
         .name("geod-oauth-callback".into())
         .spawn(move || {
@@ -615,6 +674,8 @@ pub fn auth_begin(
                 config,
                 flow,
                 credential_lock,
+                generation,
+                AUTH_WAIT_TIMEOUT,
             )
         })
         .map_err(|_| {
@@ -663,6 +724,10 @@ pub fn auth_logout(app: AppHandle, state: State<'_, ServiceState>) -> Result<Aut
         error: None,
     })
 }
+
+#[cfg(test)]
+#[path = "services/auth_recovery_tests.rs"]
+mod auth_recovery_tests;
 
 #[cfg(test)]
 mod tests {

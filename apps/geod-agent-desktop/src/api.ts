@@ -296,7 +296,7 @@ export const api = {
   artifactRaster: (jobId: string, assetId?: string) => invoke<ArtifactRaster>("artifact_raster", { jobId, assetId }),
   authStatus: () => invoke<AuthStatus>("auth_status"),
   accountProfile: (accountId: string) => invoke<AccountProfile>("account_profile", { accountId }),
-  authBegin: () => invoke<AuthStatus>("auth_begin"),
+  authBegin: (restart = false) => invoke<AuthStatus>("auth_begin", { restart }),
   authLogout: () => invoke<AuthStatus>("auth_logout"),
   agentGenerate: (generationId: string, conversationId: string, messages: AgentMessage[]) => invoke<Generation>("agent_generate", { generationId, conversationId, messages }),
   agentGenerateStream: (generationId: string, conversationId: string, messages: AgentMessage[], onEvent: (event: GenerationStreamEvent) => void) => {

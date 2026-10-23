@@ -4,7 +4,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { pathToFileURL } from "node:url";
 const { chromium } = await import(pathToFileURL("C:/Users/Administrator/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs").href);
-const output = resolve("../../artifacts/login-screen-20261007");
+const output = resolve(process.env.GEOD_LOGIN_TEST_OUTPUT || "../../artifacts/login-recovery-20261023");
 mkdirSync(output, { recursive: true });
 const browser = await chromium.launch({ channel: "msedge", headless: true });
 const page = await browser.newPage({ viewport: { width: 1395, height: 900 } });
@@ -17,7 +17,7 @@ await page.addInitScript(() => {
   localStorage.setItem("geod-agent-language-v1", JSON.stringify({ language: params.get("lang") || "zh-CN", replyLanguage: "auto" }));
   const fixture = window.__LOGIN_FIXTURE__ = {
     status: { state: params.has("saved") ? "connected" : params.has("unconfigured") ? "unconfigured" : "disconnected", userId: params.has("saved") ? "isolated-login-account" : null, error: null },
-    calls: [], unexpected: [], beginError: "", statusError: params.has("offline") ? "暂时无法连接登录服务" : "", statusDelay: 400,
+    calls: [], beginArgs: [], unexpected: [], beginError: "", statusError: params.has("offline") ? "暂时无法连接登录服务" : "", statusDelay: 400,
     profileError: params.has("profileError"), profileDelay: Number(params.get("profileDelay") || 0), profileKind: params.get("avatar") || "preset",
   };
   let callbackId = 0;
@@ -30,6 +30,10 @@ await page.addInitScript(() => {
     invoke: async (command, args) => {
       fixture.calls.push(command);
       if (command === "desktop_tray_locale_set") return;
+      if (["desktop_boot_ready", "download_telemetry_set", "agent_activity_set"].includes(command)) return;
+      if (command === "desktop_runtime_capabilities") return { version: "0.2.11", exportCrs: true, conversationOutputCrs: true, exportOptions: ["targetCrs", "resampling"] };
+      if (command === "extensions_list") return { connectors: [], skills: [] };
+      if (command === "ai_sponsors_refresh") return [];
       if (command === "account_profile") {
         const kind = fixture.profileKind, fail = fixture.profileError, id = args.accountId;
         await new Promise(resolve => setTimeout(resolve, fixture.profileDelay));
@@ -45,6 +49,7 @@ await page.addInitScript(() => {
         return result;
       }
       if (command === "auth_begin") {
+        fixture.beginArgs.push(args);
         await new Promise(resolve => setTimeout(resolve, 200));
         if (fixture.beginError) throw Error(fixture.beginError);
         fixture.status = { state: "waiting", userId: null, error: null };
@@ -56,7 +61,7 @@ await page.addInitScript(() => {
       }
       if (command === "codex_available") return { available: false };
       if (command === "desktop_settings_get") return { updateConfigured: false, automaticUpdateChecks: false };
-      if (["jobs_list", "jobs_active", "boundaries_list", "sources_list", "schedules_runs", "schedules_list", "mcp_requests_pending", "data_download_list"].includes(command)) return [];
+      if (["jobs_list", "jobs_active", "boundaries_list", "sources_list", "schedules_runs", "schedules_list", "mcp_requests_pending", "data_download_list", "imagery_tasks_list"].includes(command)) return [];
       if (command === "workspace_default") return { directory: "G:/isolated-login-fixture" };
       if (command === "workspace_get") return { directory: "G:/isolated-login-fixture", permission: "confirmEach" };
       if (command === "imagery_plans_claim") return { claimed: [], rejected: [] };
@@ -111,6 +116,15 @@ try {
   await page.getByRole("button", { name: "等待浏览器授权…", exact: true }).waitFor();
   assert.equal(await primary.isEnabled(), false);
   assert.equal(await page.evaluate(() => window.__LOGIN_FIXTURE__.calls.filter(c => c === "auth_begin").length), 1);
+  const restart = page.getByRole("button", { name: "重新发起授权", exact: true });
+  await restart.click();
+  await page.evaluate(() => { for (let n = 0; n < 8; n++) document.querySelectorAll(".login-recheck")[1]?.click(); });
+  await restart.waitFor();
+  await page.waitForFunction(() => window.__LOGIN_FIXTURE__.beginArgs.length === 2);
+  assert.equal(await page.evaluate(() => window.__LOGIN_FIXTURE__.beginArgs.at(-1).restart), true);
+  await page.waitForFunction(() => !document.querySelectorAll(".login-recheck")[1]?.disabled);
+  assert.equal(await page.evaluate(() => window.__LOGIN_FIXTURE__.beginArgs.length), 2);
+  checks.push("Waiting authorization can be restarted in place; repeated clicks start only one replacement flow");
   await page.screenshot({ path: join(output, "isolated-waiting.png") });
   await page.evaluate(() => { window.__LOGIN_FIXTURE__.status = { state: "connected", userId: "isolated-login-account", error: null }; });
   await page.locator(".login-screen").waitFor({ state: "hidden" });
@@ -142,6 +156,17 @@ try {
   assert.equal(await primary.isEnabled(), true);
   await page.screenshot({ path: join(output, "isolated-error.png") });
   checks.push("Logout returns to login; browser-open failures and rejected authorization remain visible and retryable");
+
+  await primary.click();
+  await page.getByRole("button", { name: "等待浏览器授权…", exact: true }).waitFor();
+  await page.evaluate(() => { window.__LOGIN_FIXTURE__.status = { state: "disconnected", userId: null, error: "登录等待已超时，请点击登录重新发起授权，无需重启软件" }; });
+  await page.locator(".login-error").getByText("登录等待已超时，请点击登录重新发起授权，无需重启软件", { exact: true }).waitFor();
+  assert.equal(await primary.isEnabled(), true);
+  await primary.click();
+  await page.getByRole("button", { name: "等待浏览器授权…", exact: true }).waitFor();
+  await page.evaluate(() => { window.__LOGIN_FIXTURE__.status = { state: "connected", userId: "isolated-login-account", error: null }; });
+  await page.locator(".workspace").waitFor({ state: "visible" });
+  checks.push("Expired first-time authorization is actionable and a new sign-in enters the workspace without restarting the app");
 
   assert.deepEqual(await page.evaluate(() => window.__LOGIN_FIXTURE__.unexpected), []);
   await page.goto("http://127.0.0.1:1420/?saved=1");

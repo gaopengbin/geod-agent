@@ -21,5 +21,6 @@ export function GeoDLogin({ auth }: { auth: GeoDAuth }) {
     </div>
     {error && <div className="login-error" role="alert"><CircleAlert size={17} aria-hidden="true"/><p>{localize(error)}</p></div>}
     {desktopAvailable && ready && (waiting || error || unavailable) && <Button className="login-recheck" variant="ghost" size="sm" whileHover={undefined} disabled={!!busy} onClick={() => void auth.refresh()}><RefreshCw size={15} aria-hidden="true"/>{t("重新检查登录状态")}</Button>}
+    {desktopAvailable && ready && waiting && <Button className="login-recheck" variant="ghost" size="sm" whileHover={undefined} disabled={!!busy} onClick={() => void auth.restart()}><ExternalLink size={15} aria-hidden="true"/>{t("重新发起授权")}</Button>}
   </>;
 }

@@ -47,20 +47,20 @@ export function useGeoDAuth() {
   useEffect(() => {
     if (!desktopAvailable) return;
     const invalidate = () => void refresh();
-    const focus = () => { if (status.state === "connected") void refresh(); };
+    const focus = () => { if (status.state === "connected" || status.state === "waiting") void refresh(); };
     window.addEventListener(AUTH_INVALIDATED, invalidate);
     window.addEventListener("focus", focus);
     const timer = status.state === "connected" ? window.setInterval(() => void refresh(), 30000) : undefined;
     return () => { window.removeEventListener(AUTH_INVALIDATED, invalidate); window.removeEventListener("focus", focus); if (timer !== undefined) window.clearInterval(timer); };
   }, [status.state, refresh]);
 
-  const run = useCallback(async (action: "login" | "logout") => {
+  const run = useCallback(async (action: "login" | "logout", restart = false) => {
     if (!desktopAvailable || actionPending.current) return false;
     actionPending.current = true;
     const current = ++epoch.current;
     setBusy(action); setError("");
     try {
-      const next = await (action === "login" ? api.authBegin() : api.authLogout());
+      const next = await (action === "login" ? api.authBegin(restart) : api.authLogout());
       if (mounted.current && current === epoch.current) { setStatus(next); setReady(true); }
       return true;
     } catch (cause) {
@@ -72,5 +72,5 @@ export function useGeoDAuth() {
     }
   }, []);
 
-  return { status, ...profile, ready, busy, error, refresh: () => refresh(true), begin: () => run("login"), logout: () => run("logout") };
+  return { status, ...profile, ready, busy, error, refresh: () => refresh(true), begin: () => run("login"), restart: () => run("login", true), logout: () => run("logout") };
 }
