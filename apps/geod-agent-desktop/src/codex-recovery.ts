@@ -42,7 +42,7 @@ export async function inspectCodexCheckpoint(client:Pick<RecoveryClient,'runtime
   const generation=receipt.value!;
   if(generation.generationId!==generationId||generation.conversationId!==conversationId)
     throw new Error('请求记录与当前会话不匹配，无法恢复。');
-  if(!['settled','failed','pending_reconcile'].includes(generation.state))
+  if(!['settled','failed','incomplete','pending_reconcile'].includes(generation.state))
     throw new Error('模型请求仍在处理中，请稍后检查。已完成的本机工具不会自动重复执行。');
   return {billingPending:generation.state==='pending_reconcile'};
 }

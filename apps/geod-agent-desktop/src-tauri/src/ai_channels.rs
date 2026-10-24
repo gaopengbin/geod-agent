@@ -486,8 +486,8 @@ pub(crate) fn ai_channels_list(app: AppHandle) -> Result<Value, ServiceError> {
         )
         .optional()
         .map_err(storage)?;
-    let mut stmt=db.prepare("SELECT json_extract(body,'$.channelId'),json_extract(body,'$.selectedModel'),SUM(json_extract(body,'$.inputTokens')),SUM(json_extract(body,'$.outputTokens')),COUNT(*),SUM(CASE WHEN json_extract(body,'$.usageKnown')=1 THEN 0 ELSE 1 END) FROM generations WHERE owner=? AND json_extract(body,'$.state')='settled' GROUP BY 1,2").map_err(storage)?;
-    let usage=stmt.query_map([&owner],|r|Ok(json!({"channelId":r.get::<_,String>(0)?,"model":r.get::<_,String>(1)?,"inputTokens":r.get::<_,Option<i64>>(2)?,"outputTokens":r.get::<_,Option<i64>>(3)?,"requests":r.get::<_,i64>(4)?,"unknownUsageRequests":r.get::<_,i64>(5)?}))).map_err(storage)?.collect::<rusqlite::Result<Vec<_>>>().map_err(storage)?;
+    let mut stmt=db.prepare("SELECT json_extract(body,'$.channelId'),json_extract(body,'$.selectedModel'),SUM(json_extract(body,'$.inputTokens')),SUM(json_extract(body,'$.outputTokens')),COUNT(*),SUM(CASE WHEN json_extract(body,'$.usageKnown')=1 THEN 0 ELSE 1 END),SUM(CASE WHEN json_extract(body,'$.state')='incomplete' THEN 1 ELSE 0 END) FROM generations WHERE owner=? AND json_extract(body,'$.state') IN ('settled','incomplete') GROUP BY 1,2").map_err(storage)?;
+    let usage=stmt.query_map([&owner],|r|Ok(json!({"channelId":r.get::<_,String>(0)?,"model":r.get::<_,String>(1)?,"inputTokens":r.get::<_,Option<i64>>(2)?,"outputTokens":r.get::<_,Option<i64>>(3)?,"requests":r.get::<_,i64>(4)?,"unknownUsageRequests":r.get::<_,i64>(5)?,"incompleteRequests":r.get::<_,i64>(6)?}))).map_err(storage)?.collect::<rusqlite::Result<Vec<_>>>().map_err(storage)?;
     let (sponsors,sponsors_updated_at)=crate::sponsored_channels::cached(&db,&owner)?;
     Ok(
         json!({"channels":channels,"sponsors":sponsors,"sponsorsUpdatedAt":sponsors_updated_at,"default":{"channelId":default.as_ref().map(|r|r.0.as_str()).unwrap_or("hosted"),"modelId":default.as_ref().map(|r|r.1.as_str()).unwrap_or("hosted")},"usage":usage}),
@@ -1088,7 +1088,7 @@ pub(crate) fn generate(
         Ok(mut value) => {
             value["conversationId"] = json!(conversation);
             value["result"]["role"] = json!("assistant");
-            value["errorCode"] = Value::Null;
+            if value["state"] == "settled" { value["errorCode"] = Value::Null; }
             value["channelRevision"] = record["channelRevision"].clone();
             save_generation(&state, &owner, &value)?;
             Ok(value)

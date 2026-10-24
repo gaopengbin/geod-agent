@@ -6,6 +6,30 @@ import { test } from "node:test";
 import Database from "better-sqlite3";
 import { openLedger } from "../ledger.mjs";
 
+test('explicit incomplete is durable, counts supplier usage once and frees the known reservation',()=>{
+ const folder=mkdtempSync(join(tmpdir(),'geod-terminal-'));const path=join(folder,'ledger.sqlite');let ledger=openLedger(path,100000,'s'.repeat(40));
+ try{
+  ledger.reserve({userId:'qa',generationId:'partial',conversationId:'chat',requestHash:'h',model:'m',reserveTokens:20000});ledger.markStreaming('qa','partial');
+  const terminal={status:'incomplete',reason:'max_output_tokens',id:'response-qa',model:'m',inputTokens:100,outputTokens:4096,cachedInputTokens:80,reasoningTokens:4000,result:{content:'partial',toolCalls:[{invalid:true}]}};
+  const record=ledger.terminal('qa','partial',terminal,'UPSTREAM_OUTPUT_LIMIT');assert.equal(record.state,'incomplete');assert.equal(record.errorCode,'UPSTREAM_OUTPUT_LIMIT');assert.equal(record.upstreamRequestId,'response-qa');assert.deepEqual(record.result.toolCalls,[]);assert.equal(record.cachedInputTokens,80);
+  assert.equal(ledger.usage('qa').reservedTokens,0);assert.equal(ledger.usage('qa').committedTokens,4196);assert.equal(ledger.pendingList().length,0);
+  assert.throws(()=>ledger.terminal('qa','partial',terminal,'UPSTREAM_OUTPUT_LIMIT'));
+  ledger.close();ledger=openLedger(path,100000,'s'.repeat(40));assert.equal(ledger.get('qa','partial').result.providerTerminal.reason,'max_output_tokens');assert.equal(ledger.usage('qa').committedTokens,4196);
+ }finally{ledger.close();rmSync(folder,{recursive:true,force:true})}
+});
+
+test('missing terminal usage is not fabricated and does not release an unknown supplier reservation',()=>{
+ const folder=mkdtempSync(join(tmpdir(),'geod-terminal-unknown-'));const ledger=openLedger(join(folder,'ledger.sqlite'),100000,'s'.repeat(40));
+ try{ledger.reserve({userId:'qa',generationId:'partial',conversationId:'chat',requestHash:'h',model:'m',reserveTokens:20000});ledger.markStreaming('qa','partial');
+ const record=ledger.terminal('qa','partial',{status:'incomplete',reason:'unknown',id:'resp',inputTokens:null,outputTokens:null,result:{content:'',toolCalls:[]}},'UPSTREAM_INCOMPLETE');
+ assert.equal(record.inputTokens,null);assert.equal(record.result.providerTerminal.usageKnown,false);assert.equal(ledger.usage('qa').reservedTokens,20000);
+ assert.equal(ledger.pendingList()[0].state,'incomplete');
+ assert.throws(()=>ledger.reconcile({userId:'qa',generationId:'partial',decision:'settle',inputTokens:10,outputTokens:20,upstreamRequestId:'resp',evidence:'Provider usage confirmed by request id',operator:'qa'}));
+ ledger.reconcile({userId:'qa',generationId:'partial',decision:'observe',inputTokens:10,outputTokens:20,upstreamRequestId:'resp',evidence:'Provider usage confirmed by request id',operator:'qa'});
+ assert.equal(ledger.get('qa','partial').state,'incomplete');assert.equal(ledger.get('qa','partial').errorCode,'UPSTREAM_INCOMPLETE');assert.equal(ledger.usage('qa').reservedTokens,0);assert.equal(ledger.usage('qa').committedTokens,30);assert.equal(ledger.pendingList().length,0);
+ }finally{ledger.close();rmSync(folder,{recursive:true,force:true})}
+});
+
 test("provider cache counters persist without double charging and missing counters remain unknown", () => {
   const directory = mkdtempSync(join(tmpdir(), "geod-ledger-cache-"));
   const path = join(directory, "usage.sqlite");

@@ -33,6 +33,8 @@ lines.on('line',line=>{
     },
     onDelta:(part,text)=>emit({type:'delta',part,text}),
     onWire:(event,data)=>emit({type:'wire',event,data}),
-  }).then(generation=>emit({type:'result',generation}),error=>emit({type:'failed',code:error.code??'PROVIDER_UNAVAILABLE',status:error.status??null})).finally(()=>{lines.close();process.stdin.destroy();});
+  }).then(generation=>emit({type:'result',generation}),error=>error.terminal
+    ? emit({type:'result',generation:{...error.terminal,generationId:value.generationId,state:'incomplete',errorCode:error.code==='PROVIDER_OUTPUT_LIMIT'?'UPSTREAM_OUTPUT_LIMIT':'UPSTREAM_INCOMPLETE',billingScope:'personal',channelId:value.snapshot.id,selectedModel:value.snapshot.model,result:{...error.terminal.result,toolCalls:[],providerTerminal:{status:error.terminal.status,reason:error.terminal.reason,usageKnown:error.terminal.usageKnown}}}})
+    : emit({type:'failed',code:error.code??'PROVIDER_UNAVAILABLE',status:error.status??null})).finally(()=>{lines.close();process.stdin.destroy();});
 });
 lines.on('close',()=>{ended=true;wake?.();rejectHeaders?.(new Error('Native transport ended'));});

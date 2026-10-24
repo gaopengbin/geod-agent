@@ -16,7 +16,7 @@ test('an idle terminal uncertain response unlocks checkpoint continuation withou
  const client={runtimeCapabilities:async()=>({conversationExecution:true}),agentGenerationGet:async()=>generation,codexConversationStatus:async()=>idle};
  assert.deepEqual(await inspectCodexCheckpoint(client,'chat','g'),{billingPending:true});
  assert.equal(generation.state,'pending_reconcile');assert.equal(generation.reservedTokens,121040);assert.equal(generation.result,null);
- for(const state of ['failed','settled']){generation.state=state;assert.deepEqual(await inspectCodexCheckpoint(client,'chat','g'),{billingPending:false});}
+ for(const state of ['failed','settled','incomplete']){generation.state=state;assert.deepEqual(await inspectCodexCheckpoint(client,'chat','g'),{billingPending:false});}
 });
 
 test('checkpoint recovery never interrupts active native work or replays an unfinished remote generation',async()=>{

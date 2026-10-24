@@ -10,6 +10,17 @@ import {codexRequest} from '../../../packages/codex-protocol/codex-contract.mjs'
 const declared=JSON.parse(readFileSync(new URL('../src-tauri/codex-tools.json',import.meta.url)));
 const params={conversationId:'policy-test',input:'下载所选范围，保留确认的参数',permission:'fullAccess',outputCrs:'EPSG:4326'};
 function fixture(){const home=mkdtempSync(join(tmpdir(),'geod-policy-'));let now=100000,signals=[];const policy=new RuntimePolicy(home,declared,{now:()=>now,onSignal:s=>signals.push(s)});policy.begin(params,{inputModalities:['text']});return{home,policy,signals,tick:ms=>now+=ms};}
+
+test('vector approvals are per native task and a granted task resumes with unchanged workspace permission',async()=>{
+ const{policy}=fixture();const facts={permission:'confirmEach',imagery:{counts:{},tasks:[],data:{counts:{pending:2},tasks:[{taskId:'task-a',state:'pending',planHash:'a'.repeat(64)},{taskId:'task-b',state:'pending',planHash:'b'.repeat(64)}]}}};policy.setFacts(facts);
+ const a={taskId:'task-a',planHash:'a'.repeat(64)},b={taskId:'task-b',planHash:'b'.repeat(64)};
+ await policy.execute('data_download_start',a,'a1',async()=>({error:'APPROVAL_REQUIRED'}));
+ assert.equal((await policy.execute('data_download_start',a,'a2',()=>{throw Error('unchanged must stay blocked')})).error,'RECOVERY_CONDITION_UNCHANGED');
+ let second=0;await policy.execute('data_download_start',b,'b1',async()=>{second++;return{error:'APPROVAL_REQUIRED'}});assert.equal(second,1);
+ const updated=structuredClone(facts);updated.imagery.data.tasks[0].state='queued';policy.setFacts(updated);
+ const resumed=await policy.execute('data_download_start',a,'a3',async()=>({taskId:'task-a',status:'queued'}));assert.equal(resumed.taskId,'task-a');
+ assert.equal((await policy.execute('data_download_start',b,'b2',()=>{throw Error('other task still needs approval')})).error,'RECOVERY_CONDITION_UNCHANGED');
+});
 test('a refusal from one remote feature endpoint does not block independent sources',async()=>{
  const {policy}=fixture();let called=0;
  await policy.execute('data_input_read',{url:'https://denied.test/a'},'denied',async()=>({error:'PERMISSION_DENIED'}));
@@ -74,7 +85,7 @@ test('permission recovery depends on native state; model proposals and another s
  const {policy}=fixture();policy.setFacts({permission:'confirmEach',outputCrs:params.outputCrs});let executed=0;
  const start=()=>{executed++;return{error:'APPROVAL_REQUIRED'};};await policy.execute('jobs_start',{planId:'p1'},'a',start);
  policy.update({action:'amend',expectedRevision:policy.state.revision,objective:'用户已授权'});
- assert.equal((await policy.execute('jobs_start',{planId:'p2'},'b',start)).error,'RECOVERY_CONDITION_UNCHANGED');assert.equal(executed,1);
+ assert.equal((await policy.execute('jobs_start',{planId:'p1'},'b',start)).error,'RECOVERY_CONDITION_UNCHANGED');assert.equal(executed,1);
  policy.setFacts({permission:'fullAccess',outputCrs:params.outputCrs});await policy.execute('jobs_start',{planId:'p2'},'c',()=>{executed++;return{jobId:'j2',state:'queued'};});assert.equal(executed,2);
  policy.setFacts({permission:'confirmEach',outputCrs:params.outputCrs});assert.equal(policy.builtinPre({tool_name:'Bash',tool_use_id:'old-permission',tool_input:{command:'old-authorized-command'}}).error,'WORKSPACE_PERMISSION_CHANGED');
  policy.begin({...params,permission:'confirmEach'},{inputModalities:['text']});assert.equal(policy.builtinPre({tool_name:'Bash',tool_use_id:'new-permission',tool_input:{command:'new-turn-command'}}),null);

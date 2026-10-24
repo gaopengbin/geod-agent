@@ -13,7 +13,7 @@ import { openActivityStore, validateActivity } from "./activity-store.mjs";
 import { MessageError, openMessageStore } from "./messages-store.mjs";
 import { withRangeTools } from "../../packages/codex-protocol/range-tools.mjs";
 import { codexRequest, codexResult, ContractError } from "../../packages/codex-protocol/codex-contract.mjs";
-import {channelSnapshot,providerRequest,generateProvider} from '../../packages/codex-protocol/provider-adapter.mjs';
+import {channelSnapshot,providerRequest,generateProvider,responseTerminalError} from '../../packages/codex-protocol/provider-adapter.mjs';
 import {createPaymentHostCandidate,readPaymentHostConfig} from './payment-host-candidate.mjs';
 import {readWelcomeCreditPolicy} from './welcome-credit-policy.mjs';
 import {creditWalletEnforced} from './payment-host-candidate.mjs';
@@ -370,6 +370,7 @@ export function createGatewayServer(config, { fetchImpl = fetch } = {}) {
              onWire:(event,data)=>streamEvent(response,'wire',{event,data}),
            });
          }catch(error){
+           if(error.terminal)return respond(ledger.terminal(userId,body.generationId,error.terminal,error.code==='PROVIDER_OUTPUT_LIMIT'?'UPSTREAM_OUTPUT_LIMIT':'UPSTREAM_INCOMPLETE'));
            if(error.diagnostic)ledger.recordDiagnostic(userId,body.generationId,error.diagnostic);
            if(error.code==='PROVIDER_HTTP_ERROR'&&error.status<500){ledger.fail(userId,body.generationId,'UPSTREAM_REJECTED',error.diagnostic);return respond(ledger.get(userId,body.generationId));}
            if(error.code?.startsWith('PROVIDER_STREAM')||error.code?.startsWith('CODEX_'))return respond(ledger.fail(userId,body.generationId,'UPSTREAM_MALFORMED',error.diagnostic??protocolDiagnostic(null,{}, {stage:'provider_result',code:error.code})));
@@ -413,6 +414,10 @@ export function createGatewayServer(config, { fetchImpl = fetch } = {}) {
       }
       const usage = payload?.usage;
       const message = payload?.choices?.[0]?.message;
+      if(['length','content_filter'].includes(payload?.choices?.[0]?.finish_reason)){
+        const terminal=responseTerminalError({id:payload.id??upstream.headers.get('x-request-id'),model:payload.model??selectedModel,status:'incomplete',incomplete_details:{reason:payload.choices[0].finish_reason==='length'?'max_output_tokens':'content_filter'},usage:{input_tokens:usage?.prompt_tokens,output_tokens:usage?.completion_tokens,input_tokens_details:{cached_tokens:usage?.prompt_cache_hit_tokens??usage?.prompt_tokens_details?.cached_tokens},output_tokens_details:{reasoning_tokens:usage?.completion_tokens_details?.reasoning_tokens}},output:[{type:'message',content:[{type:'output_text',text:message?.content??''}]}]}).terminal;
+        return respond(ledger.terminal(userId,body.generationId,terminal,terminal.reason==='max_output_tokens'?'UPSTREAM_OUTPUT_LIMIT':'UPSTREAM_INCOMPLETE'));
+      }
       if (!Number.isSafeInteger(usage?.prompt_tokens) || usage.prompt_tokens < 0 || !Number.isSafeInteger(usage?.completion_tokens) || usage.completion_tokens < 0 || !message || !(typeof message.content === "string" || message.content === null)) {
         return respond(ledger.fail(userId,body.generationId,'UPSTREAM_MALFORMED',protocolDiagnostic(upstream,upstreamBody,{stage:'message_shape',code:'INVALID_USAGE_OR_MESSAGE',payload})));
       }

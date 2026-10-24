@@ -4,6 +4,12 @@ import {aggregateTurnTokenUsage,loadTurnTokenUsage,recordGenerationTokenUsage,tu
 import {accountChatStore,persistCompletedChat,CHAT_LIST_KEY,restorePendingChats} from '../src/pending-generations.ts';
 
 const receipt=(id,input,output,extra={})=>({generationId:id,state:'settled',inputTokens:input,outputTokens:output,...extra});
+test('incomplete is terminal; measured usage remains counted and absent usage stays unknown',()=>{
+ const source={runIds:['r'],receipts:[]};
+ const result=aggregateTurnTokenUsage(source,[receipt('cutoff',100,4096,{state:'incomplete',cachedInputTokens:80,reasoningTokens:4000})]);
+ assert.equal(result.totalTokens,4196);assert.equal(result.pendingRequests,0);assert.equal(result.status,'complete');
+ const absent=aggregateTurnTokenUsage(source,[{generationId:'cutoff',state:'incomplete'}]);assert.equal(absent.pendingRequests,0);assert.equal(absent.unknownRequests,1);assert.equal(absent.status,'unavailable');
+});
 test('one round includes tool loops and compaction, deduplicates generation replay and subset tokens',async()=>{
  const source={runIds:['r','r'],receipts:[receipt('a',20558,38,{cachedInputTokens:3328,reasoningTokens:13})]};
  let reads=0;

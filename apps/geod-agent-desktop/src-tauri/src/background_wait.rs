@@ -51,7 +51,9 @@ pub(crate) fn wait(app:&AppHandle,owner:&str,conversation:&str,kind:&str,id:&str
             Ok(value)=>{let state=value["state"].as_str().unwrap_or("unknown");let marker=format!("{}:{}",state,value["progress"]);if marker!=last{progress(state);last=marker;}if terminal(state)||state=="unknown"{return value;}},
             Err(cause)=>return json!({"error":cause.code,"state":"unknown","verified":false,"message":"本机等待或成果核验不可用，请在任务面板核对"}),
         }
-        if last_probe.elapsed()>=Duration::from_secs(2) {
+        // A companion already owns this wait and its workers. Do not make a
+        // synchronous authenticated HTTP request back into the same process.
+        if !crate::background_runtime::is_daemon() && last_probe.elapsed()>=Duration::from_secs(2) {
             if app.state::<crate::background_runtime::BackgroundClient>().observe().is_err() {
                 return json!({"error":"BACKGROUND_UNCERTAIN","state":"unknown","verified":false,"downloadCancelled":false,"message":"本机后台连接中断，请在任务面板核对；未重新提交下载"});
             }

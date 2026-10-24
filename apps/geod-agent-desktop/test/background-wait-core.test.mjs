@@ -2,6 +2,16 @@ import test from 'node:test';import assert from 'node:assert/strict';
 import {mkdtempSync,readFileSync} from 'node:fs';import {tmpdir} from 'node:os';import {join,resolve} from 'node:path';
 import {createHost} from '../src-tauri/codex-host.mjs';
 const codex=process.env.GEOD_CODEX_EXE;
+test('pending vector inspection returns the approval proposal without entering an endless download wait',{skip:!codex,timeout:60000},async()=>{
+ const home=mkdtempSync(join(tmpdir(),'geod-pending-vector-'));let listener,models=0,waits=0;
+ const host=await createHost({codex,home,toolsFile:resolve('src-tauri/codex-tools.json'),capabilities:{runtimePolicyNative:true,inputModalities:['text']},receive:fn=>{listener=fn;return()=>{}},emit:event=>{
+  if(event.type==='policyState')response(listener,event,{permission:'confirmEach',imagery:{data:{tasks:[{taskId:'owned-task',state:'pending',planHash:'hash'}]}}});
+  if(event.type==='model')response(listener,event,{state:'settled',generationId:event.generationId,inputTokens:10,outputTokens:5,result:++models===1?{content:null,toolCalls:[{id:'inspect-pending',type:'function',function:{name:'data_download_get',arguments:'{"taskId":"owned-task"}'}}]}:{content:'请批准已生成的计划。',toolCalls:[]}});
+  if(event.type==='tool')response(listener,event,{result:{taskId:'owned-task',status:'pending',planHash:'hash'}});
+  if(event.type==='backgroundWait')waits++;
+ }});
+ try{const result=await host.turn({conversationId:'pending-inspection',input:'查看计划',workspace:home,history:[],permission:'confirmEach'});assert.equal(result.status,'completed');assert.equal(models,2);assert.equal(waits,0);}finally{await host.close()}
+});
 const params={conversationId:'native-wait-core',input:'下载确认的影像，EPSG:4326，保留其他要求',workspace:null,history:[],permission:'fullAccess',outputCrs:'EPSG:4326'};
 const proof=id=>({jobId:id,state:'completed',verified:true,artifact:{quality:{status:'complete',missingTiles:0},assets:[{id:'raster',bytes:100,sha256:'a'.repeat(64),crs:'EPSG:4326'}]}});
 function response(listener,event,result){listener({type:'response',requestId:event.requestId,value:result});}

@@ -111,14 +111,22 @@ fn save_run(connection: &Connection, run: &AiRun) -> Result<(), AppError> {
         .map_err(storage)?;
     Ok(())
 }
+fn durable_event(value:&Value)->bool {
+    !matches!(value["type"].as_str(),Some("heartbeat"|"delta")) && !value["method"].as_str().is_some_and(|s|s.ends_with("/delta")||s.ends_with("Delta"))
+}
+#[cfg(test)]
+mod audit_tests {
+    use super::*;
+    #[test]
+    fn streaming_fragments_do_not_consume_durable_history_but_terminals_and_receipts_do() {
+        for value in [json!({"type":"heartbeat"}),json!({"type":"delta","part":"content"}),json!({"type":"event","method":"item/reasoning/summaryTextDelta"}),json!({"type":"event","method":"item/agentMessage/delta"})] {assert!(!durable_event(&value));}
+        for value in [json!({"type":"toolResult"}),json!({"type":"generationResult"}),json!({"type":"event","method":"item/completed"}),json!({"type":"event","method":"turn/completed"})] {assert!(durable_event(&value));}
+    }
+}
 fn event(app: &AppHandle, run: &str, value: &Value) -> Result<(), AppError> {
     // Heartbeats/repeated deltas do not grow the ledger. Completed items retain
     // actual reasoning/tool/command output, final text and authoritative usage.
-    if matches!(value["type"].as_str(), Some("heartbeat"))
-        || value["method"]
-            .as_str()
-            .is_some_and(|s| s.ends_with("/delta"))
-    {
+    if !durable_event(value) {
         return Ok(());
     }
     let text = serde_json::to_string(value).unwrap();
@@ -129,14 +137,8 @@ fn event(app: &AppHandle, run: &str, value: &Value) -> Result<(), AppError> {
         ));
     }
     let connection = database(app)?;
-    let count: i64 = connection
-        .query_row("SELECT COUNT(*) FROM ai_events WHERE run=?1", [run], |r| {
-            r.get(0)
-        })
-        .map_err(storage)?;
-    if count >= 2000 {
-        return Err(workspace_error("AI_EVENT_LIMIT", "本次执行记录超过上限"));
-    }
+    // Keep completed receipts durably; a long valid run must not stop merely
+    // because its audit history contains more than 2,000 events.
     connection.execute("INSERT INTO ai_events(run,seq,body) VALUES (?1,(SELECT COALESCE(MAX(seq),0)+1 FROM ai_events WHERE run=?1),?2)",params![run,text]).map_err(storage)?;
     Ok(())
 }

@@ -53,7 +53,11 @@ async fn server(
                 if slow {
                     tokio::time::sleep(Duration::from_secs(30)).await;
                 }
-                let (status, body) = if fail_first && n == 0 {
+                // This OSM fixture reproduces a proxy that rejects POST reads
+                // while serving the equivalent standard interpreter GET.
+                let (status, body) = if request.starts_with(b"POST /osm ") {
+                    ("504 Gateway Timeout",b"POST read unavailable".to_vec())
+                } else if fail_first && n == 0 {
                     ("500 Server Error", b"retry".to_vec())
                 } else {
                     ("200 OK", data)

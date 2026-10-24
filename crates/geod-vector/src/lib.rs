@@ -426,10 +426,11 @@ impl Downloader {
         for attempt in 0..=self.retries {
             check_cancel(&self.cancel)?;
             let request = if let Some(body) = body {
-                self.client
+                let mut get_url=url.clone();get_url.query_pairs_mut().append_pair("data",body);
+                if get_url.as_str().len()<=6000 {self.client.get(get_url)} else {self.client
                     .post(url.clone())
                     .header("Content-Type", "application/x-www-form-urlencoded")
-                    .body(format!("data={}", form_encode(body)))
+                    .body(format!("data={}", form_encode(body)))}
             } else {
                 self.client.get(url.clone())
             };

@@ -5,6 +5,19 @@ const config = {id: 'fixture', protocol: 'chatCompletions', baseUrl: 'https://ex
 const request = {input: [{role: 'user', content: 'inspect'}], tools: [{type: 'namespace', name: 'gis', tools: [{type: 'custom', name: 'run', format: {type: 'text'}}]}]};
 const bytes = async function* (text) { for (const byte of Buffer.from(text)) yield new Uint8Array([byte]); };
 const event = value => `data: ${JSON.stringify(value)}\r\n\r\n`;
+
+test('Responses terminal exhaustion retains exact usage and receipt without executing partial tools',async()=>{
+ const snapshot=channelSnapshot({...config,protocol:'responses'});assert.equal(snapshot.maxOutputTokens,16384);
+ const partial={id:'resp_partial',model:'fixture-model',status:'incomplete',incomplete_details:{reason:'max_output_tokens'},output:[{type:'function_call',name:'unsafe_partial',arguments:'{',call_id:'partial'}],usage:{input_tokens:100,output_tokens:4096,input_tokens_details:{cached_tokens:80},output_tokens_details:{reasoning_tokens:4000}}};
+ let terminal;await assert.rejects(generateProvider(snapshot,'secret',request,{fetchImpl:async()=>new Response(event({type:'response.incomplete',response:partial}),{headers:{'Content-Type':'text/event-stream'}})}),error=>{terminal=error.terminal;return error.code==='PROVIDER_OUTPUT_LIMIT'});
+ assert.equal(terminal.id,'resp_partial');assert.equal(terminal.reason,'max_output_tokens');assert.equal(terminal.inputTokens,100);assert.equal(terminal.outputTokens,4096);assert.equal(terminal.cachedInputTokens,80);assert.equal(terminal.reasoningTokens,4000);assert.equal(terminal.usageKnown,true);assert.deepEqual(terminal.result.toolCalls,[]);
+});
+
+test('terminal without usage stays unknown; incomplete has a different outcome from missing EOF',async()=>{
+ let terminal;await assert.rejects(collectResponses(bytes(event({type:'response.incomplete',response:{id:'r',status:'incomplete',output:[],incomplete_details:{reason:'content_filter'}}}))),error=>{terminal=error.terminal;return error.code==='PROVIDER_RESPONSE_INCOMPLETE'});
+ assert.equal(terminal.usageKnown,false);assert.equal(terminal.inputTokens,null);assert.equal(terminal.outputTokens,null);
+ await assert.rejects(collectResponses(bytes(event({type:'response.created',response:{id:'r'}}))),error=>error.code==='PROVIDER_STREAM_INCOMPLETE'&&!error.terminal);
+});
 test('channel snapshot freezes routing, omits plaintext credentials and refuses URL secrets', () => {
   const input = {...config, apiKey: 'must-not-persist', inputModalities: ['text']}; const snapshot = channelSnapshot(input);
   input.model = 'changed'; input.inputModalities.push('image');
@@ -26,7 +39,7 @@ test('missing provider usage stays unknown and incomplete/truncated tool streams
   const value = await collectChat(bytes(event({choices: [{delta: {content: 'answer'}, finish_reason: 'stop'}]})), contract);
   assert.equal(value.inputTokens, null); assert.equal(value.cachedInputTokens, null);
   await assert.rejects(collectChat(bytes(event({choices: [{delta: {content: 'half'}}]})), contract), /INCOMPLETE/);
-  await assert.rejects(collectChat(bytes(event({choices: [{delta: {}, finish_reason: 'length'}]})), contract), /TRUNCATED/);
+  await assert.rejects(collectChat(bytes(event({choices: [{delta: {}, finish_reason: 'length'}]})), contract), error=>error.code==='PROVIDER_OUTPUT_LIMIT'&&error.terminal.status==='incomplete'&&error.terminal.usageKnown===false&&error.terminal.result.toolCalls.length===0);
 });
 test('responses transport preserves opaque reasoning and native custom tool data', async () => {
   const snapshot = channelSnapshot({...config, protocol: 'responses'}); const body = providerRequest(snapshot, {...request, input: [{type: 'reasoning', encrypted_content: 'opaque'}]}).body;

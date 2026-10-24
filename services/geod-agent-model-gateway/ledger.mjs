@@ -99,6 +99,24 @@ export function openLedger(path, tokenLimit, encryptionSecret, quotaEnforced = t
     entry.run(randomUUID(), userId, generationId, "release", -current.reserved_tokens, at);
     return publicGeneration(get.get(userId, generationId), key);
   });
+  const terminalTx = db.transaction((userId, generationId, terminal, code) => {
+    const current = get.get(userId, generationId);
+    if (!current || current.state !== 'streaming') throw new Error('Generation is not recording a provider terminal');
+    const valid = n => Number.isSafeInteger(n) && n >= 0;
+    const known = valid(terminal.inputTokens) && valid(terminal.outputTokens);
+    const at = timestamp();
+    const receipt = {status: terminal.status === 'incomplete' ? 'incomplete' : 'failed', reason: terminal.reason,
+      usageKnown: known, inputTokens: valid(terminal.inputTokens) ? terminal.inputTokens : null,
+      outputTokens: valid(terminal.outputTokens) ? terminal.outputTokens : null};
+    const result = {...terminal.result, toolCalls: [], providerTerminal: receipt};
+    db.prepare("UPDATE model_generations SET state='incomplete',error_code=?,input_tokens=?,output_tokens=?,cached_input_tokens=?,reasoning_tokens=?,upstream_request_id=?,upstream_model=?,response_ciphertext=?,updated_at=? WHERE user_id=? AND generation_id=?")
+      .run(code,receipt.inputTokens,receipt.outputTokens,valid(terminal.cachedInputTokens)&&terminal.cachedInputTokens<=receipt.inputTokens?terminal.cachedInputTokens:null,
+        valid(terminal.reasoningTokens)&&terminal.reasoningTokens<=receipt.outputTokens?terminal.reasoningTokens:null,
+        terminal.id??null,terminal.model??null,encrypt(result,key),at,userId,generationId);
+    if(known)entry.run(randomUUID(),userId,generationId,'release',-current.reserved_tokens,at);
+    if(known)entry.run(randomUUID(),userId,generationId,'observed',terminal.inputTokens+terminal.outputTokens,at);
+    return publicGeneration(get.get(userId,generationId),key);
+  });
   return {
     reserve: (...args)=>reserveTx.immediate(...args),
     markStreaming(userId, generationId) {
@@ -106,6 +124,7 @@ export function openLedger(path, tokenLimit, encryptionSecret, quotaEnforced = t
       if (changed.changes !== 1) throw new Error("Generation was not reserved");
     },
     settle: settleTx,
+    terminal: terminalTx,
     fail: failTx,
     recordDiagnostic(userId,generationId,diagnostic){const safe=safeDiagnostic(diagnostic);if(safe)db.prepare('UPDATE model_generations SET upstream_diagnostic=? WHERE user_id=? AND generation_id=?').run(JSON.stringify(safe),userId,generationId);},
     pending(userId, generationId, code) {
@@ -115,9 +134,17 @@ export function openLedger(path, tokenLimit, encryptionSecret, quotaEnforced = t
     reconcile: db.transaction(({ userId, generationId, decision, evidence, operator, inputTokens, outputTokens, upstreamRequestId, result }) => {
       if (typeof evidence !== "string" || evidence.trim().length < 16 || evidence.length > 2000 || typeof operator !== "string" || operator.length < 2 || operator.length > 100) throw new Error("A named operator and provider evidence are required");
       const current = get.get(userId, generationId);
-      if (!current || current.state !== "pending_reconcile") throw new Error("Generation is not pending reconciliation");
+      const terminalUnknown=current?.state==='incomplete'&&(current.input_tokens===null||current.output_tokens===null);
+      if (!current || current.state !== "pending_reconcile"&&!terminalUnknown) throw new Error("Generation is not pending reconciliation");
       const at = timestamp();
-      if (decision === "release") {
+      if(terminalUnknown){
+        if(decision!=='observe'||!Number.isSafeInteger(inputTokens)||inputTokens<0||!Number.isSafeInteger(outputTokens)||outputTokens<0||typeof upstreamRequestId!=='string'||!upstreamRequestId)throw new Error('Incomplete receipts require observed provider usage and request ID');
+        const saved=current.response_ciphertext?decrypt(current.response_ciphertext,key):{};
+        const receipt={...saved,toolCalls:[],providerTerminal:{...saved.providerTerminal,usageKnown:true,inputTokens,outputTokens}};
+        db.prepare('UPDATE model_generations SET input_tokens=?,output_tokens=?,upstream_request_id=?,response_ciphertext=?,updated_at=? WHERE user_id=? AND generation_id=?').run(inputTokens,outputTokens,upstreamRequestId,encrypt(receipt,key),at,userId,generationId);
+        entry.run(randomUUID(),userId,generationId,'release',-current.reserved_tokens,at);
+        entry.run(randomUUID(),userId,generationId,'observed',inputTokens+outputTokens,at);
+      } else if (decision === "release") {
         db.prepare("UPDATE model_generations SET state='failed',error_code='RECONCILED_NO_USAGE',updated_at=? WHERE user_id=? AND generation_id=?").run(at, userId, generationId);
         entry.run(randomUUID(), userId, generationId, "release", -current.reserved_tokens, at);
       } else if (decision === "settle") {
@@ -133,19 +160,19 @@ export function openLedger(path, tokenLimit, encryptionSecret, quotaEnforced = t
     }),
     get(userId, generationId) { const row = get.get(userId, generationId); return row ? publicGeneration(row, key) : null; },
     pendingList() {
-      return db.prepare("SELECT user_id,generation_id,created_at,updated_at,error_code,upstream_request_id,reserved_tokens FROM model_generations WHERE state='pending_reconcile' ORDER BY created_at LIMIT 100").all();
+      return db.prepare("SELECT user_id,generation_id,state,created_at,updated_at,error_code,upstream_request_id,reserved_tokens FROM model_generations WHERE state='pending_reconcile' OR (state='incomplete' AND (input_tokens IS NULL OR output_tokens IS NULL)) ORDER BY created_at LIMIT 100").all();
     },
     usage(userId) {
       const rows = db.prepare("SELECT state,reserved_tokens,input_tokens,output_tokens FROM model_generations WHERE user_id=? AND funding_scope='hosted'").all(userId);
-      const committed = rows.filter(row => row.state === "settled").reduce((sum, row) => sum + row.input_tokens + row.output_tokens, 0);
-      const reserved = rows.filter(row => ["reserved", "streaming", "pending_reconcile"].includes(row.state)).reduce((sum, row) => sum + row.reserved_tokens, 0);
-      return { policyId, quotaEnforced, limitTokens: quotaEnforced ? tokenLimit : null, committedTokens: committed, reservedTokens: reserved, remainingTokens: quotaEnforced ? Math.max(0, tokenLimit - committed - reserved) : null, pendingReconcile: rows.filter(row => row.state === "pending_reconcile").length };
+      const committed = rows.filter(row => ['settled','incomplete'].includes(row.state)).reduce((sum, row) => sum + (row.input_tokens??0) + (row.output_tokens??0), 0);
+      const reserved = rows.filter(row => ["reserved", "streaming", "pending_reconcile"].includes(row.state)||row.state==='incomplete'&&(row.input_tokens===null||row.output_tokens===null)).reduce((sum, row) => sum + row.reserved_tokens, 0);
+      return { policyId, quotaEnforced, limitTokens: quotaEnforced ? tokenLimit : null, committedTokens: committed, reservedTokens: reserved, remainingTokens: quotaEnforced ? Math.max(0, tokenLimit - committed - reserved) : null, pendingReconcile: rows.filter(row => row.state === "pending_reconcile").length, unknownUsageRequests:rows.filter(row=>row.state==='incomplete'&&(row.input_tokens===null||row.output_tokens===null)).length };
     },
     sponsorUsage(userId,provider){
       const all=db.prepare("SELECT user_id,state,reserved_tokens,input_tokens,output_tokens,created_at FROM model_generations WHERE funding_scope='sponsored' AND sponsor_id=?").all(provider.id);
       const period=sponsorBudgetWindow(provider,Date.parse(timestamp()));
       const rows=period.start?all.filter(row=>row.created_at>=period.start&&row.created_at<period.end):all;
-      const totals=items=>({committedTokens:items.filter(row=>row.state==='settled').reduce((sum,row)=>sum+row.input_tokens+row.output_tokens,0),reservedTokens:items.filter(row=>['reserved','streaming','pending_reconcile'].includes(row.state)).reduce((sum,row)=>sum+row.reserved_tokens,0),pendingReconcile:items.filter(row=>row.state==='pending_reconcile').length});
+      const totals=items=>({committedTokens:items.filter(row=>['settled','incomplete'].includes(row.state)).reduce((sum,row)=>sum+(row.input_tokens??0)+(row.output_tokens??0),0),reservedTokens:items.filter(row=>['reserved','streaming','pending_reconcile'].includes(row.state)||row.state==='incomplete'&&(row.input_tokens===null||row.output_tokens===null)).reduce((sum,row)=>sum+row.reserved_tokens,0),pendingReconcile:items.filter(row=>row.state==='pending_reconcile').length,unknownUsageRequests:items.filter(row=>row.state==='incomplete'&&(row.input_tokens===null||row.output_tokens===null)).length});
       const personal=totals(rows.filter(row=>row.user_id===userId)),total=totals(rows);
       const prior=period.start?totals(all.filter(row=>row.user_id===userId&&row.created_at<period.start)):null;
       return {quotaEnforced:provider.quotaEnforced,limitTokens:provider.perUserTokenLimit,remainingTokens:provider.quotaEnforced?Math.max(0,Math.min(provider.perUserTokenLimit-personal.committedTokens-personal.reservedTokens,provider.totalTokenLimit-total.committedTokens-total.reservedTokens)):null,...personal,totalLimitTokens:provider.totalTokenLimit,...(period.start?{budgetPeriod:'month',periodStart:period.start,periodEnd:period.end,priorReservedTokens:prior.reservedTokens}:{})};

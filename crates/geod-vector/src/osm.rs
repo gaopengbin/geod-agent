@@ -31,6 +31,7 @@ pub fn query_boundary(
         }
         let key = serde_json::to_string(&tag.key)?;
         selectors.push(match &tag.value {
+            Some(value) if value == "*" => format!("[{key}]"),
             Some(value) => format!("[{key}={}]", serde_json::to_string(value)?),
             None => format!("[{key}]"),
         });
@@ -40,12 +41,14 @@ pub fn query_boundary(
             .polygons
             .iter()
             .map(|rings| {
-                let positions = rings[0]
-                    .iter()
-                    .map(|p| format!("{} {}", p[1], p[0]))
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                format!("poly:\"{positions}\"")
+                // Query a conservative envelope for each island. The native
+                // AreaFilter below performs the exact polygon/hole test on
+                // complete geometry, including lines crossing the boundary.
+                // Repeating a detailed poly string for every tag can exceed
+                // proxy request limits and unnecessarily burden Overpass.
+                let (mut west,mut south,mut east,mut north)=(f64::INFINITY,f64::INFINITY,f64::NEG_INFINITY,f64::NEG_INFINITY);
+                for p in &rings[0] {west=west.min(p[0]);south=south.min(p[1]);east=east.max(p[0]);north=north.max(p[1]);}
+                format!("{south},{west},{north},{east}")
             })
             .collect::<Vec<_>>(),
         None => vec![format!(
@@ -311,6 +314,13 @@ fn multipolygon(element: &Value) -> Result<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn wildcard_selects_tag_presence_and_literal_values_stay_quoted() {
+        let tags=vec![OsmTag{key:"highway".into(),value:Some("*".into())},OsmTag{key:"emergency".into(),value:Some("fire_hydrant".into())}];
+        let q=query([122.1,40.5,122.4,40.9],&tags).unwrap();
+        assert!(q.contains("nwr[\"highway\"]("));assert!(!q.contains("=\"*\""));assert!(q.contains("[\"emergency\"=\"fire_hydrant\"]"));
+        assert_eq!(query([122.1,40.5,122.4,40.9],&tags[..1]).unwrap(),query([122.1,40.5,122.4,40.9],&[OsmTag{key:"highway".into(),value:None}]).unwrap());
+    }
     #[test]
     fn preserve_osm_types_and_multipolygon_hole() {
         let data = json!({"elements":[{"type":"node","id":1,"lon":10,"lat":20,"tags":{"name":"A"}},{"type":"way","id":2,"tags":{"building":"yes"},"geometry":[{"lon":0,"lat":0},{"lon":4,"lat":0},{"lon":4,"lat":4},{"lon":0,"lat":0}]},{"type":"relation","id":3,"tags":{"type":"multipolygon"},"members":[{"type":"way","role":"outer","geometry":[{"lon":0,"lat":0},{"lon":4,"lat":0},{"lon":4,"lat":4}]},{"type":"way","role":"outer","geometry":[{"lon":0,"lat":0},{"lon":0,"lat":4},{"lon":4,"lat":4}]},{"type":"way","role":"inner","geometry":[{"lon":1,"lat":1},{"lon":2,"lat":1},{"lon":2,"lat":2},{"lon":1,"lat":1}]}]}]});

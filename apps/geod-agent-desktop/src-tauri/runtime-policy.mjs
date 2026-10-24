@@ -177,10 +177,16 @@ export class RuntimePolicy {
   if(tool==='data_input_read')spec.conditionScope='data-input:'+hash(args);
   return{...spec,resource:spec.resource?spec.resource.map(k=>args[k]??null):['planId','jobId','taskId','scheduleId','connectionId','boundaryId','sourceId'].filter(k=>args[k]!==undefined).map(k=>args[k]),conditionScope:spec.conditionScope??spec.purpose??tool};
  }
- failureScope(failure,desc){return failure.category==='business'?hash([desc.conditionScope,desc.resource]):['parameter','capability','internal'].includes(failure.category)?hash([desc.conditionScope,desc.purpose]):String(desc.conditionScope);}
+ failureScope(failure,desc){return failure.category==='business'||failure.category==='permission'&&desc.resource?.length?hash([desc.conditionScope,desc.resource]):['parameter','capability','internal'].includes(failure.category)?hash([desc.conditionScope,desc.purpose]):String(desc.conditionScope);}
  condition(failure,descriptor){
   const base={contract:this.state.contract,model:this.state.capabilitiesHash};
-  if(failure.category==='permission')return hash({...base,permission:this.facts.permission,approval:this.facts.imagery?.counts??this.facts.imagery?.summary});
+  if(failure.category==='permission'){
+   const imagery=this.facts.imagery;
+   const relevant=tasks=>(tasks??[]).filter(t=>descriptor.resource?.some(id=>id===t.planId||id===t.jobId||id===t.taskId));
+   return hash({...base,permission:this.facts.permission,
+    imagery:descriptor.resource?.length?relevant(imagery?.tasks):imagery?.counts??imagery?.summary,
+    data:descriptor.resource?.length?relevant(imagery?.data?.tasks):imagery?.data?.counts});
+  }
   if(failure.category==='authentication'||failure.category==='capability')return hash({...base,connections:this.facts.connectionsRevision,discovery:this.state.discoveryRevision,conditionScope:descriptor.conditionScope});
    return hash({...base,...(failure.category==='business'?{objectState:this.facts.imagery?.tasks?.filter(t=>descriptor.resource.includes(t.planId)||descriptor.resource.includes(t.jobId))}: {})});
  }

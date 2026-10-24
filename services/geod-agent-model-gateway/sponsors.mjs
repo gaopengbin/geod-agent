@@ -42,6 +42,7 @@ export function readSponsors(env){
     const startsAt=activityDate(value.startsAt),endsAt=activityDate(value.endsAt);
     if(startsAt&&endsAt&&Date.parse(startsAt)>=Date.parse(endsAt))throw new Error('Invalid sponsored activity interval');
     const models=value.models.map(model=>{
+      model={...model,maxOutputTokens:model.maxOutputTokens??Math.min(protocol==='responses'?16384:4096,Math.floor(model.contextWindow/2))};
       if(!text(model.id,120)||!text(model.name,120)||!integer(model.contextWindow,16000,1000000)||!integer(model.maxOutputTokens,256,32768)||model.maxOutputTokens>=model.contextWindow||![null,undefined,'enabled','disabled','adaptive'].includes(model.thinking)||(model.thinking==='adaptive'&&protocol!=='anthropic')||(protocol==='anthropic'&&model.thinking==='enabled'&&model.maxOutputTokens<=1024)||!Array.isArray(model.inputModalities)||!model.inputModalities.includes('text')||model.inputModalities.some(part=>!['text','image'].includes(part))||new Set(model.inputModalities).size!==model.inputModalities.length)throw new Error('Invalid sponsored model capabilities');
       return {id:model.id,name:model.name,contextWindow:model.contextWindow,maxOutputTokens:model.maxOutputTokens,inputModalities:[...model.inputModalities],thinking:model.thinking??null};
     });

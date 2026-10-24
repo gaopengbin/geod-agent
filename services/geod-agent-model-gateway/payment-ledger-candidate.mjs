@@ -234,7 +234,8 @@ export function createPaymentLedgerCandidate(path,{gateway=null,loadGeneration,p
     const generation=await loadGeneration(account,generationId);
     if(!generation||generation.generationId!==generationId)fail('BILLING_GENERATION_NOT_FOUND','Generation unavailable for this account',404);
     if(['sponsored','personal'].includes(generation.billingScope))return {state:'externally-funded',chargeNanoCny:'0'};
-    if(!['failed','settled'].includes(generation.state))return {state:'waiting-for-provider',reservationRetained:true};
+    if(!['failed','incomplete','settled'].includes(generation.state))return {state:'waiting-for-provider',reservationRetained:true};
+    if(generation.state==='incomplete')return settle(account,{...generation,state:'failed'},null);
     const reservation=db.prepare('SELECT pricing_snapshot FROM geod_credit_reservations WHERE account=? AND generation_id=?').get(account,generationId);
     const charged=db.prepare('SELECT amount_nano,quote FROM geod_credit_charges WHERE account=? AND generation_id=?').get(account,generationId);
     if(charged)return settledCharge(charged,true);

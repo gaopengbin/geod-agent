@@ -12,6 +12,11 @@ test('provider rejection messages follow recorded causes and never guess format 
 });
 
 test('durable rejected and uncertain receipts preserve their reason before checking stream completion',()=>{
+ for(const errorCode of ['UPSTREAM_OUTPUT_LIMIT','UPSTREAM_INCOMPLETE']){
+  const receipt={state:'incomplete',errorCode,inputTokens:10,outputTokens:4096,result:{content:'partial',toolCalls:[]}};
+  assert.throws(()=>assertGenerationSettlement(receipt),e=>e.code===errorCode&&/已保存/.test(e.message));
+  const chunks=[];assert.throws(()=>sendGeneration({write:c=>chunks.push(c),end(){}},receipt,'partial'),e=>e.code===errorCode);assert.equal(chunks.length,0);
+ }
  for(const [state,errorCode] of [['failed','UPSTREAM_REJECTED'],['pending_reconcile','UPSTREAM_MALFORMED'],['pending_reconcile','UPSTREAM_UNKNOWN'],['pending_reconcile','UPSTREAM_INVALID_TOOL']]){
   const generation={state,errorCode};assert.throws(()=>assertGenerationSettlement(generation),e=>e.code===errorCode&&/[\u3400-\u9fff]/u.test(e.message)&&!e.message.includes('PROVIDER_STREAM_INCOMPLETE'));
   const chunks=[];assert.throws(()=>sendGeneration({write:c=>chunks.push(c),end(){}},generation,'failed'),e=>e.code===errorCode);assert.equal(chunks.length,0);

@@ -27,7 +27,7 @@ export interface TurnTokenUsage {
 }
 const count = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) >= 0;
 const known = (row: GenerationTokenReceipt) => row.usageKnown !== false && count(row.inputTokens) && count(row.outputTokens);
-const pending = (row: GenerationTokenReceipt) => !['settled', 'failed'].includes(row.state);
+const pending = (row: GenerationTokenReceipt) => !['settled', 'failed', 'incomplete'].includes(row.state);
 
 /** Preserve only usage metadata, never model/tool output in the UI receipt. */
 export function generationTokenReceipt(row: GenerationTokenReceipt): GenerationTokenReceipt {

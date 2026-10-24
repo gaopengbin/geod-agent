@@ -1578,6 +1578,7 @@
           },
           "tags": {
             "type": "array",
+            "description": "OSM selectors are ORed. Omit value (or use *) to select every feature carrying a key, e.g. highway. A concrete value is an exact match, e.g. amenity=fire_station.",
             "items": {
               "type": "object",
               "properties": {
@@ -1614,7 +1615,7 @@
     "type": "function",
     "function": {
       "name": "data_download_start",
-      "description": "Start or resume a planned vector/3D data download in this conversation. Requires the exact native planHash and current workspace fullAccess. Returns promptly; the native background worker updates the task card. Do not keep polling or claim completion until a completed state and file inspection are observed.",
+      "description": "Start or resume a planned vector/3D data download in this conversation using the exact native planHash. Full Access starts immediately; Confirm Each waits for approval of that exact task in the native task card. After approval, reuse the same task and planHash; workspace-wide permission need not change. Already running or finished tasks return their persisted state without another download. Do not keep polling or claim completion until a completed state and file inspection are observed.",
       "parameters": {
         "type": "object",
         "properties": {

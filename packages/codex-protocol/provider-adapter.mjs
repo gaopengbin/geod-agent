@@ -16,7 +16,7 @@ export function channelSnapshot(config) {
     id: config.id, name: config.name ?? config.id, protocol: config.protocol,
     baseUrl: url.href.replace(/\/+$/, ''), model: config.model,
     credentialRef: config.credentialRef, contextWindow: config.contextWindow,
-    maxOutputTokens: config.maxOutputTokens ?? 4096,
+    maxOutputTokens: config.maxOutputTokens ?? Math.min(config.protocol === 'responses' ? 16384 : 4096,Math.floor(config.contextWindow/2)),
     inputModalities: Object.freeze([...(config.inputModalities ?? ['text'])]),
     thinking: config.thinking ?? null, billingScope: 'personal',
   };
@@ -101,10 +101,32 @@ export async function collectChat(body, contract, onDelta = () => {}) {
     if (choice?.finish_reason) finish = choice.finish_reason;
     if (content.length + reasoning.length + JSON.stringify([...calls]).length > 16_000_000) fail('PROVIDER_OUTPUT_TOO_LARGE');
   }
-  if (!['stop', 'tool_calls'].includes(finish)) fail(finish === 'length' ? 'PROVIDER_OUTPUT_TRUNCATED' : 'PROVIDER_STREAM_INCOMPLETE');
+  if (['length','content_filter'].includes(finish)) {
+    const error=responseTerminalError({id,model,status:'incomplete',incomplete_details:{reason:finish==='length'?'max_output_tokens':'content_filter'},output:[{type:'message',content:[{type:'output_text',text:content}]}]});
+    const measured=usageOf(usage);Object.assign(error.terminal,measured,{usageKnown:measured.inputTokens!==null&&measured.outputTokens!==null});throw error;
+  }
+  if (!['stop', 'tool_calls'].includes(finish)) fail('PROVIDER_STREAM_INCOMPLETE');
   const result = codexResult({content: content || null, reasoning_content: reasoning || null,
     tool_calls: [...calls.entries()].sort(([a], [b]) => a - b).map(([, call]) => call)}, contract.definitions);
   return {id, model, result, ...usageOf(usage)};
+}
+
+export function responseTerminalError(response, code = 'PROVIDER_RESPONSE_FAILED') {
+  const error = new ProviderError(code);
+  const reason = ['max_output_tokens','max_tokens','content_filter'].includes(response?.incomplete_details?.reason)
+    ? response.incomplete_details.reason : 'unknown';
+  if (response?.status === 'incomplete') error.code = ['max_output_tokens','max_tokens'].includes(reason) ? 'PROVIDER_OUTPUT_LIMIT' : 'PROVIDER_RESPONSE_INCOMPLETE';
+  error.message=error.code;
+  const usage = usageOf(response?.usage, true);
+  error.terminal = {
+    status: response?.status === 'incomplete' ? 'incomplete' : 'failed', reason,
+    id: typeof response?.id === 'string' ? response.id : null,
+    model: typeof response?.model === 'string' ? response.model : null,
+    ...usage, usageKnown: usage.inputTokens !== null && usage.outputTokens !== null,
+    // Keep the provider receipt, but never dispatch partial tool arguments.
+    result: {response, content: (response?.output ?? []).filter(i => i.type === 'message').flatMap(i => i.content ?? []).filter(p => p.type === 'output_text').map(p => p.text).join(''), toolCalls: [], phase: 'commentary'},
+  };
+  return error;
 }
 
 export async function collectResponses(body, onWire = () => {}) {
@@ -114,7 +136,8 @@ export async function collectResponses(body, onWire = () => {}) {
     let value; try { value = JSON.parse(event.data); } catch { fail('PROVIDER_STREAM_INVALID'); }
     const kind = value.type ?? event.event;
     if (!kind) fail('PROVIDER_STREAM_INVALID');
-    if (['response.failed', 'response.incomplete', 'error'].includes(kind)) fail('PROVIDER_RESPONSE_FAILED');
+    if (['response.failed', 'response.incomplete'].includes(kind)) throw responseTerminalError(value.response);
+    if (kind === 'error') fail('PROVIDER_RESPONSE_FAILED');
     onWire(kind, value);
     if (kind === 'response.completed') completed = value.response;
   }
@@ -157,10 +180,18 @@ export async function generateProvider(snapshot, apiKey, request, {generationId,
       error.diagnostic=await upstreamDiagnostic(response,body);throw error;
     }
     if (!response.body || !response.headers.get('content-type')?.startsWith('text/event-stream')) fail('PROVIDER_STREAM_REQUIRED');
-    const value = snapshot.protocol === 'responses'
+    let value;
+    try { value = snapshot.protocol === 'responses'
       ? await collectResponses(response.body, onWire) : ['anthropic','gemini'].includes(snapshot.protocol)
         ? await collectNativeProvider(snapshot,response.body,contract,onDelta,sseEvents)
         : await collectChat(response.body, contract, onDelta);
+    } catch (error) {
+      if (error.terminal) {
+        error.terminal.id ??= response.headers.get('x-request-id') ?? response.headers.get('x-oneapi-request-id');
+        error.terminal.model ??= snapshot.model;
+      }
+      throw error;
+    }
     return {...value, result: {...value.result, usage: {cachedInputTokens: value.cachedInputTokens, reasoningTokens: value.reasoningTokens}}, generationId, state: 'settled', channelId: snapshot.id, selectedModel: snapshot.model,
       billingScope: snapshot.billingScope, usageKnown: value.inputTokens !== null && value.outputTokens !== null};
   } catch (error) {

@@ -62,6 +62,14 @@ test('late payment is preserved for review, uncertain cancellation is not closur
     assert.equal((await f.request('/v1/payments/orders/'+order.orderId)).data.status,'payment-review');assert.equal((await f.request('/v1/payments/wallet')).data.balanceNanoCny,'0');
   }finally{await f.close();}
 });
+test('explicit incomplete releases the customer hold without charging a successful answer',async()=>{
+ const f=await fixture();try{
+  await f.makePaid();const id=randomUUID(),generation={generationId:id,state:'reserved',model:'deepseek-flash',billingScope:'hosted'};f.generations.set('geod-alice:'+id,generation);
+  await f.ledger.reserveGeneration('geod-alice',id,'1000000000');generation.state='incomplete';generation.inputTokens=100;generation.outputTokens=4096;
+  await f.ledger.settleGeneration('geod-alice',id);await f.ledger.settleGeneration('geod-alice',id);
+  const wallet=(await f.request('/v1/payments/wallet')).data;assert.equal(wallet.balanceNanoCny,'10000000000');assert.equal(wallet.reservedNanoCny,'0');assert.equal(generation.state,'incomplete');
+ }finally{await f.close()}
+});
 test('server-only usage charges precisely once; ambiguous provider usage keeps its reservation',async()=>{
   const f=await fixture();try{
     await f.makePaid();const id=randomUUID(),generation={generationId:id,state:'reserved',model:'deepseek-flash',billingScope:'hosted'};f.generations.set('geod-alice:'+id,generation);
