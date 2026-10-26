@@ -1,7 +1,7 @@
 // Versioned GeoD adapters: domain facts live here; the policy engine is generic.
 export const ERROR_CLASSES={
  transient:{codes:['REGISTRY_UNAVAILABLE','CONNECTOR_UNAVAILABLE','RATE_LIMITED','NETWORK_TIMEOUT','NETWORK_ERROR','HTTP_429','HTTP_502','HTTP_503','HTTP_504'],pattern:'(?:_NETWORK_ERROR|_TIMEOUT|_RATE_LIMITED)$',condition:'service cooldown or availability',recovery:'backoff'},
- parameter:{codes:['TOOL_ARGUMENT_INVALID','INVALID_BOUNDARY_SELECTION','INVALID_JOB_ID','MCP_RESULT_EXPORT_INVALID','REPLAN_AFTER_USER_INPUT'],pattern:'^(?:INVALID_|.*_INVALID$|.*_ARGUMENT)',condition:'corrected arguments or current requirement revision',recovery:'repair'},
+ parameter:{codes:['TOOL_ARGUMENT_INVALID','INVALID_BOUNDARY_SELECTION','INVALID_JOB_ID','MCP_RESULT_EXPORT_INVALID','REPLAN_AFTER_USER_INPUT','CRS_OPTION_CONFLICT'],pattern:'^(?:INVALID_|.*_INVALID$|.*_ARGUMENT)',condition:'corrected arguments or current requirement revision',recovery:'repair'},
  permission:{codes:['APPROVAL_REQUIRED','USER_INPUT_REQUIRED','GIS_WRITE_REQUIRED','WORKSPACE_WRITE_REQUIRED','PERMISSION_DENIED'],pattern:'(?:_APPROVAL_REQUIRED|_PERMISSION_DENIED|_WRITE_REQUIRED)$',condition:'native approval or workspace permission revision',recovery:'wait'},
  authentication:{codes:['AUTH_REQUIRED','LOGIN_REQUIRED','ACCOUNT_CHANGED','MCP_AUTH_REQUIRED','SOURCE_CREDENTIAL_REQUIRED','SOURCE_CREDENTIAL_UNAVAILABLE','SOURCE_CREDENTIAL_STORE'],pattern:'(?:_AUTH_REQUIRED|_LOGIN_REQUIRED)$',condition:'native authentication revision',recovery:'wait'},
  environment:{codes:['BACKGROUND_START','BACKGROUND_OFFLINE','BACKGROUND_STOPPED','BACKGROUND_VERSION','BACKGROUND_CREDENTIAL','BACKGROUND_AUTH','TASK_STATE_UNAVAILABLE'],condition:'native background availability revision',recovery:'wait-for-runtime'},
@@ -28,6 +28,10 @@ group('background_command_prepare background_command_start background_command_st
 group('source_configure source_registration_prepare sql_connection_connect data_connection_connect workspace_skill_import skill_connect mcp_connect gdal_connect tiles3d_connection_prepare',{effect:'prepare'});
 group('source_configure',{effect:'prepare',resource:['id'],conditionScope:'source-credential'});
 group('plan_imagery plan_imagery_batch data_download_plan imagery_recovery_plan',{effect:'prepare'});
+// These native preview tools persist a stable execution ID and never start a
+// download. A lost response can reopen that exact proposal, including after
+// the user has already started it. This does not apply to arbitrary mutations.
+group('plan_imagery plan_imagery_batch',{effect:'prepare',nativeIdempotentPrepare:true});
 group('workspace_boundary_use us_county_boundary boundaries_combine mcp_result_export agent_tasks_spawn agent_tasks_cancel data_download_start data_download_cancel data_download_discard data_download_load schedules_cancel_run schedules_create schedules_set_enabled data_schedules_create data_schedules_set_enabled data_schedules_cancel_run cache_maintenance_cancel',{effect:'external'});
 group('jobs_start',{effect:'external',purpose:'imagery-download-submit',resource:['planId'],conditionScope:'imagery-download-approval'});
 export function completionEvidence(tool,args,result){

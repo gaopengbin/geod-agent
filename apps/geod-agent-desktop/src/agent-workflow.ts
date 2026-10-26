@@ -162,6 +162,8 @@ export function userProvidedUrl(message: string, url: string): boolean {
 
 export function toolDisplay(name: string, output: unknown): Pick<DisplayMessage, "content" | "toolName" | "toolStatus" | "sourceDraft" | "extensionProposal" | "recoveryAction"> {
   const data = output && typeof output === "object" ? output as Record<string, unknown> : {};
+  if(data.error==='USER_STOPPED')return {toolName:name,toolStatus:'stopped',content:'已停止等待；本机任务请查看任务状态'};
+  if(name==='ask_user'&&data.error==='CRS_OPTION_CONFLICT')return {toolName:name,toolStatus:'attention',content:'补充需求 · 已拦下冲突的坐标系选项，等待模型修正'};
   if (name === "ask_user") return { toolName: name, toolStatus: data.error ? "attention" : "success", content: data.knownFacts ? "补充需求 · 已查明本机配置，无需重复询问" : data.error ? "补充需求 · 已取消或未完成" : "补充需求 · 已收到你的选择" };
   const title = name === "mcp_call" && data.kind === "builtin"
     ? ({ search_sources: "搜索网络图源", inspect_source: "检查图源服务", lookup_boundary: "查询行政边界", lookup_boundaries: "查询多个行政区域", lookup_neighbors: "查询相邻区域" }[String(data.toolName)] ?? "调用图源工具")

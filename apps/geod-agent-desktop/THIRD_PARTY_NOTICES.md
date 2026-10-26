@@ -281,6 +281,53 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+## EPSG coordinate-reference metadata (via PROJ)
+
+The read-only CRS option reference in `contracts/crs-options.v1.json` is
+generated from PROJ 9.5.1 `proj.db` (EPSG dataset v11.022). Its source checksum
+is recorded in that file. It checks explicit model-proposed central meridians;
+it is not a projection engine or a replacement for native GDAL validation.
+
+Upstream: https://proj.org/ and https://epsg.org/
+
+The PROJ distribution's license is retained in `vendor/PROJ-9.5.1-LICENSE.txt`.
+EPSG identifiers and names retain their authority attribution. This is an
+extracted reference, not a claim to publish or modify the EPSG dataset.
+
+
+All source, data files and other contents of the PROJ.4 package are
+available under the following terms.  Note that the PROJ 4.3 and earlier
+was "public domain" as is common with US government work, but apparently
+this is not a well defined legal term in many countries.  I am placing
+everything under the following MIT style license because I believe it is
+effectively the same as public domain, allowing anyone to use the code as
+they wish, including making proprietary derivatives.
+
+Though I have put my own name as copyright holder, I don't mean to imply
+I did the work.  Essentially all work was done by Gerald Evenden.
+
+ --------------
+
+ Copyright (c) 2000, Frank Warmerdam
+
+ Permission is hereby granted, free of charge, to any person obtaining a
+ copy of this software and associated documentation files (the "Software"),
+ to deal in the Software without restriction, including without limitation
+ the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ and/or sell copies of the Software, and to permit persons to whom the
+ Software is furnished to do so, subject to the following conditions:
+
+ The above copyright notice and this permission notice shall be included
+ in all copies or substantial portions of the Software.
+
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+ OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+ THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ DEALINGS IN THE SOFTWARE.
+
 ## RTK (optional component)
 
 RTK 0.40.0 is downloaded separately from the official release and verified

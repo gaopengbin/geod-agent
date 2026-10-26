@@ -1,6 +1,6 @@
 import { t, localize } from "./i18n";
 // i18n: presentation strings migrated
-import { Activity, ArrowDownToLine, ArrowRight, Bot, Check, CheckCircle2, ChevronDown, ChevronRight, CircleAlert, Copy, FolderOpen, Terminal } from "./icons";
+import { Activity, ArrowDownToLine, ArrowRight, Bot, Check, CheckCircle2, ChevronDown, ChevronRight, CircleAlert, Copy, FolderOpen, Square, Terminal } from "./icons";
 import "./codex-work.css";
 import { Fragment, memo, useEffect, useId, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
@@ -286,7 +286,7 @@ export function ChatTranscript({ conversationId, messages, busy, activity, activ
           </Message>
         : item.role === "tool"
           ? <motion.div className={`agent-step ${item.toolStatus === "attention" ? "attention" : ""} ${item.toolStatus === "running" ? "agent-step-running" : ""}`} key={item.id} role="status" initial={busy ? { opacity: 0, x: -22, y: 8, scale: 0.96 } : false} animate={{ opacity: 1, x: 0, y: 0, scale: 1 }} transition={{ type: "spring", stiffness: 370, damping: 27, mass: 0.7 }}>
-              <span className="agent-step-icon">{item.toolStatus === "running" ? <MessageTyping label={t("正在调用工具")} /> : item.toolStatus === "attention" ? <CircleAlert size={17} /> : <CheckCircle2 size={17} />}</span>
+              <span className="agent-step-icon">{item.toolStatus === "running" ? <MessageTyping label={t("正在调用工具")} /> : item.toolStatus === "attention" ? <CircleAlert size={17} /> : item.toolStatus === 'stopped' ? <Square size={15}/> : <CheckCircle2 size={17} />}</span>
               <div className="agent-step-content"><span>{item.content}</span>{item.recoveryAction==='background'&&<Button type="button" size="sm" variant="outline" onClick={()=>window.dispatchEvent(new Event('geod:background-open'))}>{t("恢复后台")}</Button>}{item.sourceDraft && <div className="agent-source-review"><strong>{item.sourceDraft.source.name}</strong><span>{item.sourceDraft.source.urlTemplate}</span><small>{item.sourceDraft.credentialOnly?t("图源已保存，补全本机认证后继续原任务。"):t("已整理图源配置。请核对服务地址和参数。")}</small><Button type="button" size="sm" variant="outline" onClick={() => onReviewSource(item.sourceDraft!)}>{item.sourceDraft.credentialOnly?t("填写认证并继续"):t("查看配置")}<ArrowRight size={16} /></Button></div>}{item.extensionProposal && <ExtensionReview proposal={item.extensionProposal} busy={busy} onApprove={onApproveExtension} conversationId={conversationId} onConfigured={onConfigureExtension} />}</div>
             </motion.div>
           : <article className={`agent-work-entry ${item.phase === "progress" ? "progress" : "final"} ${busy && messages.at(-1)?.id === item.id ? "is-live" : ""} ${item.streaming ? "is-streaming" : ""}`} key={item.id} data-slot="message" data-from="assistant">

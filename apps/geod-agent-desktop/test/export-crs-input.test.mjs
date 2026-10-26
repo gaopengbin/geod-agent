@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {knownCrsChoice,requestCrsIntent,reuseCrsQuestions} from '../src/export-crs-input.ts';
+import {knownCrsChoice,preservedTaskCrsChoice,requestCrsIntent,reuseCrsQuestions} from '../src/export-crs-input.ts';
 import {exportCrsQuestions,resolveExportCrs} from '../src/export-crs.ts';
 import {inputOrigin,answeredCrsChoice,userInputReplyText} from '../src/user-input-records.ts';
 import {revisionCrsForQuestions,inheritedImageryCrs} from '../src/imagery-revision.ts';
@@ -11,6 +11,21 @@ const record={requestId:'original-card',questions:exportCrsQuestions,status:'ans
 const history=[{id:'initial',role:'user',content:record.userText},{id:'selection',role:'tool',content:'已收到选择',userInput:record}];
 const reworded=[{id:'projection_again',header:'导出投影',question:'这次成果使用什么坐标系？',options:[{label:'Web 墨卡托',description:'EPSG:3857'}]},
  {id:'scope_again',header:'应用范围',question:'坐标系应用到哪里？',options:[{label:'仅本次任务',description:''},{label:'当前会话默认',description:''}]}];
+
+test('source-only amendments before a plan exists retain the accepted task CRS without answering a source or reusing approval',()=>{
+ const failed={id:'no-key',role:'tool',toolName:'plan_imagery',details:JSON.stringify({arguments:{exportOptions:{targetCrs:'EPSG:3857'}},result:{error:'SOURCE_CREDENTIAL_REQUIRED'}}),content:'等待认证'};
+ const change={id:'source-change',role:'user',content:'我没有 Key，帮我换成不用 Key 的图源，刚才的其他设置保持不变。\n已附加边界：district.geojson · 2 个面'};
+ const messages=[...history,failed,change];
+ const choice=knownCrsChoice(messages,change.id,'EPSG:4490');
+ assert.deepEqual(choice,{crs:'EPSG:4326',session:false,source:'acceptedAnswer',requirementUserMessageId:'initial'});
+ const source={id:'source',header:'图源',question:'使用哪个图源？',options:[{label:'Esri',description:''},{label:'其他',description:''}]};
+ assert.deepEqual(reuseCrsQuestions([...reworded,source],choice).remaining,[source]);
+ assert.equal(reuseCrsQuestions(reworded,choice).knownFacts.requirementUserMessageId,'initial');
+ assert.equal(knownCrsChoice([...messages,{id:'resume',role:'user',content:'继续刚才的任务。'}],'resume').crs,'EPSG:4326');
+ for(const content of ['下载另一座城市的影像','换源，坐标系改成高斯投影','换源，范围改成别处，其余设置不变','新建另一个任务换源，刚才的其余设置不变','“换源，刚才的其他设置不变”是示例'])assert.equal(preservedTaskCrsChoice([...history,{...change,content}],change.id),null,content);
+ // An assistant claim or generated plan argument is not a confirmed CRS.
+ assert.equal(preservedTaskCrsChoice([history[0],failed,change],change.id),null);
+});
 
 test('rephrased CRS and scope questions reuse a real task answer without trusting model options',()=>{
  const before=JSON.stringify(history),choice=knownCrsChoice(history,'initial','EPSG:4490');

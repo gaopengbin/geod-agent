@@ -3,6 +3,14 @@ import test from "node:test";
 import { boundaryLookupReply, pendingPlanLabel, sourceRegistrationDraft, toolDisplay, userProvidedUrl, workspacePermissionContext } from "../src/agent-workflow.ts";
 import { boundedContext } from "../src/conversation-context.ts";
 
+test('a normal user stop is neutral and does not claim that a native download failed',()=>{
+ const row=toolDisplay('data_download_start',{error:'USER_STOPPED',message:'已停止等待确认'});
+ assert.equal(row.toolStatus,'stopped');assert.doesNotMatch(row.content,/失败|LOCAL_TOOL_ERROR/);
+ assert.match(row.content,/本机任务.*状态/);
+ const conflict=toolDisplay('ask_user',{error:'CRS_OPTION_CONFLICT'});
+ assert.match(conflict.content,/选项.*修正/);assert.doesNotMatch(conflict.content,/取消/);
+});
+
 test("fresh native permission overrides stale history, survives compaction and preserves user links", () => {
   const link = "https://example.org/skills/geo/SKILL.md";
   const messages = [{ role: "user", content: "只要生成计划。" }, { role: "assistant", content: "当前是 Confirm Each，请确认计划。" },

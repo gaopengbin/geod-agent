@@ -19,7 +19,7 @@ type CodexEventPayload =
   | { type: "connection"; state:'connected'|'reconnecting'|'unavailable'; attempt?:number; details?:string }
   | { type: "steered"; text: string; input?:string;requestId?: string;imageIds?:string[];documentIds?:string[] }
   | { type: "commandError"; message: string; commandType?: string; requestId?: string; code?: string;outcomeUnknown?:boolean }
-  | { type: "tool"; requestId: string; tool: string; arguments: Record<string, unknown>; callId: string; threadId: string };
+  | { type: "tool"; requestId: string; tool: string; arguments: Record<string, unknown>; callId: string; threadId: string;operationId?:string };
 export type CodexEvent=CodexEventPayload&{sequence?:number;runId?:string;emittedAt?:number};
 export type CodexRunSnapshot=RunSnapshot<CodexResult>;
 export interface CodexResult { threadId: string; id: string; status: "completed" | "interrupted" | "failed"; text: string;durationMs?:number; error?: { message: string } | null }
@@ -77,12 +77,15 @@ export async function runCodexTurn(runId: string, conversationId: string, input:
       } else if (event.type === "tool") {
         await checkpoint;
         const call: AgentToolCall = { id: event.callId, type: "function", function: { name: event.tool, arguments: JSON.stringify(event.arguments) } };
-        const output = await hooks.execute(call, `codex:${conversationId}`, context,event.requestId);
+        const output = await hooks.execute(call, event.operationId?`runtime-operation:${event.operationId}`:`codex:${conversationId}`, context,event.requestId);
         context = [...context, { role: "assistant", content: null, tool_calls: [call] }, { role: "tool", tool_call_id: call.id, content: JSON.stringify(output.result) }];
         await respond(event.requestId, output);
       }
     } catch (cause) {
       if (event.type === "request" || event.type === "tool") await respond(event.requestId, null, errorMessage(cause)).catch(() => {});
+      // A malformed model question is returned to Core as a request error so
+      // it can correct the question. It is not a failed user interaction.
+      if(event.type==='request'&&event.method==='item/tool/requestUserInput'&&(cause as {code?:string})?.code==='CRS_OPTION_CONFLICT')return;
       callbacksError = cause;
       if ((event.type !== "request" && event.type !== "tool") || runtimeCompatibilityFailure(cause)) await api.codexCommand(runId, { type: "interrupt" }).catch(() => {});
     }finally{if(callback)processing.delete(callback);}

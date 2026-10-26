@@ -2,7 +2,7 @@ import {humanCrsIntent,normalizeExportCrs} from './export-crs.ts';
 import {answeredCrsChoice,inputOrigin} from './user-input-records.ts';
 import type {DisplayMessage} from './pending-generations';
 import type {UserInputQuestion,UserInputReply} from './user-input';
-import type {InheritedImageryCrs} from './imagery-revision';
+import {sourceRevision,type InheritedImageryCrs} from './imagery-revision.ts';
 
 /** Continuations keep the original human instruction, including its explicit CRS. */
 export function requestCrsIntent(messages:DisplayMessage[],userMessageId?:string){
@@ -12,7 +12,26 @@ export function requestCrsIntent(messages:DisplayMessage[],userMessageId?:string
  return origin!==userMessageId?humanCrsIntent(messages.find(m=>m.id===origin&&m.role==='user')?.content??''):latest;
 }
 
-export interface KnownCrsChoice {crs:string;session:boolean;source:'humanRequest'|'acceptedAnswer'|'existingPlan'|'conversationDefault';planId?:string}
+export interface KnownCrsChoice {crs:string;session:boolean;source:'humanRequest'|'acceptedAnswer'|'existingPlan'|'conversationDefault';planId?:string;requirementUserMessageId?:string;resampling?:'nearest'|'bilinear'|'cubic'}
+
+/** A source-only amendment can precede the first native plan (e.g. no Key).
+ * Carry the human's CRS choice, not the model's attempted plan arguments.
+ * Other questions, source approvals and task permissions keep their own scope. */
+export function preservedTaskCrsChoice(messages:DisplayMessage[],userMessageId?:string):KnownCrsChoice|null {
+ const origin=inputOrigin(messages,userMessageId),index=messages.findIndex(m=>m.id===origin&&m.role==='user');
+ if(index<0)return null;
+ const direct=messages[index].content.split(/\n已附加边界：/)[0].trim(),intent=humanCrsIntent(direct);
+ if(!sourceRevision(direct)||intent.crs||intent.clear||intent.needsClarification)return null;
+ if(/```|[“”"‘’]|\bif\b|如果|除非|(?:新|另外|另一个|另一份)(?:任务|区域|影像|下载)|(?:下载|获取|download).*(?:市|区|县|省|city|region)/i.test(direct))return null;
+ if(!/(?:刚才|当前|原(?:来)?)(?:的|这份|这个|任务|计划)?|previous|current|same/i.test(direct)||!/(?:其他|其它|其余)(?:参数|设置|要求)?(?:都|均)?(?:保持|继续)?(?:不变|照旧)|keep.*(?:other|rest).*unchanged/i.test(direct))return null;
+ const previous=[...messages.slice(0,index)].reverse().find(m=>m.role==='user');
+ if(!previous)return null;
+ const priorIntent=requestCrsIntent(messages,previous.id),accepted=answeredCrsChoice(messages,previous.id);
+ if(priorIntent.clear||priorIntent.needsClarification&&!accepted)return null;
+ const choice=priorIntent.crs?{crs:priorIntent.crs,session:priorIntent.session,source:'humanRequest' as const}:accepted?{crs:accepted.crs,session:accepted.session,source:'acceptedAnswer' as const}:null;
+ return choice?{...choice,...(accepted?.resampling?{resampling:accepted.resampling}:{}),requirementUserMessageId:inputOrigin(messages,previous.id)}:null;
+}
+
 export function knownCrsChoice(messages:DisplayMessage[],userMessageId:string|undefined,conversationDefault?:string|null,inherited?:InheritedImageryCrs|null):KnownCrsChoice|null {
  const intent=requestCrsIntent(messages,userMessageId);
  if(intent.clear)return null;
@@ -20,6 +39,7 @@ export function knownCrsChoice(messages:DisplayMessage[],userMessageId:string|un
  const accepted=answeredCrsChoice(messages,userMessageId);
  if(accepted)return {crs:accepted.crs,session:accepted.session,source:'acceptedAnswer'};
  if(intent.needsClarification)return null;
+ const preserved=preservedTaskCrsChoice(messages,userMessageId);if(preserved)return preserved;
  if(inherited)return {crs:inherited.crs,session:false,source:'existingPlan',planId:inherited.planId};
  const crs=conversationDefault?normalizeExportCrs(conversationDefault):null;
  return crs?{crs,session:true,source:'conversationDefault'}:null;
@@ -50,6 +70,6 @@ export function reuseCrsQuestions(questions:UserInputQuestion[],choice:KnownCrsC
   const kind=choice?crsQuestionKind(q):null;if(!kind)return true;
   reused.answers[q.id]={answers:[kind==='crs'?choice!.crs:choice!.session?'当前会话默认':'仅本次任务']};return false;
  });
- const knownFacts=Object.keys(reused.answers).length?{targetCrs:choice!.crs,scope:choice!.session?'conversation':'task',source:choice!.source,...(choice!.planId?{planId:choice!.planId}:{}),message:'沿用已明确的成果坐标系，不重复询问；没有新增或修改会话默认。'}:undefined;
+ const knownFacts=Object.keys(reused.answers).length?{targetCrs:choice!.crs,scope:choice!.session?'conversation':'task',source:choice!.source,...(choice!.planId?{planId:choice!.planId}:{}),...(choice!.requirementUserMessageId?{requirementUserMessageId:choice!.requirementUserMessageId}:{}),message:'沿用已明确的成果坐标系，不重复询问；没有新增或修改会话默认。'}:undefined;
  return {remaining,reused,knownFacts};
 }

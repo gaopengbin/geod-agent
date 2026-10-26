@@ -194,7 +194,7 @@ export async function createHost({codex,home,sqliteHome=home,toolsFile,emit,rece
   const heartbeat=setInterval(()=>{if(run)notify({type:'heartbeat'});},3000);
   const cancelBackgroundWaits=()=>{for(const [requestId,entry]of callbacks)if(entry.backgroundWait){notify({type:'backgroundWaitCancel',requestId});entry.resolve({error:'BACKGROUND_WAIT_DETACHED',state:'unknown',verified:false});entry.deadline.close();callbacks.delete(requestId);}};
   const interrupt=createTurnInterrupt({getRun:()=>run,cancel:()=>{policy.cancel();cancelBackgroundWaits();},rpc});
-  const refreshFacts=async()=>{if(capabilities.runtimePolicyNative){const facts=await ask('policyState',{}, {timeout:10000});if(facts.error){policy.cancel();throw Object.assign(new Error(facts.message),{code:facts.error});}policy.setFacts(facts);}};
+  const refreshFacts=async()=>{if(capabilities.runtimePolicyNative){const facts=await ask('policyState',{}, {timeout:10000});if(facts.error){policy.cancel('native-state-unavailable');throw Object.assign(new Error(facts.message),{code:facts.error});}policy.setFacts(facts);}};
   const server=createServer(async(req,res)=>{
     let streamStarted=false;
     try {

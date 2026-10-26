@@ -35,8 +35,10 @@ import { SchedulesPage } from "./schedules-page";
 import { requestScheduleFocus } from "./schedule-navigation";
 import { api, desktopAvailable, errorMessage, type AgentMessage, type AgentToolCall, type BoundaryImport, type DataInputRequest, type DataConnectionDraft, type DataConnectionResult, type Generation, type Job, type ModelUsage, type OnlineSkillCandidate, type RegistryMcpItem, type SkillSourceCandidate, type SourceRegistrationDraft, type StoredPlan, type WorkspaceSettings } from "./api";
 import { crsFromAnswers, exportCrsQuestions, humanCrsIntent, isExportPlan, resolveExportCrs } from "./export-crs";
-import {hasReusableCrsQuestion,knownCrsChoice,requestCrsIntent,reuseCrsQuestions} from './export-crs-input';
+import {hasReusableCrsQuestion,knownCrsChoice,preservedTaskCrsChoice,requestCrsIntent,reuseCrsQuestions} from './export-crs-input';
 import {ensureExportRuntime} from "./runtime-compatibility";
+import {crsQuestionConflict,CrsQuestionConflict} from './crs-option-validation';
+import {nativeToolExecutionId} from './tool-execution-id';
 import {listen} from "@tauri-apps/api/event";
 import {GisInstallCard} from "./gis-install-card";
 import {GisInstallFlow,type GisInstallRequest} from "./gis-install-flow";
@@ -908,7 +910,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
           else if(intent.session && intent.crs) workspace=await api.workspaceSetOutputCrs(conversationId,intent.crs);
           exportCrsPreferenceProcessed.current=human?.id;
         }
-        const accepted=exportCrsChoice.current?.userMessageId===human?.id ? exportCrsChoice.current : answeredCrsChoice(displayRef.current,human?.id);
+        const accepted=exportCrsChoice.current?.userMessageId===human?.id ? exportCrsChoice.current : answeredCrsChoice(displayRef.current,human?.id)??preservedTaskCrsChoice(displayRef.current,human?.id);
         const inherited=!accepted?await inheritedImageryCrs({messages:displayRef.current,userMessageId:human?.id,toolName:call.function.name,args,planIds:planIdsRef.current,activeBoundary:boundaryRef.current},api.plansGet):null;
         let answer=accepted??inherited;
         const raster=call.function.name!=="data_download_plan";
@@ -945,6 +947,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
         if(requestRevision!==humanRequestRevision.current)return {error:'REPLAN_AFTER_USER_INPUT',message:'用户请求已更新，请依据最新请求重新规划。'};
         if(!established.remaining.length)return {...established.reused,knownFacts:established.knownFacts,reusedPreviousAnswer:true};
         questions=established.remaining;
+         const conflict=crsQuestionConflict(questions);if(conflict)return conflict;
         if(questions.some(q=>/(?:MCP|服务|server)/i.test(q.question)&&/(?:地址|endpoint|url)/i.test(q.question))){
           const known=knownSavedMcpAddress(questions,(await api.extensionsList()).connectors,displayRef.current.find(m=>m.id===userMessageId)?.content??'');
           if(known)return known;
@@ -1189,7 +1192,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
       }
       if (call.function.name === "plan_imagery_batch") {
         await sourceCredentialPreflight([args.sourceId,...(Array.isArray(args.overlaySourceIds)?args.overlaySourceIds:[])].filter((id):id is string=>typeof id==='string'));
-        const result = await planImagery(args, conversationId, `${generationId}:${call.id}`, boundaryRef.current, true);
+        const result = await planImagery(args, conversationId, nativeToolExecutionId(generationId,call.id), boundaryRef.current, true);
         for (const item of result.plans) {
           assertPlanAvailable(localStateStore, accountId, conversationId, item.stored.planId);
           rememberPlan(item.stored, { userMessageId, toolMessageId, dataName: item.rangeName });
@@ -1199,7 +1202,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
         return { mode: args.mode, plans: result.plans.map(item => ({ ...compactPlan(item.stored, permission), name: defaultPlanTitle(item.rangeName, item.stored.plan.sourceName) })), errors: result.errors };
       }
       if (call.function.name === "plan_imagery") {
-        const toolExecutionId = `${generationId}:${call.id}`;
+        const toolExecutionId = nativeToolExecutionId(generationId,call.id);
         const previous = await api.plansForToolExecution(toolExecutionId);
         if (previous) {
           assertPlanAvailable(localStateStore, accountId, conversationId, previous.planId);
@@ -1691,6 +1694,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
           const established=await establishedCrsInput(questions,userMessageId);
           if(!established.remaining.length)return established.reused;
           questions=established.remaining;
+           const conflict=crsQuestionConflict(questions);if(conflict)throw new CrsQuestionConflict(conflict);
           userInputGate.current.begin();
           const value = await waitForUserInput({...request,params:{...request.params,questions}});
           if(isDetachedUserInput(value)){userInputGate.current.waiting=false;return {answers:{}};}

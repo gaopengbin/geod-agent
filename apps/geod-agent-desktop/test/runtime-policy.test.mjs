@@ -11,6 +11,49 @@ const declared=JSON.parse(readFileSync(new URL('../src-tauri/codex-tools.json',i
 const params={conversationId:'policy-test',input:'下载所选范围，保留确认的参数',permission:'fullAccess',outputCrs:'EPSG:4326'};
 function fixture(){const home=mkdtempSync(join(tmpdir(),'geod-policy-'));let now=100000,signals=[];const policy=new RuntimePolicy(home,declared,{now:()=>now,onSignal:s=>signals.push(s)});policy.begin(params,{inputModalities:['text']});return{home,policy,signals,tick:ms=>now+=ms};}
 
+test('stopping an approval wait preserves an uncertain native submission without counting a failure or replaying it',async()=>{
+ const {policy,home,signals}=fixture();const args={taskId:'stopped-task',planHash:'approved-plan'};
+ policy.setFacts({permission:'fullAccess',outputCrs:params.outputCrs});
+ await policy.execute('data_download_start',args,'wait',()=>({error:'USER_STOPPED'}));
+ const op=Object.values(policy.state.operations).find(o=>o.tool==='data_download_start');
+ assert.equal(op.state,'unknown');assert.equal(op.recovery,'reconcile');
+ assert.deepEqual(policy.state.failures,{});assert.equal(policy.state.stagnation,0);assert.equal(signals.length,0);
+ const restored=new RuntimePolicy(home,declared);restored.begin(params,{});
+ assert.equal((await restored.execute('data_download_start',args,'again',()=>assert.fail('must reconcile first'))).error,'OPERATION_RECONCILIATION_REQUIRED');
+ restored.setFacts({permission:'fullAccess',outputCrs:params.outputCrs,imagery:{data:{available:true,tasks:[{taskId:'stopped-task',planHash:'different-plan',state:'completed'}]}}});
+ assert.equal(Object.values(restored.state.operations).find(o=>o.tool==='data_download_start').state,'unknown');
+ await restored.execute('data_download_get',{taskId:'stopped-task'},'read-receipt',()=>({taskId:'stopped-task',planHash:'approved-plan',status:'completed'}));
+ const reused=await restored.execute('data_download_start',args,'after-read',()=>assert.fail('completed task must not restart'));
+ assert.equal(reused.taskId,'stopped-task');assert.equal(reused.reconciled,true);assert.deepEqual(restored.state.failures,{});
+});
+
+test('an interrupted native plan reopens its durable operation receipt while unknown downloads stay blocked',async()=>{
+ const {policy,home}=fixture();const args={sourceId:'fixture',bounds:[1,2,3,4],zoom:15,outputFormats:['geotiff']};let identity;
+ await policy.execute('plan_imagery',args,'model-call-a',(_args,id)=>{identity=id;return{error:'USER_STOPPED'};});policy.finish('interrupted');
+ const restored=new RuntimePolicy(home,declared);restored.begin(params,{});
+ const result=await restored.execute('plan_imagery',args,'model-call-b',(_args,id)=>{assert.equal(id,identity);return{planId:'same-native-plan'};});
+ assert.equal(result.planId,'same-native-plan');assert.equal(restored.view().unresolvedOperations.length,0);
+ const legacy=fixture();await legacy.policy.execute('plan_imagery',args,'old',()=>({error:'USER_STOPPED'}));for(const op of Object.values(legacy.policy.state.operations))delete op.nativeExecutionId;
+ assert.equal((await legacy.policy.execute('plan_imagery',args,'unknown',()=>assert.fail())).error,'OPERATION_RECONCILIATION_REQUIRED');
+ legacy.policy.setFacts({permission:'fullAccess',imagery:{available:true,planCount:0,omitted:0,tasks:[]}});
+ assert.equal((await legacy.policy.execute('plan_imagery',args,'absent',()=>({planId:'first-native-plan'}))).planId,'first-native-plan');
+});
+
+test('a user stop racing the closing callback remains neutral, including when the next run already began',async()=>{
+ for(const startNext of [false,true]){
+  const {policy}=fixture();let reject;
+  const pending=policy.execute('jobs_start',{planId:'native-approval-wait'},'inflight',()=>new Promise((_resolve,fail)=>{reject=fail;}));
+  policy.cancel();policy.finish('interrupted');if(startNext)policy.begin(params,{});
+  reject(new Error('Codex turn ended'));
+  assert.equal((await pending).error,'USER_STOPPED');assert.deepEqual(policy.state.failures,{});
+  assert.equal(Object.values(policy.state.operations)[0].state,'unknown');
+ }
+ const {policy}=fixture();let reject;
+ const pending=policy.execute('jobs_start',{planId:'unavailable'},'failure',()=>new Promise((_resolve,fail)=>{reject=fail;}));
+ policy.cancel('native-state-unavailable');reject(new Error('State source unavailable'));
+ assert.equal((await pending).error,'OPERATION_RESULT_UNKNOWN');assert.equal(Object.values(policy.state.failures).length,1);
+});
+
 test('a source credential failure waits for that source, survives a new call and does not block other sources',async()=>{
  const {policy,home}=fixture();
  const facts={permission:'fullAccess',sourceReadiness:{available:true,sources:{a:{state:'missing',revision:'pending'},b:{state:'ready',revision:'b1'}},plans:{'plan-a':['a'],'plan-b':['b']}}};

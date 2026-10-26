@@ -131,6 +131,16 @@ export class RuntimePolicy {
    const job=facts.imagery?.tasks?.find(t=>t.planId===op.resource?.[0]&&t.jobId&&t.state!=='not_started');
    if(job){op.state='succeeded';op.result={jobId:job.jobId,planId:job.planId,state:job.state,reconciled:true};delete op.recovery;}
   }
+  for(const task of facts.imagery?.data?.tasks??[])this.reconcileDataSubmission(task);
+ }
+ reconcileDataSubmission(task){
+  const id=task?.taskId??task?.id,state=task?.state??task?.status;
+  if(!id||!task.planHash||!['pending','queued','downloading','processing','verifying','completed','partial','failed','cancelled','paused','interrupted'].includes(state))return;
+  for(const op of Object.values(this.state.operations))if(op.state==='unknown'&&op.tool==='data_download_start'&&op.resource?.[0]===id&&op.nativePlanHash===task.planHash){
+   op.state=state==='pending'?'not-submitted':'succeeded';
+   if(op.state==='succeeded')op.result={taskId:id,planHash:task.planHash,status:state,reconciled:true};
+   delete op.recovery;
+  }
  }
  view(){return{version:this.state.version,revision:this.state.revision,goal:this.state.goal,run:this.state.run,requirements:this.state.requirements,workflow:this.workflow.view(),contract:this.state.contract,capabilities:{inputModalities:this.capabilities?.inputModalities??['text']},unresolvedOperations:Object.values(this.state.operations).filter(o=>['pending','unknown'].includes(o.state)).map(({id,tool,state,recovery})=>({id,tool,state,recovery})),failures:Object.values(this.state.failures).slice(-12),evidence:Object.values(this.state.evidence).slice(-12),metrics:this.state.metrics,lastDecision:this.state.lastDecision};}
  compactView(){
@@ -250,10 +260,15 @@ export class RuntimePolicy {
   const operationKey=hash([goalId,this.state.goal.revision,canonicalTool,canonicalArgs]);
   const prior=this.state.operations[operationKey];
   const unknown=Object.values(this.state.operations).find(op=>op.state==='unknown'&&op.tool===canonicalTool&&op.argsHash===hash(canonicalArgs));
-  if(unknown)return error('OPERATION_RECONCILIATION_REQUIRED','A previous submission with these arguments has an unknown outcome; reconcile its native receipt first.',{operationId:unknown.id});
+  // Reviewed native planning has its own durable, account/workspace-scoped
+  // idempotency receipt. Legacy operations without that ID are only safe to
+  // resume when a complete fresh native ledger proves no proposal exists.
+  const legacyAbsent=this.facts.imagery?.available===true&&this.facts.imagery.planCount===0&&this.facts.imagery.omitted===0;
+  const resumePrepare=desc.nativeIdempotentPrepare&&unknown&&(unknown.nativeExecutionId===true||legacyAbsent);
+  if(unknown&&!resumePrepare)return error('OPERATION_RECONCILIATION_REQUIRED','A previous submission with these arguments has an unknown outcome; reconcile its native receipt first.',{operationId:unknown.id});
   if(desc.effect!=='read'&&desc.effect!=='interactive'&&prior){
    if(canonicalTool!=='data_download_plan'&&desc.effect!=='opaque'&&prior.state==='succeeded'&&(!prior.expiresAt||prior.expiresAt>this.now())){this.state.metrics.reused++;this.audit('operation-reused',{tool,operationId:prior.id});return rewrap(prior.resultRef?JSON.parse(readFileSync(join(this.results,prior.resultRef),'utf8')):clean(prior.result));}
-   if(['pending','unknown'].includes(prior.state))return error('OPERATION_RECONCILIATION_REQUIRED','The previous submission may have taken effect. Read its native status/receipt before resubmitting.',{operationId:prior.id});
+   if(['pending','unknown'].includes(prior.state)&&!resumePrepare)return error('OPERATION_RECONCILIATION_REQUIRED','The previous submission may have taken effect. Read its native status/receipt before resubmitting.',{operationId:prior.id});
   }
   if(tool==='ask_user'){
    const reused={};let missing=false;
@@ -272,15 +287,17 @@ export class RuntimePolicy {
     return {...clean(memo.result),reusedDiscovery:true};
   }
   if(this.pending.has(operationKey))return this.pending.get(operationKey);
+  const dispatchRun=this.state.run;
   const work=(async()=>{
-    const operation={id:randomUUID(),tool:canonicalTool,state:'pending',goalId,revision,argsHash:hash(canonicalArgs),resource:desc.resource};
+    const operation={id:resumePrepare?unknown.id:randomUUID(),tool:canonicalTool,state:'pending',goalId,revision,argsHash:hash(canonicalArgs),resource:desc.resource,...(desc.nativeIdempotentPrepare?{nativeExecutionId:true}:{}),...(canonicalTool==='data_download_start'?{nativePlanHash:canonicalArgs.planHash}:{})};
+   if(resumePrepare){unknown.state='resumed';unknown.recovery='native-idempotency-receipt';this.audit('prepare-receipt-resume',{tool,operationId:operation.id});}
    if(desc.effect!=='read'&&desc.effect!=='interactive')this.state.operations[operationKey]=operation;
    this.audit('dispatch',{tool,operationId:operation.id});
    let result;
    for(let attempt=0;;attempt++){
     if(this.cancelled||revision!==this.state.revision){result=error('TASK_REVISION_CHANGED','The user or requirements changed before dispatch. Replan with the current checkpoint.');break;}
     try{this.state.metrics.executed++;result=await dispatch(args,operation.id);}
-    catch(cause){result={error:cause.code??(desc.effect==='read'?'TOOL_INTERNAL_ERROR':'OPERATION_RESULT_UNKNOWN'),message:String(cause.message)};}
+    catch(cause){result={error:dispatchRun?.stopReason==='user'?'USER_STOPPED':cause.code??(desc.effect==='read'?'TOOL_INTERNAL_ERROR':'OPERATION_RESULT_UNKNOWN'),message:String(cause.message)};}
     if(result?.answers)this.learn(tool,args,result);
     const failure=failureOf(result);
     if(!failure||failure.category!=='transient'||desc.effect!=='read'||attempt>=GEOD_POLICY.transientRetries)break;
@@ -290,7 +307,13 @@ export class RuntimePolicy {
     this.state.metrics.retries++;await new Promise(resolve=>setTimeout(resolve,delay));
    }
    const failure=failureOf(result);
-   if(failure){
+    if(failure?.code==='USER_STOPPED'){
+     // Stopping an AI wait is not evidence that its native side effect failed
+     // or was cancelled. Keep the exact operation for native reconciliation.
+     operation.state=desc.effect==='read'||desc.effect==='interactive'?'cancelled':'unknown';
+     operation.recovery=operation.state==='unknown'?'reconcile':'wait';
+     this.audit('user-stopped-wait',{tool,operationId:operation.id,state:operation.state});
+    }else if(failure){
     const scope=this.failureScope(failure,desc);
     const key=hash([scope,failure.category]),previous=this.state.failures[key];
     this.state.failures[key]={...failure,scope,condition:this.condition(failure,desc),attempts:(previous?.attempts??0)+1,recovery:ERROR_CLASSES[failure.category].recovery,retryAt:failure.category==='transient'?this.now()+Math.max(failure.retryAfterMs,GEOD_POLICY.cooldownMs):null};
@@ -333,6 +356,7 @@ export class RuntimePolicy {
   if(['jobs_list','jobs_get','jobs_events'].includes(tool)){
    for(const job of result?.jobs??[result])if(job?.jobId&&job.planId&&job.state&&job.state!=='not_started')for(const op of Object.values(this.state.operations))if(op.state==='unknown'&&op.tool==='jobs_start'&&op.resource?.[0]===job.planId){op.state='succeeded';op.result={jobId:job.jobId,planId:job.planId,state:job.state,reconciled:true};delete op.recovery;}
   }
+  if(['data_download_get','data_download_list'].includes(tool))for(const task of Array.isArray(result)?result:result?.tasks??[result])this.reconcileDataSubmission(task);
   if(tool==='ask_user'&&result?.answers){let changed=false;for(const q of args.questions){const value=result.answers[q.id];if(value?.answers?.length){const key='question:'+q.id;changed||=hash(this.state.requirements[key]?.value)!==hash(value);this.state.requirements[key]={value,contract:hash(q),source:'native-user-answer',scope:this.state.goal.id,confirmed:true,revision:this.state.revision};}}if(changed){this.state.revision++;this.state.goal.revision++;}}
   if(tool==='extensions_list'||tool==='gdal_connect'||tool==='mcp_connect'){
    const connectors=result?.connectors??(result?.connectorId?[result]:[]);
@@ -378,6 +402,6 @@ export class RuntimePolicy {
    if((item.status==='failed'||item.error||item.exitCode&&item.exitCode!==0)&&!operation?.failureCounted){const tool=operation?.tool??'core:'+item.type;if(operation)operation.failureCounted=true;this.noProgress(tool,'CORE_TOOL_FAILURE','core-failure:'+tool.replace(/^core:/,''));}
  }
  resume(){this.state.stagnation=0;this.audit('human-strategy-review');}
- cancel(){this.cancelled=true;if(this.state.run)this.state.run.state='cancelled';this.audit('cancel');}
+ cancel(reason='user'){this.cancelled=true;if(this.state.run){this.state.run.state='cancelled';this.state.run.stopReason=reason;}this.audit('cancel',{reason});}
  finish(status){if(this.state.run){this.state.run.state=status;this.state.run.completionRegistration={scope:'submitted-native-resources',resourceIds:this.state.run.resourceIds,complete:this.state.run.resourceIds.length>0&&this.state.run.resourceIds.every(id=>this.state.nativeResources[id]?.verified===true)};}this.cancelled=true;this.audit('run-finish');}
 }
