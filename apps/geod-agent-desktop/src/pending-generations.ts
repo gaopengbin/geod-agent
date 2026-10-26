@@ -12,6 +12,7 @@ export interface DisplayMessage {
   id: string;
   role: "user" | "assistant" | "tool";
   content: string;
+  resumeOfUserMessageId?: string;
   images?:ImageAttachment[];
   documents?:DocumentAttachment[];
   phase?: "progress" | "final";
@@ -20,6 +21,7 @@ export interface DisplayMessage {
   itemType?: string;
   details?: string;
   toolName?: string;
+  recoveryAction?: "background";
   toolStatus?: "running" | "success" | "attention" | "stopped";
   commandActions?: CommandAction[];
   durationMs?: number | null;

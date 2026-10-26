@@ -81,7 +81,8 @@ export type SourceAuthMode = "queryToken" | "bearerToken" | "headerToken";
 export interface SourceAuthentication { mode: SourceAuthMode; parameter: string; credentialRef: string; version: string; origin: string }
 /** Only sent to native credential storage, never to an Agent tool or localStorage. */
 export interface SourceCredentialInput { mode: SourceAuthMode | null; parameter?: string; token?: string }
-export interface SourceRegistrationDraft { source: HttpSource; minZoom: number; maxZoom: number; authenticationMode?: SourceAuthMode; authenticationParameter?: string }
+export interface SourceRegistrationDraft { source: HttpSource; minZoom: number; maxZoom: number; authenticationMode?: SourceAuthMode; authenticationParameter?: string; editingExisting?: boolean; credentialOnly?: boolean }
+export interface SourceReadiness { sourceId:string; state:'ready'|'missing'|'unavailable'; ready:boolean; revision:string; errorCode:string|null }
 export interface RegisteredSource { descriptor: SourceDescriptor; endpoint: HttpSource; configuredAt: string }
 
 export interface TaskSpec {
@@ -256,6 +257,8 @@ export const api = {
   dataConnectionRemove: (connectionId: string) => invoke<void>("data_connection_remove", { connectionId }),
   usCountyBoundary: (stateFips: string, countyName: string) => invoke<BoundaryImport>("us_county_boundary", { stateFips, countyName }),
   sourcesList: () => invoke<SourceDescriptor[]>("sources_list"),
+  sourcesModelCatalog: () => invoke<Record<string,unknown>>("sources_model_catalog"),
+  sourcesReadiness: (sourceId:string) => invoke<SourceReadiness>("sources_readiness",{sourceId}),
   mapPreviewTile: (sourceId: string | null, url: string | null, z: number, x: number, y: number) => invoke<string>("map_preview_tile", { sourceId, url, z, x, y }),
   sourcePreviewTile: (endpoint: HttpSource, z: number, x: number, y: number, credential?: SourceCredentialInput) => invoke<string>("map_preview_tile", { sourceId: null, url: null, endpoint, credential, z, x, y }),
   sourceThumbnailMetadata: (url: string) => invoke<Record<string, unknown>>("source_thumbnail_metadata", { url }),

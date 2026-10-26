@@ -606,6 +606,17 @@ fn sources_list(state: State<'_, AppState>) -> Result<Vec<SourceDescriptor>, App
     open_store(&state)?.list_sources().map_err(Into::into)
 }
 
+#[tauri::command]
+fn sources_model_catalog(state: State<'_, AppState>) -> Result<serde_json::Value, AppError> {
+    source_auth::model_catalog(&state)
+}
+#[tauri::command]
+fn sources_readiness(state: State<'_, AppState>, source_id: String) -> Result<source_auth::Readiness, AppError> {
+    let source = open_store(&state)?.get_registered_source(&source_id)?
+        .ok_or_else(|| workspace_error("SOURCE_UNAUTHORIZED", "图源尚未登记，请选择可用图源"))?;
+    source_auth::readiness(&state, &source.endpoint)
+}
+
 /// Local settings read; never exposed as a model tool.
 #[tauri::command]
 fn sources_get(
@@ -653,6 +664,8 @@ fn plans_create(
             code: "SOURCE_UNAUTHORIZED",
             message: "请先配置图源".into(),
         })?;
+    source_auth::assert_ready(&state, &source.endpoint)?;
+    for overlay in store.plan_overlays(&spec, &source.descriptor)? { source_auth::assert_ready(&state, &overlay)?; }
     let options=spec.export_options.get_or_insert_with(Default::default);
     let crs=options.target_crs.as_ref().or(workspace.output_crs.as_ref()).ok_or_else(||workspace_error("OUTPUT_CRS_REQUIRED","请通过选项卡询问成果坐标系；仅用户明确设置的会话默认可以沿用"))?;
     options.target_crs=Some(export_crs::validate(crs,true)?);
@@ -1651,6 +1664,8 @@ pub fn run() {
             sql_connections::sql_query,
             us_county_boundary,
             sources_list,
+            sources_model_catalog,
+            sources_readiness,
             sources_get,
             source_creator::source_creator_call,
             source_creator::source_thumbnail_metadata,

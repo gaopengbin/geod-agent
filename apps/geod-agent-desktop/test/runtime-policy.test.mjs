@@ -11,6 +11,29 @@ const declared=JSON.parse(readFileSync(new URL('../src-tauri/codex-tools.json',i
 const params={conversationId:'policy-test',input:'下载所选范围，保留确认的参数',permission:'fullAccess',outputCrs:'EPSG:4326'};
 function fixture(){const home=mkdtempSync(join(tmpdir(),'geod-policy-'));let now=100000,signals=[];const policy=new RuntimePolicy(home,declared,{now:()=>now,onSignal:s=>signals.push(s)});policy.begin(params,{inputModalities:['text']});return{home,policy,signals,tick:ms=>now+=ms};}
 
+test('a source credential failure waits for that source, survives a new call and does not block other sources',async()=>{
+ const {policy,home}=fixture();
+ const facts={permission:'fullAccess',sourceReadiness:{available:true,sources:{a:{state:'missing',revision:'pending'},b:{state:'ready',revision:'b1'}},plans:{'plan-a':['a'],'plan-b':['b']}}};
+ policy.setFacts(facts);let calls=0;
+ await policy.execute('jobs_start',{planId:'plan-a'},'a1',async()=>{calls++;return {error:'SOURCE_CREDENTIAL_REQUIRED'}});
+ assert.equal((await policy.execute('jobs_start',{planId:'plan-a'},'a2',async()=>{throw Error('unchanged credential must not dispatch')})).error,'RECOVERY_CONDITION_UNCHANGED');
+ await policy.execute('jobs_start',{planId:'plan-b'},'b1',async()=>({jobId:'job-b',state:'queued'}));
+ const restored=new RuntimePolicy(home,declared);restored.begin(params,{});restored.setFacts(facts);
+ assert.equal((await restored.execute('jobs_start',{planId:'plan-a'},'a3',()=>{throw Error('restart must preserve blocker')})).error,'RECOVERY_CONDITION_UNCHANGED');
+ const unrelated=structuredClone(facts);unrelated.sourceReadiness.sources.b.revision='b2';restored.setFacts(unrelated);
+ assert.equal((await restored.execute('jobs_start',{planId:'plan-a'},'a4',()=>{throw Error('another key must not unblock')})).error,'RECOVERY_CONDITION_UNCHANGED');
+ unrelated.sourceReadiness.sources.a={state:'ready',revision:'saved'};restored.setFacts(unrelated);
+ assert.equal((await restored.execute('jobs_start',{planId:'plan-a'},'a5',async()=>{calls++;return {jobId:'job-a',state:'queued'}})).jobId,'job-a');assert.equal(calls,2);
+});
+
+test('backend launch failure waits for native readiness rather than model retries or changed download arguments',async()=>{
+ const {policy}=fixture();policy.setFacts({backgroundRuntime:{running:false,error:'BACKGROUND_START'}});
+ await policy.execute('jobs_start',{planId:'a'},'first',async()=>({error:'BACKGROUND_START'}));
+ assert.equal((await policy.execute('jobs_start',{planId:'b'},'changed-plan',()=>{throw Error('same offline backend')})).error,'RECOVERY_CONDITION_UNCHANGED');
+ policy.setFacts({backgroundRuntime:{running:true,pid:17}});
+ assert.equal((await policy.execute('jobs_start',{planId:'a'},'restored',async()=>({jobId:'a',state:'queued'}))).jobId,'a');
+});
+
 test('vector approvals are per native task and a granted task resumes with unchanged workspace permission',async()=>{
  const{policy}=fixture();const facts={permission:'confirmEach',imagery:{counts:{},tasks:[],data:{counts:{pending:2},tasks:[{taskId:'task-a',state:'pending',planHash:'a'.repeat(64)},{taskId:'task-b',state:'pending',planHash:'b'.repeat(64)}]}}};policy.setFacts(facts);
  const a={taskId:'task-a',planHash:'a'.repeat(64)},b={taskId:'task-b',planHash:'b'.repeat(64)};

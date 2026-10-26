@@ -12,6 +12,13 @@ test('explicit output CRS, source CRS and ambiguous projection are distinguished
   assert.equal(humanCrsIntent('用 CGCS2000 高斯投影').crs,null);
   assert.equal(humanCrsIntent('输出按 WGS84 经纬度').crs,'EPSG:4326');
 });
+
+test('confirmed parameter lists retain their CRS when later prose mentions export settings',()=>{
+  assert.equal(humanCrsIntent('Esri，Z16，GeoTIFF，EPSG:4326，LZW。以上范围、图源和导出参数已确认，不再询问。').crs,'EPSG:4326');
+  assert.equal(humanCrsIntent('Z16, GeoTIFF, EPSG:4326. All output settings are confirmed.').crs,'EPSG:4326');
+  assert.equal(humanCrsIntent('源坐标系 EPSG:3857，导出参数还没确定').crs,null);
+  assert.equal(humanCrsIntent('源 EPSG:3857，输出 EPSG:4326').crs,'EPSG:4326');
+});
 test('conversation defaults require direct explicit scope; one-off and quoted instructions do not',()=>{
   assert.deepEqual(humanCrsIntent('当前会话都用 EPSG:4490'),{crs:'EPSG:4490',session:true,clear:false});
   assert.equal(humanCrsIntent('这一张用 EPSG:32650').session,false);

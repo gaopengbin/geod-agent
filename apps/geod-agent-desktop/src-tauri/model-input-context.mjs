@@ -169,7 +169,7 @@ function productRules(source){
 
 const callType=item=>['function_call','custom_tool_call'].includes(item.type);
 const outputType=item=>['function_call_output','custom_tool_call_output'].includes(item.type);
-const FACT_KEYS=new Set('id name kind sourceId boundaryId planId planHash jobId taskId connectionId connectorId state status verified quality bounds zoomLevels outputFormats exportOptions targetCrs crs totalTiles completedTiles missingTiles bytes width height error code recovery retryAfterMs permission canStartWithoutPlanConfirmation relativePath bulkData executionId jsonPointer sha256 defaultOutput outputCrs answeredBy reusedPreviousAnswer'.split(' '));
+const FACT_KEYS=new Set('id name kind sourceId boundaryId planId planHash jobId taskId connectionId connectorId state status verified quality bounds zoomLevels outputFormats exportOptions targetCrs crs totalTiles completedTiles missingTiles bytes width height error code recovery retryAfterMs permission canStartWithoutPlanConfirmation relativePath bulkData executionId jsonPointer sha256 defaultOutput outputCrs answeredBy reusedPreviousAnswer ready credentialRequired credentialState credentialRevision errorCode configured saved catalogScope onlineSearchScope'.split(' '));
 function historyFacts(value){
  if(!value||typeof value!=='object')return {};
  const facts={};for(const [key,v]of Object.entries(value))if(FACT_KEYS.has(key))facts[key]=v;

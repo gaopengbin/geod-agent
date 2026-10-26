@@ -93,6 +93,15 @@ test("tool failures remain visible in the work transcript", () => {
   });
 });
 
+test("credential and backend failures expose the relevant recovery action instead of a generic warning",()=>{
+  const draft={source,minZoom:5,maxZoom:18,editingExisting:true,credentialOnly:true};
+  const credential=toolDisplay("plan_imagery",{error:"SOURCE_CREDENTIAL_REQUIRED",credentialRequired:true,draft});
+  assert.equal(credential.toolStatus,"attention");assert.equal(credential.sourceDraft,draft);
+  assert.match(credential.content,/认证/);
+  const backend=toolDisplay("jobs_start",{error:"BACKGROUND_START"});
+  assert.equal(backend.recoveryAction,"background");assert.equal(backend.toolStatus,"attention");
+});
+
 test("AI extension onboarding produces an in-conversation review step", () => {
   const extensionProposal = { kind: "mcp", id: "connector-1", name: "Example MCP", description: "A test service", detail: "https://example.org/mcp", toolNames: ["lookup"] };
   const step = toolDisplay("mcp_connect", { requiresUserReview: true, extensionProposal });

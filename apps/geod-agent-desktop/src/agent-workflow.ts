@@ -160,12 +160,14 @@ export function userProvidedUrl(message: string, url: string): boolean {
     .some(candidate => candidate.replace(/[，。；、）)\]}]+$/u, "") === url);
 }
 
-export function toolDisplay(name: string, output: unknown): Pick<DisplayMessage, "content" | "toolName" | "toolStatus" | "sourceDraft" | "extensionProposal"> {
+export function toolDisplay(name: string, output: unknown): Pick<DisplayMessage, "content" | "toolName" | "toolStatus" | "sourceDraft" | "extensionProposal" | "recoveryAction"> {
   const data = output && typeof output === "object" ? output as Record<string, unknown> : {};
   if (name === "ask_user") return { toolName: name, toolStatus: data.error ? "attention" : "success", content: data.knownFacts ? "补充需求 · 已查明本机配置，无需重复询问" : data.error ? "补充需求 · 已取消或未完成" : "补充需求 · 已收到你的选择" };
   const title = name === "mcp_call" && data.kind === "builtin"
     ? ({ search_sources: "搜索网络图源", inspect_source: "检查图源服务", lookup_boundary: "查询行政边界", lookup_boundaries: "查询多个行政区域", lookup_neighbors: "查询相邻区域" }[String(data.toolName)] ?? "调用图源工具")
     : labels[name] ?? name;
+  if(data.credentialRequired&&data.draft)return {toolName:name,toolStatus:'attention',content:`${title} · 等待补全图源认证`,sourceDraft:data.draft as SourceRegistrationDraft};
+  if(typeof data.error==='string'&&/^(BACKGROUND_(START|OFFLINE|STOPPED|VERSION|CREDENTIAL|AUTH)|TASK_STATE_UNAVAILABLE)$/.test(data.error))return {toolName:name,toolStatus:'attention',content:`${title} · 下载后台暂不可用，原任务已保留`,recoveryAction:'background'};
   if (data.error === "MCP_RESULT_UNKNOWN") return { toolName: name, toolStatus: "attention", content: `${title} · 结果待核对，已停止自动重试` };
   if (data.error === "MCP_EXECUTION_CONFLICT") return { toolName: name, toolStatus: "attention", content: `${title} · 调用参数与已保存记录不一致` };
   if (data.error === "SKIPPED_AFTER_MCP_UNKNOWN" || data.error === "SKIPPED_FOR_USER_REVIEW") return { toolName: name, toolStatus: "attention", content: `${title} · 等待核对，未执行` };

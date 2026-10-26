@@ -971,10 +971,18 @@ async fn transport(
         .to_owned();
     write_worker(
         &input,
-        &json!({"type":"headers","status":response.status().as_u16(),"contentType":content}),
+        &json!({"type":"headers","status":response.status().as_u16(),"contentType":content,"safeHeaders":safe_error_headers(response.headers())}),
     )
     .await?;
     if !response.status().is_success() {
+        let mut bytes=Vec::new();
+        while let Some(chunk)=response.chunk().await.map_err(|_|provider_failure("PROVIDER_UNAVAILABLE",None))? {
+            bytes.extend_from_slice(&chunk);
+            if bytes.len()>16384 { bytes.clear();break; }
+        }
+        let redacted=String::from_utf8_lossy(&bytes).replace(key.as_str(),"[redacted]");
+        write_worker(&input,&json!({"type":"chunk","data":STANDARD.encode(redacted.as_bytes())})).await?;
+        write_worker(&input,&json!({"type":"end"})).await?;
         return Ok(());
     }
     let mut total = 0usize;
@@ -999,6 +1007,14 @@ async fn transport(
         permit.forget();
     }
     write_worker(&input, &json!({"type":"end"})).await
+}
+
+fn safe_error_headers(headers: &reqwest::header::HeaderMap) -> Value {
+    let mut safe=serde_json::Map::new();
+    for name in ["x-request-id","request-id","x-oneapi-request-id","retry-after"] {
+        if let Some(value)=headers.get(name).and_then(|h|h.to_str().ok()).filter(|v|v.len()<=100&&v.bytes().all(|c|c.is_ascii_alphanumeric()||b"_.:-".contains(&c))&&!v.starts_with("sk-")) {safe.insert(name.into(),json!(value));}
+    }
+    Value::Object(safe)
 }
 pub(crate) fn generate(
     app: &AppHandle,
@@ -1045,6 +1061,7 @@ pub(crate) fn generate(
             let ack = Arc::new(tokio::sync::Semaphore::new(0));
             let mut http = None;
             let mut key = Some(key);
+            let mut upstream_diagnostic=Value::Null;
             let mut timer = tokio::time::interval(Duration::from_millis(100));
             let started = std::time::Instant::now();
             let result = loop {
@@ -1069,7 +1086,7 @@ pub(crate) fn generate(
                             Some("delta")=>on_event(if value["part"]=="reasoning"{"reasoning_delta"}else{"content_delta"},&json!({"text":value["text"]})),
                             Some("wire")=>on_event("wire",&value),
                             Some("result")=>break Ok(value["generation"].clone()),
-                            Some("failed")=>break Err(provider_failure(value["code"].as_str().unwrap_or("PROVIDER_UNAVAILABLE"),value["status"].as_u64())),
+                            Some("failed")=>{upstream_diagnostic=value["diagnostic"].clone();break Err(provider_failure(value["code"].as_str().unwrap_or("PROVIDER_UNAVAILABLE"),value["status"].as_u64()));},
                             _=>break Err(error("PROVIDER_STREAM_INVALID","接口适配返回无效事件")),
                         }
                     }
@@ -1081,6 +1098,7 @@ pub(crate) fn generate(
             }
             let _ = child.kill().await;
             let _ = child.wait().await;
+            if !upstream_diagnostic.is_null(){record["upstreamDiagnostic"]=upstream_diagnostic;}
             result
         })
     })();
@@ -1105,6 +1123,16 @@ pub(crate) fn generate(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn upstream_headers_keep_correlation_but_reject_credentials_and_unbounded_values() {
+        let mut headers=reqwest::header::HeaderMap::new();
+        headers.insert("x-request-id","req_safe-123".parse().unwrap());
+        headers.insert("retry-after","30".parse().unwrap());
+        headers.insert("request-id","sk-do-not-retain".parse().unwrap());
+        headers.insert("authorization","Bearer private".parse().unwrap());
+        headers.insert("x-oneapi-request-id","x".repeat(101).parse().unwrap());
+        assert_eq!(safe_error_headers(&headers),json!({"x-request-id":"req_safe-123","retry-after":"30"}));
+    }
     #[test]
     fn embedded_provider_worker_starts_without_external_modules() {
         let root = tempfile::tempdir().unwrap();

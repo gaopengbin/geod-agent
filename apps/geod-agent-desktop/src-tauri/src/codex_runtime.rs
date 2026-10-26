@@ -495,7 +495,12 @@ async fn run_operation(
                 let facts=if cancelled.load(Ordering::Acquire){json!({"error":"EXECUTION_CANCELLED","message":"执行已取消"})}
                 else if services::current_user_id(&services).ok().as_deref()!=Some(&owner){json!({"error":"ACCOUNT_CHANGED","message":"账号已切换，执行已停止"})}
                 else{match read_workspace(&app,&state,&services,&conversation_id){
-                    Ok(settings)=>json!({"permission":settings.permission,"outputCrs":settings.output_crs,"connectionsRevision":app.state::<crate::extensions::ExtensionState>().policy_revision(&owner).ok(),"imagery":crate::task_state_context::policy_snapshot(&state.db_path,&owner,&conversation_id)}),
+                    Ok(settings)=>{
+                        let imagery=crate::task_state_context::policy_snapshot(&state.db_path,&owner,&conversation_id);
+                        let source_readiness=crate::source_auth::policy_snapshot(&state,&imagery);
+                        let background=if background {json!({"running":true})}else{app.state::<crate::background_runtime::BackgroundClient>().observe().unwrap_or_else(|e|json!({"running":false,"error":e["code"]}))};
+                        json!({"permission":settings.permission,"outputCrs":settings.output_crs,"connectionsRevision":app.state::<crate::extensions::ExtensionState>().policy_revision(&owner).ok(),"imagery":imagery,"sourceReadiness":source_readiness,"backgroundRuntime":background})
+                    },
                     Err(cause)=>json!({"error":cause.code,"message":cause.message})
                 }};
                 if let Err(cause)=write_command(&stdin,&json!({"type":"response","requestId":value["requestId"],"value":facts})){result=Err(cause);break;}

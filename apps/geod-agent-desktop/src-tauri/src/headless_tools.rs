@@ -141,12 +141,7 @@ pub(crate) async fn execute(
         "workspace_skills_list" => Ok(
             json!({"skills":crate::workspace_skills_list(app.clone(),state,services,conversation.into())?}),
         ),
-        "sources_list" => {
-            let all = serde_json::to_value(crate::sources_list(state)?).unwrap();
-            Ok(
-                json!({"sources":all.as_array().unwrap().iter().map(|s|json!({"id":s["id"],"name":s["displayName"],"minZoom":s["minZoom"],"maxZoom":s["maxZoom"],"attribution":s["attribution"]})).collect::<Vec<_>>()}),
-            )
-        }
+        "sources_list" => crate::source_auth::model_catalog(&state),
         "boundaries_list" => {
             Ok(json!({"boundaries":boundary_inputs::boundaries_list(state,conversation.into())?}))
         }

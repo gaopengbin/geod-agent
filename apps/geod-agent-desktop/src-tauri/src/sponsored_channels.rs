@@ -14,6 +14,7 @@ fn default_protocol()->String{"chatCompletions".into()}
 #[serde(rename_all="camelCase",deny_unknown_fields)]
 struct Usage {
     quota_enforced:bool,limit_tokens:Option<u64>,remaining_tokens:Option<u64>,committed_tokens:u64,reserved_tokens:u64,pending_reconcile:u64,total_limit_tokens:Option<u64>,
+    #[serde(default)]unknown_usage_requests:u64,
     #[serde(default,skip_serializing_if="Option::is_none")]budget_period:Option<String>,
     #[serde(default,skip_serializing_if="Option::is_none")]period_start:Option<String>,
     #[serde(default,skip_serializing_if="Option::is_none")]period_end:Option<String>,
@@ -128,5 +129,12 @@ mod tests {
         assert!(decode(value.clone()).is_ok());
         for (field,bad) in [("budgetPeriod",json!("week")),("periodStart",json!("2026-12-02T00:00:00Z")),("periodEnd",json!("2027-02-01T00:00:00Z")),("priorReservedTokens",json!(-1))]{let mut changed=value.clone();changed["sponsors"][0]["usage"][field]=bad;assert!(decode(changed).is_err());}
         let mut changed=catalogue();changed["sponsors"][0]["usage"]["periodEnd"]=json!("2027-01-01T00:00:00Z");assert!(decode(changed).is_err());
+    }
+    #[test]
+    fn current_unknown_usage_count_and_legacy_catalogues_remain_readable(){
+        assert_eq!(decode(catalogue()).unwrap().sponsors[0].usage.unknown_usage_requests,0);
+        let mut current=catalogue();current["sponsors"][0]["usage"]["unknownUsageRequests"]=json!(3);
+        assert_eq!(decode(current.clone()).unwrap().sponsors[0].usage.unknown_usage_requests,3);
+        current["sponsors"][0]["usage"]["unknownUsageRequests"]=json!(-1);assert!(decode(current).is_err());
     }
 }

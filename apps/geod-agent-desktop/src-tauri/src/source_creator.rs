@@ -12,6 +12,18 @@ pub(crate) fn initialize(directory: std::path::PathBuf) { wayback::initialize(di
 fn error(code: &'static str, message: &str) -> AppError { AppError { code, message: message.into() } }
 const MAX_BYTES: usize = 1024 * 1024;
 
+// Static raster metadata is useful on first launch even before an optional
+// source-discovery skill is enabled. It performs no network or credential read.
+pub(crate) fn raster_presets() -> Result<Vec<Value>, AppError> {
+    let catalog:Value=serde_json::from_str(include_str!("../../../../contracts/source-presets.v1.json")).map_err(|_|error("SOURCE_PRESETS_INVALID","图源预设无法读取"))?;
+    let mut presets=catalog["presets"].as_array().cloned().ok_or_else(||error("SOURCE_PRESETS_INVALID","图源预设无法读取"))?;
+    for preset in &mut presets {preset["scheme"]=json!("XYZ");preset["tileSize"]=json!(256);preset["minIntervalMs"]=json!(0);}
+    for (layer,name) in [("img","天地图影像"),("cia","天地图影像注记"),("vec","天地图矢量底图"),("cva","天地图矢量注记"),("cta","天地图地形注记")] {
+        presets.push(json!({"id":format!("tianditu-{layer}-w"),"name":name,"urlTemplate":format!("https://t{{s}}.tianditu.gov.cn/{layer}_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER={layer}&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX={{z}}&TILEROW={{y}}&TILECOL={{x}}"),"subdomains":["0","1","2","3","4","5","6","7"],"attribution":"天地图","scheme":"XYZ","tileSize":256,"minZoom":1,"maxZoom":18,"minIntervalMs":0,"authenticationMode":"queryToken","authenticationParameter":"tk"}));
+    }
+    Ok(presets)
+}
+
 pub(crate) fn tools() -> Value {
     let mut result = json!({"connectorId": SOURCE_CREATOR_ID, "name": "图源接入工具", "kind": "builtin", "tools": [
         {"name":"source_presets", "description":"列出影像、底图、Terrarium 高程、天地图认证连接及MVT矢量预设。栅格presets需source_configure后规划；保留coordinateSystem和subdomains。vectorPresets直接用data_download_plan kind=mvt与urlTemplate作为sourceUrl，不登记为影像。OpenFreeMap实时解析官方TileJSON，失败不会返回过期地址。", "inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
@@ -45,12 +57,7 @@ pub(crate) async fn call(tool: &str, args: Value) -> Result<Value, AppError> {
         match tool {
             "source_presets" => {
                 let mut catalog: Value = serde_json::from_str(include_str!("../../../../contracts/source-presets.v1.json")).map_err(|_|error("SOURCE_PRESETS_INVALID","图源预设无法读取"))?;
-                if let Some(presets)=catalog["presets"].as_array_mut() {
-                    for preset in presets.iter_mut() {preset["scheme"]=json!("XYZ");preset["tileSize"]=json!(256);preset["minIntervalMs"]=json!(0);}
-                    for (layer,name) in [("img","天地图影像"),("cia","天地图影像注记"),("vec","天地图矢量底图"),("cva","天地图矢量注记"),("cta","天地图地形注记")] {
-                        presets.push(json!({"id":format!("tianditu-{layer}-w"),"name":name,"urlTemplate":format!("https://t{{s}}.tianditu.gov.cn/{layer}_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER={layer}&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX={{z}}&TILEROW={{y}}&TILECOL={{x}}"),"subdomains":["0","1","2","3","4","5","6","7"],"attribution":"天地图","scheme":"XYZ","tileSize":256,"minZoom":1,"maxZoom":18,"minIntervalMs":0,"authenticationMode":"queryToken","authenticationParameter":"tk"}));
-                    }
-                }
+                catalog["presets"]=json!(raster_presets()?);
                 // OpenFreeMap rotates versioned tile paths. Resolve its official
                 // TileJSON, never keep the old desktop's dated snapshot URL.
                 if let Some(presets)=catalog["vectorPresets"].as_array_mut() {

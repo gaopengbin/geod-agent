@@ -13,10 +13,10 @@ const body={async *[Symbol.asyncIterator](){
     if(ended)return;
     await new Promise(resolve=>{wake=resolve;});
   }
-}};
+},getReader(){const iterator=this[Symbol.asyncIterator]();return {read:()=>iterator.next(),cancel:async()=>{ended=true;wake?.();wake=null;},releaseLock(){}};}};
 lines.on('line',line=>{
   let value;try{value=JSON.parse(line);}catch{process.exitCode=1;lines.close();return;}
-  if(value.type==='headers')resolveHeaders?.({ok:value.status>=200&&value.status<300,status:value.status,headers:new Headers({'content-type':value.contentType??''}),body});
+  if(value.type==='headers')resolveHeaders?.({ok:value.status>=200&&value.status<300,status:value.status,headers:new Headers({'content-type':value.contentType??'',...(value.safeHeaders??{})}),body});
   if(value.type==='chunk'){queue.push(Buffer.from(value.data,'base64'));wake?.();wake=null;}
   if(value.type==='end'){ended=true;wake?.();wake=null;}
   if(value.type==='error'){failure=true;rejectHeaders?.(new Error('Native transport failed'));wake?.();wake=null;}
@@ -35,6 +35,6 @@ lines.on('line',line=>{
     onWire:(event,data)=>emit({type:'wire',event,data}),
   }).then(generation=>emit({type:'result',generation}),error=>error.terminal
     ? emit({type:'result',generation:{...error.terminal,generationId:value.generationId,state:'incomplete',errorCode:error.code==='PROVIDER_OUTPUT_LIMIT'?'UPSTREAM_OUTPUT_LIMIT':'UPSTREAM_INCOMPLETE',billingScope:'personal',channelId:value.snapshot.id,selectedModel:value.snapshot.model,result:{...error.terminal.result,toolCalls:[],providerTerminal:{status:error.terminal.status,reason:error.terminal.reason,usageKnown:error.terminal.usageKnown}}}})
-    : emit({type:'failed',code:error.code??'PROVIDER_UNAVAILABLE',status:error.status??null})).finally(()=>{lines.close();process.stdin.destroy();});
+    : emit({type:'failed',code:error.code??'PROVIDER_UNAVAILABLE',status:error.status??null,diagnostic:error.diagnostic??null})).finally(()=>{lines.close();process.stdin.destroy();});
 });
 lines.on('close',()=>{ended=true;wake?.();rejectHeaders?.(new Error('Native transport ended'));});

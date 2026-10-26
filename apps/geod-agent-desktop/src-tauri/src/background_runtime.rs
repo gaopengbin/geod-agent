@@ -41,6 +41,31 @@ fn credential(dir: &Path) -> Result<keyring::Entry, Value> {
 }
 fn failure(code: &str, message: &str) -> Value { json!({"code":code,"message":message}) }
 
+fn lifecycle_restricted() -> bool {
+    #[cfg(windows)] unsafe {
+        use windows_sys::Win32::System::{JobObjects::IsProcessInJob,Threading::GetCurrentProcess};
+        let mut found=0;return IsProcessInJob(GetCurrentProcess(),std::ptr::null_mut(),&mut found)!=0&&found!=0;
+    }
+    #[cfg(not(windows))] { false }
+}
+
+// Restrictive Windows jobs can deny BREAKAWAY. Keep the first download usable
+// and report inherited lifetime explicitly instead of promising independence.
+fn launch_companion(command: &mut Command) -> std::io::Result<std::process::Child> {
+    #[cfg(windows)] {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x08000000 | 0x00000200 | 0x01000000);
+        match command.spawn() {
+            Err(cause) if matches!(cause.raw_os_error(),Some(5|87)) => {
+                eprintln!("GeoD companion: breakaway denied (Windows {}); using scoped launch",cause.raw_os_error().unwrap());
+                command.creation_flags(0x08000000 | 0x00000200);command.spawn()
+            },
+            result=>result,
+        }
+    }
+    #[cfg(not(windows))] { command.spawn() }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Endpoint { port: u16, pid: u32, protocol: u32, fingerprint: String }
@@ -110,16 +135,19 @@ impl BackgroundClient {
         let mut command = Command::new(executable);
         command.arg("--background-runtime").stdin(Stdio::null()).stdout(output.try_clone().map_err(|_| failure("BACKGROUND_START", "无法打开后台日志"))?).stderr(output);
         command.env_remove("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS");
-        #[cfg(windows)] {
-            use std::os::windows::process::CommandExt;
-            // A companion must survive its launching desktop and its job tree.
-            command.creation_flags(0x00000008 | 0x00000200 | 0x01000000);
-        }
-        command.spawn().map_err(|_| failure("BACKGROUND_START", "无法启动独立后台程序"))?;
+        let mut child=launch_companion(&mut command).map_err(|cause| {
+            eprintln!("GeoD companion launch failed: kind={:?}, os_code={:?}",cause.kind(),cause.raw_os_error());
+            failure("BACKGROUND_START", "无法启动下载后台，请点击“恢复后台”后继续原任务")
+        })?;
         let deadline = Instant::now() + Duration::from_secs(15);
         while Instant::now() < deadline {
             if let Ok(status) = self.request("runtime_status", json!({}), Duration::from_secs(1)) {
                 if status["fingerprint"] == fingerprint() { return Ok(status); }
+            }
+            if let Ok(Some(status))=child.try_wait() {
+                eprintln!("GeoD companion exited before readiness: {:?}",status.code());
+                if let Ok(status)=self.request("runtime_status",json!({}),Duration::from_secs(1)) {if status["fingerprint"]==fingerprint(){return Ok(status);}}
+                return Err(failure("BACKGROUND_START", "下载后台启动后退出，请打开后台运行设置恢复；原任务已保留"));
             }
             std::thread::sleep(Duration::from_millis(100));
         }
@@ -292,7 +320,7 @@ fn dispatch(app: &AppHandle, endpoint: &Endpoint, command: &str, a: &Value) -> R
         return Ok(json!({"running":true,"pid":endpoint.pid,"protocol":PROTOCOL,"fingerprint":endpoint.fingerprint,
             "activeDownloads":state.running_jobs.lock().unwrap().len()+data_jobs::active_count(),
             "maintenanceActive":cache_management::ensure_idle().is_err(),
-            "activeCommands":crate::background_commands::active_count(),"activeAiTurns":usize::from(crate::ai_schedules::ACTIVE.load(Ordering::Acquire))+crate::agent_tasks::active_count(),"windowRequired":false}));
+            "activeCommands":crate::background_commands::active_count(),"activeAiTurns":usize::from(crate::ai_schedules::ACTIVE.load(Ordering::Acquire))+crate::agent_tasks::active_count(),"windowRequired":lifecycle_restricted()}));
     }
     if command == "runtime_stop" {
         STOPPING.store(true, Ordering::Release);

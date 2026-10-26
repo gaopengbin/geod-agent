@@ -71,6 +71,7 @@ function SourceForm({ draft, editing, existingIds, onCancel, onSaved, onSavingCh
     if (!Number.isInteger(minZoom) || !Number.isInteger(maxZoom) || minZoom < 0 || maxZoom > 22 || minZoom > maxZoom) {
       setError("缩放级别须为 0–22 的整数，最低缩放不能大于最高缩放。"); return;
     }
+    if(draft?.credentialOnly&&!token.trim()) {setError("请填写要保存的 Key/Token。");return;}
     setSaving(true); onSavingChange(true); setError("");
     try {
       // Recheck before writing so a new-source form cannot silently replace an existing ID.
@@ -78,10 +79,19 @@ function SourceForm({ draft, editing, existingIds, onCancel, onSaved, onSavingCh
         setError("此图源 ID 已登记，请返回列表选择编辑，或使用新的 ID。"); return;
       }
       const { endpoint, credential } = connection();
-      onSaved(await api.sourcesSave(endpoint, minZoom, maxZoom, editing, credential));
+      const saved=await api.sourcesSave(endpoint, minZoom, maxZoom, editing, credential);
+      if(draft?.credentialOnly){const state=await api.sourcesReadiness(saved.id);if(!state.ready)throw {code:state.errorCode,message:"认证尚未就绪，请核对本机凭据存储后重新保存。"};}
+      onSaved(saved);
     } catch (cause) { setError(errorMessage(cause)); }
     finally { setSaving(false); onSavingChange(false); }
   }
+  if(draft?.credentialOnly)return <form noValidate className="source-form" aria-label={t("补全图源认证")} aria-busy={saving} onSubmit={event=>{event.preventDefault();void save();}}>
+    <section className="source-form-section"><h2>{source.name}</h2><p>{t("图源已保存。只需在本机填写认证，随后继续原任务。")}</p>
+      <Field label={authParameter==='tk'?t("天地图 Key"):"Key / Token"} hint={t("仅保存到本机凭据存储，不会发送到聊天。范围、级别和导出参数保持不变。")}> <input type="password" autoComplete="new-password" autoFocus value={token} onChange={event=>setToken(event.target.value)} spellCheck={false}/></Field>
+      {error&&<p className="warning-text" role="alert">{localize(error)}</p>}
+      <div className="source-form-actions"><Button type="button" variant="ghost" disabled={saving} onClick={onCancel}>{t("取消")}</Button><Button type="submit" disabled={saving||!token.trim()}>{saving?<Loader2 size={16} className="extension-spin"/>:<Save size={16}/>} {saving?t("正在保存…"):t("保存并继续")}</Button></div>
+    </section>
+  </form>;
   return <form noValidate className="source-form" aria-label={editing ? t("编辑图源") : t("登记图源")} aria-busy={saving} onSubmit={event => { event.preventDefault(); void save(); }}>
     <fieldset disabled={saving} className="source-form-fields">
     <section className="source-form-section"><div className="source-form-section-head"><h2>{t("连接信息")}</h2>{!editing && <UiTooltip content={t("填入 USGS NAIP 美国本土影像服务")}><Button type="button" variant="ghost" size="sm" className="source-example-button" whileHover={undefined} whileTap={undefined} onClick={() => { setSource(usgsConus); setMinZoom(10); setMaxZoom(18); authChange("none"); setToken(""); setError(""); }}>{t("填入示例")}</Button></UiTooltip>}</div>
@@ -141,8 +151,15 @@ export function SourcePage({ active, draft, reviewing, onReturn, onSaved, onOpen
   const [selected, setSelected] = useState<SourceDescriptor | null>(null);
   const [saving, setSaving] = useState(false);
   useEffect(() => {
-    setEditor(draft ? { key: crypto.randomUUID(), draft, editing: false } : null);
+    let cancelled=false;
+    setEditor(draft&&!draft.editingExisting ? { key: crypto.randomUUID(), draft, editing: false } : null);
+    if(draft?.editingExisting){setOpeningId(draft.source.id);void api.sourcesGet(draft.source.id).then(stored=>{
+      if(cancelled)return;
+      if(!stored)throw Error("此图源已不存在，请重新选择图源。");
+      setEditor({key:crypto.randomUUID(),editing:true,draft:{source:stored.endpoint,minZoom:stored.descriptor.minZoom,maxZoom:stored.descriptor.maxZoom,editingExisting:true,credentialOnly:draft.credentialOnly}});
+    }).catch(cause=>{if(!cancelled)setError(errorMessage(cause));}).finally(()=>{if(!cancelled)setOpeningId(null);});}
     setError(""); setNotice("");
+    return()=>{cancelled=true;};
   }, [draft]);
   useEffect(() => {
     if (!active || !desktopAvailable) return;

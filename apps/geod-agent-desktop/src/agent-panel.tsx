@@ -44,7 +44,7 @@ import {GisDependencyGate,gisRequirement,missingGisDependency,type GisRequiremen
 import type {GisInstallProgress} from "./api";
 import {runtimeCompatibilityFailure, runtimeUpdateError} from "./app-error";
 import { sourceRegistrationDraft, toolDisplay, userProvidedUrl, workspacePermissionContext } from "./agent-workflow";
-import { configureSource } from "./source-configuration";
+import { configureSource, sourceCredentialRecovery, sourceCredentialPreflight } from "./source-configuration";
 import { artifactResultForModel, modelMessagesWithoutArtifactPaths } from "./model-artifacts";
 import {aiScheduleTools,executeAiScheduleTool,AI_SCHEDULE_ID} from "./ai-schedule-tools";
 import { backgroundCommandTools, executeBackgroundCommandTool, BACKGROUND_COMMAND_ID } from "./background-command-tools";
@@ -348,7 +348,9 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
     for (const resolve of codexRequestResolve.current.values()) Promise.resolve(resolve(explicit?{ answers: {} }:detachedUserInput)).catch(()=>{});
     codexRequestResolve.current.clear(); setCodexRequests([]);
   }
-  const engine = chatRecords.find(chat => chat.conversationId === conversationId)?.engine ?? (codexAvailable ? "codex" : "legacy");
+  // Availability arrives asynchronously. A fresh chat must not persist legacy
+  // merely because its first render preceded the native availability response.
+  const engine = chatRecords.find(chat => chat.conversationId === conversationId)?.engine ?? "codex";
   const lastInputTokensRef = session.ref<number | null>("lastInputTokensRef",lastInputTokens);
   const [clock, setClock] = useState(() => Date.now());
   const [extensionApprovalBusy, setExtensionApprovalBusy] = useConversationState(session,"extensionApprovalBusy",false);
@@ -653,7 +655,9 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
       ? { ...item, content: `登记图源 · ${registeredSource.displayName} 已保存`, toolStatus: "success" as const, sourceDraft: undefined }
       : item);
     setDisplay(displayRef.current);
-    void send(`我已核对并在本机登记图源「${registeredSource.displayName}」（ID：${registeredSource.sourceId}）。请继续刚才的任务。`);
+    const latestHuman=[...displayRef.current].reverse().find(item=>item.role==='user');
+    const origin=inputOrigin(displayRef.current,latestHuman?.id);
+    void send(`我已核对并在本机登记图源「${registeredSource.displayName}」（ID：${registeredSource.sourceId}）。请继续刚才的任务。`,undefined,false,undefined,undefined,undefined,origin);
   }, [registeredSource, conversationId, status.state, busy, pendingId]);
 
   function chatStore() {
@@ -991,8 +995,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
       }
       if (call.function.name.startsWith("data_download_")) return await executeDataDownloadTool(conversationId, call.function.name, args, `${generationId}:${call.id}`,check=>waitForPlanApproval(nativeRequestId,check));
       if (call.function.name === "sources_list") {
-        const sources = await api.sourcesList();
-        return { sources: sources.map(source => ({ id: source.id, name: source.displayName, license: source.license, attribution: source.attribution, minZoom: source.minZoom, maxZoom: source.maxZoom })) };
+        return await api.sourcesModelCatalog();
       }
       if (call.function.name === "extensions_list") {
         const installed = await api.extensionsList();
@@ -1185,6 +1188,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
         return rangeSummary(combined);
       }
       if (call.function.name === "plan_imagery_batch") {
+        await sourceCredentialPreflight([args.sourceId,...(Array.isArray(args.overlaySourceIds)?args.overlaySourceIds:[])].filter((id):id is string=>typeof id==='string'));
         const result = await planImagery(args, conversationId, `${generationId}:${call.id}`, boundaryRef.current, true);
         for (const item of result.plans) {
           assertPlanAvailable(localStateStore, accountId, conversationId, item.stored.planId);
@@ -1202,6 +1206,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
           rememberPlan(previous);
           return compactPlan(previous, (await api.workspaceGet(conversationId)).permission);
         }
+        await sourceCredentialPreflight([args.sourceId,...(Array.isArray(args.overlaySourceIds)?args.overlaySourceIds:[])].filter((id):id is string=>typeof id==='string'));
         const result = await planImagery(args, conversationId, toolExecutionId, boundaryRef.current);
         if (!result.plans[0]) return { error: result.errors[0]?.error ?? "PLAN_NOT_CREATED" };
         const { stored: plan, rangeName } = result.plans[0];
@@ -1273,6 +1278,14 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
       return { error: "TOOL_NOT_ALLOWED" };
     } catch (cause) {
       if (runtimeCompatibilityFailure(cause)) throw runtimeUpdateError();
+      const code=cause&&typeof cause==='object'&&'code'in cause?String(cause.code):'';
+      if(['SOURCE_CREDENTIAL_REQUIRED','SOURCE_CREDENTIAL_UNAVAILABLE','SOURCE_CREDENTIAL_STORE'].includes(code)){
+        const values=JSON.parse(call.function.arguments) as Record<string,unknown>;
+        const stored=typeof values.planId==='string'?await api.plansGet(values.planId).catch(()=>null):null;
+        const failedSource=cause&&typeof cause==='object'&&'sourceId'in cause?cause.sourceId:null;
+        const sourceId=typeof failedSource==='string'?failedSource:typeof values.sourceId==='string'?values.sourceId:stored?.plan.spec.sourceId;
+        if(sourceId)return sourceCredentialRecovery(sourceId,code);
+      }
       return { error: cause && typeof cause === "object" && "code" in cause && typeof cause.code === "string" ? cause.code : "LOCAL_TOOL_ERROR", message: errorMessage(cause) };
     }
   }
@@ -1575,7 +1588,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
       changeQueue(chat=>({...chat,queuedInputs:chat.queuedInputs?.map(row=>row.id===item.id?{...submitted,delivery:{...submitted.delivery,state:'outcome-unknown',message:errorMessage(cause)}}:row)}));setQueueSendingId(null);
     }
   }
-  async function send(value: string,queuedImages?:ImageAttachment[],fromQueue=false,queuedDocuments?:DocumentAttachment[],inputCrsChoice?:ReturnType<typeof crsFromAnswers>,queuedId?:string) {
+  async function send(value: string,queuedImages?:ImageAttachment[],fromQueue=false,queuedDocuments?:DocumentAttachment[],inputCrsChoice?:ReturnType<typeof crsFromAnswers>,queuedId?:string,resumeOfUserMessageId?:string) {
     const text = value.trim()||(documents.length?"请阅读这些文档。":images.length?"请查看这些图片。":"");
     if (text && sending.current && engine === "codex" && !fromQueue) {
         if(queuedInputs.length>=20){setError("消息队列最多暂存 20 条，请先移除或等待发送。");return;}
@@ -1590,7 +1603,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
     if(queuedId)setQueueSendingId(queuedId);
     setChatRecords(current => current.map(chat => chat.conversationId === conversationId ? { ...chat, updatedAt: new Date().toISOString() } : chat));
     const userId=queuedId?`queued-${queuedId}`:crypto.randomUUID();
-    const visible = [...displayRef.current.filter(item=>item.id!==userId), { id: userId, role: "user" as const, content: boundary ? `${text}\n已附加边界：${boundary.name} · ${boundary.polygonCount} 个面` : text, ...(attachments.length?{images:attachments}:{}),...(attachedDocuments.length?{documents:attachedDocuments}:{}) }];
+    const visible = [...displayRef.current.filter(item=>item.id!==userId), { id: userId, role: "user" as const, content: boundary ? `${text}\n已附加边界：${boundary.name} · ${boundary.polygonCount} 个面` : text, ...(resumeOfUserMessageId?{resumeOfUserMessageId}:{}),...(attachments.length?{images:attachments}:{}),...(attachedDocuments.length?{documents:attachedDocuments}:{}) }];
     userInputGate.current.reset(text, displayRef.current.filter(item=>item.role==="user").map(item=>item.content));
     humanRequestRevision.current++;
     displayRef.current = visible;

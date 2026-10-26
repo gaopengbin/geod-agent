@@ -9,8 +9,13 @@ export function humanCrsIntent(text: string): { crs: string | null; session: boo
   const direct = directText(text);
   const session = !/如果|除非|unless|\bif\b/i.test(direct) && /(?:本|当前|这个)(?:次)?(?:会话|对话).*(?:都|均|统一|默认|一直|全部)|(?:之后|后续|以后).*(?:都|均|统一|默认).*(?:坐标系|EPSG)|(?:this conversation|this chat|session default)/i.test(direct);
   const clear = /(?:取消|清除|重置|不再沿用).*(?:默认坐标系|会话坐标系)|(?:坐标系).*(?:每次|逐次).*(?:问|询问)|clear.*(?:crs|coordinate).*default/i.test(direct);
-  const explicitOutput=direct.match(/(?:导出|输出|成果|目标|转换(?:成|为|到)|export|output|target|reproject)[^。；;\n]*/i)?.[0];
-  const codes = [...(explicitOutput ?? direct).matchAll(/EPSG\s*:\s*(\d{1,5})/gi)].map(match => normalizeExportCrs(`EPSG:${match[1]}`)).filter(Boolean);
+  const outputClauses=[...direct.matchAll(/(?:导出|输出|成果|目标|转换(?:成|为|到)|export|output|target|reproject)[^。；;\n，,]*/gi)].map(match=>match[0]);
+  const extract=(value:string)=>[...value.matchAll(/EPSG\s*:\s*(\d{1,5})/gi)].map(match=>normalizeExportCrs(`EPSG:${match[1]}`)).filter(Boolean);
+  const explicitCodes=outputClauses.flatMap(extract);
+  // A later "export settings confirmed" clause must not hide a CRS already
+  // stated in the parameter list. Source CRS alone is not an output instruction.
+  const unscoped=direct.split(/[。；;\n，,]/).filter(clause=>!/(?:源|输入|原始|地图)(?:数据)?(?:坐标系|投影|\s*EPSG)|(?:source|input|map)\s*(?:crs|projection)/i.test(clause)).join(' ');
+  const codes = explicitCodes.length?explicitCodes:extract(unscoped);
   // Source/input/map CRS is not an export instruction. Ambiguous alternatives must be asked.
   const sourceOnly = /(?:源|输入|原始|地图)(?:数据)?坐标系|source crs|input crs|map projection/i.test(direct) && !/导出|输出|成果|目标|转换(?:成|为|到)|export|output|target|reproject/i.test(direct);
   const unique = [...new Set(codes)];

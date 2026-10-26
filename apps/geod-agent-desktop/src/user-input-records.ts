@@ -15,6 +15,9 @@ export function inputOrigin(messages:DisplayMessage[],userMessageId?:string){
   const withoutAttachment=(text:string)=>text.replace(/\n已附加边界：[^\n]*$/,'');
   let cursor=index;
   while(cursor>0){
+    const resumed=humans[cursor].resumeOfUserMessageId;
+    const original=resumed?humans.findIndex(m=>m.id===resumed):-1;
+    if(original>=0&&original<cursor){cursor=original;continue;}
     const submitted=messages.find(m=>m.userInput?.status==='answered'&&m.userInput.reply&&withoutAttachment(userInputReplyText(m.userInput,m.userInput.reply))===withoutAttachment(humans[cursor].content))?.userInput;
     const parent=submitted?.userMessageId?humans.findIndex(m=>m.id===submitted.userMessageId):-1;
     if(parent>=0&&parent<cursor){cursor=parent;continue;}

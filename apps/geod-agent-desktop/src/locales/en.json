@@ -2579,5 +2579,16 @@
   "恢复前快照": "Snapshot before recovery",
   "Agent 使用统计：": "Agent usage statistics: ",
   "自愿开启后，启动、自有渠道调用结果与可用 Token 用量会关联当前账号；不发送对话、模型名称、渠道地址或密钥。关闭会清除待上传记录，已发送的请求可能完成。下载统计单独控制。": "Opt in to associate app sessions, personal provider call outcomes and available token usage with this account. No conversations, model names, provider URLs or keys are sent. Turning this off clears pending records; in-flight requests may finish. Download statistics are controlled separately.",
-  "自愿关联当前账号的活跃与自有渠道用量，不上传对话或密钥；下载统计独立控制。": "Opt in to account-linked activity and personal provider usage. No conversations or keys. Download statistics are controlled separately."
+  "自愿关联当前账号的活跃与自有渠道用量，不上传对话或密钥；下载统计独立控制。": "Opt in to account-linked activity and personal provider usage. No conversations or keys. Download statistics are controlled separately.",
+  "恢复后台": "Restore background service",
+  "后台未就绪": "Background service not ready",
+  "补全图源认证": "Complete source authentication",
+  "图源已保存，补全本机认证后继续原任务。": "The source is saved. Complete authentication on this device to continue the task.",
+  "填写认证并继续": "Authenticate and continue",
+  "图源已保存。只需在本机填写认证，随后继续原任务。": "The source is saved. Enter authentication on this device to continue the task.",
+  "仅保存到本机凭据存储，不会发送到聊天。范围、级别和导出参数保持不变。": "Saved only in this device's credential store, never sent to the chat. Your area, zoom level and export settings are preserved.",
+  "请填写要保存的 Key/Token。": "Enter the Key/Token to save.",
+  "认证尚未就绪，请核对本机凭据存储后重新保存。": "Authentication is not ready. Check this device's credential store and save again.",
+  "此图源已不存在，请重新选择图源。": "This source no longer exists. Select a source again.",
+  "当前启动环境限制后台独立运行，请保持应用打开直到任务完成。": "This launch environment restricts independent background execution. Keep the app open until your tasks finish."
 }

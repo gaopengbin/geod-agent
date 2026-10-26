@@ -177,9 +177,21 @@ export class RuntimePolicy {
   if(tool==='data_input_read')spec.conditionScope='data-input:'+hash(args);
   return{...spec,resource:spec.resource?spec.resource.map(k=>args[k]??null):['planId','jobId','taskId','scheduleId','connectionId','boundaryId','sourceId'].filter(k=>args[k]!==undefined).map(k=>args[k]),conditionScope:spec.conditionScope??spec.purpose??tool};
  }
- failureScope(failure,desc){return failure.category==='business'||failure.category==='permission'&&desc.resource?.length?hash([desc.conditionScope,desc.resource]):['parameter','capability','internal'].includes(failure.category)?hash([desc.conditionScope,desc.purpose]):String(desc.conditionScope);}
+ sourceConditions(desc){
+  const facts=this.facts.sourceReadiness;
+  if(!facts)return null;
+  const ids=[...new Set((desc.resource??[]).flatMap(id=>facts.plans?.[id]??(facts.sources?.[id]?[id]:[])))].sort();
+  return ids.length?ids.map(id=>({sourceId:id,...facts.sources?.[id]})):null;
+ }
+ failureScope(failure,desc){
+  if(failure.category==='authentication'&&failure.code.startsWith('SOURCE_CREDENTIAL'))return hash(['source-credential',this.sourceConditions(desc)?.map(s=>s.sourceId)??desc.resource]);
+  if(failure.category==='environment')return hash(['background-runtime',desc.effect==='read'?'read:'+desc.purpose:'mutation']);
+  return failure.category==='business'||failure.category==='permission'&&desc.resource?.length?hash([desc.conditionScope,desc.resource]):['parameter','capability','internal'].includes(failure.category)?hash([desc.conditionScope,desc.purpose]):String(desc.conditionScope);
+ }
  condition(failure,descriptor){
   const base={contract:this.state.contract,model:this.state.capabilitiesHash};
+  if(failure.category==='authentication'&&failure.code.startsWith('SOURCE_CREDENTIAL'))return hash({sources:this.sourceConditions(descriptor),available:this.facts.sourceReadiness?.available});
+  if(failure.category==='environment')return hash(this.facts.backgroundRuntime??{running:'unknown'});
   if(failure.category==='permission'){
    const imagery=this.facts.imagery;
    const relevant=tasks=>(tasks??[]).filter(t=>descriptor.resource?.some(id=>id===t.planId||id===t.jobId||id===t.taskId));
@@ -248,7 +260,7 @@ export class RuntimePolicy {
    for(const q of args.questions){const known=this.state.requirements['question:'+q.id];if(known?.confirmed&&known.contract===hash(q)&&known.scope===goalId)reused[q.id]=known.value;else missing=true;}
    if(!missing){this.state.metrics.reused++;this.audit('requirements-reused');return{answers:reused,answeredBy:'user',reusedPreviousAnswer:true};}
   }
-  const blocked=Object.values(this.state.failures).find(f=>f.scope===this.failureScope(f,desc)&&['transient','permission','authentication','capability','business'].includes(f.category)&&f.condition===this.condition(f,desc)&&(!f.retryAt||f.retryAt>this.now()));
+  const blocked=Object.values(this.state.failures).find(f=>f.scope===this.failureScope(f,desc)&&['transient','permission','authentication','capability','business','environment'].includes(f.category)&&f.condition===this.condition(f,desc)&&(!f.retryAt||f.retryAt>this.now()));
   if(blocked){this.noProgress(tool,blocked.code,hash([blocked.scope,blocked.category]));this.state.metrics.blocked++;this.audit('condition-blocked',{tool,category:blocked.category});return error('RECOVERY_CONDITION_UNCHANGED','A prerequisite has not changed. Reuse the known failure, obtain the missing condition, or use another valid capability.',{failure:blocked});}
   // Memoize catalog/contract discovery only. Task status, SQL, file contents,
   // source availability and remote dataset searches remain live reads.
