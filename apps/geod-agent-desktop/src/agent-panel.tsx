@@ -66,6 +66,7 @@ import {userApprovedMcpUrl,reconcileMcpProposals} from './mcp-onboarding';
 import {resolveMcpTarget,prepareMcpConnection} from './mcp-connection';
 import {repairSavedMcpHistory,knownSavedMcpAddress} from './mcp-history-repair';
 import {turnOutcomeMessage,outputFailureCode,modelResponseIssue,orphanedReasoningTurn,recoverTurnOutcome} from './turn-outcome';
+import {terminalTaskFeedback,needsTerminalFeedback} from './task-feedback';
 import {prepareCodexConversation,conversationBusyFailure,confirmedCreditRejection,inspectCodexCheckpoint} from './codex-recovery';
 import { McpRequestQueue } from "./mcp-request-queue";
 import { backgroundHandoff, backgroundRunning, backgroundStateLabels, type BackgroundSnapshot } from "./background-jobs";
@@ -96,6 +97,7 @@ import type {ImageAttachment,DocumentAttachment} from "./api";
 import { receiveBoundarySelection } from "./boundary-selection";
 import { scheduleTools, SCHEDULE_CONNECTOR_ID } from "./schedule-tools";
 import { dataDownloadTools, DATA_DOWNLOAD_ID, executeDataDownloadTool } from "./data-download-tools";
+import {dataDownloads} from './data-downloads';
 import { accountChatStore, chatPlanIds, CHAT_LIST_KEY, clearPending, commitPending, deleteStoredConversation, importLegacyChats, LEGACY_IMPORT_MARKER, legacyChats, pendingBoundary, persistCompletedChat, readPending, restorePendingChats, savePending, type DisplayMessage, type ExtensionProposal, type SavedChat, type QueuedInput,type FollowupReceipt } from "./pending-generations";
 
 const WORKSPACE_LIST_KEY = "geod-agent-workspace-list-0.1";
@@ -901,6 +903,10 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
     try {
       if (isExportPlan(call.function.name,args)) {
         await ensureExportRuntime(api.runtimeCapabilities);
+        // A missing source credential blocks planning before unrelated export questions.
+        if (call.function.name === "plan_imagery" || call.function.name === "plan_imagery_batch") {
+          await sourceCredentialPreflight([args.sourceId,...(Array.isArray(args.overlaySourceIds)?args.overlaySourceIds:[])].filter((id):id is string=>typeof id==='string'));
+        }
         const human=[...displayRef.current].reverse().find(item=>item.role==="user");
         const intent=requestCrsIntent(displayRef.current,human?.id);
         let workspace=await api.workspaceGet(conversationId);
@@ -1191,7 +1197,6 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
         return rangeSummary(combined);
       }
       if (call.function.name === "plan_imagery_batch") {
-        await sourceCredentialPreflight([args.sourceId,...(Array.isArray(args.overlaySourceIds)?args.overlaySourceIds:[])].filter((id):id is string=>typeof id==='string'));
         const result = await planImagery(args, conversationId, nativeToolExecutionId(generationId,call.id), boundaryRef.current, true);
         for (const item of result.plans) {
           assertPlanAvailable(localStateStore, accountId, conversationId, item.stored.planId);
@@ -1209,7 +1214,6 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
           rememberPlan(previous);
           return compactPlan(previous, (await api.workspaceGet(conversationId)).permission);
         }
-        await sourceCredentialPreflight([args.sourceId,...(Array.isArray(args.overlaySourceIds)?args.overlaySourceIds:[])].filter((id):id is string=>typeof id==='string'));
         const result = await planImagery(args, conversationId, toolExecutionId, boundaryRef.current);
         if (!result.plans[0]) return { error: result.errors[0]?.error ?? "PLAN_NOT_CREATED" };
         const { stored: plan, rangeName } = result.plans[0];
@@ -1738,7 +1742,13 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
       for(const item of queueSnapshot.current?.queuedInputs??[])if(item.delivery?.runId===runId&&item.delivery.state==='sending')await checkQueuedDelivery(item);
       const interrupted = result.status === "interrupted";
       if(result.status==='completed') {
-        displayRef.current=completeCodexReply(displayRef.current,runId,result).map(item=>item.turnId===runId&&item.phase==='final'?{...item,turnDurationMs:result.durationMs}:item);setDisplay(displayRef.current);
+        displayRef.current=completeCodexReply(displayRef.current,runId,result).map(item=>item.turnId===runId&&item.phase==='final'?{...item,turnDurationMs:result.durationMs,...(result.taskFeedback?{nativeFeedback:result.taskFeedback}:{})}:item);setDisplay(displayRef.current);
+        if(needsTerminalFeedback(displayRef.current,runId)){
+          setLiveActivity(getLocale()==='en'?'Checking the execution outcome…':'正在核对执行结果…');
+          const feedback=await terminalTaskFeedback(displayRef.current,runId,{imagery:()=>api.imageryTasksList(conversationId),data:()=>dataDownloads.list(conversationId),active:api.jobsActive},{english:getLocale()==='en'});
+          const notice=turnOutcomeMessage(runId,{status:'incomplete',message:feedback.reason,code:'TURN_ENDED_WITHOUT_REPLY',durationMs:result.durationMs,feedback});
+          appendDisplay(displayRef.current.some(m=>m.id===notice.id)?{...notice,id:notice.id+'-final'}:notice);
+        }
       }
       if (interrupted) {
         changeQueue(chat=>({...chat,queuePaused:!resumeQueueAfterStop.current}));
@@ -1753,12 +1763,25 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
       setChatRecords(persistCompletedChat(chatStore(), {...completed,...queueSnapshot.current})); await releasePending();
       await flushLocalState();
     } catch(cause) {
-      if(['CODEX_CONNECTION_UNKNOWN','CODEX_TOOL_OUTCOME_UNKNOWN'].includes((cause as {code?:string})?.code??'')){await persistQuestionTranscript();throw cause;}
+      if(['CODEX_CONNECTION_UNKNOWN','CODEX_TOOL_OUTCOME_UNKNOWN'].includes((cause as {code?:string})?.code??'')){
+        const code=(cause as {code:string}).code;
+        if(!displayRef.current.some(m=>m.id==='turn-outcome-'+runId)){
+          const feedback=await terminalTaskFeedback(displayRef.current,runId,{imagery:()=>api.imageryTasksList(conversationId),data:()=>dataDownloads.list(conversationId),active:api.jobsActive},{code,english:getLocale()==='en'});
+          appendDisplay(turnOutcomeMessage(runId,{status:'incomplete',message:feedback.reason,code,feedback}));
+        }
+        // Keep the durable run/callback identity. Feedback is provisional,
+        // not permission to resubmit an operation or cancel a download.
+        await persistQuestionTranscript();throw cause;
+      }
       setNativeRun(null);
       displayRef.current=displayRef.current.map(item=>item.id.startsWith(`codex-${runId}-`)?{...item,streaming:false,...(item.toolStatus==='running'?{toolStatus:'attention' as const}:{})}:item);
       setDisplay(displayRef.current);
       const message=errorMessage(cause),code=outputFailureCode(message);
-      if(!conversationBusyFailure(cause))appendDisplay(turnOutcomeMessage(runId,{status:code?'incomplete':'failed',message,code,generationId:lastGenerationId??undefined}));
+      if(!conversationBusyFailure(cause)){
+        const explicitCode=cause&&typeof cause==='object'&&'code'in cause&&typeof cause.code==='string'?cause.code:code??message.match(/\b[A-Z][A-Z0-9_]{4,}\b/)?.[0]??'';
+        const feedback=await terminalTaskFeedback(displayRef.current,runId,{imagery:()=>api.imageryTasksList(conversationId),data:()=>dataDownloads.list(conversationId),active:api.jobsActive},{code:explicitCode,english:getLocale()==='en'});
+        appendDisplay(turnOutcomeMessage(runId,{status:code?'incomplete':'failed',message:feedback.reason,code:explicitCode||code,generationId:lastGenerationId??undefined,feedback}));
+      }
       await persistQuestionTranscript();
       throw cause;
     } finally {

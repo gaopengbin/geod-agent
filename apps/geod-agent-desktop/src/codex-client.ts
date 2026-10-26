@@ -3,6 +3,7 @@ import { modelMessagesWithoutArtifactPaths } from "./model-artifacts";
 import { guardedCodexTurn } from "./codex-liveness";
 import {runtimeCompatibilityFailure} from "./app-error";
 import {followNativeRun,type RunSnapshot} from './codex-stream-client';
+import type {TaskFeedback} from '../src-tauri/task-feedback.mjs';
 
 export interface CodexTokenUsage { inputTokens: number; outputTokens: number; cachedInputTokens: number; modelContextWindow: number | null }
 type CodexEventPayload =
@@ -22,7 +23,7 @@ type CodexEventPayload =
   | { type: "tool"; requestId: string; tool: string; arguments: Record<string, unknown>; callId: string; threadId: string;operationId?:string };
 export type CodexEvent=CodexEventPayload&{sequence?:number;runId?:string;emittedAt?:number};
 export type CodexRunSnapshot=RunSnapshot<CodexResult>;
-export interface CodexResult { threadId: string; id: string; status: "completed" | "interrupted" | "failed"; text: string;durationMs?:number; error?: { message: string } | null }
+export interface CodexResult { threadId: string; id: string; status: "completed" | "interrupted" | "failed"; text: string;durationMs?:number;taskFeedback?:TaskFeedback; error?: { message: string } | null }
 export interface CodexHooks {
   onEvent: (event: CodexEvent) => void;
   onModel: (generationId: string, messages: AgentMessage[]) => void | Promise<void>;

@@ -1,6 +1,7 @@
 import type { AgentMessage, BoundaryImport, SourceRegistrationDraft, ImageAttachment, DocumentAttachment } from "./api";
 import type {UserInputRecord} from './user-input-records';
 import type {TurnOutcome} from './turn-outcome';
+import type {TaskFeedback} from '../src-tauri/task-feedback.mjs';
 import type {GenerationTokenReceipt,TurnTokenUsage} from './turn-token-usage';
 import type {CommandAction} from './codex-protocol/v2/CommandAction';
 import {restoreQueuedInputs} from './queued-inputs.ts';
@@ -33,6 +34,7 @@ export interface DisplayMessage {
   monitorTrace?: DisplayMessage[];
   userInput?:UserInputRecord;
   turnOutcome?:TurnOutcome;
+  nativeFeedback?:TaskFeedback;
   modelReceipts?:GenerationTokenReceipt[];
   tokenUsage?:TurnTokenUsage;
   turnDurationMs?:number;

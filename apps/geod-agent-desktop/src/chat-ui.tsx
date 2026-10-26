@@ -113,8 +113,9 @@ function workTitle(item: DisplayMessage, active = true) {
 function TurnOutcomeCard({item,onContinue,canContinue}:{item:DisplayMessage;onContinue?:()=>void;canContinue:boolean}) {
   const outcome=item.turnOutcome!;
   if(outcome.status==='interrupted'||inactiveInterrupt(outcome))return <div className="agent-turn-stopped" role="status">{outcome.durationMs!==undefined?t('你在 {0} 秒后停止了',{'0':String(Math.max(0,Math.round(outcome.durationMs/1000)))}):t('已停止')}</div>;
-  return <section className="agent-turn-outcome" role="status" aria-label={t('本轮未完成')}>
-    <CircleAlert size={17}/><div><strong>{t('本轮未完成')}</strong><p>{localize(outcome.message)}</p>{onContinue&&<Button variant="outline" size="sm" disabled={!canContinue} onClick={onContinue}>{t('继续处理')}<ArrowRight size={15}/></Button>}</div>
+  const feedback=outcome.feedback;
+  return <section className="agent-turn-outcome" role="status" aria-label={feedback?.title??t('本轮未完成')}>
+    <CircleAlert size={17}/><div><strong>{feedback?.title??t('本轮未完成')}</strong><p>{feedback?.reason??localize(outcome.message)}</p>{feedback&&<><p>{feedback.progress}</p><p>{feedback.retained}</p><p>{feedback.next}</p></>}{onContinue&&(!feedback||feedback.canContinue)&&<Button variant="outline" size="sm" disabled={!canContinue} onClick={onContinue}>{t('继续处理')}<ArrowRight size={15}/></Button>}</div>
   </section>;
 }
 

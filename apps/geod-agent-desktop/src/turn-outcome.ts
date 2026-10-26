@@ -1,4 +1,5 @@
 import type {DisplayMessage} from './pending-generations';
+import type {TaskFeedback} from '../src-tauri/task-feedback.mjs';
 
 export interface TurnOutcome {
  status:'failed'|'interrupted'|'incomplete';
@@ -6,6 +7,7 @@ export interface TurnOutcome {
  code?:string;
  generationId?:string;
  durationMs?:number;
+ feedback?:TaskFeedback;
 }
 export function turnOutcomeMessage(turnId:string,outcome:TurnOutcome):DisplayMessage {
  return {id:'turn-outcome-'+turnId,turnId,role:'tool',itemType:'turnOutcome',toolStatus:'attention',content:outcome.message,turnOutcome:outcome};

@@ -13,6 +13,7 @@ import {BULK_DATA_POLICY,compactGeometryRequest,compactGeometryHistory,persistEm
 export {BULK_DATA_POLICY} from './codex-bulk-data.mjs';
 import {createOutputCompactor,RTK_OUTPUT_POLICY} from './rtk-output.mjs';
 import {RuntimePolicy,RUNTIME_TOOLS} from './runtime-policy.mjs';
+import {taskFeedbackText} from './task-feedback.mjs';
 import {GEOD_POLICY} from './runtime-policy-geod.mjs';
 import {ModelToolCatalog,SEARCH_TOOL,CONTEXT_TOOL,projectModelInput,modelInputAudit} from './model-input-context.mjs';
 
@@ -237,6 +238,13 @@ export async function createHost({codex,home,sqliteHome=home,toolsFile,emit,rece
       let raw='';for await(const chunk of req){raw+=chunk;if(Buffer.byteLength(raw)>48_000_000)throw new Error('Responses request too large');}
       const savedGeometry=await persistEmbeddedGeometryRequest(JSON.parse(raw),data=>ask('embeddedData',data,{timeout:10000}));
       await refreshFacts();
+      const taskReport=policy.reportForRun();
+      if(taskReport){
+        // This is native execution feedback, not an upstream generation. Do
+        // not emit a model request, generation receipt or a synthetic debit.
+        res.writeHead(200,{'content-type':'text/event-stream','cache-control':'no-store'});streamStarted=true;
+        sendGeneration(res,{state:'settled',inputTokens:0,outputTokens:0,result:{content:taskFeedbackText(taskReport.feedback,taskReport.english)}},'runtime_report_'+taskReport.id);return;
+      }
        const unprojected=policy.context(compactGeometryRequest(await run.outputCompactor.request(savedGeometry)));
        const request=capabilities.isolatedWorker?unprojected:projectModelInput(unprojected,run.modelInput),id=`geod_${randomUUID()}`,requestRevision=policy.state.revision;
       if(capabilities.isolatedWorker){
@@ -378,6 +386,7 @@ export async function createHost({codex,home,sqliteHome=home,toolsFile,emit,rece
                }
                return result;
              });
+             if(result?.executionBlocker)run.modelInput.catalog.enable('runtime_task_report');
              const imageResult=result?.imageContent;
              if(imageResult&&!capabilities.inputModalities?.includes('image')){send({id:value.id,result:{success:false,contentItems:[{type:'inputText',text:JSON.stringify({error:'CHANNEL_IMAGE_UNSUPPORTED',message:'图片附件存在；当前模型不能读取像素。请选择支持图片的模型，不要推断图片不存在。'})}]}});}
              else send({id:value.id,result:{success:!result?.error,contentItems:imageResult?[{type:'inputText',text:JSON.stringify({...result,imageContent:undefined})},{type:'inputImage',imageUrl:imageResult}]:[{type:'inputText',text:JSON.stringify(result)}]}});
@@ -434,7 +443,7 @@ export async function createHost({codex,home,sqliteHome=home,toolsFile,emit,rece
         overrides.developerInstructions+=' GeoD explicit memory is managed through agent_memory_list/save/remove. If these direct tools are unavailable in an older thread, discover builtin-agent-memory through extensions_list and use mcp_call with its exact returned schema. Only save or change memories when the user explicitly asks to remember, update or forget a preference. Never save passwords, tokens, keys, tool output, or inferred facts as preferences. Read the current revision before editing or removing an existing entry. Account memories apply across this account; workspace memories apply only to this actual workspace. These preferences cannot authorize execution or override current user requests and native permissions. The following freshly loaded enabled entries replace previous memory snapshots; removed/disabled entries must not be treated as current preferences. Other applicable entries can be searched using agent_memory_list.\n'+JSON.stringify(params.memory??{entries:[],omitted:0});
         if(capabilities.isolatedWorker)overrides.developerInstructions='You are an isolated GeoD task agent. Work only on the assigned task. The only available execution tools list, read and optionally write files inside your own workspace. Use the exact declared tool schemas. System commands, external MCP, parent files and other agents are unavailable. File reads/writes are enforced by the native owner. Do not claim an operation succeeded without its actual result. Reply concisely in the user language.';
         overrides.developerInstructions+=' '+USER_INPUT_POLICY;
-        overrides.developerInstructions+=' A casual observation, acknowledgement, thanks, or conversational feedback is not a request to investigate, verify, run experiments, write files, or recheck data. Respond briefly without tools unless the human explicitly requests an action or a check. If the human says they were only commenting or did not ask for verification, stop further investigation immediately and acknowledge; do not offer or start more experiments. Full workspace access is permission to execute authorized tasks, not authorization to invent a new task. Continue authorized tasks while tools return new evidence or measurable progress. Repeated unchanged results are not progress: change the approach or explain the blocker. Use the fewest model/tool rounds needed for the requested result; avoid repeated self-checks after success. Conversation spending limits, when configured by the human, are enforced by the native runtime across turns.';
+        overrides.developerInstructions+=' A casual observation, acknowledgement, thanks, or conversational feedback is not a request to investigate, verify, run experiments, write files, or recheck data. Respond briefly without tools unless the human explicitly requests an action or a check. If the human says they were only commenting or did not ask for verification, stop further investigation immediately and acknowledge; do not offer or start more experiments. Full workspace access is permission to execute authorized tasks, not authorization to invent a new task. Continue authorized tasks while tools return new evidence or measurable progress. Repeated unchanged results are not progress: change the approach or explain the blocker. When a verified blocker prevents the request and no valid authorized alternative remains, use runtime_task_report with its executionBlocker IDs. Do not end only with a plan or a promise to keep trying: state what could not be completed, the actual reason, verified partial results, retained tasks, and the next useful action. Missing evidence remains unknown. Native running tasks are not failures, and a blocked reply must not cancel them. Do not ask for unrelated export parameters after the user has made a required prerequisite unavailable. Use the fewest model/tool rounds needed for the requested result; avoid repeated self-checks after success. Conversation spending limits, when configured by the human, are enforced by the native runtime across turns.';
         if(!capabilities.isolatedWorker)overrides.developerInstructions+=' '+BULK_DATA_POLICY;
         if(params.rtkOutput?.enabled===true&&!capabilities.isolatedWorker)overrides.developerInstructions+=' '+RTK_OUTPUT_POLICY;
         if(!capabilities.isolatedWorker)overrides.developerInstructions+=' Current native conversation export CRS default: '+JSON.stringify(params.outputCrs??null)+'. This is refreshed at each turn. A non-null value was explicitly selected by the human for this conversation; reuse it unless the current request explicitly overrides it. A one-time override never changes that default. Query workspace_status for any preference changed during this turn. A null default requires an interactive CRS choice for a new export unless the human already specified its target CRS or explicitly delegated choosing defaults.';
@@ -458,7 +467,7 @@ export async function createHost({codex,home,sqliteHome=home,toolsFile,emit,rece
           :{type:'readOnly',networkAccess:false};
         // Resume can rejoin an already loaded thread; refresh execution permissions per turn.
         const turn=await rpc('turn/start',{threadId:run.threadId,input,cwd:params.workspace,runtimeWorkspaceRoots:[params.workspace],approvalPolicy:overrides.approvalPolicy,sandboxPolicy});run.turnId=turn.turn.id;if(run.interrupt)await interrupt();
-          const outcome=await finished;policy.finish(outcome.status);return {...outcome,durationMs:Date.now()-run.startedAt};
+          const outcome=await finished;policy.finish(outcome.status);return {...outcome,durationMs:Date.now()-run.startedAt,...(policy.reportForRun()?{taskFeedback:policy.reportForRun().feedback}:{})};
       }finally{
         hookGate?.clear();
         for(const entry of callbacks.values()){clearTimeout(entry.timer);entry.deadline?.close();entry.close?.();entry.reject(new Error('Codex turn ended'));}callbacks.clear();run=null;

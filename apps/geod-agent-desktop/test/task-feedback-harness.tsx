@@ -1,0 +1,14 @@
+import {createRoot} from 'react-dom/client';
+import * as Tooltip from '@radix-ui/react-tooltip';
+import {ChatTranscript} from '../src/chat-ui';
+import {turnOutcomeMessage} from '../src/turn-outcome';
+import {buildTaskFeedback,taskFeedbackText} from '../src-tauri/task-feedback.mjs';
+import {setLanguagePreferences} from '../src/i18n';
+import type {DisplayMessage} from '../src/pending-generations';
+import '../src/styles.css';import '../src/theme.css';import '../src/workspace.css';
+const query=new URLSearchParams(location.search),state=query.get('state')??'blocked',english=query.get('lang')==='en';
+setLanguagePreferences({language:english?'en':'zh-CN'});
+const feedback=buildTaskFeedback({english,code:state==='incomplete'?'MODEL_OUTPUT_LIMIT':state==='partial'?'SOURCE_NETWORK':'SOURCE_CREDENTIAL_REQUIRED',factsKnown:state!=='unknown',resources:state==='partial'?[{id:'complete-result',state:'completed',verified:true}]:state==='running'?[{id:'active',state:'downloading',active:true}]:[]});
+const messages:DisplayMessage[]=[{id:'human',role:'user',content:english?'Download this source. If it cannot be completed, explain the result.':'下载指定图源，无法完成时请明确说明原因和下一步。'},state==='report'?{id:'report',turnId:'run',role:'assistant',phase:'final',nativeFeedback:feedback,content:taskFeedbackText(feedback,english)}:turnOutcomeMessage('run',{status:'failed',message:feedback.reason,feedback})];
+createRoot(document.getElementById('root')!).render(<Tooltip.Provider><main className="agent-chat" style={{height:'100dvh',width:'100%',maxWidth:900,margin:'0 auto',padding:16}}><ChatTranscript conversationId="feedback-visual-fixture" messages={messages} busy={false} activity="" onReviewSource={()=>{}} onApproveExtension={()=>{}} onContinueTurn={()=>{document.documentElement.dataset.continued='true';}}/></main></Tooltip.Provider>);
+document.documentElement.dataset.feedbackReady='true';

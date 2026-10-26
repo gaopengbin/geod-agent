@@ -37,6 +37,8 @@ export default defineConfig({
     host: "127.0.0.1",
     port: 1420,
     strictPort: true,
-    watch: { ignored: ["**/src-tauri/**"] },
+    // The feedback formatter is shared with the native host. Keep that one
+    // frontend dependency live while excluding Cargo and other native files.
+    watch: { ignored: path => {const value=path.replaceAll('\\','/'),at=value.indexOf('/src-tauri/');return at>=0&&value.slice(at+11)!=='task-feedback.mjs';} },
   },
 });

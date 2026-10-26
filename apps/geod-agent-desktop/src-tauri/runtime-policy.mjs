@@ -5,10 +5,12 @@ import {join} from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
 import {GEOD_POLICY,ERROR_CLASSES,completionEvidence} from './runtime-policy-geod.mjs';
 import {RuntimeWorkflow,WORKFLOW_TOOLS} from './runtime-workflow.mjs';
+import {buildTaskFeedback} from './task-feedback.mjs';
 
 export const POLICY_VERSION=1;
 export const RUNTIME_TOOLS=[
  ...WORKFLOW_TOOLS,
+ {type:'function',function:{name:'runtime_task_report',description:'End this reply with a factual blocker/partial-result report when a verified prerequisite or capability prevents the requested work. Use executionBlocker IDs returned by failed tools. Choose this after assessing valid alternatives, not after correctable argument errors or just because a task is slow. The runtime preserves confirmed parameters, reports native results and unknowns, and produces the final reply locally without another model request. It does not cancel downloads, approve work, or mark the objective successful.',parameters:{type:'object',properties:{blockerIds:{type:'array',minItems:1,maxItems:6,uniqueItems:true,items:{type:'string',minLength:1,maxLength:80}}},required:['blockerIds'],additionalProperties:false}}},
  {type:'function',function:{name:'runtime_task_state',description:'Read the durable execution checkpoint: goal revision, confirmed requirements, unresolved operations, failure recovery conditions and evidence. Page evidence with offset/limit. This is not a download status poll.',parameters:{type:'object',properties:{offset:{type:'integer',minimum:0},limit:{type:'integer',minimum:1,maximum:64}},additionalProperties:false}}},
  {type:'function',function:{name:'runtime_task_update',description:'Propose a new structured goal or explicitly amend requirements. Routine native downloads and their verified completion are registered automatically; do not call this tool just to record completion. expectedRevision prevents stale changes. Proposals cannot grant permissions or verify outputs. An explicit complete requires native evidence. Conversation budget remains cumulative.',parameters:{type:'object',properties:{expectedRevision:{type:'integer',minimum:1},action:{type:'string',enum:['amend','start','complete']},objective:{type:'string',maxLength:2000},deliverables:{type:'array',description:'Exact native jobId/taskId strings only, without prefixes or descriptive labels. Submitted download IDs are bound automatically.',maxItems:32,items:{type:'string',maxLength:200}},evidenceIds:{type:'array',maxItems:32,items:{type:'string'}},invalidateRequirements:{type:'array',maxItems:32,items:{type:'string'}}},required:['expectedRevision','action'],additionalProperties:false}}},
 ];
@@ -150,7 +152,30 @@ export class RuntimePolicy {
    resources:resources.map(({id,kind,state,verified,evidenceId})=>({id,kind,state,verified,evidenceId})),
    completionRegistration:{automatic:true,scope:'submitted-native-resources',complete:submitted.length>0&&submitted.every(r=>r.verified),ids:submitted.map(r=>r.id)},
    evidence:view.evidence.filter(e=>e.verified&&e.goalId===this.state.goal?.id).map(({id,tool,resourceIds,verified})=>({id,tool,resourceIds,verified})),
+   blockers:Object.values(this.state.run?.blockers??{}).map(({id,code,category})=>({id,code,category})),
    detailsTool:'runtime_task_state'};
+ }
+ rememberBlocker(failure,desc,run=this.state.run){
+  if(!run||run!==this.state.run||['parameter'].includes(failure.category)||['USER_STOPPED','USER_INPUT_CANCELLED','USER_INPUT_SAVED','EXECUTION_CANCELLED'].includes(failure.code))return null;
+  run.blockers??={};const scope=this.failureScope(failure,desc),condition=this.condition(failure,desc);
+  const previous=Object.values(run.blockers).find(b=>b.code===failure.code&&b.scope===scope&&b.condition===condition);
+  const blocker=previous??{id:'blocker-'+randomUUID(),code:failure.code,category:failure.category,scope,condition,descriptor:{effect:desc.effect,purpose:desc.purpose,resource:desc.resource,conditionScope:desc.conditionScope}};
+  run.blockers[blocker.id]=blocker;
+  while(Object.keys(run.blockers).length>16)delete run.blockers[Object.keys(run.blockers)[0]];
+  return {id:blocker.id,code:blocker.code,category:blocker.category,reportTool:'runtime_task_report',instruction:'This is a verified blocker, not a tool-call limit. If no valid authorized path remains, report it and finish clearly; do not keep exploring or retrying the unchanged condition. Preserve partial results and unknown outcomes.'};
+ }
+ reportForRun(){
+  const report=this.state.run?.taskReport;if(!report||report.revision!==this.state.revision)return null;
+  return report.blockerIds.every(id=>{const b=this.state.run.blockers?.[id];return b&&b.condition===this.condition(b,b.descriptor);})?report:null;
+ }
+ reportBlocked(args){
+  const blockers=args.blockerIds.map(id=>this.state.run?.blockers?.[id]);
+  if(blockers.some(b=>!b||b.condition!==this.condition(b,b.descriptor)))return error('REPORT_EVIDENCE_REQUIRED','Use current executionBlocker IDs with unchanged prerequisites. Old errors or model assertions cannot prove that work is blocked.');
+  const current=new Set(this.state.run.resourceIds),resources=Object.values(this.state.nativeResources).filter(r=>current.has(r.id));
+  const english=/^Use English\b/.test(this.params.input),feedback=buildTaskFeedback({code:blockers[0].code,resources,unresolved:this.view().unresolvedOperations.length,factsKnown:this.facts.imagery?.available===true&&this.facts.imagery?.data?.available===true,english});
+  this.state.run.taskReport={id:randomUUID(),revision:this.state.revision,blockerIds:args.blockerIds,feedback,english};
+  this.audit('task-blocker-reported',{codes:blockers.map(b=>b.code),status:feedback.status});
+  return {reported:true,feedback,preserved:true,downloadsCancelled:false,objectiveComplete:false};
  }
  context(request){
   const marker='[GeoD execution checkpoint]';const input=(request.input??[]).filter(item=>!(item.role==='developer'&&JSON.stringify(item.content).includes(marker)));
@@ -227,10 +252,12 @@ export class RuntimePolicy {
  async execute(tool,args,callId,dispatch,workflowStep=false){
   args=clean(args);const schema=this.schemas.get(tool);
   if(this.cancelled)return error('EXECUTION_CANCELLED','The run was cancelled; no new operation was dispatched.');
+  if(this.reportForRun())return error('TASK_REPORTED_BLOCKED','A factual task report is ready. End this reply; do not issue further effects. Existing background work remains intact.');
   if(this.callRevisions.has(callId)&&this.callRevisions.get(callId)!==this.state.revision)return error('TASK_REVISION_CHANGED','This call was generated before a user correction or confirmed requirement changed. Replan from the current checkpoint.');
   if(!schema)return error('TOOL_NOT_ALLOWED','Use a tool from the current contract.');
    const unsupported=unsupportedSchemaErrors(schema);if(unsupported.length){this.state.metrics.blocked++;this.noProgress(tool,'TOOL_SCHEMA_UNSUPPORTED','schema:'+tool);this.audit('unsupported-contract',{tool});return error('TOOL_SCHEMA_UNSUPPORTED','This tool contract uses validation constraints that the runtime cannot safely enforce. Refresh the capability or use a supported tool.',{constraints:unsupported});}
   const invalid=schemaErrors(args,schema);if(invalid.length){this.state.metrics.blocked++;this.noProgress(tool,'TOOL_ARGUMENT_INVALID',hash([tool,'parameter']));this.audit('schema-rejected',{tool});return error('TOOL_ARGUMENT_INVALID','Arguments failed the declared schema.',{constraints:invalid});}
+  if(tool==='runtime_task_report')return this.reportBlocked(args);
   // Stable MCP entry for durable Core threads created before workflow tools existed.
   if(tool==='mcp_call'&&args.connectorId==='builtin-runtime-workflow'){
    if(!WORKFLOW_TOOLS.some(t=>t.function.name===args.toolName))return error('TOOL_NOT_ALLOWED','Use an actual runtime workflow tool.');
@@ -276,7 +303,7 @@ export class RuntimePolicy {
    if(!missing){this.state.metrics.reused++;this.audit('requirements-reused');return{answers:reused,answeredBy:'user',reusedPreviousAnswer:true};}
   }
   const blocked=Object.values(this.state.failures).find(f=>f.scope===this.failureScope(f,desc)&&['transient','permission','authentication','capability','business','environment'].includes(f.category)&&f.condition===this.condition(f,desc)&&(!f.retryAt||f.retryAt>this.now()));
-  if(blocked){this.noProgress(tool,blocked.code,hash([blocked.scope,blocked.category]));this.state.metrics.blocked++;this.audit('condition-blocked',{tool,category:blocked.category});return error('RECOVERY_CONDITION_UNCHANGED','A prerequisite has not changed. Reuse the known failure, obtain the missing condition, or use another valid capability.',{failure:blocked});}
+  if(blocked){const executionBlocker=this.rememberBlocker(blocked,desc);this.noProgress(tool,blocked.code,hash([blocked.scope,blocked.category]));this.state.metrics.blocked++;this.audit('condition-blocked',{tool,category:blocked.category});return error('RECOVERY_CONDITION_UNCHANGED','A prerequisite has not changed. Reuse the known failure, obtain the missing condition, or use another valid capability.',{failure:blocked,executionBlocker});}
   // Memoize catalog/contract discovery only. Task status, SQL, file contents,
   // source availability and remote dataset searches remain live reads.
   const discovery=tool==='runtime_tools_search'||tool==='extensions_list';
@@ -318,6 +345,7 @@ export class RuntimePolicy {
     const key=hash([scope,failure.category]),previous=this.state.failures[key];
     this.state.failures[key]={...failure,scope,condition:this.condition(failure,desc),attempts:(previous?.attempts??0)+1,recovery:ERROR_CLASSES[failure.category].recovery,retryAt:failure.category==='transient'?this.now()+Math.max(failure.retryAfterMs,GEOD_POLICY.cooldownMs):null};
     operation.state=failure.category==='unknownOutcome'?'unknown':'failed';operation.recovery=ERROR_CLASSES[failure.category].recovery;this.noProgress(tool,failure.code,key);
+    const executionBlocker=this.rememberBlocker(failure,desc,dispatchRun);if(executionBlocker)result={...result,executionBlocker};
    }else if(result?.runtimePolicy){operation.state='failed';}
    else{
     operation.state='succeeded';operation.expiresAt=Date.parse(result?.expiresAt??result?.plan?.expiresAt??'')||null;
@@ -347,6 +375,13 @@ export class RuntimePolicy {
      const key=hash([tool,args,this.state.run?.id,this.state.revision,this.state.contract,this.facts.connectionsRevision,this.state.discoveryRevision]);
      this.discoveryMemo.set(key,{until:this.now()+90000,result:clean(result)});
      if(this.discoveryMemo.size>100)this.discoveryMemo.delete(this.discoveryMemo.keys().next().value);
+   }
+   const native=unwrap(result),terminal=native?.backgroundResult;
+   if(terminal&&['failed','partial'].includes(terminal.state)&&!failure){
+    // Successful submission is distinct from failed/partial delivery. The
+    // native monitor supplies only its recorded error code, never raw logs.
+    const outcome=failureOf({error:terminal.errorCode??(terminal.state==='partial'?'PARTIAL_DELIVERY':'TASK_EXECUTION_FAILED')});
+    const executionBlocker=this.rememberBlocker(outcome,desc,dispatchRun);if(executionBlocker)result={...result,executionBlocker};
    }
    this.audit('result',{tool,operationId:operation.id,state:operation.state});return clean(result);
   })();this.pending.set(operationKey,work);try{return await work;}finally{this.pending.delete(operationKey);}

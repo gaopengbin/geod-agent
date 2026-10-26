@@ -14,6 +14,7 @@ pub(crate) fn artifact_summary(value:&Value)->Value {
 }
 fn verified_assets(value:&Value)->bool {value["assets"].as_array().is_some_and(|assets|!assets.is_empty()&&assets.iter().all(|asset|asset["bytes"].as_u64().is_some_and(|n|n>0)&&asset["sha256"].as_str().is_some_and(|s|s.len()==64&&s.bytes().all(|b|b.is_ascii_hexdigit()))))}
 pub(crate) fn terminal(state:&str)->bool {matches!(state,"completed"|"partial"|"failed"|"cancelled"|"paused")}
+fn safe_error_code(value:&str)->Option<&str>{let code=value.split(|c:char|!c.is_ascii_uppercase()&&!c.is_ascii_digit()&&c!='_').next()?;if code.len()>=3&&code.len()<=80&&code.contains('_')&&code.as_bytes()[0].is_ascii_uppercase(){Some(code)}else{None}}
 
 pub(crate) fn wait(app:&AppHandle,owner:&str,conversation:&str,kind:&str,id:&str,cancel:&Arc<AtomicBool>,detached:&Arc<AtomicBool>,progress:impl Fn(&str)) -> Value {
     let read=||->Result<Value,crate::AppError>{
@@ -26,6 +27,10 @@ pub(crate) fn wait(app:&AppHandle,owner:&str,conversation:&str,kind:&str,id:&str
             let raw=serde_json::to_value(job).map_err(|_|crate::workspace_error("TASK_STATE_UNAVAILABLE","任务状态不可读"))?;
             let status=raw["state"].as_str().unwrap_or("unknown");
             let mut output=json!({"jobId":id,"state":status,"verified":false,"progress":fields(&raw,&["completedTiles","totalTiles","version"])});
+            if status=="failed" {
+                let events=crate::open_store(&state)?.events_after(id,raw["version"].as_u64().unwrap_or(0).saturating_sub(1),4)?;
+                output["errorCode"]=events.iter().rev().find_map(|e|e.error_code.as_deref().and_then(safe_error_code)).map(|s|json!(s)).unwrap_or_else(||json!("TASK_EXECUTION_FAILED"));
+            }else if status=="partial"{output["errorCode"]=json!("PARTIAL_DELIVERY");}
             if status=="completed" {
                 let manifest=crate::open_store(&state)?.inspect_job_artifact(id)?;
                 let value=serde_json::to_value(manifest).map_err(|_|crate::workspace_error("ARTIFACT_UNAVAILABLE","成果核验清单不可读"))?;
@@ -37,6 +42,8 @@ pub(crate) fn wait(app:&AppHandle,owner:&str,conversation:&str,kind:&str,id:&str
         } else if kind=="data" {
             let task=crate::data_jobs::data_download_get(app.clone(),state,service,conversation.into(),id.into())?;
             let status=task.status.clone();let mut output=json!({"taskId":id,"state":status,"verified":false,"progress":task.progress});
+            if status=="failed"{output["errorCode"]=task.error.as_deref().and_then(safe_error_code).map(|s|json!(s)).unwrap_or_else(||json!("TASK_EXECUTION_FAILED"));}
+            else if status=="partial"{output["errorCode"]=json!("PARTIAL_DELIVERY");if let Some(manifest)=&task.manifest{output["artifact"]=artifact_summary(manifest);}}
             if status=="completed" {
                 let inspected=crate::data_jobs::data_download_inspect(app.clone(),app.state(),app.state(),conversation.into(),id.into())?;
                 if let Some(manifest)=inspected.manifest {let summary=artifact_summary(&manifest);output["verified"]=json!(verified_assets(&summary));output["artifact"]=summary;}
@@ -68,6 +75,7 @@ pub(crate) fn wait(app:&AppHandle,owner:&str,conversation:&str,kind:&str,id:&str
 #[cfg(test)]mod tests {
  use super::*;
  #[test]fn terminal_states_do_not_invent_success(){for state in ["completed","partial","failed","cancelled","paused"]{assert!(terminal(state));}for state in ["queued","downloading","processing","verifying","unknown"]{assert!(!terminal(state));}}
+ #[test]fn failure_codes_never_forward_messages_urls_or_credentials(){assert_eq!(safe_error_code("SOURCE_NETWORK: https://private/?token=secret"),Some("SOURCE_NETWORK"));assert_eq!(safe_error_code("无法连接 private.example"),None);assert_eq!(safe_error_code("sk-sensitive"),None);assert_eq!(safe_error_code("402 balance"),None);}
  #[test]fn artifact_summary_keeps_verification_and_dimensions_without_local_paths(){let raw=json!({"quality":{"status":"complete","missingTiles":0},"assets":[{"id":"raster","bytes":100,"sha256":"proof","width":501,"height":522,"crs":"EPSG:4326","path":"private.tif"}],"provenance":[]});let value=artifact_summary(&raw);assert!(value["assets"][0].get("path").is_none());assert_eq!(value["assets"][0]["crs"],"EPSG:4326");assert_eq!(value["assets"][0]["width"],501);}
  #[test]fn vector_and_3d_native_manifests_keep_real_verification_without_assuming_imagery_fields(){let sha="a".repeat(64);let vector=artifact_summary(&json!({"outputCrs":"EPSG:4490","assets":[{"size":55,"sha256":sha,"path":"features.gpkg"}]}));assert!(verified_assets(&vector));assert_eq!(vector["outputCrs"],"EPSG:4490");let scene=artifact_summary(&json!({"resources":[{"bytes":99,"sha256":sha,"path":"tileset.json"}]}));assert!(verified_assets(&scene));assert!(scene["assets"][0].get("path").is_none());assert!(!verified_assets(&artifact_summary(&json!({"assets":[{"bytes":0,"sha256":sha}]}))));}
 }

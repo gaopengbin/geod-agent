@@ -388,6 +388,7 @@ async fn run_operation(
         let mut policy_hook_source=include_str!("../runtime-policy-hook.mjs").to_owned();
         let mut input_context_source=include_str!("../model-input-context.mjs").to_owned();
         let mut workflow_source=include_str!("../runtime-workflow.mjs").to_owned();
+        let mut feedback_source=include_str!("../task-feedback.mjs").to_owned();
         let control_source=include_str!("../codex-control.mjs");
         if cfg!(debug_assertions){
             let source=PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -396,6 +397,7 @@ async fn run_operation(
             if let Ok(value)=fs::read_to_string(source.join("runtime-policy-hook.mjs")){policy_hook_source=value;}
             if let Ok(value)=fs::read_to_string(source.join("model-input-context.mjs")){input_context_source=value;}
             if let Ok(value)=fs::read_to_string(source.join("runtime-workflow.mjs")){workflow_source=value;}
+            if let Ok(value)=fs::read_to_string(source.join("task-feedback.mjs")){feedback_source=value;}
         }
         if cfg!(debug_assertions){if let Ok(source)=fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("rtk-output.mjs")){rtk_source=source;}}
         if cfg!(debug_assertions){if let Ok(source)=fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("codex-bulk-data.mjs")){bulk_source=source;}}
@@ -404,7 +406,7 @@ async fn run_operation(
         // MCP reload. Replace the idle owned process when reviewed automation
         // changes; resume the durable thread under the newly exported hooks.
         let tool_source=if isolated{include_str!("../worker-tools.json")}else{include_str!("../codex-tools.json")};
-        let source_hash = format!("{:x}", Sha256::digest(format!("{host_source}\n{control_source}\n{hook_source}\n{bulk_source}\n{rtk_source}\n{policy_source}\n{policy_geod_source}\n{policy_hook_source}\n{input_context_source}\n{workflow_source}\n{tool_source}\n{capabilities}\n{}",extensions["pluginHooks"]).as_bytes()));
+        let source_hash = format!("{:x}", Sha256::digest(format!("{host_source}\n{control_source}\n{hook_source}\n{bulk_source}\n{rtk_source}\n{policy_source}\n{policy_geod_source}\n{policy_hook_source}\n{input_context_source}\n{workflow_source}\n{feedback_source}\n{tool_source}\n{capabilities}\n{}",extensions["pluginHooks"]).as_bytes()));
         for (name,source) in [("runtime-policy.mjs",policy_source),("runtime-policy-geod.mjs",policy_geod_source),("runtime-policy-hook.mjs",policy_hook_source)]{
             fs::write(home.join(name),source).map_err(|_|error("CODEX_STORAGE_ERROR","无法准备执行策略运行环境"))?;
         }
@@ -415,6 +417,7 @@ async fn run_operation(
         fs::write(home.join("codex-control.mjs"),control_source).map_err(|_|error("CODEX_STORAGE_ERROR","无法准备对话控制运行环境"))?;
         fs::write(home.join("model-input-context.mjs"),input_context_source).map_err(|_|error("CODEX_STORAGE_ERROR","无法准备按需模型上下文"))?;
         fs::write(home.join("runtime-workflow.mjs"),workflow_source).map_err(|_|error("CODEX_STORAGE_ERROR","无法准备跨工具步骤运行环境"))?;
+        fs::write(home.join("task-feedback.mjs"),feedback_source).map_err(|_|error("CODEX_STORAGE_ERROR","无法准备任务结果反馈"))?;
         fs::write(&host, host_source).map_err(|_| error("CODEX_STORAGE_ERROR", "无法准备 Codex 适配层"))?;
         fs::write(&tools, tool_source).map_err(|_| error("CODEX_STORAGE_ERROR", "无法准备 GeoD 工具定义"))?;
         let (sender, receiver) = mpsc::channel();

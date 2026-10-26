@@ -1,0 +1,41 @@
+// Factual task closure, shared by the native host and desktop presentation.
+// No provider text, paths or credentials are copied into these explanations.
+const reasons=[
+ [/^CODEX_(?:CONNECTION_UNKNOWN|TOOL_OUTCOME_UNKNOWN)$/,['与原执行的连接已中断，提交结果尚未核实，不能判断成功或失败。','使用“重新连接”查看原执行；若无法恢复，先停止原执行并核对“任务与成果”，再继续，避免重复提交。','The connection to the original run was lost; submitted operation outcomes are unverified.','Reconnect to the original run. If recovery fails, stop it and inspect Tasks and Results before resuming.','unknown']],
+ [/^IDENTITY_UNAVAILABLE$/,['身份服务暂时无法连接，当前不能核对账号授权与任务状态。','恢复服务或网络连接后再核对原任务；不要反复登录或重复提交下载。','The identity service is unreachable, so account and task state cannot be checked.','Restore the service or network connection, then check the existing task before submitting anything again.','blocked']],
+ [/^USER_INPUT_(?:PENDING|REQUIRED|SAVED)$/,['这一步还需要你回答已保存的问题，本轮没有替你选择。','打开会话中的待回答问题，提交后继续原任务。','A saved question still needs your answer; no choice was made for you.','Open the pending question in this conversation and submit your answer to resume.','waiting']],
+ [/^PARTIAL_DELIVERY$/,['任务仅完成了一部分，尚未满足完整交付要求。','查看任务中的缺失项，保留已有成果，从未完成部分继续。','Only part of the task completed; full delivery is not verified.','Review missing items and resume the unfinished work while retaining existing results.','partial']],
+ [/TASK_EXECUTION_FAILED|ARTIFACT_VERIFICATION_FAILED/,['本机执行或成果核验未通过，具体错误保存在任务记录中。','打开对应任务的关键记录，修复原因后从失败步骤继续。','Local execution or artifact verification failed; details are retained in the task record.','Open the task log, resolve the cause, and resume the failed step.','blocked']],
+ [/^SOURCE_CREDENTIAL_/,['所选图源缺少可用的本机认证，暂时不能取得要求的数据。','在图源管理中补全认证，或明确选择其他图源后再继续。','The selected source has no usable local credentials, so its data cannot be fetched.','Add credentials in source settings, or explicitly choose another source before continuing.','waiting']],
+ [/AUTH|CREDENTIAL|UNAUTHORIZED|HTTP_401/,['连接尚未获得有效授权，当前操作无法继续。','在对应的本机连接或登录入口完成授权后，再继续原任务。','The connection is not authorized, so this operation cannot continue.','Authorize the local connection or sign in, then resume the existing task.','waiting']],
+ [/APPROVAL|PERMISSION|WRITE_REQUIRED/,['这一步尚未获得所需授权。','在原任务的确认入口授予所需权限；已批准的其他任务不需要重复确认。','This operation still requires permission.','Approve the required operation in its original task; other approvals remain unchanged.','waiting']],
+ [/COVERAGE|PERIOD_UNAVAILABLE|TIME_UNAVAILABLE|NO_IMAGERY/,['当前图源没有提供符合指定范围或时期的数据。','确认改用有覆盖的来源，或调整范围、时期；不会自行替换要求。','The source does not provide data for the requested area or period.','Choose a source with coverage, or approve a change to the area or period.','blocked']],
+ [/NOT_FOUND|NOT_SUPPORTED|UNSUPPORTED|TOOL_NOT_ALLOWED/,['当前可用的工具或数据无法完成这一步。','补充对应数据或连接器，或选择当前支持的交付方式后再继续。','The currently available tools or data cannot perform this step.','Provide the required data or connector, or choose a supported delivery format.','blocked']],
+ [/DISK|SPACE|OUTPUT_DIRECTORY|WORKSPACE_INVALID/,['保存位置不可用或可用空间不足，未能完成交付。','检查保存位置与磁盘空间，再恢复原任务。','The output location is unavailable or has insufficient space.','Check the output location and free space, then resume the task.','waiting']],
+ [/NETWORK|TIMEOUT|HTTP_5\d\d|RATE_LIMIT|HTTP_429|CONNECTOR_UNAVAILABLE|BACKGROUND_/,['数据服务、网络或本机下载后台暂时不可用。','检查服务状态及网络与代理；恢复后继续原任务或补齐缺失部分。','The data service, network or local download service is unavailable.','Check the service and network/proxy settings, then resume or fill missing results.','blocked']],
+ [/MODEL_OUTPUT_LIMIT|MODEL_EMPTY_RESPONSE|MODEL_CONTENT_FILTERED/,['模型没有给出完整的最终答复，这一轮已结束。','可继续原任务；已提交的下载请先以任务面板的实际状态为准。','The model did not provide a complete final reply; this turn has ended.','Resume the existing task; check submitted downloads in Tasks and Results first.','incomplete']],
+ [/UPSTREAM|PROVIDER|HTTP_402|CREDIT|QUOTA/,['模型渠道未能完成本次请求，具体原因以渠道诊断为准。','先检查渠道状态或额度，再继续原任务；已启动的下载不依赖后续模型调用。','The model channel did not complete this request; consult its recorded diagnostics.','Check the channel status or quota before resuming. Existing downloads do not require more model calls.','blocked']],
+ [/UNKNOWN|UNAVAILABLE_RESULT|CONNECTION_UNKNOWN/,['部分执行结果尚未核实，不能认定成功或失败。','先检查任务状态和已有成果，再恢复未完成步骤，避免重复下载或写入。','Some operation outcomes are unverified; success or failure is unknown.','Check task status and existing results before resuming to avoid duplicate effects.','unknown']],
+];
+export function taskReason(code='',english=false){
+ const row=reasons.find(([pattern])=>pattern.test(code))?.[1];
+ return row?{reason:row[english?2:0],next:row[english?3:1],status:row[4],canContinue:row[4]==='incomplete'}:{reason:english?'The turn ended without a verified final result.':'这一轮已结束，尚未取得可确认的最终结果。',next:english?'Inspect Tasks and Results, then decide which unfinished step to resume.':'查看任务与成果，核对已有结果后再恢复未完成步骤。',status:'unknown',canContinue:false};
+}
+export function buildTaskFeedback({code='',resources=[],factsKnown=true,unresolved=0,english=false}={}){
+ const pending=resources.filter(r=>['pending','not_started','approved_not_started'].includes(r.state)).length;
+ const cause=taskReason(code||(pending?'APPROVAL_REQUIRED':''),english),completed=resources.filter(r=>r.verified===true).length,partial=resources.filter(r=>r.state==='partial').length;
+ const activeStates=['queued','downloading','processing','verifying','running'];
+ const running=resources.filter(r=>activeStates.includes(r.state)&&r.active===true).length;
+ const unverifiedRunning=resources.some(r=>activeStates.includes(r.state)&&r.active!==true);
+ const uncertain=unresolved>0||!factsKnown||resources.some(r=>r.state==='unknown')||unverifiedRunning;
+ const status=uncertain?'unknown':running?'background':completed||partial?'partial':cause.status;
+ const titles={unknown:['执行结果待核对','Outcome needs verification'],background:['部分操作尚未完成，后台任务仍在执行','Some work remains; background tasks are running'],partial:['已完成一部分，其余暂时无法继续','Partly completed; remaining work is blocked'],waiting:['需要补充条件后才能继续','A prerequisite is needed to continue'],blocked:['当前要求暂时无法完成','The request cannot currently be completed'],incomplete:['本轮回复未完成','This reply is incomplete']};
+ const progress=completed?(english?`${completed} completed result(s) are recorded for this turn. See Tasks and Results.`:`任务记录显示本轮已有 ${completed} 项成果完成，可在“任务与成果”查看。`):partial?(english?`${partial} partially completed task(s) are recorded; inspect their available results.`:`已有 ${partial} 项部分完成的任务，可查看已取得的成果与缺失项。`):pending?(english?`${pending} saved plan(s) are awaiting execution; inspect and confirm them in Tasks and Results.`:`已有 ${pending} 项计划等待执行，请在“任务与成果”核对并确认。`):factsKnown?(english?'No completed result has been confirmed in this turn.':'本轮尚无确认完成的结果。'):(english?'Current task state could not be read; missing data is not a failure.':'当前任务状态未能读取，不能把缺记录当成失败。');
+ const retained=running?(english?`${running} background task(s) remain running; ending this reply does not cancel them.`:`仍有 ${running} 项后台任务在执行，结束本轮回复不会取消下载。`):unverifiedRunning?(english?'Background work has running records but needs a live status check. Ending this reply does not cancel it.':'后台任务仍有执行中记录，实际运行状态待核对；结束本轮回复不会取消任务。'):(english?'Confirmed parameters and task records are retained. No automatic cleanup or replay was performed.':'已确认的参数和任务记录保留，未自动清理或重复执行。');
+ const next=uncertain&&!/^CODEX_(?:CONNECTION_UNKNOWN|TOOL_OUTCOME_UNKNOWN)$/.test(code)?(english?'Check task status and existing files before resuming; do not repeat an unverified submission.':'先核对任务状态和已有文件，再恢复未完成步骤；不要重复提交结果未知的操作。'):cause.next;
+ return {status,title:(titles[status]??titles.unknown)[english?1:0],reason:cause.reason,progress,retained,next,canContinue:!uncertain&&!running&&cause.canContinue,code,source:'native-runtime',completed,running};
+}
+export function taskFeedbackText(feedback,english=false){
+ const labels=english?['Reason','Verified results','Retained work','Next step']:['原因','已完成部分','保留内容','下一步'];
+ return `**${feedback.title}**\n\n`+[feedback.reason,feedback.progress,feedback.retained,feedback.next].map((value,i)=>`${labels[i]}${english?': ':'：'}${value}`).join('\n\n');
+}
