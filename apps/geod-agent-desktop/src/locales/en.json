@@ -2600,5 +2600,7 @@
   "查询谷歌历史影像日期 · 已读取目录": "Check Google Earth history · catalogue read",
   "选择谷歌历史版本 · {0}": "Select Google Earth history · {0}",
   "成果尺寸": "Result dimensions",
-  "瓦片网格尺寸": "Tile grid dimensions"
+  "瓦片网格尺寸": "Tile grid dimensions",
+  "当前版本未提供这个本机操作": "This version does not provide this local operation.",
+  "本机操作的执行结果尚未确认，请核对原任务状态；未自动重试。": "The local operation outcome is unverified. Check the original task; it was not automatically retried."
 }

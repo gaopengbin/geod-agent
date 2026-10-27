@@ -131,7 +131,14 @@ impl ServiceState {
 
 pub fn current_user_id(state: &ServiceState) -> Result<String, ServiceError> {
     let config = load_config(&state.config_path)?;
-    Ok(authenticated_tokens(state, &config)?.user_id)
+    // Local ownership is a vault snapshot, not an online entitlement check.
+    // Remote calls still use authenticated_tokens and must refresh/authorize.
+    cached_owner(read_tokens(&config.identity_origin)?.as_ref(),&config.identity_origin)
+}
+fn cached_owner(tokens:Option<&Tokens>,identity_origin:&str)->Result<String,ServiceError>{
+    let tokens=tokens.filter(|t|t.identity_origin==identity_origin&&!t.user_id.is_empty())
+        .ok_or_else(||error("AUTH_REQUIRED","请先登录 GeoD"))?;
+    Ok(tokens.user_id.clone())
 }
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -399,35 +406,16 @@ pub fn auth_status(state: State<'_, ServiceState>) -> Result<AuthStatus, Service
             })
         }
     };
-    let tokens = {
-        let _guard = state
-            .credential_lock
-            .lock()
-            .expect("credential mutex poisoned");
-        let _shared = lock_credentials(&config.identity_origin)?;
-        read_tokens(&config.identity_origin)?
-    };
+    // A read-only login check must not queue behind a rotating-token refresh.
+    // The vault atomically replaces the entry. Actual remote requests perform
+    // the serialized refresh when they need an access token.
+    let tokens = read_tokens(&config.identity_origin)?;
     if let Some(tokens) = tokens {
         if tokens.identity_origin == config.identity_origin {
-            let refresh_error = if tokens.access_expires_at <= unix_seconds() + 30 {
-                match get_access_token(&state, &config) {
-                    Ok(_) => None,
-                    Err(cause) if cause.code == "AUTH_EXPIRED" || cause.code == "AUTH_REQUIRED" => {
-                        return Ok(AuthStatus {
-                            state: "disconnected",
-                            user_id: None,
-                            error: Some(cause.message),
-                        });
-                    }
-                    Err(cause) => Some(cause.message),
-                }
-            } else {
-                None
-            };
             return Ok(AuthStatus {
                 state: "connected",
                 user_id: Some(tokens.user_id),
-                error: refresh_error,
+                error: last_error,
             });
         }
     }
@@ -732,6 +720,15 @@ mod auth_recovery_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cached_local_owner_does_not_require_an_unexpired_cloud_access_token() {
+        let tokens=Tokens{identity_origin:"https://identity.test".into(),access_token:"a".repeat(43),refresh_token:"r".repeat(43),user_id:"local-owner".into(),access_expires_at:0};
+        assert_eq!(cached_owner(Some(&tokens),"https://identity.test").unwrap(),"local-owner");
+        assert_eq!(cached_owner(Some(&tokens),"https://different.test").unwrap_err().code,"AUTH_REQUIRED");
+        assert_eq!(cached_owner(None,"https://identity.test").unwrap_err().code,"AUTH_REQUIRED");
+        let empty=Tokens{user_id:String::new(),..tokens};assert_eq!(cached_owner(Some(&empty),"https://identity.test").unwrap_err().code,"AUTH_REQUIRED");
+    }
 
     #[test]
     fn payment_checkout_stays_on_the_declared_provider_and_fixture_boundary(){

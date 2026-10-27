@@ -1,4 +1,5 @@
 mod network;
+mod ipc_dispatch;
 mod services;
 mod extensions;
 mod mcp_credentials;
@@ -1793,7 +1794,7 @@ pub fn run() {
             extensions::mcp_result_export,
             extensions::mcp_registry_search,
         ];
-            commands(invoke)
+            ipc_dispatch::dispatch(invoke,commands)
         })
         .build(context)
         .expect("GeoD Agent desktop failed to start")
