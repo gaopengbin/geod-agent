@@ -1,6 +1,6 @@
 ---
 name: geod-source-creator
-description: 配置网络影像图源；查询中国行政区边界并生成下载裁剪计划。用于添加图源、按地区下载影像和行政区裁剪。
+description: 配置网络影像图源；查询 Google Earth 谷歌历史影像日期、Esri 历史版本及中国行政区边界，生成真实下载裁剪计划。
 ---
 
 # 图源 Creator
@@ -65,6 +65,10 @@ GeoTIFF 默认不压缩（`exportOptions.compression: "none"`），默认不生�
 
 
 ## Historical imagery requires the user's period
+
+- Google Earth / 谷歌历史影像：先通过 `builtin-source-creator` 的 `google_history_dates` 查询目标位置与级别的真实日期目录，再用返回的 `catalogId` 和用户要求的截止日期调用 `google_history_source`。返回的是原生历史版本参数，直接交给 `source_configure`，再用已有 `plan_imagery`、计划确认和 `jobs_start` 执行。不要给普通 Google 实时图源添加日期参数，不要改用 Esri 或其他来源充当谷歌历史影像。
+- Google Earth 按所选日期或之前的版本逐块取图。目录是查询点位的历史记录，区域覆盖和不同块的版本日期在下载时检查；不能把点位目录当成整区同日拍摄证明。输出保留 `google-earth-history-*.json`，含截止日期、逐块目录日期、原生块版本、内容摘要和提供方署名；不能取得的实际拍摄日期保持未知。
+- 日期图源绑定不可变的目录根与截止日期；任务保持普通的本机进度、暂停、恢复、缓存与成果核验。补充参数或恢复任务时复用原图源和已确认计划，不重新选择日期。上游无覆盖或协议不可用时明确说明实际原因，不把空白瓦片报成完整成功。
 
 - If a historical imagery request lacks a year, date, season or period and the user has not explicitly delegated that choice or asked not to be questioned, call the application tool `ask_user` before selecting a source or creating a download plan. Present 1–3 concise questions with short headers, useful options and descriptions; the application adds custom input. Wait for the user's actual reply. Ask whether a single period or multiple periods are needed when that affects the task.
 - Full Access authorizes execution within the workspace; it does not resolve missing time requirements. An already registered Wayback source or the newest release is not the user's selection. Do not ask again if the period is explicit.

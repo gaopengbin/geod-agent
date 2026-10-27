@@ -2590,5 +2590,15 @@
   "请填写要保存的 Key/Token。": "Enter the Key/Token to save.",
   "认证尚未就绪，请核对本机凭据存储后重新保存。": "Authentication is not ready. Check this device's credential store and save again.",
   "此图源已不存在，请重新选择图源。": "This source no longer exists. Select a source again.",
-  "当前启动环境限制后台独立运行，请保持应用打开直到任务完成。": "This launch environment restricts independent background execution. Keep the app open until your tasks finish."
+  "当前启动环境限制后台独立运行，请保持应用打开直到任务完成。": "This launch environment restricts independent background execution. Keep the app open until your tasks finish.",
+  "查询谷歌历史影像日期": "Check Google Earth history dates",
+  "选择谷歌历史版本": "Select Google Earth history",
+  "{0} 个日期": "{0} dates",
+  "已读取目录": "Catalogue read",
+  "已固定": "Snapshot pinned",
+  "查询谷歌历史影像日期 · {0} 个日期": "Check Google Earth history · {0} dates",
+  "查询谷歌历史影像日期 · 已读取目录": "Check Google Earth history · catalogue read",
+  "选择谷歌历史版本 · {0}": "Select Google Earth history · {0}",
+  "成果尺寸": "Result dimensions",
+  "瓦片网格尺寸": "Tile grid dimensions"
 }

@@ -15,6 +15,10 @@
     {"id":"gaode-satellite","name":"高德 卫星","urlTemplate":"https://webst0{s}.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}","subdomains":["1","2","3","4"],"coordinateSystem":"gcj02","attribution":"高德地图","minZoom":0,"maxZoom":18},
     {"id":"terrarium-dem","name":"Terrarium 高程","urlTemplate":"https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png","attribution":"Mapzen / AWS Terrain Tiles","minZoom":0,"maxZoom":15,"elevationEncoding":"terrarium"}
   ],
+  "historicalProviders": [
+    {"id":"google-earth-history","name":"Google Earth 历史影像","catalogTool":"google_history_dates","sourceTool":"google_history_source","dateMeaning":"历史目录截止日期；实际拍摄日期可能因位置不同或未知","supportsLocalDownload":true},
+    {"id":"esri-wayback","name":"Esri Wayback 历史影像","catalogTool":"wayback_versions","metadataTool":"wayback_metadata","dateMeaning":"版本发布日期；区域拍摄日期由元数据查询","supportsLocalDownload":true}
+  ],
   "vectorPresets": [
     {"id":"mvt-openfreemap","name":"OpenFreeMap · 全球矢量","kind":"mvt","tileJsonUrl":"https://tiles.openfreemap.org/planet","attribution":"OpenStreetMap / OpenMapTiles / OpenFreeMap","minZoom":0,"maxZoom":14},
     {"id":"mvt-versatiles-osm","name":"VersaTiles · OSM 矢量","kind":"mvt","urlTemplate":"https://tiles.versatiles.org/tiles/osm/{z}/{x}/{y}","attribution":"OpenStreetMap / VersaTiles","minZoom":0,"maxZoom":14}

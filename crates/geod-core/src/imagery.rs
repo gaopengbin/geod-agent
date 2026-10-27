@@ -196,6 +196,10 @@ impl HttpSource {
     /// Exact origins implied by this source's fixed template and explicit labels.
     /// Authentication is bound to the first origin; requests may use this list.
     pub fn request_origins(&self) -> Result<Vec<String>, CoreError> {
+        if geod_earth_history::is_template(&self.url_template) {
+            self.validate_configuration()?;
+            return Ok(vec![geod_earth_history::ORIGIN.trim_end_matches('/').into()]);
+        }
         Ok(expanded_sample_urls(self)?.iter().map(|url| url.origin().ascii_serialization()).collect())
     }
 }
@@ -591,6 +595,16 @@ fn expanded_sample_urls(source: &HttpSource) -> Result<Vec<Url>,CoreError> {
 }
 
 fn validate_source_configuration(source: &HttpSource) -> Result<(), CoreError> {
+    if geod_earth_history::is_template(&source.url_template) {
+        geod_earth_history::validate_template(&source.url_template).map_err(history_error)?;
+        if source.id.trim().is_empty() || source.scheme!=TileScheme::XYZ || source.tile_size!=256
+            || source.authentication.is_some() || source.runtime_token.is_some() || !source.subdomains.is_empty()
+            || !matches!(source.coordinate_system,None|Some(CoordinateSystem::Wgs84)) || source.elevation_encoding.is_some() || source.name.trim().is_empty()
+            || source.network_policy!=NetworkPolicy::PublicHttps {
+            return Err(CoreError::new("INVALID_SOURCE","Google Earth history requires its saved native snapshot and canonical WGS84/XYZ grid"));
+        }
+        return Ok(());
+    }
     if source.id.trim().is_empty()
         || source.name.trim().is_empty()
         || !matches!(source.tile_size, 256 | 512)
@@ -715,7 +729,7 @@ pub async fn fetch_preview_tile(source: &HttpSource, zoom: u8, x: u32, y: u32, p
     let builder = Client::builder().redirect(Policy::none()).timeout(Duration::from_secs(25)).user_agent("GeoD-Agent/0.1");
     let builder = match proxy { ProxyRoute::Environment => builder, ProxyRoute::Direct => builder.no_proxy(), ProxyRoute::Http(url) => builder.no_proxy().proxy(reqwest::Proxy::all(url).map_err(|_| CoreError::new("SOURCE_NETWORK", "Invalid proxy"))?) };
     let client = builder.build().map_err(|_| CoreError::new("SOURCE_NETWORK", "Unable to create source connection"))?;
-    if source.coordinate_system==Some(CoordinateSystem::Gcj02) {
+    if source.coordinate_system==Some(CoordinateSystem::Gcj02) || geod_earth_history::is_template(&source.url_template) {
         get_registered_tile(&client,source,zoom,x,y,&AtomicBool::new(false),None,Instant::now(),Duration::from_secs(90),&Mutex::new(Instant::now())).await.map(|tile|tile.bytes)
     } else { get_tile(&client, url, source, &mut None).await.map(|tile| tile.bytes) }
 }
@@ -894,6 +908,14 @@ fn tile_network_error(error: reqwest::Error) -> CoreError {
         else if error.is_body() { "BODY: 影像响应读取中断" }
         else { "REQUEST: 图源请求失败" };
     CoreError::new("SOURCE_NETWORK", reason)
+}
+
+fn history_error(error:String)->CoreError {
+    let (code,message)=if error.starts_with("EARTH_NO_DATA:") {("SOURCE_TILE_MISSING","所选历史版本在此瓦片没有完整覆盖；未将空白记为下载成功")}
+        else if error.starts_with("EARTH_NETWORK:"){("SOURCE_NETWORK","Google Earth 历史影像服务暂时不可达，请检查网络与代理")}
+        else if error.starts_with("EARTH_PROTOCOL:")||error.starts_with("EARTH_UNSUPPORTED:"){("SOURCE_PROTOCOL","Google Earth 历史影像的数据格式暂时无法解析")}
+        else {("HISTORY_CONTEXT_UNAVAILABLE","本机历史版本记录不可用，请重新查询日期并保留已有任务")};
+    CoreError::new(code,message)
 }
 
 async fn get_tile(
@@ -1144,6 +1166,21 @@ impl Drop for WarpPermit { fn drop(&mut self) { ACTIVE_WARPS.fetch_sub(1,Orderin
 /// ordinary network concurrency setting. Output checkpoints keep canonical WGS tiles.
 async fn get_registered_tile(client:&Client,source:&HttpSource,zoom:u8,x:u32,y:u32,cancelled:&AtomicBool,
     paused:Option<&AtomicBool>,started:Instant,deadline:Duration,cooldown:&Mutex<Instant>) -> Result<DownloadedTile,CoreError> {
+    if geod_earth_history::is_template(&source.url_template) {
+        let read=geod_earth_history::read_tile(&source.url_template,zoom,x,y,client.clone());
+        tokio::pin!(read);
+        loop {
+            check_download_control(cancelled,paused,started,deadline)?;
+            tokio::select! {
+                result=&mut read => {
+                    let bytes=result.map_err(history_error)?;
+                    let image=image::load_from_memory(&bytes).map_err(|_|CoreError::new("SOURCE_FORMAT","Historical imagery raster is invalid"))?.to_rgba8();
+                    return Ok(DownloadedTile{image,bytes});
+                },
+                _=tokio::time::sleep(Duration::from_millis(50))=>{}
+            }
+        }
+    }
     if source.coordinate_system!=Some(CoordinateSystem::Gcj02) {
         return get_tile_with_retry(client,tile_url_at(source,zoom,x,y)?,source,cancelled,paused,started,deadline,cooldown).await;
     }
@@ -1844,6 +1881,9 @@ where
         }
     }
     if completed_tiles == 0 {
+        if geod_earth_history::is_template(&source.url_template) && manifest.quality.missing_tiles>0 {
+            return Err(CoreError::new("SOURCE_TIME_UNAVAILABLE","所选日期或之前的历史影像在此范围没有完整可用瓦片；已确认的日期和任务保留，未替换为实时影像"));
+        }
         return Err(CoreError::new(
             "SOURCE_UNAVAILABLE",
             "No imagery tiles were available for the approved plan",
@@ -1902,6 +1942,17 @@ where
             "PAUSED",
             "Download paused before publication",
         ));
+    }
+    for (index,native) in std::iter::once(source).chain(request.overlays.iter()).enumerate() {
+        if geod_earth_history::is_template(&native.url_template) {
+            let mut tiles=Vec::new();
+            for grid in &request.grids {for y in grid.y_min..=grid.y_max {for x in grid.x_min..=grid.x_max {tiles.push((grid.zoom,x,y));}}}
+            let evidence=geod_earth_history::tile_evidence(&native.url_template,&tiles).map_err(history_error)?;
+            let filename=format!("google-earth-history-{index}.json");
+            fs::write(stage.path().join(&filename),serde_json::to_vec_pretty(&evidence).map_err(io_error)?).map_err(io_error)?;
+            manifest.assets.push(asset(stage.path(),format!("google-earth-history-{index}"),filename,"metadata","application/json",None,AssetFootprint{bounds:request.bounds,dimensions:None})?);
+            manifest.quality.warnings.push("Google Earth history index dates are not verified acquisition dates for every pixel; per-cell selections and provider credits are retained in the history metadata.".into());
+        }
     }
     fs::write(
         stage.path().join("manifest.json"),

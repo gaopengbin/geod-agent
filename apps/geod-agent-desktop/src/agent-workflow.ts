@@ -138,7 +138,10 @@ export function sourceRegistrationDraft(args: Record<string, unknown>): SourceRe
   if (urlTemplate.includes("{s}") && (!Array.isArray(subdomains) || !subdomains.length)) return null;
   if (args.coordinateSystem !== undefined && !["wgs84", "gcj02"].includes(String(args.coordinateSystem))) return null;
   try { url = new URL(urlTemplate.replaceAll("{s}", Array.isArray(subdomains) ? subdomains[0] : "")); } catch { return null; }
-  if (url.protocol !== "https:" || url.username || url.password || url.hash ||
+  const history=urlTemplate.match(/^geod-earth-history:\/\/([a-f0-9]{64})\/\{z\}\/\{x\}\/\{y\}$/);
+  const nativeHistory=!!history&&scheme==='XYZ'&&tileSize===256
+    && !args.authenticationMode&&(args.coordinateSystem===undefined||args.coordinateSystem==='wgs84')&&!args.elevationEncoding&&(!Array.isArray(subdomains)||!subdomains.length);
+  if ((url.protocol !== "https:" && !nativeHistory) || url.username || url.password || url.hash ||
       [...url.searchParams.keys()].some(key => /^(tk|token|access_token|api_key|apikey|key|authorization|signature|sig)$/i.test(key)) ||
       (!(urlTemplate.includes("{z}") && urlTemplate.includes("{x}") && urlTemplate.includes("{y}")) &&
       !url.pathname.endsWith("/ImageServer/exportImage"))) return null;
@@ -220,6 +223,11 @@ export function toolDisplay(name: string, output: unknown): Pick<DisplayMessage,
     const result = data.result as { error?: string; message?: string; paged?: boolean; bulkData?: boolean; isError?:boolean } | undefined;
     if (result?.error) return { toolName: name, toolStatus: "attention", content: `${title} · ${result.message ?? (result.error === "MCP_RESULT_TOO_LARGE" ? "返回内容超过本机处理上限，请缩小查询范围" : result.error)}` };
     if(result?.isError)return {toolName:name,toolStatus:"attention",content:`${title} · 服务返回错误`};
+    if(data.toolName==='google_history_dates'){
+      const total=(data.result as {total?:number})?.total;
+      return {toolName:name,toolStatus:'success',content:`查询谷歌历史影像日期 · ${Number.isInteger(total)?`${total} 个日期`:'已读取目录'}`};
+    }
+    if(data.toolName==='google_history_source')return {toolName:name,toolStatus:'success',content:`选择谷歌历史版本 · ${String((data.result as {history?:{requestedDate?:string}})?.history?.requestedDate??'已固定')}`};
     return { toolName: name, toolStatus: "success", content: `${title} · ${String(data.toolName ?? "已完成")}${result?.bulkData ? "，完整坐标保存在本机" : result?.paged ? "，正在分段读取" : ""}` };
   }
   if (name === "mcp_result_read") {

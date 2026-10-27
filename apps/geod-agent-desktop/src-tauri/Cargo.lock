@@ -1610,6 +1610,7 @@ dependencies = [
  "chrono",
  "fs4",
  "futures-util",
+ "geod-earth-history",
  "image",
  "png 0.18.1",
  "reqwest 0.12.28",
@@ -1622,6 +1623,20 @@ dependencies = [
  "tiff",
  "tokio",
  "uuid",
+]
+
+[[package]]
+name = "geod-earth-history"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "flate2",
+ "image",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
 ]
 
 [[package]]

@@ -1,6 +1,8 @@
 // Factual task closure, shared by the native host and desktop presentation.
 // No provider text, paths or credentials are copied into these explanations.
 const reasons=[
+ [/^HISTORY_CONTEXT_UNAVAILABLE$/,['所选历史版本的本机目录记录当前不可用，暂时不能继续取图。','重新查询原目标时期并恢复历史版本；保留已有成果，不会自动换成最新影像。','The selected historical snapshot is unavailable on this device.','Query the original period and restore its historical snapshot. Existing results are retained; current imagery is not substituted.','waiting']],
+ [/^SOURCE_PROTOCOL$/,['图源返回的数据格式当前无法解析，暂时不能完成这一步。','检查图源服务是否变更；保留原任务和成果，待适配或恢复服务后继续。','The current source response format cannot be decoded.','Check whether the source service changed. Retain the task and results, then resume after compatibility or service recovery.','blocked']],
  [/^CODEX_(?:CONNECTION_UNKNOWN|TOOL_OUTCOME_UNKNOWN)$/,['与原执行的连接已中断，提交结果尚未核实，不能判断成功或失败。','使用“重新连接”查看原执行；若无法恢复，先停止原执行并核对“任务与成果”，再继续，避免重复提交。','The connection to the original run was lost; submitted operation outcomes are unverified.','Reconnect to the original run. If recovery fails, stop it and inspect Tasks and Results before resuming.','unknown']],
  [/^IDENTITY_UNAVAILABLE$/,['身份服务暂时无法连接，当前不能核对账号授权与任务状态。','恢复服务或网络连接后再核对原任务；不要反复登录或重复提交下载。','The identity service is unreachable, so account and task state cannot be checked.','Restore the service or network connection, then check the existing task before submitting anything again.','blocked']],
  [/^USER_INPUT_(?:PENDING|REQUIRED|SAVED)$/,['这一步还需要你回答已保存的问题，本轮没有替你选择。','打开会话中的待回答问题，提交后继续原任务。','A saved question still needs your answer; no choice was made for you.','Open the pending question in this conversation and submit your answer to resume.','waiting']],

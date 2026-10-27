@@ -1154,7 +1154,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
       }
       if (call.function.name === "source_configure") {
         const draft = sourceRegistrationDraft(args);
-        if (!draft) return { error: "INVALID_SOURCE_CONFIGURATION" };
+        if (!draft) return { error: "INVALID_SOURCE_CONFIGURATION",...(String(args.urlTemplate??'').startsWith('geod-earth-history:')?{message:'历史图源须保留查询返回的原生 URL（完整版本 ID 与 {z}/{x}/{y}），使用 XYZ、256 像素、WGS84，无需认证。图源 ID 可使用 1–80 位字母、数字、连字符和下划线；不要把历史地址改为普通实时瓦片。'}:{}) };
         return configureSource(draft);
       }
       if (call.function.name === "source_registration_prepare") {

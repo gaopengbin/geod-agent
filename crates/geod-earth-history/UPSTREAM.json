@@ -1,0 +1,45 @@
+{
+  "contract": "geod-earth-history.v1",
+  "version": "0.1.0",
+  "sourceRepository": "https://github.com/gaopengbin/geo-downloader",
+  "sourceHead": "0938626b16aa2662df6058b2a7bd7733c72a3f14",
+  "sourceState": "working-tree snapshot; content hashes identify uncommitted source files",
+  "capturedOn": "2026-10-27",
+  "files": [
+    {
+      "source": "src-tauri/src/earth_history/keyhole/io.rs",
+      "sourceSha256": "1d8fb955c788636d623963c24948f5837848d9c216a70e23ba1e12deea269b34",
+      "vendored": "keyhole/io.rs",
+      "vendoredSha256": "573694cc2c8274aa21c35118189fb551f76e141a64ef53416d222b3979fb4b57"
+    },
+    {
+      "source": "src-tauri/src/earth_history/keyhole/protocol.rs",
+      "sourceSha256": "c220208361071607e72f8b100c137a72d8b413b04ebc551fa20c11079f7199d1",
+      "vendored": "keyhole/protocol.rs",
+      "vendoredSha256": "43b79de8e7882a71109090e3a874a6c018169145e3438f074a1ec8c6f35a85fa"
+    },
+    {
+      "source": "src-tauri/src/earth_history/keyhole/wire.rs",
+      "sourceSha256": "4c985db3afdd28bee8582c4a560838d0bfbff31146bea3666ed3ad6132ca7615",
+      "vendored": "keyhole/wire.rs",
+      "vendoredSha256": "e3c82b8aa670828d4e5e8361efe41dc86f883b0bbffd9ef27ae28ef74e1e1190"
+    },
+    {
+      "source": "src-tauri/src/earth_history/wire.rs",
+      "sourceSha256": "39418f1eb48d830c07f431b1002f533e41a5d7a9627457ec3667c15dfec81202",
+      "vendored": "wire_base.rs",
+      "vendoredSha256": "cf88e8e1eb506b70c7e915cef5995482ec8d034f6543ecaf9e91b7a58cdeb513"
+    },
+    {
+      "source": "src-tauri/src/earth_history/keyhole/mod.rs",
+      "sourceSha256": "e8d33f2def6bc7bdf951a107b6ea10c9315aff6acc4da7981ac60614addb2f72",
+      "reuse": "quadtree addressing and inverse Web Mercator raster sampling"
+    }
+  ],
+  "localDependencies": false,
+  "license": {
+    "source": "LICENSE",
+    "vendored": "LICENSE",
+    "sha256": "f608de0cfd6e3b735bd87eed58df98edabac405242770b02330f87a2c6c77191"
+  }
+}

@@ -6,6 +6,8 @@ use std::{net::IpAddr, time::Duration};
 use tauri::State;
 #[path = "wayback.rs"]
 mod wayback;
+#[path = "google_history.rs"]
+mod google_history;
 
 pub(crate) fn initialize(directory: std::path::PathBuf) { wayback::initialize(directory); }
 
@@ -34,6 +36,7 @@ pub(crate) fn tools() -> Value {
         {"name":"lookup_neighbors", "description":"依据 AreaCity 2026-04-03 实际边界查询同层级相邻行政区。只有共享边界线段才算相邻，点接触或包围盒相交不算。返回名称、编码和来源，不附加几何。随后用 lookup_boundaries 查询目标及相邻区域编码，再规划。", "inputSchema":{"type":"object","properties":{"query":{"type":"string"},"parent":{"type":"string"}},"required":["query"],"additionalProperties":false}}
     ]});
     result["tools"].as_array_mut().unwrap().extend(wayback::tools());
+    result["tools"].as_array_mut().unwrap().extend(google_history::tools());
     result
 }
 
@@ -82,6 +85,8 @@ pub(crate) async fn call(tool: &str, args: Value) -> Result<Value, AppError> {
             "wayback_versions" => wayback::versions(&args).await,
             "wayback_metadata" => wayback::metadata(&args).await,
             "wayback_changes" => wayback::changes(&args).await,
+            "google_history_dates" => google_history::dates(&args).await,
+            "google_history_source" => google_history::source(&args),
             _ => Err(error("SOURCE_TOOL_NOT_FOUND", "图源 Creator 未提供此工具")),
         }
     }).await.map_err(|_| error("SOURCE_LOOKUP_TIMEOUT", "图源检查超时，可检查网络代理后重试"))?
@@ -184,6 +189,11 @@ async fn fetch_limit(mut url: Url, limit: usize) -> Result<Fetched, AppError> {
 async fn search(query: &str) -> Result<Value, AppError> {
     let query = query.trim();
     if !(2..=160).contains(&query.chars().count()) { return Err(error("INVALID_SOURCE_QUERY", "请用 2–160 个字符描述图源")); }
+    let lowered=query.to_ascii_lowercase();
+    if (query.contains("谷歌")||lowered.contains("google")||lowered.contains("earth"))
+        && (query.contains("历史")||lowered.contains("histor")||lowered.contains("past")) {
+        return Ok(json!({"query":query,"provider":"google_earth_history","tools":["google_history_dates","google_history_source"],"next":"用 google_history_dates 查询目标位置与级别的真实历史日期，再按用户时期固定原生图源；不能给普通实时 Google 瓦片模板添加日期参数。"}));
+    }
     if query.contains("天地图") || query.to_ascii_lowercase().contains("tianditu") {
         let candidates = [("img", "天地图影像"), ("cia", "天地图影像注记"), ("vec", "天地图矢量底图"), ("cva", "天地图矢量注记"), ("cta", "天地图地形注记")].map(|(layer, name)| {
             json!({"name":name,"url":format!("https://t0.tianditu.gov.cn/{layer}_w/wmts"),"type":"WMTS","authenticationMode":"queryToken","authenticationParameter":"tk"})

@@ -115,6 +115,7 @@ export function TaskPanel({ conversationId, onOpenScheduleRun, onOpenNetwork, pl
   const generating = generatingArtifacts(executionState);
   const artifactBytes = manifest && job && ["completed", "partial"].includes(job.state)
     ? manifest.assets.reduce((sum, asset) => sum + asset.bytes, 0) : null;
+  const outputDimensions=artifactBytes!==null?manifest!.assets.filter(asset=>asset.role==='analysis'&&asset.width&&asset.height).map(asset=>`${asset.width} × ${asset.height}`):[];
   const discarded = tasks.some(task => task.stored.planId === stored?.planId && task.state === "discarded");
   const cleaned = tasks.some(task => task.stored.planId === stored?.planId && task.state === "cleaned");
   const scheduledTemplate = tasks.some(task => task.stored.planId === stored?.planId && task.state === "scheduled");
@@ -148,7 +149,7 @@ export function TaskPanel({ conversationId, onOpenScheduleRun, onOpenNetwork, pl
           </div>}
           {job.state === "downloading" && !running && <p className="warning-text">{t("下载已中断，可恢复已有进度。")}</p>}
         </div>}
-        <dl className="task-facts"><div><dt>{t("瓦片数量")}</dt><dd>{count(plan.totalTiles)}</dd></div>{artifactBytes !== null ? <div><dt><UiTooltip content={t("已核验成果文件的实际大小合计，不含下载缓存。")}><span tabIndex={0}>{t("成果大小")}</span></UiTooltip></dt><dd>{size(artifactBytes)}</dd></div> : plan.requiredFreeDiskBytes ? <div><dt><UiTooltip content={t("包括成果、缓存和处理中临时文件的保守空间预算，不是最终文件大小。")}><span tabIndex={0}>{t("建议空闲空间")}</span></UiTooltip></dt><dd>{size(plan.requiredFreeDiskBytes)}</dd></div> : null}<div className="task-dimensions"><dt>{t("输出尺寸")}</dt><dd>{plan.tileGrids.map(g => `${g.pixelWidth} × ${g.pixelHeight}`).join(" / ")}</dd></div></dl>
+        <dl className="task-facts"><div><dt>{t("瓦片数量")}</dt><dd>{count(plan.totalTiles)}</dd></div>{artifactBytes !== null ? <div><dt><UiTooltip content={t("已核验成果文件的实际大小合计，不含下载缓存。")}><span tabIndex={0}>{t("成果大小")}</span></UiTooltip></dt><dd>{size(artifactBytes)}</dd></div> : plan.requiredFreeDiskBytes ? <div><dt><UiTooltip content={t("包括成果、缓存和处理中临时文件的保守空间预算，不是最终文件大小。")}><span tabIndex={0}>{t("建议空闲空间")}</span></UiTooltip></dt><dd>{size(plan.requiredFreeDiskBytes)}</dd></div> : null}<div className="task-dimensions"><dt>{t(outputDimensions.length?"成果尺寸":"瓦片网格尺寸")}</dt><dd>{outputDimensions.length?outputDimensions.join(" / "):plan.tileGrids.map(g => `${g.pixelWidth} × ${g.pixelHeight}`).join(" / ")}</dd></div></dl>
         {directoryButton && <div className="task-actions">{directoryButton}</div>}
         {!job && (scheduledTemplate?<div className="task-discarded"><p>{t("这是定时任务的范围和参数模板。到时会生成独立计划与成果目录。")}</p><Button variant="secondary" size="sm" onClick={()=>setView('schedule')}>{t("查看定时任务")}</Button></div>:discarded ? <div className="task-discarded"><p>{t("此计划已从待处理列表移出。")}</p><Button variant="secondary" size="sm" disabled={working} onClick={() => void onTaskAction("restore", [stored!.planId]).catch(() => {})}>{t("恢复计划")}</Button></div> : <PlanReviewCard key={stored!.planId} stored={stored!} compact externalErrors permission={permission} working={working} onStart={onStart} onDiscard={onDiscard}/>)}
         </>}

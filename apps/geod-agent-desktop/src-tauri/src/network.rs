@@ -91,7 +91,7 @@ pub fn proxy_for(origin: &str) -> Result<Option<String>, String> {
 pub fn download_proxy_for(origin: &str, phase: &str) -> Result<Option<String>, String> {
     let settings = read()?;
     let (proxy, source) = resolve(&settings, origin)?;
-    let host = Url::parse(origin).ok().and_then(|url| url.host_str().map(str::to_owned));
+    let host = Url::parse(geod_core::earth_history::network_target(origin)).ok().and_then(|url| url.host_str().map(str::to_owned));
     eprintln!("GeoD download network: phase={phase}, mode={:?}, source={source}, proxied={}, host={}",
         settings.mode, proxy.is_some(), host.as_deref().unwrap_or("unknown"));
     Ok(proxy)
@@ -101,7 +101,7 @@ pub fn resolve(
     settings: &NetworkSettings,
     origin: &str,
 ) -> Result<(Option<String>, &'static str), String> {
-    let target = Url::parse(origin).map_err(|_| "网络请求地址无效")?;
+    let target = Url::parse(geod_core::earth_history::network_target(origin)).map_err(|_| "网络请求地址无效")?;
     if matches!(target.host_str(), Some("localhost" | "127.0.0.1" | "::1")) {
         return Ok((None, "本机直连"));
     }

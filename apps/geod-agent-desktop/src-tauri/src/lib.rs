@@ -1490,6 +1490,7 @@ pub fn run() {
             network::initialize(data_dir.join("network-settings.json"));
             rtk_runtime::initialize(data_dir.clone());
             source_creator::initialize(data_dir.join("wayback"));
+            geod_core::earth_history::initialize(data_dir.join("google-earth-history-v1"));
             let db_path = data_dir.join("agent-tasks.sqlite");
             TaskStore::open(&db_path).map_err(|error| {
                 std::io::Error::other(format!("{}: {}", error.code, error.message))
