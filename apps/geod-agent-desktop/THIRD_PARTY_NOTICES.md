@@ -339,3 +339,12 @@ Upstream: https://github.com/rtk-ai/rtk/tree/v0.40.0
 
 The tagged LICENSE is Apache License 2.0. The complete license is retained in
 vendor/rtk-0.40.0-LICENSE.txt and installed alongside the optional executable.
+
+## GeoD Earth History (native adapter)
+
+The versioned native history adapter includes protocol and raster-sampling code
+from GeoD (https://github.com/gaopengbin/geo-downloader), under the MIT License,
+Copyright (c) 2025-2026 gaopengbin. The complete license is included as LICENSE.txt;
+source and adapted-file hashes are retained in crates/geod-earth-history/UPSTREAM.json.
+Google Earth and imagery-provider credits belong to their respective owners and
+are retained in the metadata of downloaded historical imagery.
