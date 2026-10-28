@@ -41,7 +41,7 @@ for file in [ROOT/'scripts/build-closeout-gateway.py', ROOT/'scripts/package-clo
     if file.is_file() and 'node_modules' not in file.parts and 'live' not in file.name:
         verification[file.relative_to(ROOT).as_posix()] = sha(file)
 for directory in [ROOT/'services/geod-agent-model-gateway', ROOT/'packages/codex-protocol']:
-    for file in sorted(directory.glob('*.mjs')):
+    for file in sorted([*directory.glob('*.mjs'), *directory.glob('*.json')]):
         if file.name.endswith('.test.mjs'):
             continue
         destination = stage / file.relative_to(ROOT)
