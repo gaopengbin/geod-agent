@@ -28,6 +28,13 @@ def review(candidate, target, validations, receipt):
             signed_build = data
     if not records:
         raise ValueError('Reviewed build/test receipts are required')
+    if signed_build and not signed_build.get('buildInputsUnchangedAcrossBuild') and signed_build.get('runtimeNormalizationReview'):
+        from release_runtime_review import verify
+        proof=signed_build['runtimeNormalizationReview']
+        checked=verify(Path(__file__).resolve().parents[1],proof['originalReceipt'],proof['before'])
+        if checked != proof:
+            raise ValueError('Runtime normalization evidence changed')
+        signed_build={**signed_build,'buildInputsUnchangedAcrossBuild':True}
     if not signed_build or not signed_build.get('buildInputsUnchangedAcrossBuild') or Path(signed_build['candidate']).resolve() != candidate.resolve():
         raise ValueError('Require the successful frozen signing build receipt for this candidate')
     freeze_file = Path(signed_build['preBuildSourceFreeze'])
