@@ -68,13 +68,17 @@ pub fn required_free_disk_bytes_for_outputs(tile_count: u64, tile_size: u16, out
         .ok_or_else(|| CoreError::new("RESOURCE_LIMIT", "Disk budget overflow"))
 }
 
-fn ensure_disk_budget(path: &Path, required: u64) -> Result<(), CoreError> {
-    let available = fs4::available_space(path).map_err(|cause| {
+pub fn available_disk_bytes(path: &Path) -> Result<u64, CoreError> {
+    fs4::available_space(path).map_err(|cause| {
         CoreError::new(
             "DISK_CHECK_FAILED",
             format!("Cannot check free disk space: {cause}"),
         )
-    })?;
+    })
+}
+
+fn ensure_disk_budget(path: &Path, required: u64) -> Result<(), CoreError> {
+    let available = available_disk_bytes(path)?;
     if available < required {
         return Err(CoreError::new(
             "DISK_INSUFFICIENT",
@@ -233,6 +237,7 @@ pub enum TiffCompression { #[default] None, Lzw, Deflate }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExportOptions {
+    #[serde(default, skip_serializing_if = "Option::is_none")] pub pixel_value_mode: Option<PixelValueMode>,
     #[serde(default, skip_serializing_if = "Option::is_none")] pub target_crs: Option<String>,
     #[serde(default, skip_serializing_if = "RasterResampling::is_nearest")] pub resampling: RasterResampling,
     /// Explicitly export verified cached tiles; never make a tile network request.
@@ -253,6 +258,9 @@ pub struct OverlaySourceRef { pub source_id: String, pub config_revision: String
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub enum ElevationEncoding { Terrarium }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all="lowercase")]
+pub enum PixelValueMode { Rendered, Native }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub enum RasterResampling { #[default] Nearest, Bilinear, Cubic }
@@ -269,7 +277,7 @@ pub trait RasterProjector: Send + Sync {
 fn default_jpeg_quality() -> u8 { 90 }
 fn is_false(value: &bool) -> bool { !*value }
 impl Default for ExportOptions {
-    fn default() -> Self { Self { target_crs: None, resampling: RasterResampling::Nearest, cache_only: false, reuse_verified_cache: false, compression: TiffCompression::None, build_pyramid: false, generate_sidecars: false, jpeg_quality: 90, overlay_sources: Vec::new(), elevation_encoding: None } }
+    fn default() -> Self { Self { pixel_value_mode:None,target_crs: None, resampling: RasterResampling::Nearest, cache_only: false, reuse_verified_cache: false, compression: TiffCompression::None, build_pyramid: false, generate_sidecars: false, jpeg_quality: 90, overlay_sources: Vec::new(), elevation_encoding: None } }
 }
 
 /// An app-owned cache directory lets a previously approved job resume after

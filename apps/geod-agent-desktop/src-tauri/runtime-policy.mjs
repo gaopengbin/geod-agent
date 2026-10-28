@@ -85,7 +85,9 @@ export function failureOf(result){
  if(!code)return null;
  const declared=value.recovery?.category;
  const category=Object.hasOwn(ERROR_CLASSES,declared)?declared:Object.entries(ERROR_CLASSES).find(([,v])=>v.codes.includes(code)||v.pattern&&new RegExp(v.pattern).test(code))?.[0]??'internal';
- return{code,category,condition:ERROR_CLASSES[category].condition,retryAfterMs:Number.isFinite(value.retryAfterMs)?Math.max(0,value.retryAfterMs):0};
+ const requiredBytes=value.partition?.requiredFreeDiskBytes??value.requiredFreeDiskBytes;
+ const effective=value.error?.planningConflict?.conditionFingerprint;
+ return{code,category,condition:ERROR_CLASSES[category].condition,retryAfterMs:Number.isFinite(value.retryAfterMs)?Math.max(0,value.retryAfterMs):0,...(Number.isSafeInteger(requiredBytes)&&requiredBytes>0?{requiredBytes}: {}),...(typeof effective==='string'&&/^[a-f0-9]{64}$/.test(effective)?{effectiveKey:effective}:{})};
 }
 function bounded(value,limit=3000){const text=JSON.stringify(value);return text.length<=limit?value:{summary:text.slice(0,limit),omitted:true,sha256:hash(value)};}
 
@@ -123,6 +125,12 @@ export class RuntimePolicy {
   if(this.state.goal&&this.state.requirements['conversation.outputCrs']?.value!==(crs??undefined)){this.state.goal.revision++;this.state.revision++;}
   if(crs)this.state.requirements['conversation.outputCrs']={value:crs,source:'native-user-selection',scope:'conversation',confirmed:true,revision:this.state.revision};
   else delete this.state.requirements['conversation.outputCrs'];
+   if(facts.planningOutput?.available===true){
+    const revision=facts.planningOutput.revision??null;
+    if((this.state.planningOutputRevision??null)!==revision){this.state.planningOutputRevision=revision;this.state.goal.revision++;this.state.revision++;}
+    if(facts.planningOutput.conditions)this.state.requirements['task.output']={value:facts.planningOutput.conditions,source:'native-human-output-selection',scope:'task',confirmed:true,revision:this.state.revision};
+    else delete this.state.requirements['task.output'];
+   }
   // The owned ledger's completed transition follows the worker's verification.
   // Reuse that evidence; do not force another artifact read merely to finish.
   for(const task of facts.imagery?.tasks??[])if(task.state==='completed'&&this.state.goal?.deliverables.includes(task.jobId)){
@@ -159,7 +167,7 @@ export class RuntimePolicy {
   if(!run||run!==this.state.run||['parameter'].includes(failure.category)||['USER_STOPPED','USER_INPUT_CANCELLED','USER_INPUT_SAVED','EXECUTION_CANCELLED'].includes(failure.code))return null;
   run.blockers??={};const scope=this.failureScope(failure,desc),condition=this.condition(failure,desc);
   const previous=Object.values(run.blockers).find(b=>b.code===failure.code&&b.scope===scope&&b.condition===condition);
-  const blocker=previous??{id:'blocker-'+randomUUID(),code:failure.code,category:failure.category,scope,condition,descriptor:{effect:desc.effect,purpose:desc.purpose,resource:desc.resource,conditionScope:desc.conditionScope}};
+   const blocker=previous??{id:'blocker-'+randomUUID(),code:failure.code,category:failure.category,scope,condition,...(failure.requiredBytes?{requiredBytes:failure.requiredBytes}:{}),...(failure.effectiveKey?{effectiveKey:failure.effectiveKey}:{}),descriptor:{effect:desc.effect,purpose:desc.purpose,resource:desc.resource,conditionScope:desc.conditionScope}};
   run.blockers[blocker.id]=blocker;
   while(Object.keys(run.blockers).length>16)delete run.blockers[Object.keys(run.blockers)[0]];
   return {id:blocker.id,code:blocker.code,category:blocker.category,reportTool:'runtime_task_report',instruction:'This is a verified blocker, not a tool-call limit. If no valid authorized path remains, report it and finish clearly; do not keep exploring or retrying the unchanged condition. Preserve partial results and unknown outcomes.'};
@@ -210,6 +218,8 @@ export class RuntimePolicy {
   // A denied remote URL must not disable every other data source. Hash the
   // exact request without exposing service URLs or embedded credentials.
   if(tool==='data_input_read')spec.conditionScope='data-input:'+hash(args);
+   if(tool==='data_download_plan')spec.conditionScope='data-source:'+hash({kind:args.kind,url:args.sourceUrl,connectionId:args.connectionId,onlineConnectionId:args.onlineConnectionId,sourceBoundaryId:args.sourceBoundaryId});
+   if(['plan_imagery','plan_imagery_batch'].includes(tool))spec.conditionScope='imagery-planning:'+hash(args);
   return{...spec,resource:spec.resource?spec.resource.map(k=>args[k]??null):['planId','jobId','taskId','scheduleId','connectionId','boundaryId','sourceId'].filter(k=>args[k]!==undefined).map(k=>args[k]),conditionScope:spec.conditionScope??spec.purpose??tool};
  }
  sourceConditions(desc){
@@ -219,14 +229,17 @@ export class RuntimePolicy {
   return ids.length?ids.map(id=>({sourceId:id,...facts.sources?.[id]})):null;
  }
  failureScope(failure,desc){
+   if(failure.category==='requirements'&&failure.effectiveKey)return hash(['resolved-planning',failure.effectiveKey]);
   if(failure.category==='authentication'&&failure.code.startsWith('SOURCE_CREDENTIAL'))return hash(['source-credential',this.sourceConditions(desc)?.map(s=>s.sourceId)??desc.resource]);
-  if(failure.category==='environment')return hash(['background-runtime',desc.effect==='read'?'read:'+desc.purpose:'mutation']);
+   if(failure.category==='environment')return hash(['background-runtime',desc.requiresBackground?'companion':desc.effect==='read'?'read:'+desc.purpose:'mutation']);
   return failure.category==='business'||failure.category==='permission'&&desc.resource?.length?hash([desc.conditionScope,desc.resource]):['parameter','capability','internal'].includes(failure.category)?hash([desc.conditionScope,desc.purpose]):String(desc.conditionScope);
  }
  condition(failure,descriptor){
   const base={contract:this.state.contract,model:this.state.capabilitiesHash};
+   if(failure.category==='requirements')return hash({...base,effectiveKey:failure.effectiveKey});
   if(failure.category==='authentication'&&failure.code.startsWith('SOURCE_CREDENTIAL'))return hash({sources:this.sourceConditions(descriptor),available:this.facts.sourceReadiness?.available});
   if(failure.category==='environment')return hash(this.facts.backgroundRuntime??{running:'unknown'});
+   if(['DISK_INSUFFICIENT','BATCH_DISK_INSUFFICIENT'].includes(failure.code))return hash({...base,storage:this.facts.storageCapacity?.identity,known:this.facts.storageCapacity?.availableBytes!=null,enough:failure.requiredBytes!=null&&this.facts.storageCapacity?.availableBytes>=failure.requiredBytes});
   if(failure.category==='permission'){
    const imagery=this.facts.imagery;
    const relevant=tasks=>(tasks??[]).filter(t=>descriptor.resource?.some(id=>id===t.planId||id===t.jobId||id===t.taskId));
@@ -283,6 +296,7 @@ export class RuntimePolicy {
   }
   const goalId=this.state.goal.id,revision=this.state.revision;
   const canonicalTool=desc.canonicalTool??tool,canonicalArgs=desc.canonicalArgs??args;
+   if(['plan_imagery','plan_imagery_batch'].includes(canonicalTool)&&this.facts.planningOutput?.available===false)return error('PLANNING_STATE_UNAVAILABLE','Confirmed planning conditions are unreadable. Neither a cached raw-argument success nor a fresh plan may replace the missing requirement state. Restore it first.');
   const rewrap=value=>tool==='mcp_call'?{connectorId:args.connectorId,toolName:args.toolName,result:value}:value;
   const operationKey=hash([goalId,this.state.goal.revision,canonicalTool,canonicalArgs]);
   const prior=this.state.operations[operationKey];
@@ -346,6 +360,13 @@ export class RuntimePolicy {
     this.state.failures[key]={...failure,scope,condition:this.condition(failure,desc),attempts:(previous?.attempts??0)+1,recovery:ERROR_CLASSES[failure.category].recovery,retryAt:failure.category==='transient'?this.now()+Math.max(failure.retryAfterMs,GEOD_POLICY.cooldownMs):null};
     operation.state=failure.category==='unknownOutcome'?'unknown':'failed';operation.recovery=ERROR_CLASSES[failure.category].recovery;this.noProgress(tool,failure.code,key);
     const executionBlocker=this.rememberBlocker(failure,desc,dispatchRun);if(executionBlocker)result={...result,executionBlocker};
+    // The domain executor has already saved an actual user decision card.
+    // Finish from that native receipt rather than asking the model to retry
+    // argument spellings or to generate another clarification round.
+    const planning=unwrap(result)?.error?.planningConflict;
+    if(['plan_imagery','plan_imagery_batch','ask_user'].includes(canonicalTool)&&failure.code==='OUTPUT_CRS_FORMAT_CONFLICT'&&planning?.source==='resolved-native-planning'&&planning.questionSaved===true&&executionBlocker){
+      this.reportBlocked({blockerIds:[executionBlocker.id]});this.audit('planning-awaits-human',{effectiveKey:failure.effectiveKey,reused:planning.reused===true});
+    }
    }else if(result?.runtimePolicy){operation.state='failed';}
    else{
     operation.state='succeeded';operation.expiresAt=Date.parse(result?.expiresAt??result?.plan?.expiresAt??'')||null;
@@ -362,7 +383,10 @@ export class RuntimePolicy {
     const verified=completionEvidence(canonicalTool,canonicalArgs,unwrap(result));
     const evidenceId=hash([goalId,evidenceHash]),nativeResult=unwrap(result);this.state.evidence[evidenceId]={id:evidenceId,goalId,tool,fingerprint:evidenceHash,resourceIds:[nativeResult?.jobId,nativeResult?.taskId].filter(Boolean),verified,summary:bounded(result,600),source:'tool-receipt'};
      this.registerResource(canonicalTool,nativeResult,evidenceId,verified);
-    if(tool==='runtime_tools_search'&&result.discoveryFingerprint){
+     if(tool==='runtime_context_read'&&result.retrievalFingerprint&&result.reusedContext){
+      result={...result,knownBlockers:Object.values(this.state.run?.blockers??{}).map(({id,code,category})=>({id,code,category})),next:'These exact records were already delivered. Use confirmed requirements and fresh native task state; another wording of the same retrieval is not progress. Resolve the actual blocker or issue runtime_task_report if no authorized path remains.'};
+      this.noProgress(tool,'UNCHANGED_CONTEXT','context:'+result.retrievalFingerprint);
+     }else if(tool==='runtime_tools_search'&&result.discoveryFingerprint){
      this.state.discoveryPages??={};const known=this.state.discoveryPages[result.discoveryFingerprint];
      if(known&&!result.newlyActivated?.length){result={...result,reusedDiscovery:true,previousQueries:known.queries,note:result.note+' This capability page is unchanged; follow capabilityRoutes or the next page instead of rephrasing the same search.'};this.noProgress(tool,'UNCHANGED_DISCOVERY','discovery:'+result.discoveryFingerprint);}
      else if(!seen)this.state.stagnation=0;

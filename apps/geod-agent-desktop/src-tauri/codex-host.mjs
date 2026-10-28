@@ -201,6 +201,9 @@ export async function createHost({codex,home,sqliteHome=home,toolsFile,emit,rece
     try {
       const actual=Buffer.from(req.headers.authorization??''),expected=Buffer.from(`Bearer ${secret}`);
       if(actual.length!==expected.length||!timingSafeEqual(actual,expected)){res.writeHead(401).end();return;}
+       // HTTP chunks are byte boundaries, not UTF-8 character boundaries.
+       // Decode once per stream so long Chinese tool receipts survive exactly.
+       req.setEncoding('utf8');
       if(req.url==='/runtime-policy'&&req.method==='POST'){
         let raw='';for await(const chunk of req){raw+=chunk;if(Buffer.byteLength(raw)>1024*1024)throw new Error('Policy event too large');}
         if(!run){res.writeHead(409).end();return;}
@@ -352,7 +355,7 @@ export async function createHost({codex,home,sqliteHome=home,toolsFile,emit,rece
     child=spawn(codex,['app-server','--stdio','--enable','hooks'],{cwd:params.workspace,env:{...environment,CODEX_HOME:home,CODEX_SQLITE_HOME:sqliteHome,GEOD_CODEX_BRIDGE_TOKEN:secret},windowsHide:true,stdio:['pipe','pipe','pipe']});
     const failed=error=>{run?.reject(error);for(const entry of rpcPending.values()){clearTimeout(entry.timer);entry.reject(error);}rpcPending.clear();initialized=false;};
     let stderr='';
-    child.stderr.on('data',chunk=>{stderr=(stderr+chunk.toString('utf8')).slice(-16384);});
+    child.stderr.setEncoding('utf8');child.stderr.on('data',chunk=>{stderr=(stderr+chunk).slice(-16384);});
     child.on('error',failed);child.on('exit',code=>{
       if(stderr)try{writeFileSync(join(home,'codex-stderr.log'),stderr);}catch{}
       if(!closed)failed(new Error(`Codex process exited (${code})${stderr?'；详细错误已保存在本机引擎日志':''}`));
@@ -372,6 +375,7 @@ export async function createHost({codex,home,sqliteHome=home,toolsFile,emit,rece
                  if(dispatchTool==='runtime_context_read')return run.modelInput.catalog.context(arguments_);
                const output=await ask('tool',{tool:dispatchTool,arguments:arguments_,callId:dispatchTool===tool?callId:callId+':'+dispatchTool,operationId,taskRevision:policy.state.revision,policyManaged:true,threadId:run?.threadId},{timeout:dispatchTool==='ask_user'?0:180000});
                const result=output.result;
+               run.modelInput.catalog.observe(dispatchTool);
                if(capabilities.runtimePolicyNative){
                  const canonical=dispatchTool==='mcp_call'?(GEOD_POLICY.nativeConnectors.includes(arguments_.connectorId)?arguments_.toolName:null):dispatchTool,native=dispatchTool==='mcp_call'?result?.result:result;
                  const kind=['jobs_start','jobs_get'].includes(canonical)?'imagery':['data_download_start','data_download_get'].includes(canonical)?'data':null,id=kind==='imagery'?native?.jobId:native?.taskId??native?.id;

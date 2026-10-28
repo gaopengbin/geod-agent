@@ -7,29 +7,35 @@ import { Loader2, Server, X } from "./icons";
 import { api, errorMessage, type BackgroundStatus } from "./api";
 
 export const BACKGROUND_OPEN = "geod:background-open";
+function startupDiagnostic(cause:unknown){
+  const value=(cause as {diagnostic?:{stage?:string;osCode?:number;exitCode?:number}})?.diagnostic;
+  if(!value||!['spawn','early-exit','readiness'].includes(value.stage??''))return null;
+  return{stage:value.stage!,code:Number.isInteger(value.osCode)?value.osCode:Number.isInteger(value.exitCode)?value.exitCode:null};
+}
 export function BackgroundDialog({ onClose }: { onClose: () => void }) {
   const [status, setStatus] = useState<BackgroundStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [diagnostic,setDiagnostic]=useState<ReturnType<typeof startupDiagnostic>>(null),[revision,setRevision]=useState(0);
   useEffect(() => {
     let disposed = false, loading = false, failed = false;
     const refresh = async () => {
       if (loading || failed) return;
       loading = true;
-      try { const current = await api.backgroundStatus(); if (!disposed) {setStatus(current);setError("");} }
-      catch (cause) { failed=true;if (!disposed) {setStatus(null);setError(errorMessage(cause));} }
+      try { const current = await api.backgroundStatus(); if (!disposed) {setStatus(current);setError("");setDiagnostic(null);} }
+      catch (cause) { failed=true;if (!disposed) {setStatus(null);setError(errorMessage(cause));setDiagnostic(startupDiagnostic(cause));} }
       finally { loading = false; }
     };
     void refresh(); const timer = setInterval(() => void refresh(), 5000);
     return () => { disposed = true; clearInterval(timer); };
-  }, []);
+  }, [revision]);
   const toggle = async () => {
-    setBusy(true); setError("");
+    setBusy(true); setError("");setDiagnostic(null);
     try {
       if (status?.running) { await api.backgroundStop(); setStatus({ running: false, activeDownloads: 0, windowRequired: false }); }
       else setStatus(await api.backgroundStart());
-    } catch (cause) { setStatus(null);setError(errorMessage(cause)); }
-    finally { setBusy(false); }
+    } catch (cause) { setStatus(null);setError(errorMessage(cause));setDiagnostic(startupDiagnostic(cause)); }
+    finally { setBusy(false);setRevision(value=>value+1); }
   };
   return <Dialog.Root open onOpenChange={open => { if (!open) onClose(); }}><Dialog.Portal>
     <Dialog.Overlay className="dialog-overlay" />
@@ -41,6 +47,7 @@ export function BackgroundDialog({ onClose }: { onClose: () => void }) {
         {status?.activeDownloads ? <p className="field-hint">{t("先暂停或取消正在执行的下载，再退出后台。")}</p> : null}
         {status?.activeCommands ? <p className="field-hint">{t("先在任务面板停止正在运行的命令，再退出后台。")}</p> : null}
         {error && <p role="alert" className="form-error">{localize(error)}</p>}
+        {diagnostic&&<p className="field-hint">{diagnostic.stage==='spawn'?t('后台在创建进程时失败。'):diagnostic.stage==='early-exit'?t('后台在准备完成前退出。'):t('后台进程未能完成就绪检查。')}{diagnostic.code!==null&&t('系统返回码：{0}。',{'0':String(diagnostic.code)})}{t('处理该原因后点击“恢复后台”，已有任务无需重建。')}</p>}
       </div>
       <div className="dialog-actions"><Button variant="outline" disabled={busy || (status?.activeDownloads??0) > 0 || (status?.activeCommands??0)>0 || (status?.activeAiTurns??0)>0 || status?.maintenanceActive} onClick={() => void toggle()}>{busy && <Loader2 size={14} className="animate-spin"/>}{status?.running ? t("退出后台") : t("恢复后台")}</Button><Button onClick={onClose}>{t("完成")}</Button></div>
     </Dialog.Content>

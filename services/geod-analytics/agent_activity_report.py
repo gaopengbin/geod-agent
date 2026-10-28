@@ -28,6 +28,9 @@ def collect(hours=48,until=None,accounts='/srv/laogao/data/geod-studio/accounts/
         summary['server_model_requests']=grouped('model_generations','funding_scope,state,count(*) requests,count(distinct user_id) accounts','created_at')
         summary['reported_downloads']=grouped('agent_events','state,download_kind,count(*) attempts,count(distinct user_id) accounts','occurred_at')
         summary['reported_personal_activity']=grouped('agent_activity_events','kind,state,count(*) events,count(distinct user_id) accounts,sum(input_tokens) input_tokens,sum(output_tokens) output_tokens,sum(usage_known=0) unknown_usage_events','occurred_at')
+        diagnostic_available='agent_activity_events' in tables and 'reason' in {r[1] for r in db.execute('PRAGMA table_info(agent_activity_events)')}
+        summary['download_reporting_diagnostics']=[dict(r) for r in db.execute(f"SELECT reason,count(distinct user_id) accounts,count(*) events,max(occurred_at) last_observed_at FROM agent_activity_events WHERE user_id IN ({marks}) AND kind='download_status' AND julianday(occurred_at)>=julianday(?) AND julianday(occurred_at)<julianday(?) GROUP BY reason",ids+[start.isoformat(),until.isoformat()])] if diagnostic_available else None
+        summary['download_reporting_diagnostics_status']='observed' if summary['download_reporting_diagnostics'] else 'not_observed' if diagnostic_available else 'unavailable'
         for u in users:
             if stamp(u['createdAt'])<start:continue
             uid=u['id'];grants=[g for g in store.get('geodOAuthGrants',[]) if g.get('userId')==uid and g.get('clientId')=='geod-agent-desktop']
@@ -35,6 +38,8 @@ def collect(hours=48,until=None,accounts='/srv/laogao/data/geod-studio/accounts/
             item['server_model_requests']=[dict(r) for r in db.execute('SELECT funding_scope,state,count(*) requests FROM model_generations WHERE user_id=? AND julianday(created_at)<julianday(?) GROUP BY funding_scope,state',[uid,until.isoformat()])]
             item['reported_downloads']=[dict(r) for r in db.execute('SELECT state,download_kind,count(*) attempts FROM agent_events WHERE user_id=? AND julianday(occurred_at)<julianday(?) GROUP BY state,download_kind',[uid,until.isoformat()])]
             item['personal_activity_collection_available']='agent_activity_events' in tables
+            latest=db.execute("SELECT state,reason,occurred_at FROM agent_activity_events WHERE user_id=? AND kind='download_status' AND julianday(occurred_at)<julianday(?) ORDER BY julianday(occurred_at) DESC,rowid DESC LIMIT 1",[uid,until.isoformat()]).fetchone() if diagnostic_available else None
+            item['download_reporting_status']=dict(latest) if latest else None
             item['reported_activity']=[dict(r) for r in db.execute('SELECT kind,state,count(*) events,sum(input_tokens) input_tokens,sum(output_tokens) output_tokens,sum(usage_known=0) unknown_usage_events FROM agent_activity_events WHERE user_id=? AND julianday(occurred_at)<julianday(?) GROUP BY kind,state',[uid,until.isoformat()])] if 'agent_activity_events' in tables else None
             cohort.append(item)
     finally:db.close()

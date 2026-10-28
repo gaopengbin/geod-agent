@@ -8,6 +8,12 @@ import {join} from 'node:path';
 import {createGatewayServer} from '../server.mjs';
 import {validateActivity,openActivityStore} from '../activity-store.mjs';
 const event=()=>({event_id:randomUUID(),kind:'personal_model',state:'completed',reason:'none',occurred_at:new Date().toISOString(),input_tokens:123,output_tokens:4,usage_known:true});
+test('download diagnostics are bounded, uncharged and distinct from missing download outcomes',()=>{
+ const record={...event(),kind:'download_status',state:'started',reason:'consent_disabled',input_tokens:null,output_tokens:null,usage_known:false};
+ const body={schema_version:1,accountId:'a',events:[record]};assert.equal(validateActivity(body)[0].reason,'consent_disabled');
+ for(const extra of [{reason:'raw URL failure'},{state:'completed'},{input_tokens:1},{path:'private'},{kind:'personal_model'}])assert.throws(()=>validateActivity({...body,events:[{...record,...extra}]}));
+ assert.equal(validateActivity({...body,events:[{...record,state:'failed',reason:'transport_network'}]})[0].state,'failed');
+});
 
 test('first observed client is once per account across devices and opt-in resets',()=>{
  const store=openActivityStore(':memory:');

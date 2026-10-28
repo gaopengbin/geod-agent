@@ -11,15 +11,17 @@ import { AccountAvatar } from "./account-avatar";
 import { CREDITS_CHANGED, formatCredits } from "./credits";
 import { useEffect, useRef, useState } from "react";
 import { UiTooltip } from "./ui-tooltip";
+import type {DownloadDiagnostic} from './use-download-telemetry';
 
 function tokens(value: number) {
   return `${(value / 1000).toLocaleString(getLocale(), { maximumFractionDigits: 1 })}K`;
 }
 
-export function AccountMenu({ open, onOpenChange, connected, userId, profile, profileError, onProfileRefresh, usage, busy, theme, onModels, onNetwork, onCache, onTheme, onLogout, telemetryEnabled, onTelemetry, activityEnabled=false, onActivity }: {
+export function AccountMenu({ open, onOpenChange, connected, userId, profile, profileError, onProfileRefresh, usage, busy, theme, onModels, onNetwork, onCache, onTheme, onLogout, telemetryEnabled, onTelemetry,telemetryDiagnostic,telemetryError=false,telemetryBusy=false, activityEnabled=false, onActivity }: {
   open: boolean; onOpenChange: (value: boolean) => void; connected: boolean; userId: string | null; usage: ModelUsage | null;
   busy: boolean; theme: "light" | "dark"; onNetwork: () => void; onCache: () => void; onTheme: () => void; onLogout: () => void;
   telemetryEnabled: boolean; onTelemetry: () => void; onModels: () => void;
+  telemetryDiagnostic?:DownloadDiagnostic|null;telemetryError?:boolean;telemetryBusy?:boolean;
   activityEnabled?: boolean; onActivity?: () => void;
   profile: AccountProfile | null; profileError: boolean; onProfileRefresh: (force?: boolean) => Promise<void>;
 }) {
@@ -83,9 +85,10 @@ export function AccountMenu({ open, onOpenChange, connected, userId, profile, pr
       <button type="button" onClick={() => action(() => window.dispatchEvent(new Event(BACKGROUND_OPEN)))}><Server size={16} aria-hidden="true"/>{t("后台运行")}</button>
       <button type="button" onClick={() => action(() => window.dispatchEvent(new Event(LANGUAGE_OPEN)))}><Globe2 size={16} aria-hidden="true"/>{t("语言")}</button>
       <button type="button" onClick={() => action(onTheme)}>{theme === "light" ? <Moon size={16} aria-hidden="true"/> : <Sun size={16} aria-hidden="true"/>} {theme === "light" ? t("深色外观") : t("浅色外观")}</button>
-      <button type="button" aria-pressed={telemetryEnabled} onClick={onTelemetry}><ChartNoAxesColumn size={16} aria-hidden="true"/>{t("下载使用统计：")}{telemetryEnabled ? t("已开启") : t("已关闭")}</button>
+      <button type="button" aria-pressed={telemetryEnabled} disabled={!connected||telemetryBusy} onClick={onTelemetry}><ChartNoAxesColumn size={16} aria-hidden="true"/>{t("下载使用统计：")}{telemetryEnabled ? t("已开启") : t("已关闭")}</button>
+      <p className="account-menu-usage" role="status">{telemetryError?t('下载统计状态暂不可读，请稍后重试。'):telemetryDiagnostic?.reason==='consent_disabled'?t('未开启下载统计，下载结果不会上报。'):telemetryDiagnostic?.reason==='no_download_observed'?t('已开启，尚未观测到新的下载任务。'):telemetryDiagnostic?.reason==='queued'?t('有 {0} 条结果等待上报。',{'0':String(telemetryDiagnostic.queuedEvents)}):telemetryDiagnostic?.reason==='transport_auth'?t('结果已保留，请重新登录后继续上报。'):telemetryDiagnostic?.reason==='transport_network'?t('结果已保留，网络恢复后会继续上报。'):telemetryDiagnostic?.reason==='transport_schema'?t('结果已保留，统计服务需更新后继续上报。'):telemetryDiagnostic?.reason==='reported'?t('最近一次上报已确认。'):telemetryDiagnostic?t('结果已保留，上报暂未确认。'):t('正在读取下载统计状态…')}</p>
       <p className="account-menu-usage">{t("开启后，任务状态、耗时区间和错误类别会关联当前 GeoD 账号；不发送文件路径、坐标或对话内容，可随时关闭。")}</p>
-      {connected&&onActivity&&<><UiTooltip side="right" content={t("自愿开启后，启动、自有渠道调用结果与可用 Token 用量会关联当前账号；不发送对话、模型名称、渠道地址或密钥。关闭会清除待上传记录，已发送的请求可能完成。下载统计单独控制。")}><button type="button" aria-pressed={activityEnabled} onClick={onActivity}><ChartNoAxesColumn size={16} aria-hidden="true"/>{t("Agent 使用统计：")}{activityEnabled?t("已开启"):t("已关闭")}</button></UiTooltip><p className="account-menu-usage">{t("自愿关联当前账号的活跃与自有渠道用量，不上传对话或密钥；下载统计独立控制。")}</p></>}
+      {connected&&onActivity&&<><UiTooltip side="right" content={t("自愿开启后，启动、自有渠道调用结果与可用 Token 用量会关联当前账号；不发送对话、模型名称、渠道地址或密钥。关闭会清除待上传记录，已发送的请求可能完成。下载统计单独控制。")}><button type="button" aria-pressed={activityEnabled} onClick={onActivity}><ChartNoAxesColumn size={16} aria-hidden="true"/>{t("Agent 使用统计：")}{activityEnabled?t("已开启"):t("已关闭")}</button></UiTooltip><p className="account-menu-usage">{t("自愿关联活跃、自有渠道用量及下载统计是否可用；不上传对话或密钥，下载结果仍由独立开关控制。")}</p></>}
       {connected && <button type="button" className="account-menu-logout" disabled={busy} onClick={() => action(onLogout)}><LogOut size={16} aria-hidden="true"/>{t("退出登录")}</button>}
     </MorphPopoverContent>
   </MorphPopover></div>;

@@ -2,12 +2,13 @@
 export const ERROR_CLASSES={
  transient:{codes:['REGISTRY_UNAVAILABLE','CONNECTOR_UNAVAILABLE','RATE_LIMITED','NETWORK_TIMEOUT','NETWORK_ERROR','HTTP_429','HTTP_502','HTTP_503','HTTP_504'],pattern:'(?:_NETWORK_ERROR|_TIMEOUT|_RATE_LIMITED)$',condition:'service cooldown or availability',recovery:'backoff'},
  parameter:{codes:['TOOL_ARGUMENT_INVALID','INVALID_BOUNDARY_SELECTION','INVALID_JOB_ID','MCP_RESULT_EXPORT_INVALID','REPLAN_AFTER_USER_INPUT','CRS_OPTION_CONFLICT'],pattern:'^(?:INVALID_|.*_INVALID$|.*_ARGUMENT)',condition:'corrected arguments or current requirement revision',recovery:'repair'},
+ requirements:{codes:['OUTPUT_CRS_FORMAT_CONFLICT'],condition:'resolved output conditions and an explicit human change; enforced by the durable planning gate',recovery:'ask-user'},
  permission:{codes:['APPROVAL_REQUIRED','USER_INPUT_REQUIRED','GIS_WRITE_REQUIRED','WORKSPACE_WRITE_REQUIRED','PERMISSION_DENIED'],pattern:'(?:_APPROVAL_REQUIRED|_PERMISSION_DENIED|_WRITE_REQUIRED)$',condition:'native approval or workspace permission revision',recovery:'wait'},
  authentication:{codes:['AUTH_REQUIRED','LOGIN_REQUIRED','ACCOUNT_CHANGED','MCP_AUTH_REQUIRED','SOURCE_CREDENTIAL_REQUIRED','SOURCE_CREDENTIAL_UNAVAILABLE','SOURCE_CREDENTIAL_STORE'],pattern:'(?:_AUTH_REQUIRED|_LOGIN_REQUIRED)$',condition:'native authentication revision',recovery:'wait'},
  environment:{codes:['BACKGROUND_START','BACKGROUND_OFFLINE','BACKGROUND_STOPPED','BACKGROUND_VERSION','BACKGROUND_CREDENTIAL','BACKGROUND_AUTH','TASK_STATE_UNAVAILABLE'],condition:'native background availability revision',recovery:'wait-for-runtime'},
  capability:{codes:['TOOL_NOT_ALLOWED','TOOL_NOT_FOUND','SOURCE_TOOL_NOT_FOUND','IMAGE_UNSUPPORTED','MODEL_IMAGE_UNSUPPORTED','TOOL_SCHEMA_UNSUPPORTED','MCP_CANDIDATE_NOT_FOUND'],pattern:'(?:_UNSUPPORTED|_TOOL_NOT_FOUND)$',condition:'current capability or discovered contract revision',recovery:'discover-or-fallback'},
  unknownOutcome:{codes:['MCP_RESULT_UNKNOWN','OPERATION_RESULT_UNKNOWN','JOB_START_UNKNOWN','COMMAND_RESULT_UNKNOWN'],pattern:'(?:_RESULT_UNKNOWN|_OUTCOME_UNKNOWN)$',condition:'native operation reconciliation',recovery:'reconcile'},
- business:{codes:['SOURCE_UNAVAILABLE','PLAN_EXPIRED','PLAN_NOT_FOUND','QUOTA_EXCEEDED','OUTSIDE_COVERAGE','LICENSE_DENIED'],condition:'business object state',recovery:'state-or-alternative'},
+ business:{codes:['SOURCE_UNAVAILABLE','PLAN_EXPIRED','PLAN_NOT_FOUND','QUOTA_EXCEEDED','OUTSIDE_COVERAGE','LICENSE_DENIED','RESOURCE_LIMIT','DISK_INSUFFICIENT','BATCH_DISK_INSUFFICIENT','PARTITION_MANIFEST_TOO_LARGE'],condition:'business object state',recovery:'state-or-alternative'},
  internal:{codes:['TOOL_INTERNAL_ERROR','TOOL_FAILED'],condition:'diagnosis or implementation repair',recovery:'diagnose'},
 };
 const tools={};
@@ -34,6 +35,7 @@ group('plan_imagery plan_imagery_batch data_download_plan imagery_recovery_plan'
 group('plan_imagery plan_imagery_batch',{effect:'prepare',nativeIdempotentPrepare:true});
 group('workspace_boundary_use us_county_boundary boundaries_combine mcp_result_export agent_tasks_spawn agent_tasks_cancel data_download_start data_download_cancel data_download_discard data_download_load schedules_cancel_run schedules_create schedules_set_enabled data_schedules_create data_schedules_set_enabled data_schedules_cancel_run cache_maintenance_cancel',{effect:'external'});
 group('jobs_start',{effect:'external',purpose:'imagery-download-submit',resource:['planId'],conditionScope:'imagery-download-approval'});
+for(const name of 'jobs_list jobs_get jobs_events jobs_start data_download_start data_download_get data_download_list'.split(' '))tools[name]={...tools[name],requiresBackground:true};
 export function completionEvidence(tool,args,result){
  if(['jobs_start','jobs_get','data_download_start','data_download_get'].includes(tool)){
   const done=result?.backgroundResult,id=tool.startsWith('jobs_')?result?.jobId:result?.taskId??result?.id;

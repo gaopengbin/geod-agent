@@ -354,7 +354,7 @@ pub(crate) async fn execute(
             let id: String = f!("jobId");
             let job = open_store(&state)?
                 .get_job(&id)?
-                .ok_or_else(|| workspace_error("JOB_NOT_FOUND", "任务不存在"))?;
+                .ok_or_else(|| workspace_error("JOB_NOT_FOUND_IN_AGENT", "当前 Agent 任务库未找到该标识；外部 GeoDownloader 的旧任务与文件状态仍未知，请在原软件续传或提供原任务清单核验"))?;
             assert_plan(app, conversation, &job.plan_id)?;
             if tool == "artifacts_inspect" {
                 let mut result = encode(crate::artifacts_inspect(state, id)?)?;
@@ -406,6 +406,10 @@ pub(crate) async fn execute(
                     spec["boundary"] = json!(b.geometry);
                 }
                 json!({"kind":"tiles3d","spec":spec})
+            } else if kind=="raster"{
+                let mut spec=json!({"sourceUrl":a["sourceUrl"],"bounds":bounds,"outputs":a.get("outputFormats").cloned().unwrap_or(json!(["geotiff"])),"targetCrs":a["targetCrs"],"rasterFunction":a["rasterFunction"],"bandIds":a.get("bandIds").cloned().unwrap_or(json!([]))});
+                if let Some(range)=a.get("timeRange"){spec["timeRange"]=range.clone();}if let Some(b)=&boundary{spec["boundary"]=json!(b.geometry);}
+                json!({"kind":"raster","spec":spec})
             } else if kind=="online"||kind=="boundary"{
                 let mut spec=json!({"outputs":a.get("outputFormats").cloned().unwrap_or(json!(["geojson","gpkg"])),"maxFeatures":a.get("maxFeatures").cloned().unwrap_or(json!(10000)),"pageSize":a.get("pageSize").cloned().unwrap_or(json!(500))});
                 for key in ["sourceUrl","onlineConnectionId","layer","sourceCrs","targetCrs","sourceBoundaryId","dissolve"]{if let Some(value)=a.get(key){spec[key]=value.clone();}}
@@ -552,9 +556,9 @@ fn compact_data(task: &crate::data_jobs::DataTask) -> Value {
         let files=m["assets"].as_array().or_else(||m["resources"].as_array()).cloned().unwrap_or_default();
         let fields=m["fields"].as_array().map(|v|v.iter().take(100).cloned().collect::<Vec<_>>());
         let encodings=m["fieldEncodings"].as_object().map(|v|v.iter().take(100).map(|(k,v)|(k.clone(),v.clone())).collect::<serde_json::Map<String,Value>>());
-        json!({"bounds":m["bounds"],"featureCount":m["featureCount"],"sourceFeatureCount":m["sourceFeatureCount"],"geometryTypes":m["geometryTypes"],"sourceLayer":m["sourceLayer"],"outputCrs":m["outputCrs"],"fields":fields,"fieldsTruncated":m["fields"].as_array().is_some_and(|v|v.len()>100),"fieldEncodings":encodings,"quality":m["quality"],"failureCount":m["failures"].as_array().map(Vec::len),"warnings":m["warnings"].as_array().map(|v|v.iter().take(10).cloned().collect::<Vec<_>>()).unwrap_or_default(),"dataTimestamp":m["dataTimestamp"],"fileCount":files.len(),"assets":files.iter().take(20).map(|f|json!({"kind":f["kind"],"bytes":f.get("bytes").or_else(||f.get("size")),"sha256":f["sha256"]})).collect::<Vec<_>>(),"assetsTruncated":files.len()>20})
+        json!({"width":m["width"],"height":m["height"],"bandCount":m["bandCount"],"bands":m["bands"],"sourceTime":m["sourceTime"],"numericValuesPreserved":m["numericValuesPreserved"],"bounds":m["bounds"],"featureCount":m["featureCount"],"sourceFeatureCount":m["sourceFeatureCount"],"geometryTypes":m["geometryTypes"],"sourceLayer":m["sourceLayer"],"outputCrs":m["outputCrs"],"fields":fields,"fieldsTruncated":m["fields"].as_array().is_some_and(|v|v.len()>100),"fieldEncodings":encodings,"quality":m["quality"],"failureCount":m["failures"].as_array().map(Vec::len),"warnings":m["warnings"].as_array().map(|v|v.iter().take(10).cloned().collect::<Vec<_>>()).unwrap_or_default(),"dataTimestamp":m["dataTimestamp"],"fileCount":files.len(),"assets":files.iter().take(20).map(|f|json!({"kind":f["kind"],"bytes":f.get("bytes").or_else(||f.get("size")),"sha256":f["sha256"]})).collect::<Vec<_>>(),"assetsTruncated":files.len()>20})
     });
-    json!({"taskId":task.id,"kind":task.kind,"title":task.title,"status":task.status,"cleaned":task.cleaned,"planHash":task.plan_hash,"progress":task.progress,"error":task.error,"outputLocation":"当前工作区中的新目录","createdAt":task.created_at,"updatedAt":task.updated_at,"manifest":manifest})
+    json!({"rasterSnapshot":if let crate::data_jobs::DataRequest::Raster(spec)=&task.request{json!(spec.prepared)}else{Value::Null},"nativePreviewSupported":task.kind!="raster","taskId":task.id,"kind":task.kind,"title":task.title,"status":task.status,"cleaned":task.cleaned,"planHash":task.plan_hash,"progress":task.progress,"error":task.error,"outputLocation":"当前工作区中的新目录","createdAt":task.created_at,"updatedAt":task.updated_at,"manifest":manifest})
 }
 fn compact_plan(
     p: &geod_task_engine::ledger::StoredPlan,
@@ -662,6 +666,11 @@ fn plan(
         }
         let spec = serde_json::from_value(spec)
             .map_err(|_| workspace_error("INPUT_INVALID", "影像计划参数无效"))?;
+        if a["partition"]==true {
+            let prepared=crate::plans_partition_create(app.clone(),state.clone(),services.clone(),conversation.into(),spec,key.into())?;
+            let plans:Vec<geod_task_engine::ledger::StoredPlan>=serde_json::from_value(prepared["plans"].clone()).map_err(|_|workspace_error("PARTITION_RESULT_INVALID","分片计划回执无效"))?;
+            return Ok(json!({"partition":prepared["partition"],"plans":plans.iter().map(|p|compact_plan(p,workspace.permission)).collect::<Vec<_>>(),"errors":[],"error":if prepared["partition"]["canStoreAllParts"]==false{json!("BATCH_DISK_INSUFFICIENT")}else{Value::Null},"message":if prepared["partition"]["canStoreAllParts"]==false{json!("分片已保留，当前磁盘不能同时容纳全部成果；请明确存储或分批迁出方式后再执行")}else{Value::Null}}));
+        }
         let saved = crate::plans_create(
             app.clone(),
             state.clone(),

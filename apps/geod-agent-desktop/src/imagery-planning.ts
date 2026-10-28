@@ -5,7 +5,8 @@ export function compactPlan(stored: StoredPlan, permission: WorkspaceSettings["p
   return { permission, requiresPlanConfirmation: permission !== "fullAccess", canStartWithoutPlanConfirmation: permission === "fullAccess", planId: stored.planId, planHash: plan.planHash, source: plan.sourceName, bounds: plan.spec.bounds, boundary: plan.spec.boundary ? `${plan.spec.boundary.polygons.length} 个面；GeoTIFF 按边界透明裁剪，MBTiles 保留整瓦片` : null, zoomLevels: plan.spec.zoomLevels, outputFormats: plan.spec.outputFormats, targetCrs: plan.spec.exportOptions?.targetCrs ?? "EPSG:3857", resampling: plan.spec.exportOptions?.resampling ?? "nearest", outputLocation: "当前本机工作区中的新文件夹，模型不可读取路径", totalTiles: plan.totalTiles, decodedRgbaBytes: plan.decodedRgbaBytes, requiredFreeDiskBytes: plan.requiredFreeDiskBytes, license: plan.license, attribution: plan.attribution, expiresAt: plan.expiresAt, execution: permission === "fullAccess" ? "可调用 jobs_start；本机将验证工作区完全访问授权及计划路径" : "需要用户点击聊天里的任务入口，在右侧任务面板确认" };
 }
 
-export interface ImageryPlanResult { plans: { stored: StoredPlan; rangeName?: string }[]; errors: { boundaryId?: string; name?: string; error: unknown }[] }
+export interface ImageryPlanResult { plans: { stored: StoredPlan; rangeName?: string }[]; errors: { boundaryId?: string; name?: string; error: unknown }[];partition?:Record<string,unknown> }
+export type PlanningExecutor=<T>(args:Record<string,unknown>,spec:TaskSpec,dispatch:()=>Promise<T>)=>Promise<T>;
 const invalid = (message: string): never => { throw { code: "INVALID_PLAN_ARGUMENTS", message }; };
 const rangeTitle = (value: string) => value.replace(/\.(geojson|json)$/i, "").replace(/-AreaCity-\d{8}$/i, "").replace(/[<>:"/\\|?*\x00-\x1f]/g, "_").slice(0, 70);
 
@@ -29,7 +30,8 @@ export function requestedExportOptions(value: unknown): ExportOptions | undefine
   if (value === undefined) return undefined;
   if (!value || typeof value !== "object" || Array.isArray(value)) return invalid("exportOptions 必须为导出参数对象");
   const options = value as Record<string, unknown>;
-  if (Object.keys(options).some(key => !["compression", "buildPyramid", "generateSidecars", "jpegQuality", "elevationEncoding", "targetCrs", "resampling"].includes(key))) return invalid("导出参数包含不支持的字段");
+  if (Object.keys(options).some(key => !["pixelValueMode","compression", "buildPyramid", "generateSidecars", "jpegQuality", "elevationEncoding", "targetCrs", "resampling"].includes(key))) return invalid("导出参数包含不支持的字段");
+  if(options.pixelValueMode!==undefined&&!['rendered','native'].includes(String(options.pixelValueMode)))return invalid('请选择渲染影像或原始数值波段');
   if (options.elevationEncoding !== undefined && options.elevationEncoding !== "terrarium") return invalid("高程编码目前支持 Terrarium");
   if (options.compression !== undefined && !["none", "lzw", "deflate"].includes(String(options.compression))) return invalid("压缩支持 none、lzw、deflate");
   if (["buildPyramid", "generateSidecars"].some(key => options[key] !== undefined && typeof options[key] !== "boolean")) return invalid("金字塔和辅助文件选项必须为布尔值");
@@ -40,7 +42,7 @@ export function requestedExportOptions(value: unknown): ExportOptions | undefine
 }
 
 /** Planning is native and deterministic. This module never starts downloads. */
-export async function planImagery(args: Record<string, unknown>, conversationId: string, executionId: string, activeBoundary: BoundaryImport | null, batch = false): Promise<ImageryPlanResult> {
+export async function planImagery(args: Record<string, unknown>, conversationId: string, executionId: string, activeBoundary: BoundaryImport | null, batch = false,execute?:PlanningExecutor): Promise<ImageryPlanResult> {
   const sources = await api.sourcesList();
   const source = sources.find(item => item.id === args.sourceId);
   const formats = args.outputFormats;
@@ -83,10 +85,18 @@ export async function planImagery(args: Record<string, unknown>, conversationId:
           ...(exportOptions ? { exportOptions } : {}),
           outputDirectory: range ? `${directory}-${rangeTitle(range.name)}` : directory,
           limits: { maxTiles: 1_000_000, maxDecodedRgbaBytes: 1024 ** 4 } };
-        stored = await api.plansCreate(spec, toolExecutionId, conversationId);
+        if(args.partition===true){
+          const dispatch=()=>api.plansPartitionCreate(spec,toolExecutionId,conversationId);
+          const partition=execute?await execute({...args,...(range?.boundaryId?{boundaryId:range.boundaryId}:{})},spec,dispatch):await dispatch();
+          result.plans.push(...partition.plans.map((stored,index)=>({stored,rangeName:`${range?.name??source.displayName} · 分片 ${index+1}（共 ${partition.plans.length} 片）`})));
+          result.partition=partition.partition;
+          continue;
+        }
+        const dispatch=()=>api.plansCreate(spec,toolExecutionId,conversationId);
+        stored = execute?await execute({...args,...(range?.boundaryId?{boundaryId:range.boundaryId}:{})},spec,dispatch):await dispatch();
       }
       result.plans.push({ stored, rangeName: range?.name });
-    } catch (error) { result.errors.push({ boundaryId: range?.boundaryId, name: range?.name, error }); }
+    } catch (error) { result.errors.push({ boundaryId: range?.boundaryId, name: range?.name, error });if(error&&typeof error==='object'&&'planningConflict'in error)break; }
   }
   return result;
 }

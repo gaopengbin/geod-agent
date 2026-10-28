@@ -14,6 +14,7 @@ pub(crate) fn schema(db: &Connection) -> Result<(), AppError> {
       CREATE TABLE IF NOT EXISTS download_observations(seq INTEGER PRIMARY KEY AUTOINCREMENT,owner TEXT NOT NULL,resource TEXT NOT NULL,state TEXT NOT NULL,stamp TEXT NOT NULL,reason TEXT NOT NULL DEFAULT '');
       CREATE TABLE IF NOT EXISTS download_attempts(owner TEXT NOT NULL,resource TEXT NOT NULL,attempt TEXT NOT NULL,state TEXT NOT NULL,started TEXT NOT NULL,PRIMARY KEY(owner,resource));
       CREATE TABLE IF NOT EXISTS download_outbox(id TEXT PRIMARY KEY,owner TEXT NOT NULL,body TEXT NOT NULL);").map_err(storage)?;
+    db.execute_batch("CREATE TABLE IF NOT EXISTS download_transport_state(owner TEXT PRIMARY KEY,last_attempt TEXT,last_delivery TEXT,last_error TEXT);").map_err(storage)?;
     let exists = |name: &str| {
         db.query_row(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1",
@@ -62,6 +63,18 @@ fn duration(start: &str, end: &str) -> &'static str {
         _ => "unknown",
     }
 }
+fn failure_reason(reason:&str)->&'static str {
+    let r=reason.to_uppercase();
+    if ["NETWORK","TIMEOUT","网络","超时"].iter().any(|v|r.contains(v)){"network"}
+    else if ["AUTH","401","403","授权","认证"].iter().any(|v|r.contains(v)){"auth"}
+    else if ["DISK","SPACE","磁盘","空间不足"].iter().any(|v|r.contains(v)){"disk"}
+    else if ["PERMISSION","ACCESS_DENIED","权限","拒绝访问"].iter().any(|v|r.contains(v)){"permission"}
+    else if ["CHECKSUM","VERIFY","MISMATCH","校验","不匹配","TIFF 的像元"].iter().any(|v|r.contains(v)){"verification"}
+    else if ["RASTER_EXPORT_INVALID","SOURCE_","HTTP ","PROVIDER","提供方"].iter().any(|v|r.contains(v)){"provider"}
+    else if ["PROCESSING","REPROJECT","处理","转换","投影"].iter().any(|v|r.contains(v)){"processing"}
+    else if ["BACKGROUND_","COMPANION","后台启动"].iter().any(|v|r.contains(v)){"backend"}
+    else{"unknown"}
+}
 fn enqueue(
     db: &Connection,
     owner: &str,
@@ -78,21 +91,12 @@ fn enqueue(
     } else if state == "cancelled" {
         "cancelled"
     } else if state == "failed" {
-        let r = reason.to_uppercase();
-        if r.contains("NETWORK") || r.contains("TIMEOUT") || r.contains("网络") || r.contains("超时") {
-            "network"
-        } else if r.contains("AUTH") {
-            "auth"
-        } else if r.contains("DISK") || r.contains("SPACE") {
-            "disk"
-        } else {
-            "unknown"
-        }
+        failure_reason(reason)
     } else {
         "none"
     };
     let body = json!({"event_id":id,"attempt_id":attempt,"occurred_at":stamp,"state":state,"duration":if state=="started"{"unknown"}else{duration(start,stamp)},"reason":reason});
-    let mut body=body;body["download_kind"]=json!(if ["imagery","vector","online","tiles3d"].contains(&kind){kind}else{"unknown"});
+    let mut body=body;body["download_kind"]=json!(if ["imagery","vector","online","tiles3d","raster"].contains(&kind){kind}else{"unknown"});
     db.execute(
         "INSERT INTO download_outbox(id,owner,body) VALUES(?1,?2,?3)",
         params![id, owner, body.to_string()],
@@ -207,6 +211,33 @@ pub(crate) fn start(app: AppHandle) {
         std::thread::sleep(std::time::Duration::from_secs(5));
     });
 }
+fn safe_transport(code:&str)->&'static str {
+    if code.contains("AUTH")||code.contains("ACCOUNT")||code.contains("LOGIN"){"auth"}
+    else if code.contains("NETWORK")||code.contains("TIMEOUT")||code.contains("UNAVAILABLE")||code=="GATEWAY_ERROR"{"network"}
+    else if code.contains("EVENT")||code.contains("RECEIPT")||code.contains("SCHEMA"){"schema"}
+    else{"unknown"}
+}
+pub(crate) fn diagnostic_snapshot(db:&Connection,owner:&str)->rusqlite::Result<Value>{
+    let enabled:Option<bool>=db.query_row("SELECT enabled FROM download_telemetry_consent WHERE owner=?1",[owner],|r|r.get(0)).optional()?;
+    let queued:i64=db.query_row("SELECT count(*) FROM download_outbox WHERE owner=?1",[owner],|r|r.get(0))?;
+    let observations:i64=db.query_row("SELECT count(*) FROM download_observations WHERE owner=?1",[owner],|r|r.get(0))?;
+    let attempts:i64=db.query_row("SELECT count(*) FROM download_attempts WHERE owner=?1",[owner],|r|r.get(0))?;
+    let transport:Option<(Option<String>,Option<String>,Option<String>)>=db.query_row("SELECT last_attempt,last_delivery,last_error FROM download_transport_state WHERE owner=?1",[owner],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?))).optional()?;
+    let (last_attempt,last_delivery,last_error)=transport.unwrap_or_default();
+    let reason=if enabled!=Some(true){"consent_disabled"}else if queued>0&&last_error.is_some(){match last_error.as_deref(){Some("auth")=>"transport_auth",Some("network")=>"transport_network",Some("schema")=>"transport_schema",_=>"transport_other"}}else if queued>0||observations>0{"queued"}else if last_delivery.is_some(){"reported"}else{"no_download_observed"};
+    Ok(json!({"enabled":enabled.unwrap_or(false),"hasConsentRecord":enabled.is_some(),"reason":reason,"queuedEvents":queued,"pendingObservations":observations,"observedAttempts":attempts,"observedAttemptsMeaning":"resources with a retained latest attempt, not a historical attempt total","lastAttemptAt":last_attempt,"lastDeliveryAt":last_delivery,"lastErrorCategory":last_error,"collector":"native-background","schemaVersion":1}))
+}
+pub(crate) fn diagnostics(app:&AppHandle,owner:&str)->Result<Value,AppError>{
+    let state=app.state::<AppState>();let db=Connection::open(&state.db_path).map_err(storage)?;
+    db.busy_timeout(std::time::Duration::from_secs(2)).map_err(storage)?;schema(&db)?;
+    diagnostic_snapshot(&db,owner).map_err(storage)
+}
+#[tauri::command]
+pub(crate) fn download_telemetry_status(app:AppHandle,account_id:String)->Result<Value,AppError>{
+    let owner=services::current_user_id(&app.state::<services::ServiceState>()).map_err(|e|workspace_error(e.code,e.message))?;
+    if owner!=account_id{return Err(workspace_error("ACCOUNT_CHANGED","下载统计账号已切换"));}
+    diagnostics(&app,&owner)
+}
 fn tick(app: &AppHandle) -> Result<(), AppError> {
     let state = app.state::<AppState>();
     let mut db = Connection::open(&state.db_path).map_err(storage)?;
@@ -249,11 +280,15 @@ fn tick(app: &AppHandle) -> Result<(), AppError> {
         .iter()
         .map(|(_, body)| serde_json::from_str::<Value>(body).map_err(storage))
         .collect::<Result<Vec<_>, _>>()?;
-    let receipt = services::send_download_events(&service, &owner, json!(events))
-        .map_err(|e| workspace_error(e.code, e.message))?;
+    db.execute("INSERT INTO download_transport_state(owner,last_attempt) VALUES(?1,?2) ON CONFLICT(owner) DO UPDATE SET last_attempt=excluded.last_attempt",params![owner,Utc::now().to_rfc3339()]).map_err(storage)?;
+    let receipt = services::send_download_events(&service, &owner, json!(events)).map_err(|e|{
+        let _=db.execute("UPDATE download_transport_state SET last_error=?2 WHERE owner=?1",params![owner,safe_transport(e.code)]);
+        workspace_error(e.code,e.message)
+    })?;
     if receipt["accepted"].as_u64().unwrap_or(0) + receipt["duplicates"].as_u64().unwrap_or(0)
         != batch.len() as u64
     {
+        let _=db.execute("UPDATE download_transport_state SET last_error='schema' WHERE owner=?1",[&owner]);
         return Err(workspace_error(
             "TELEMETRY_RECEIPT",
             "统计回执未确认，稍后重试",
@@ -266,11 +301,30 @@ fn tick(app: &AppHandle) -> Result<(), AppError> {
         )
         .map_err(storage)?;
     }
+    db.execute("UPDATE download_transport_state SET last_delivery=?2,last_error=NULL WHERE owner=?1",params![owner,Utc::now().to_rfc3339()]).map_err(storage)?;
     Ok(())
 }
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]fn outcome_reasons_retain_processing_provider_permission_and_verification_without_uploading_details(){
+        for (detail,expected) in [("原始栅格处理返回无效结果","processing"),("SOURCE_NETWORK","network"),("SOURCE_HTTP HTTP 500","provider"),("CHECKSUM_MISMATCH private.tif","verification"),("ACCESS_DENIED","permission"),("BACKGROUND_UNAVAILABLE","backend"),("no diagnostic","unknown")]{assert_eq!(failure_reason(detail),expected);}
+    }
+    #[test]fn diagnostics_separate_disabled_no_download_queue_transport_failure_and_confirmed_receipt(){
+        let db=Connection::open_in_memory().unwrap();schema(&db).unwrap();
+        assert_eq!(diagnostic_snapshot(&db,"a").unwrap()["reason"],"consent_disabled");
+        db.execute("INSERT INTO download_telemetry_consent VALUES('a',1,'now')",[]).unwrap();
+        assert_eq!(diagnostic_snapshot(&db,"a").unwrap()["reason"],"no_download_observed");
+        enqueue(&db,"a","opaque-attempt","started","now","now","","imagery").unwrap();
+        assert_eq!(diagnostic_snapshot(&db,"a").unwrap()["reason"],"queued");
+        db.execute("INSERT INTO download_transport_state VALUES('a','now',NULL,'network')",[]).unwrap();
+        assert_eq!(diagnostic_snapshot(&db,"a").unwrap()["reason"],"transport_network");
+        assert_eq!(diagnostic_snapshot(&db,"a").unwrap()["queuedEvents"],1);
+        assert_eq!(diagnostic_snapshot(&db,"b").unwrap()["queuedEvents"],0);
+        assert!(!diagnostic_snapshot(&db,"a").unwrap().to_string().contains("opaque-attempt"));
+        db.execute("DELETE FROM download_outbox WHERE owner='a'",[]).unwrap();db.execute("UPDATE download_transport_state SET last_delivery='later',last_error=NULL WHERE owner='a'",[]).unwrap();
+        assert_eq!(diagnostic_snapshot(&db,"a").unwrap()["reason"],"reported");
+    }
     #[test] fn imagery_failures_use_native_error_and_keep_anonymous_kind_without_resource_ids(){
         let mut db=Connection::open_in_memory().unwrap();schema(&db).unwrap();
         db.execute_batch("CREATE TABLE job_events(job_id TEXT,seq INTEGER,body TEXT);INSERT INTO job_events VALUES('private-job',1,'{\"errorCode\":\"SOURCE_NETWORK\"}');INSERT INTO download_telemetry_consent VALUES('owner',1,'now');INSERT INTO download_observations(owner,resource,state,stamp) VALUES('owner','imagery:private-job','downloading','2026-10-18T00:00:00Z'),('owner','imagery:private-job','failed','2026-10-18T00:01:00Z');").unwrap();

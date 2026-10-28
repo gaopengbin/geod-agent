@@ -24,6 +24,23 @@ impl geod_vector::VectorProjector for Projector {
     }
 }
 pub(crate) fn normalize(value:&str)->Result<String,AppError>{geod_core::crs::normalize(value).map_err(|e|workspace_error(e.code,e.message))}
+pub(crate) fn imagery_target(value:&str,formats:&[geod_task_engine::OutputFormat])->Result<String,AppError>{
+    let value=normalize(value)?;
+    if value!="EPSG:3857"&&formats.iter().any(|f|matches!(f,geod_task_engine::OutputFormat::Tiles|geod_task_engine::OutputFormat::Mbtiles|geod_task_engine::OutputFormat::GeoPackage)){
+        return Err(workspace_error("OUTPUT_CRS_FORMAT_CONFLICT","原始瓦片、MBTiles 和瓦片 GeoPackage 固定使用 EPSG:3857；安装转换组件不能解决此冲突。请明确选择保留原生瓦片或改用可重投影的影像格式，未自动修改要求。"));
+    }
+    validate(&value,true)
+}
+#[cfg(test)]mod format_preflight_tests{
+    use super::*;
+    #[test]fn incompatible_tile_crs_is_rejected_before_optional_gis_runtime_is_needed(){
+        use geod_task_engine::OutputFormat;
+        for format in [OutputFormat::Tiles,OutputFormat::Mbtiles,OutputFormat::GeoPackage]{
+            assert_eq!(imagery_target("EPSG:4326",&[format]).unwrap_err().code,"OUTPUT_CRS_FORMAT_CONFLICT");
+            assert_eq!(imagery_target("EPSG:3857",&[format]).unwrap(),"EPSG:3857");
+        }
+    }
+}
 pub(crate) fn validate(value:&str,raster:bool)->Result<String,AppError>{
     let value=normalize(value)?;
     if value==if raster{"EPSG:3857"}else{"EPSG:4326"}{return Ok(value);}

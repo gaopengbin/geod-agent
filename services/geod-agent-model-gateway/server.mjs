@@ -305,7 +305,7 @@ export function createGatewayServer(config, { fetchImpl = fetch } = {}) {
       if (request.method === "GET" && url.pathname === "/api/agent/usage") return json(response, 200, ledger.usage(userId));
       if (request.method === 'GET' && url.pathname === '/api/agent/sponsors') return json(response,200,sponsorCatalogue(config.sponsors??[],ledger,userId));
       if (request.method === "GET" && url.pathname === "/api/agent/capabilities") return json(response, 200, {
-        protocol: "geod-codex-v1", model: config.model, provider: "DeepSeek", contextWindow: config.contextWindow,downloadEventDetails:1,agentActivityEvents:1,
+        protocol: "geod-codex-v1", model: config.model, provider: "DeepSeek", contextWindow: config.contextWindow,downloadEventDetails:2,agentActivityEvents:1,downloadDiagnostics:1,
         contextWindowSource: "gatewayConfigured", maxOutputTokens: config.maxOutputTokens,
         reasoning: config.codexThinking === "enabled", inputModalities: ["text"], requestMaxBytes: 4_000_000,
         ...(defaultSponsorInfo(config,userId)??{}),

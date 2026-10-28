@@ -70,6 +70,7 @@ pub(crate) enum DataRequest {
     Vector(VectorSpec),
     Tiles3d(Tiles3dSpec),
     Online(crate::online_exports::OnlineSpec),
+    Raster(crate::raster_exports::RasterSpec),
 }
 impl DataRequest {
     fn kind(&self) -> &'static str {
@@ -77,6 +78,7 @@ impl DataRequest {
             Self::Vector(_) => "vector",
             Self::Tiles3d(_) => "tiles3d",
             Self::Online(_) => "online",
+            Self::Raster(_) => "raster",
         }
     }
     fn url(&self) -> &str {
@@ -84,6 +86,7 @@ impl DataRequest {
             Self::Vector(r) => r.source.url(),
             Self::Tiles3d(r) => &r.tileset_url,
             Self::Online(r) => r.source_url.as_deref().unwrap_or(""),
+            Self::Raster(r)=>&r.source_url,
         }
     }
     fn bounds(&self) -> Option<[f64; 4]> {
@@ -91,11 +94,13 @@ impl DataRequest {
             Self::Vector(r) => Some(r.bounds),
             Self::Tiles3d(r) => r.bounds,
             Self::Online(r) => r.bounds,
+            Self::Raster(r)=>Some(r.bounds),
         }
     }
     fn validate(&self) -> Result<(Self, u64), AppError> {
         match self {
             Self::Online(r) => Ok((Self::Online(r.validate()?),0)),
+            Self::Raster(r)=>{let value=r.validate()?;if value.prepared.is_none(){return Err(workspace_error("RASTER_PLAN_NOT_READY","原始栅格尚未取得可核实的数据快照"));}Ok((Self::Raster(value),1))},
             Self::Vector(r) => {
                 let plan = geod_vector::plan(r.request.clone()).map_err(vector_error)?;
                 Ok((Self::Vector(VectorSpec{request:plan.request,connection_id:r.connection_id.clone(),connection_revision:r.connection_revision.clone()}), plan.tile_count))
@@ -391,6 +396,7 @@ pub(crate) fn data_download_plan(
     match &mut request {
         DataRequest::Vector(spec)=>{let crs=spec.target_crs.as_ref().or(workspace.output_crs.as_ref()).ok_or_else(||workspace_error("OUTPUT_CRS_REQUIRED","请通过选项卡确认成果坐标系"))?;spec.target_crs=Some(crate::export_crs::validate(crs,false)?);},
         DataRequest::Online(spec)=>{let crs=spec.target_crs.as_ref().or(workspace.output_crs.as_ref()).ok_or_else(||workspace_error("OUTPUT_CRS_REQUIRED","请通过选项卡确认成果坐标系"))?;spec.target_crs=Some(crate::export_crs::validate(crs,false)?);},
+        DataRequest::Raster(spec)=>{let crs=spec.target_crs.as_ref().or(workspace.output_crs.as_ref()).ok_or_else(||workspace_error("OUTPUT_CRS_REQUIRED","请确认原始栅格成果坐标系"))?;spec.target_crs=Some(crate::export_crs::validate(crs,true)?);},
         _=>{}
     }
     if let DataRequest::Vector(spec)=&mut request {
@@ -430,6 +436,15 @@ pub(crate) fn data_download_plan(
         spec.source_boundary=if let Some(id)=&spec.source_boundary_id {Some(crate::boundary_inputs::boundaries_get(state.clone(),conversation_id.clone(),id.clone())?)}else{None};
         if spec.source_boundary.is_some(){spec.source_crs=Some("EPSG:4326".into());}
         spec.bind(&app,&owner)?;
+    }
+    if let DataRequest::Raster(spec)=&mut request{
+        let db=open_data_db(&state.db_path)?;
+        let existing=db.query_row(&format!("{SELECT} WHERE owner_id=?1 AND conversation_id=?2 AND idempotency_key=?3"),params![owner,conversation_id,idempotency_key],row).optional().map_err(storage_error)?;
+        if let Some(existing)=existing{if let DataRequest::Raster(previous)=&existing.request{if previous.unprepared().validate()?==spec.unprepared().validate()?&&existing.title==title.trim(){check_binding(&db,&existing,&workspace.directory)?;return Ok(existing);}}return Err(workspace_error("IDEMPOTENCY_CONFLICT","相同任务标识对应不同的原始栅格请求"));}
+        // No database write transaction is held during metadata HTTP. Never
+        // trust a caller-supplied snapshot in place of the provider catalog.
+        let _readiness=crate::python_runtime::gis_command("",&["gis-common","gis-raster"])?;
+        *spec=tauri::async_runtime::block_on(spec.prepare())?;
     }
     let (request, total) = request.validate()?;
     let mut connection = open_data_db(&state.db_path)?;
@@ -751,6 +766,7 @@ async fn execute(
     };
     match &task.request {
         DataRequest::Online(spec)=>crate::online_exports::run(app,owner,spec,Path::new(&task.output_dir),&task.plan_hash,control.vector.clone(),|phase,completed,total,bytes|report(DataProgress{phase:phase.into(),completed,total,bytes,cache_hits:0,failures:0})).await,
+        DataRequest::Raster(spec)=>crate::raster_exports::run(spec,Path::new(&task.output_dir),&task.plan_hash,control.vector.clone(),|phase,completed,total,bytes|report(DataProgress{phase:phase.into(),completed,total,bytes,cache_hits:0,failures:0})).await,
         DataRequest::Vector(request) => {
             let plan = geod_vector::plan(request.request.clone()).map_err(|e| e.to_string())?;
             let mut options =
@@ -903,6 +919,7 @@ fn verified(task: &DataTask) -> Result<Value, AppError> {
 fn verified_files(task: &DataTask) -> Result<Value, AppError> {
     match &task.request {
         DataRequest::Online(spec)=>crate::online_exports::inspect(Path::new(&task.output_dir),spec,&task.plan_hash).map_err(|e|workspace_error("DATA_INSPECTION_FAILED",e)),
+        DataRequest::Raster(spec)=>crate::raster_exports::inspect(Path::new(&task.output_dir),spec,&task.plan_hash).map_err(|e|workspace_error("DATA_INSPECTION_FAILED",e)),
         DataRequest::Vector(request) => {
             let manifest =
                 geod_vector::inspect(Path::new(&task.output_dir)).map_err(vector_error)?;
@@ -969,6 +986,10 @@ pub(crate) fn data_download_open_directory(
     let db = open_data_db(&state.db_path)?;
     let task = get(&db, &owner(&services)?, &conversation_id, &task_id)?;
     check_binding(&db, &task, &workspace.directory)?;
+    if task.kind=="raster"&&matches!(task.status.as_str(),"failed"|"interrupted"|"cancelled"){
+        let folder=crate::raster_exports::work_directory(Path::new(&task.output_dir),&task.plan_hash).map_err(|e|workspace_error("OUTPUT_NOT_READY",e))?;
+        return crate::open_output_directory(&app,&workspace.directory,&folder.to_string_lossy());
+    }
     if !matches!(task.status.as_str(), "completed" | "partial") {
         return Err(workspace_error("OUTPUT_NOT_READY", "成果尚未生成"));
     }
@@ -991,6 +1012,7 @@ pub(crate) fn data_download_preview(
     check_binding(&db, &task, &workspace.directory)?;
     let manifest = verified(&task)?;
     let (entrypoint, resources, feature_count, truncated) = match &task.request {
+        DataRequest::Raster(_)=>return Err(workspace_error("RASTER_VIEWER_EXTERNAL","原始数值栅格已交付；请从成果目录在 QGIS 等栅格软件中打开 GeoTIFF。预览图仅供展示，不替代数值文件")),
         DataRequest::Online(_)=>{
             let preview=manifest["assets"].as_array().and_then(|a|a.iter().find(|a|a["kind"]=="preview")).ok_or_else(||workspace_error("DATA_PREVIEW_MISSING","在线矢量成果缺少预览"))?;
             let path=preview["path"].as_str().ok_or_else(||workspace_error("DATA_PREVIEW_MISSING","在线预览记录无效"))?.to_owned();

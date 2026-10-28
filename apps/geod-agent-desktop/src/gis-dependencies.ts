@@ -2,9 +2,13 @@ export interface GisRequirement {id:string;reason:string;requireTools:boolean}
 export function gisRequirement(name:string,args:Record<string,unknown>,onFailure=false):GisRequirement|null {
   if(name==='plan_imagery'||name==='plan_imagery_batch'){
     const crs=(args.exportOptions as {targetCrs?:string}|undefined)?.targetCrs;
+    // Native tile containers cannot be reprojected. Let native format/CRS
+    // validation explain the conflict before offering a pointless installer.
+    if(Array.isArray(args.outputFormats)&&args.outputFormats.some(f=>['tiles','mbtiles','gpkg'].includes(String(f))))return null;
     return onFailure||crs&&crs!=='EPSG:3857'?{id:'gis-raster-convert',reason:'按已选坐标系导出影像',requireTools:false}:null;
   }
   if(name==='data_download_plan'&&args.kind!=='tiles3d'){
+    if(args.kind==='raster')return{id:'gis-raster-convert',reason:'保留原始数值波段并按边界导出栅格',requireTools:false};
     return ['online','boundary'].includes(String(args.kind))||onFailure||args.targetCrs&&args.targetCrs!=='EPSG:4326'?{id:'gis-vector-convert',reason:'读取并导出矢量数据',requireTools:false}:null;
   }
   if(onFailure&&name==='data_input_read')return{id:'gis-import',reason:'读取当前数据范围',requireTools:false};

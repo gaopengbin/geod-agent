@@ -3,6 +3,14 @@ from pathlib import Path
 from datetime import datetime,timezone
 spec=importlib.util.spec_from_file_location('activity',Path(__file__).with_name('agent_activity_report.py'));report=importlib.util.module_from_spec(spec);spec.loader.exec_module(report)
 class ActivityReportTest(unittest.TestCase):
+    def test_download_reporting_diagnostic_is_distinct_from_outcome_and_excludes_internal(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);accounts=root/'accounts.json';ledger=root/'agent.sqlite'
+            accounts.write_text(json.dumps({'users':[{'id':'a','email':'user@example.test','createdAt':'2026-10-20T00:00:00Z'},{'id':'test','email':'qa@example.test','createdAt':'2026-10-20T00:00:00Z','isTestAccount':True}]}),encoding='utf8')
+            db=sqlite3.connect(ledger);db.executescript("CREATE TABLE model_generations(user_id,funding_scope,state,created_at);CREATE TABLE agent_events(user_id,state,download_kind,occurred_at);CREATE TABLE agent_activity_events(user_id,kind,state,reason,input_tokens,output_tokens,usage_known,occurred_at);INSERT INTO agent_activity_events VALUES('a','download_status','started','consent_disabled',NULL,NULL,0,'2026-10-20T01:00:00Z'),('test','download_status','failed','transport_network',NULL,NULL,0,'2026-10-20T01:00:00Z');");db.close()
+            result=report.collect(until=datetime(2026,10,21,tzinfo=timezone.utc),accounts=str(accounts),ledger=str(ledger));item=result['new_user_activity'][0]
+            self.assertEqual(item['download_reporting_status']['reason'],'consent_disabled');self.assertEqual(item['reported_downloads'],[])
+            rows=result['usage_excluding_owner_and_internal']['download_reporting_diagnostics'];self.assertEqual(len(rows),1);self.assertEqual(rows[0]['reason'],'consent_disabled');self.assertEqual(rows[0]['accounts'],1)
     def test_missing_personal_coverage_is_not_zero_and_owner_is_excluded(self):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp);accounts=root/'accounts.json';ledger=root/'agent.sqlite'

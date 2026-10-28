@@ -84,6 +84,7 @@ import { DataInputPanel, vectorAccept, vectorFiles } from "./data-input-panel";
 import { DATA_INPUT_ID, dataInputTools, executeDataInputTool } from "./data-input-tools";
 import { attachBoundaryLookup, rangeSummary, saveBoundary } from "./boundary-tools";
 import { compactPlan, planImagery } from "./imagery-planning";
+import {PlanningConflicts,planningConflictKey,conflictQuestions,isPlanningOutputQuestion,type PlanningContext} from './planning-conflicts';
 import type { BoundarySummary } from "./api";
 import { BoundaryPicker } from "./boundary-picker";
 import {ImageAttachments,imageFiles,imageAccept} from "./image-attachments";
@@ -178,6 +179,23 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
     return () => window.clearTimeout(timer);
   }, [backgroundNotice]);
   const displayRef = session.ref<DisplayMessage[]>("displayRef",display);
+  const planningConflicts=session.ref('planningConflicts',new PlanningConflicts(localStateStore,planningConflictKey(accountId??'',conversationId))).current;
+  const planningOutputSynced=session.ref<string|undefined>('planningOutputSynced',undefined);
+  async function syncPlanningOutput(){
+    const conditions=planningConflicts.projection(),serialized=JSON.stringify(conditions);
+    if(planningOutputSynced.current===serialized)return;
+    if(!accountId||!conversationId)throw new Error('账号与会话尚未就绪，规划条件已保留。');
+    await flushLocalState();await api.planningOutputSet(accountId,conversationId,conditions);planningOutputSynced.current=serialized;
+  }
+  async function savePlanningQuestion(cause:unknown,toolCallId?:string){
+    if(!cause||typeof cause!=='object'||!('planningConflict'in cause))return;
+    const conflict=planningConflicts.view().active;if(!conflict)return;
+    const id='planning-question-'+conflict.id,existing=displayRef.current.find(m=>m.id===id);
+    if(!existing)appendDisplay({id,role:'tool',content:'规划条件需要确认',turnId:codexRun.current??undefined,userInput:{requestId:id,questions:conflictQuestions(conflict),status:'pending',userMessageId:conflict.origin,userText:conflict.userText,toolCallId,createdAt:new Date().toISOString(),resolution:{kind:'planningConflict',conflictId:conflict.id}}});
+    else if(existing.userInput?.status==='cancelled')replaceDisplay(id,{userInput:{...existing.userInput,status:'pending',reply:undefined}});
+    if(!existing||existing.userInput?.status==='pending'||existing.userInput?.status==='cancelled')setOpenInputId(id);
+    await persistQuestionTranscript();
+  }
   const registryCandidates = session.ref("registryCandidates",new Map<string, RegistryMcpItem>());
   const skillCandidates = session.ref("skillCandidates",new Map<string, OnlineSkillCandidate | SkillSourceCandidate>());
   const [pendingId, setPendingId] = useConversationState(session,"pendingId","");
@@ -274,6 +292,8 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
     if (intent.clear) await api.workspaceSetOutputCrs(conversationId, null);
     else if (intent.session && intent.crs) await api.workspaceSetOutputCrs(conversationId, intent.crs);
     exportCrsPreferenceProcessed.current = messageId;
+    const id=messageId??crypto.randomUUID(),messages=displayRef.current.some(m=>m.id===id)?displayRef.current:[...displayRef.current,{id,role:'user' as const,content:text}];
+    planningConflicts.observeHuman({messages,userMessageId:id});await syncPlanningOutput();
   }
   async function rememberCrsAnswer(questions: ReturnType<typeof inputQuestions>, reply: ReturnType<typeof validatedInputReply>,userMessageId=[...displayRef.current].reverse().find(item=>item.role==='user')?.id) {
     const choice=crsFromAnswers(questions,reply);
@@ -284,6 +304,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
   async function establishedCrsInput(questions:ReturnType<typeof inputQuestions>,userMessageId?:string){
     // Do not query plan state for unrelated questions.
     if(!hasReusableCrsQuestion(questions))return reuseCrsQuestions(questions,null);
+    try{const selected=planningConflicts.before({},{messages:displayRef.current,userMessageId}).targetCrs;if(selected)return reuseCrsQuestions(questions,{crs:selected,session:false,source:'acceptedAnswer'});}catch{/* An unresolved format/CRS pair still needs its own actual decision. */}
     const workspace=await api.workspaceGet(conversationId);
     const inherited=await revisionCrsForQuestions({messages:displayRef.current,userMessageId,planIds:planIdsRef.current,activeBoundary:boundaryRef.current},api.plansGet);
     return reuseCrsQuestions(questions,knownCrsChoice(displayRef.current,userMessageId,workspace.outputCrs,inherited));
@@ -339,9 +360,15 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
       if(['reserved','streaming','pending_reconcile'].includes(generation.state))throw new Error('模型请求还在核对中，请稍后检查。');
       await releasePending();
     }
-    await rememberCrsAnswer(record.questions,reply,record.userMessageId);
+    const planningDecision=planningConflicts.accept(record,reply);
+    const planningAnswer=!planningDecision&&planningConflicts.observeAnswer(record,reply);
+    if(planningDecision||planningAnswer)await syncPlanningOutput();
+    if(!planningDecision)await rememberCrsAnswer(record.questions,reply,record.userMessageId);
     replaceDisplay(id,{userInput:{...record,status:reply?'answered':'cancelled',reply:reply??undefined,draft:undefined}});
     await persistQuestionTranscript();setOpenInputId(null);
+    if(planningDecision==='deferred'||planningDecision==='unrecognized'){
+      appendDisplay({id:'planning-deferred-'+crypto.randomUUID(),role:'assistant',phase:'final',content:planningDecision==='deferred'?'已保留原要求，未继续规划或下载。请明确说明新的格式或坐标系后再继续。':'这次回答尚未形成明确的新组合；原要求保留，未继续规划。请明确新的输出格式或坐标系。'});await persistQuestionTranscript();return;
+    }
     if(resolve){codexRequestResolve.current.delete(record.requestId);if(reply)setLiveActivity("正在继续处理…");resolve(reply??{answers:{}});}
     else if(reply)await send(userInputReplyText(record,reply),undefined,false,undefined,crsFromAnswers(record.questions,reply));
     if(!reply&&resolve){userInputGate.current.cancelled=true;if(codexRun.current)void api.codexCommand(codexRun.current,{type:'interrupt'}).catch(cause=>setError(errorMessage(cause)));}
@@ -901,6 +928,10 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
     const inputBlock = userInputGate.current.block(call.function.name);
     if (inputBlock) return inputBlock;
     try {
+      let planningCrs:string|undefined;
+      if(call.function.name==='plan_imagery'||call.function.name==='plan_imagery_batch'){
+        const prepared=planningConflicts.before(args,{messages:displayRef.current,userMessageId});args=prepared.args;planningCrs=prepared.targetCrs;
+      }
       if (isExportPlan(call.function.name,args)) {
         await ensureExportRuntime(api.runtimeCapabilities);
         // A missing source credential blocks planning before unrelated export questions.
@@ -920,7 +951,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
         const inherited=!accepted?await inheritedImageryCrs({messages:displayRef.current,userMessageId:human?.id,toolName:call.function.name,args,planIds:planIdsRef.current,activeBoundary:boundaryRef.current},api.plansGet):null;
         let answer=accepted??inherited;
         const raster=call.function.name!=="data_download_plan";
-        let crs=resolveExportCrs(intent,answer?.crs,workspace.outputCrs,userInputGate.current.allowsChoices,raster);
+        let crs=planningCrs??resolveExportCrs(intent,answer?.crs,workspace.outputCrs,userInputGate.current.allowsChoices,raster);
         if(!crs) {
           if(userInputGate.current.waiting) return {error:"USER_INPUT_PENDING",message:"等待用户选择坐标系，不重复询问。"};
           const questions=inputQuestions(exportCrsQuestions.map(question=>({...question,header:t(question.header),question:t(question.question),options:question.options?.map(option=>({...option,label:t(option.label),description:option.description ? t(option.description) : undefined}))})));
@@ -947,6 +978,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
       if (call.function.name === "ask_user") {
         let questions = inputQuestions(args.questions);
         if (questions.some(question => question.isSecret)) return { error: "SECRET_INPUT_NOT_SUPPORTED", message: "认证信息请通过对应的本机认证表单填写。" };
+        if(planningConflicts.view().active&&questions.some(isPlanningOutputQuestion))planningConflicts.before({},{messages:displayRef.current,userMessageId});
         const accepted=reusableInputReply(questions,displayRef.current,userMessageId);
         if(accepted)return {...accepted,answeredBy:'user',reusedPreviousAnswer:true};
         const established=await establishedCrsInput(questions,userMessageId);
@@ -1197,7 +1229,9 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
         return rangeSummary(combined);
       }
       if (call.function.name === "plan_imagery_batch") {
-        const result = await planImagery(args, conversationId, nativeToolExecutionId(generationId,call.id), boundaryRef.current, true);
+        const ctx:PlanningContext={messages:displayRef.current,userMessageId,isCurrent:()=>requestRevision===humanRequestRevision.current};
+        const result = await planImagery(args, conversationId, nativeToolExecutionId(generationId,call.id), boundaryRef.current, true,(v,s,dispatch)=>planningConflicts.execute(v,s,ctx,dispatch));
+        const conflict=result.errors.find(e=>e.error&&typeof e.error==='object'&&'planningConflict'in e.error);if(conflict){await savePlanningQuestion(conflict.error,toolMessageId);return{error:conflict.error,requiresUserReview:true};}
         for (const item of result.plans) {
           assertPlanAvailable(localStateStore, accountId, conversationId, item.stored.planId);
           rememberPlan(item.stored, { userMessageId, toolMessageId, dataName: item.rangeName });
@@ -1214,8 +1248,15 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
           rememberPlan(previous);
           return compactPlan(previous, (await api.workspaceGet(conversationId)).permission);
         }
-        const result = await planImagery(args, conversationId, toolExecutionId, boundaryRef.current);
+        const ctx:PlanningContext={messages:displayRef.current,userMessageId,isCurrent:()=>requestRevision===humanRequestRevision.current};
+        const result = await planImagery(args, conversationId, toolExecutionId, boundaryRef.current,false,(v,s,dispatch)=>planningConflicts.execute(v,s,ctx,dispatch));
+        const conflict=result.errors.find(e=>e.error&&typeof e.error==='object'&&'planningConflict'in e.error);if(conflict){await savePlanningQuestion(conflict.error,toolMessageId);return{error:conflict.error,requiresUserReview:true};}
         if (!result.plans[0]) return { error: result.errors[0]?.error ?? "PLAN_NOT_CREATED" };
+        if(result.partition){
+          for(const item of result.plans)rememberPlan(item.stored,{userMessageId,toolMessageId,dataName:item.rangeName});
+          const permission=(await api.workspaceGet(conversationId)).permission;
+          return {partition:result.partition,plans:result.plans.map(item=>({...compactPlan(item.stored,permission),name:item.rangeName})),...(result.partition.canStoreAllParts===false?{error:'BATCH_DISK_INSUFFICIENT',message:'分片计划已保留，当前磁盘不足以同时容纳全部成果；请明确存储位置或分批迁出方式后再确认执行。'}:{})};
+        }
         const { stored: plan, rangeName } = result.plans[0];
         rememberPlan(plan, { userMessageId, toolMessageId, dataName: rangeName });
         return compactPlan(plan, (await api.workspaceGet(conversationId)).permission);
@@ -1261,7 +1302,8 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
         const id = stringArg(args.jobId);
         if (!id) return { error: "INVALID_JOB_ID" };
         const job = await api.jobsGet(id);
-        if (!job || !await ownsPlan(job.planId)) return { error: "JOB_NOT_IN_CONVERSATION" };
+        if(!job)return {error:'JOB_NOT_FOUND_IN_AGENT',message:'当前账号与会话未找到该标识，不能据此认定任务或成果丢失。请在 Agent 原会话和工作区核对或恢复任务记录，不要重复创建下载。'};
+        if (!await ownsPlan(job.planId)) return { error: "JOB_NOT_IN_CONVERSATION" };
         const [events, active, stored] = await Promise.all([api.jobsEvents(id, 0), api.jobsActive(), api.plansGet(job.planId)]);
         return jobStatusFacts(job, active.includes(id), events, stored?.plan.totalTiles ?? 0);
       }
@@ -1284,6 +1326,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
       }
       return { error: "TOOL_NOT_ALLOWED" };
     } catch (cause) {
+      if(cause&&typeof cause==='object'&&'planningConflict'in cause){await savePlanningQuestion(cause,toolMessageId);return{error:cause,requiresUserReview:true};}
       if (runtimeCompatibilityFailure(cause)) throw runtimeUpdateError();
       const code=cause&&typeof cause==='object'&&'code'in cause?String(cause.code):'';
       if(['SOURCE_CREDENTIAL_REQUIRED','SOURCE_CREDENTIAL_UNAVAILABLE','SOURCE_CREDENTIAL_STORE'].includes(code)){
@@ -1589,7 +1632,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
     const requestId=queuedRequestId(item),submitted={...item,delivery:{state:'sending' as const,clientRequestId:requestId,runId:run}};
     changeQueue(chat=>({...chat,queuedInputs:chat.queuedInputs?.map(row=>row.id===item.id?submitted:row)}));
     setQueueSendingId(item.id);
-    try{await rememberHumanCrsPreference(item.text);applyFollowupReceipt(await api.codexFollowupSend(run,conversationId,requestId,modelUserText(item.text,boundaryRef.current)+documentContext(item.documents??[]),item.text,item.images??[],item.documents??[]));}
+    try{await rememberHumanCrsPreference(item.text,`queued-${item.id}`);applyFollowupReceipt(await api.codexFollowupSend(run,conversationId,requestId,modelUserText(item.text,boundaryRef.current)+documentContext(item.documents??[]),item.text,item.images??[],item.documents??[]));}
     catch(cause){
       // An IPC rejection is not proof that Core rejected the message. Keep its ID locked until reconciliation.
       changeQueue(chat=>({...chat,queuedInputs:chat.queuedInputs?.map(row=>row.id===item.id?{...submitted,delivery:{...submitted.delivery,state:'outcome-unknown',message:errorMessage(cause)}}:row)}));setQueueSendingId(null);
@@ -1745,8 +1788,8 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
         displayRef.current=completeCodexReply(displayRef.current,runId,result).map(item=>item.turnId===runId&&item.phase==='final'?{...item,turnDurationMs:result.durationMs,...(result.taskFeedback?{nativeFeedback:result.taskFeedback}:{})}:item);setDisplay(displayRef.current);
         if(needsTerminalFeedback(displayRef.current,runId)){
           setLiveActivity(getLocale()==='en'?'Checking the execution outcome…':'正在核对执行结果…');
-          const feedback=await terminalTaskFeedback(displayRef.current,runId,{imagery:()=>api.imageryTasksList(conversationId),data:()=>dataDownloads.list(conversationId),active:api.jobsActive},{english:getLocale()==='en'});
-          const notice=turnOutcomeMessage(runId,{status:'incomplete',message:feedback.reason,code:'TURN_ENDED_WITHOUT_REPLY',durationMs:result.durationMs,feedback});
+          const feedback=await terminalTaskFeedback(displayRef.current,runId,{imagery:()=>api.imageryTasksList(conversationId),data:()=>dataDownloads.list(conversationId),active:api.jobsActive},{code:'MODEL_EMPTY_RESPONSE',english:getLocale()==='en'});
+          const notice=turnOutcomeMessage(runId,{status:'incomplete',message:feedback.reason,code:'MODEL_EMPTY_RESPONSE',durationMs:result.durationMs,feedback});
           appendDisplay(displayRef.current.some(m=>m.id===notice.id)?{...notice,id:notice.id+'-final'}:notice);
         }
       }
@@ -1898,7 +1941,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
       </div>;
     })}</div>
     {legacyImportReady && <div className="conversation-legacy-import"><p>{t("发现旧版未归属账号的本机对话。")}</p><button type="button" onClick={importOlderChats} disabled={busy}>{t("导入到当前账号")}</button></div>}
-    <AccountMenu open={accountMenuOpen} onOpenChange={setAccountMenuOpen} connected={status.state === "connected"} userId={status.userId} profile={auth.profile} profileError={auth.profileError} onProfileRefresh={auth.refreshProfile} usage={usage} busy={busy||runningIds.length>0} theme={theme} onModels={() => onMainViewChange("models")} onNetwork={onOpenNetwork} onCache={onOpenCache} onTheme={onToggleTheme} onLogout={() => void logout()} telemetryEnabled={downloadTelemetry.enabled} onTelemetry={downloadTelemetry.toggle} activityEnabled={activityTelemetry.enabled} onActivity={activityTelemetry.toggle}/>
+    <AccountMenu open={accountMenuOpen} onOpenChange={setAccountMenuOpen} connected={status.state === "connected"} userId={status.userId} profile={auth.profile} profileError={auth.profileError} onProfileRefresh={auth.refreshProfile} usage={usage} busy={busy||runningIds.length>0} theme={theme} onModels={() => onMainViewChange("models")} onNetwork={onOpenNetwork} onCache={onOpenCache} onTheme={onToggleTheme} onLogout={() => void logout()} telemetryEnabled={downloadTelemetry.enabled} onTelemetry={downloadTelemetry.toggle} telemetryDiagnostic={downloadTelemetry.diagnostic} telemetryError={downloadTelemetry.error} telemetryBusy={downloadTelemetry.busy} activityEnabled={activityTelemetry.enabled} onActivity={activityTelemetry.toggle}/>
   </aside><section className={`agent-panel agent-primary ${emptyConversation ? "agent-start" : ""}`} aria-label={t("GeoD Agent 智能助手")} hidden={mainView !== "conversation"}>
     <div className="agent-header"><strong>{currentChat?chatTitle(currentChat):t("新对话")}</strong>{engine==="codex"&&display.some(m=>m.role==="assistant"&&m.phase!=="progress")&&<UiTooltip content={t("复制已完成的对话，创建独立分支")}><Button variant="ghost" size="icon" aria-label={t("创建会话分支")} disabled={busy||!!pendingId||!workspace} onClick={()=>void forkChat()}><GitBranch size={16}/></Button></UiTooltip>}</div>
     {error && <div className="agent-error" role="alert"><CircleAlert size={16} />{localize(error)}</div>}

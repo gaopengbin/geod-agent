@@ -11,6 +11,7 @@ use std::path::{Component, Path};
 pub mod ledger;
 pub mod boundary_store;
 pub mod schedule_store;
+pub mod partition;
 
 const MAX_PLAN_TILES: u64 = 1_000_000;
 const MAX_PLAN_RGBA_BYTES: u64 = 1024 * 1024 * 1024 * 1024;
@@ -281,6 +282,9 @@ pub fn plan(
         return Err(PlanError::new("INVALID_SPEC", "JPEG quality must be between 1 and 100"));
     }
     if let Some(options) = &mut spec.export_options {
+        if options.pixel_value_mode==Some(geod_core::imagery::PixelValueMode::Native)&&options.elevation_encoding.is_none(){
+            return Err(PlanError::new("RASTER_ANALYSIS_UNSUPPORTED","This imagery pipeline exports rendered RGB/RGBA pixels and cannot preserve original scientific bands or radiance values. Use a raw scientific raster acquisition workflow, or explicitly choose visualization output; a GeoTIFF filename does not make rendered imagery analytical data."));
+        }
         if let Some(crs) = &mut options.target_crs {
             *crs = geod_core::crs::normalize(crs).map_err(|e|PlanError::new(e.code,e.message))?;
             if crs != "EPSG:3857" && spec.output_formats.iter().any(|f|matches!(f,OutputFormat::Mbtiles | OutputFormat::GeoPackage | OutputFormat::Tiles)) {

@@ -8,6 +8,8 @@ use tauri::State;
 mod wayback;
 #[path = "google_history.rs"]
 mod google_history;
+#[path="wmts_inspect.rs"]
+mod wmts_inspect;
 
 pub(crate) fn initialize(directory: std::path::PathBuf) { wayback::initialize(directory); }
 
@@ -30,7 +32,7 @@ pub(crate) fn tools() -> Value {
     let mut result = json!({"connectorId": SOURCE_CREATOR_ID, "name": "图源接入工具", "kind": "builtin", "tools": [
         {"name":"source_presets", "description":"列出影像、底图、Terrarium 高程、天地图认证连接及MVT矢量预设。栅格presets需source_configure后规划；保留coordinateSystem和subdomains。vectorPresets直接用data_download_plan kind=mvt与urlTemplate作为sourceUrl，不登记为影像。OpenFreeMap实时解析官方TileJSON，失败不会返回过期地址。", "inputSchema":{"type":"object","properties":{},"additionalProperties":false}},
         {"name":"search_sources", "description":"搜索在线 ArcGIS 影像服务目录，返回候选服务链接与描述。只读。", "inputSchema":{"type":"object","properties":{"query":{"type":"string","description":"图源名称、地区或影像用途"}},"required":["query"],"additionalProperties":false}},
-        {"name":"inspect_source", "description":"读取公开 HTTPS 服务或文档，识别 GeoD 兼容性和技术参数。支持缓存 MapServer、ImageServer、XYZ/TMS 模板及普通文档。可给瓦片模板指定 sampleZ/sampleX/sampleY 检查一张覆盖内瓦片；带{s}的模板同时传subdomains。返回可配置的技术参数，不保存配置。", "inputSchema":{"type":"object","properties":{"url":{"type":"string"},"subdomains":{"type":"array","maxItems":16,"items":{"type":"string","minLength":1,"maxLength":32,"pattern":"^[A-Za-z0-9-]+$"}},"sampleZ":{"type":"integer","minimum":0,"maximum":22},"sampleX":{"type":"integer","minimum":0},"sampleY":{"type":"integer","minimum":0}},"required":["url"],"additionalProperties":false}},
+        {"name":"inspect_source", "description":"读取公开 HTTPS 服务元数据，支持 MapServer、ImageServer、XYZ/TMS、WMTS GetCapabilities XML 及文档。WMTS 用 query 过滤图层、offset/limit 翻页；返回提供方实际 ResourceURL、矩阵标识、格式与时间域。time 只用于已确认的时间选择。不要猜 .png/.lerc/.mvt 扩展或矩阵名。sampleZ/X/Y 可检查一张真实瓦片。返回客户端数值/渲染能力，不保存配置。", "inputSchema":{"type":"object","properties":{"url":{"type":"string"},"query":{"type":"string","maxLength":200},"offset":{"type":"integer","minimum":0},"limit":{"type":"integer","minimum":1,"maximum":32},"time":{"type":"string","maxLength":40},"subdomains":{"type":"array","maxItems":16,"items":{"type":"string","minLength":1,"maxLength":32,"pattern":"^[A-Za-z0-9-]+$"}},"sampleZ":{"type":"integer","minimum":0,"maximum":22},"sampleX":{"type":"integer","minimum":0},"sampleY":{"type":"integer","minimum":0}},"required":["url"],"additionalProperties":false}},
         {"name":"lookup_boundary", "description":"查询中国省、市、区县行政边界，例如北京、天津、海淀区，可按六位区划代码查询，同名区域用 parent 指定所属省市。使用本机随应用提供的 AreaCity 2026-04-03 边界库，无需网络；将 GCJ-02 转为 WGS84，自动附到当前对话影像计划用于裁剪。返回数据版本，不能称为实时最新；不要求用户提供工作区 GeoJSON。", "inputSchema":{"type":"object","properties":{"query":{"type":"string","description":"行政区名称或六位区划代码，例如北京市或110000"},"parent":{"type":"string","description":"同名区域的所属省市，例如北京市"}},"required":["query"],"additionalProperties":false}}
         ,{"name":"lookup_boundaries", "description":"一次查询多个中国行政区名称或编码。每个成功范围独立保存并返回 boundaryId，不覆盖之前的范围。用 plan_imagery_batch 按区下载或合并裁剪；同名区县可用 parent。返回实际缺失或歧义，不猜测。", "inputSchema":{"type":"object","properties":{"queries":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":32},"parent":{"type":"string"}},"required":["queries"],"additionalProperties":false}},
         {"name":"lookup_neighbors", "description":"依据 AreaCity 2026-04-03 实际边界查询同层级相邻行政区。只有共享边界线段才算相邻，点接触或包围盒相交不算。返回名称、编码和来源，不附加几何。随后用 lookup_boundaries 查询目标及相邻区域编码，再规划。", "inputSchema":{"type":"object","properties":{"query":{"type":"string"},"parent":{"type":"string"}},"required":["query"],"additionalProperties":false}}
@@ -125,7 +127,17 @@ fn public_url(raw: &str) -> Result<Url, AppError> {
     Ok(url)
 }
 
-struct Fetched { url: Url, status: u16, content_type: String, bytes: Vec<u8> }
+#[derive(Clone)]
+pub(crate) struct Fetched { pub(crate) url: Url, pub(crate) status: u16, pub(crate) content_type: String, pub(crate) bytes: Vec<u8> }
+pub(crate) async fn public_fetch(raw:&str,limit:usize)->Result<Fetched,AppError>{fetch_limit(public_url(raw)?,limit).await}
+async fn wmts_fetch(url:Url)->Result<Fetched,AppError>{
+    use std::sync::{Mutex,OnceLock};use std::collections::BTreeMap;use std::time::Instant;
+    static CACHE:OnceLock<Mutex<BTreeMap<String,(Instant,Fetched)>>>=OnceLock::new();let cache=CACHE.get_or_init(||Mutex::new(BTreeMap::new()));
+    let key=url.to_string();if let Some(found)=cache.lock().ok().and_then(|c|c.get(&key).filter(|(at,_)|at.elapsed()<Duration::from_secs(300)).map(|(_,v)|v.clone())){return Ok(found);}
+    let found=fetch_limit(url,8*1024*1024).await?;
+    if found.status==200{if let Ok(mut saved)=cache.lock(){if saved.len()>=4{saved.clear();}saved.insert(key,(Instant::now(),found.clone()));}}
+    Ok(found)
+}
 
 pub(crate) async fn viewport_tile(url: Url) -> Result<String, AppError> {
     use base64::Engine;
@@ -304,6 +316,12 @@ async fn inspect(args: &Value) -> Result<Value, AppError> {
     }
     let mut url = public_url(raw)?;
     let path = url.path().trim_end_matches('/').to_owned();
+    if path.to_lowercase().ends_with(".xml")||url.query_pairs().any(|(k,v)|k.eq_ignore_ascii_case("request")&&v.eq_ignore_ascii_case("GetCapabilities")){
+        let found=wmts_fetch(url).await?;
+        if found.status!=200{return Ok(json!({"url":found.url.as_str(),"httpStatus":found.status,"compatibility":"unconfirmed"}));}
+        let xml=std::str::from_utf8(&found.bytes).map_err(|_|error("SOURCE_XML_INVALID","WMTS XML 不是有效 UTF-8"))?;
+        let mut metadata=wmts_inspect::inspect(xml,args)?;metadata["url"]=json!(found.url.as_str());return Ok(metadata);
+    }
     let service = path.strip_suffix("/exportImage").unwrap_or(&path);
     let arcgis = ["/ImageServer", "/MapServer", "/FeatureServer"].iter().any(|suffix| service.ends_with(suffix));
     if arcgis {
@@ -329,6 +347,10 @@ async fn inspect(args: &Value) -> Result<Value, AppError> {
             "description":text(meta["description"].as_str().unwrap_or(""),2000),
             "copyrightText":text(meta["copyrightText"].as_str().unwrap_or(""),1200),
             "extent":meta.get("extent").or_else(|| meta.get("fullExtent")),"spatialReference":meta["spatialReference"],
+            "rasterMetadata":{"bandCount":meta["bandCount"],"pixelType":meta["pixelType"],"pixelSizeX":meta["pixelSizeX"],"pixelSizeY":meta["pixelSizeY"],"timeInfo":meta["timeInfo"],"hasMultidimensions":meta["hasMultidimensions"],"minValues":meta["minValues"],"maxValues":meta["maxValues"]},
+            "rasterFunctionInfos":meta["rasterFunctionInfos"],"catalogFields":meta["fields"].as_array().map(|v|v.iter().take(64).map(|f|json!({"name":f["name"],"type":f["type"],"alias":f["alias"]})).collect::<Vec<_>>()),
+            "rawRasterRoute":if image&&matches!(meta["pixelType"].as_str(),Some("F32"|"F64")){json!({"tool":"data_download_plan","kind":"raster","outputFormats":["geotiff"],"sourceUrl":url.as_str(),"functionSelection":"Choose the exact provider rasterFunction name for numeric/no-stretch data. The native planner verifies it against this list and pins a catalog item/time before approval.","resolution":"provider native pixel size; not an invented XYZ zoom","sampleNumericExportVerified":false})}else{Value::Null},
+            "clientExportContract":{"pixelType":"U8","bands":"rendered RGBA","preservesOriginalScientificBands":false,"preservesRadianceValues":false,"selectsTimeOrMosaicRule":false,"timeMeaning":"provider metadata time range is not proof of the selected exported image date","next":"For numerical radiance, elevation or multiband analysis, use a raw scientific raster acquisition workflow. Do not present an imagery GeoTIFF as original analytical bands. For map visualization, explicitly confirm that rendered imagery is acceptable."},
             "thumbnailExtents":thumbnail_extents,
             "candidate":if image {json!({"urlTemplate":endpoint,"scheme":"XYZ","tileSize":256,"minZoom":0,"maxZoom":18,"minIntervalMs":0})} else {cached.unwrap_or(Value::Null)},
             "next":if compatible {"使用 candidate 的参数保存图源配置，署名和备注选填"} else {"服务没有兼容的 Image 接口或标准 Web Mercator 栅格瓦片网格"}}));

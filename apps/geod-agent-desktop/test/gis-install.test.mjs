@@ -13,6 +13,7 @@ function fixture(install=async()=>{}) {
 test('dependency selection installs only the components needed by the operation',()=>{
   assert.equal(gisRequirement('plan_imagery',{exportOptions:{targetCrs:'EPSG:3857'}}),null);
   assert.equal(gisRequirement('plan_imagery_batch',{exportOptions:{targetCrs:'EPSG:4490'}}).id,'gis-raster-convert');
+  for(const format of ['tiles','mbtiles','gpkg'])for(const failure of [false,true])assert.equal(gisRequirement('plan_imagery',{outputFormats:[format],exportOptions:{targetCrs:'EPSG:4326'}},failure),null,'an incompatible tile CRS must reach native validation before an installer');
   assert.equal(gisRequirement('data_download_plan',{kind:'online',targetCrs:'EPSG:4326'}).id,'gis-vector-convert');
   assert.equal(gisRequirement('data_download_plan',{kind:'mvt',targetCrs:'EPSG:4326'}),null);
   assert.equal(gisRequirement('data_download_plan',{kind:'tiles3d'},true),null);

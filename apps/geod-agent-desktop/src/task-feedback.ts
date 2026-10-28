@@ -34,7 +34,8 @@ export async function terminalTaskFeedback(messages:DisplayMessage[],runId:strin
  for(const item of imagery??[])if(captured.ids.has(item.stored.planId)||item.job&&captured.ids.has(item.job.jobId))resources.push(item.job?{id:item.job.jobId,state:item.job.state,verified:item.job.state==='completed',active:active?active.includes(item.job.jobId):undefined}:{id:item.stored.planId,state:'pending',verified:false});
  for(const task of data??[])if(captured.ids.has(task.id))resources.push({id:task.id,state:task.status,verified:task.status==='completed',active:undefined});
  const pending=messages.some(m=>sameTurn(m,runId)&&m.userInput?.status==='pending');
- return buildTaskFeedback({code:code||(pending?'USER_INPUT_PENDING':captured.code),resources,factsKnown:imagery!==null&&data!==null,english});
+ const factsKnown=imagery!==null&&data!==null,recordedCompleted=factsKnown?(imagery??[]).filter(item=>item.job?.state==='completed').length+(data??[]).filter(item=>item.status==='completed').length:0;
+ return buildTaskFeedback({code:code||(pending?'USER_INPUT_PENDING':captured.code),resources,factsKnown,recordedCompleted,english});
 }
 
 /** A real final reply wins. Terminal Core status alone does not create a reply. */

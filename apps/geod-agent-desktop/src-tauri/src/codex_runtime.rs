@@ -502,7 +502,9 @@ async fn run_operation(
                         let imagery=crate::task_state_context::policy_snapshot(&state.db_path,&owner,&conversation_id);
                         let source_readiness=crate::source_auth::policy_snapshot(&state,&imagery);
                         let background=if background {json!({"running":true})}else{app.state::<crate::background_runtime::BackgroundClient>().observe().unwrap_or_else(|e|json!({"running":false,"error":e["code"]}))};
-                        json!({"permission":settings.permission,"outputCrs":settings.output_crs,"connectionsRevision":app.state::<crate::extensions::ExtensionState>().policy_revision(&owner).ok(),"imagery":imagery,"sourceReadiness":source_readiness,"backgroundRuntime":background})
+                        let capacity=geod_core::imagery::available_disk_bytes(std::path::Path::new(&settings.directory)).ok();
+                        use sha2::{Digest,Sha256};
+                        json!({"permission":settings.permission,"outputCrs":settings.output_crs,"planningOutput":crate::planning_requirements::snapshot(&state,&owner,&conversation_id),"connectionsRevision":app.state::<crate::extensions::ExtensionState>().policy_revision(&owner).ok(),"imagery":imagery,"sourceReadiness":source_readiness,"backgroundRuntime":background,"storageCapacity":{"identity":format!("{:x}",Sha256::digest(settings.directory.as_bytes())),"availableBytes":capacity}})
                     },
                     Err(cause)=>json!({"error":cause.code,"message":cause.message})
                 }};

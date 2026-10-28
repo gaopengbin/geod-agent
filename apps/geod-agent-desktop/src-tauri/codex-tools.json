@@ -860,6 +860,10 @@
           "boundaryId": {
             "type": "string"
           },
+          "partition": {
+            "type": "boolean",
+            "description": "When the user accepts splitting an oversized raw tiles/MBTiles/tile GeoPackage request, set true. Native planning partitions the exact integer tile grid at unchanged zooms, persists every child plan and returns aggregate disk capacity. No manual split geometry is needed. Does not start downloads or approve them. Raster cropping/polygons require a supported pixel-window workflow instead."
+          },
           "zoomLevels": {
             "type": "array",
             "items": {
@@ -891,6 +895,14 @@
           "exportOptions": {
             "type": "object",
             "properties": {
+              "pixelValueMode": {
+                "type": "string",
+                "enum": [
+                  "rendered",
+                  "native"
+                ],
+                "description": "Use native when the user requires original radiance/scientific numeric bands. The imagery downloader preserves rendered RGB/RGBA, except explicitly supported encoded DEM sources; native analysis on ordinary imagery is rejected with an actionable capability error. Do not substitute a rendered GeoTIFF for quantitative data. Choose rendered only for an actual visualization requirement or an explicitly accepted alternative."
+              },
               "targetCrs": {
                 "type": "string",
                 "description": "Explicit user-selected target EPSG CRS, or the saved conversation default. Never infer it. Ask with an interactive card when missing. GeoTIFF/PNG/JPEG can be reprojected by the optional raster conversion skill; non-native output images include world files. MBTiles/tile GeoPackage/raw tiles only support EPSG:3857."
@@ -1481,7 +1493,7 @@
     "type": "function",
     "function": {
       "name": "data_download_plan",
-      "description": "Export saved administrative boundaries directly with kind=boundary, sourceBoundaryId from boundaries_list/boundaries_combine, outputFormats=[gpkg] or [geojson], and dissolve=true to remove internal borders. This uses the saved geometry, needs no URL, external GDAL executable, Python environment probing or repeated remote download. Online features also support dissolve=true. Create a persistent native download plan for MVT/PBF vector tiles, OpenStreetMap features, or a recursive 3D Tiles dataset. Downloads run on the user device and appear in the task list. Does not execute yet. Use an actual public service URL; never include credentials. MVT supports pbf,mbtiles,geojson,gpkg; OSM supports geojson,gpkg; 3D Tiles writes a self-contained offline bundle. bounds is required for vectors, optional for full 3D datasets. Use a saved boundaryId for polygon selection, including holes and separated regions. Vector GeoJSON/GPKG retains whole intersecting features; PBF/MBTiles retains selected whole tiles. 3D selects intersecting tile bounding volumes and retains whole models, not mesh clipping. For Cesium Ion or authenticated 3D services, first discover/prepare tiles3d connections and supply connectionId; secret values stay in the native store. Name the task by region and data. Pending plans can be started with data_download_start only in fullAccess; confirmEach waits for UI confirmation.",
+      "description": "For original numeric F32/F64 data from a public ArcGIS ImageServer, use kind=raster, sourceUrl, actual rasterFunction, bounds or boundaryId, outputFormats=[geotiff], targetCrs. The native layer verifies provider functions and catalog dates, freezes a real intersecting item before confirmation, preserves Float values, clips and reprojects with the managed raster component. Latest means latest in this provider catalog for this area, not globally latest data. It never substitutes RGB. Raw numeric TIFF can be opened from the results directory in QGIS; data_download_load currently supports vector/3D previews. Export saved administrative boundaries directly with kind=boundary, sourceBoundaryId from boundaries_list/boundaries_combine, outputFormats=[gpkg] or [geojson], and dissolve=true to remove internal borders. This uses the saved geometry, needs no URL, external GDAL executable, Python environment probing or repeated remote download. Online features also support dissolve=true. Create a persistent native download plan for MVT/PBF vector tiles, OpenStreetMap features, or a recursive 3D Tiles dataset. Downloads run on the user device and appear in the task list. Does not execute yet. Use an actual public service URL; never include credentials. MVT supports pbf,mbtiles,geojson,gpkg; OSM supports geojson,gpkg; 3D Tiles writes a self-contained offline bundle. bounds is required for vectors, optional for full 3D datasets. Use a saved boundaryId for polygon selection, including holes and separated regions. Vector GeoJSON/GPKG retains whole intersecting features; PBF/MBTiles retains selected whole tiles. 3D selects intersecting tile bounding volumes and retains whole models, not mesh clipping. For Cesium Ion or authenticated 3D services, first discover/prepare tiles3d connections and supply connectionId; secret values stay in the native store. Name the task by region and data. Pending plans can be started with data_download_start only in fullAccess; confirmEach waits for UI confirmation.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -1492,7 +1504,8 @@
               "osm",
               "tiles3d",
               "online",
-              "boundary"
+              "boundary",
+              "raster"
             ]
           },
           "name": {
@@ -1565,7 +1578,8 @@
                 "pbf",
                 "mbtiles",
                 "geojson",
-                "gpkg"
+                "gpkg",
+                "geotiff"
               ]
             },
             "minItems": 1
@@ -1598,6 +1612,28 @@
           "targetCrs": {
             "type": "string",
             "description": "Explicit EPSG target chosen by the user or saved conversation default. Ask if unspecified. GeoJSON only EPSG:4326; other CRS requires GPKG only. PBF/MBTiles preserve original tile grids; 3D Tiles preserves its native scene coordinates."
+          },
+          "rasterFunction": {
+            "type": "string",
+            "description": "For kind=raster, use the exact provider ImageServer numeric/no-stretch function from inspect_source.rasterFunctionInfos."
+          },
+          "bandIds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 15
+            },
+            "maxItems": 16
+          },
+          "timeRange": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional inclusive YYYY-MM-DD range for scientific raster catalog selection. Omit only when the human asked for the selected provider latest available item. Native planning pins the item and actual dates before approval."
           },
           "allowPartial": {
             "type": "boolean"
@@ -2279,6 +2315,14 @@
           "exportOptions": {
             "type": "object",
             "properties": {
+              "pixelValueMode": {
+                "type": "string",
+                "enum": [
+                  "rendered",
+                  "native"
+                ],
+                "description": "Use native when the user requires original radiance/scientific numeric bands. The imagery downloader preserves rendered RGB/RGBA, except explicitly supported encoded DEM sources; native analysis on ordinary imagery is rejected with an actionable capability error. Do not substitute a rendered GeoTIFF for quantitative data. Choose rendered only for an actual visualization requirement or an explicitly accepted alternative."
+              },
               "targetCrs": {
                 "type": "string",
                 "description": "Explicit user-selected target EPSG CRS, or the saved conversation default. Never infer it. Ask with an interactive card when missing. GeoTIFF/PNG/JPEG can be reprojected by the optional raster conversion skill; non-native output images include world files. MBTiles/tile GeoPackage/raw tiles only support EPSG:3857."

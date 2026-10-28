@@ -29,13 +29,13 @@ test('authenticated HTTP ingestion deduplicates retries, binds account and persi
     assert.equal((await send({ ...body, accountId: 'wechat-user' })).status, 409);
     assert.equal((await send({ ...body, events: [{ ...event(), filename: 'secret.tif' }] })).status, 400);
     assert.deepEqual(await (await send(body)).json(), { accepted: 1, duplicates: 0 });
-    const detailed={...event(),download_kind:'vector'};
+    const detailed={...event(),state:'failed',reason:'processing',download_kind:'raster'};
     assert.deepEqual(await (await send({...body,events:[detailed]})).json(),{accepted:1,duplicates:0});
     assert.deepEqual(await (await send({...body,events:[detailed]})).json(),{accepted:0,duplicates:1});
     assert.deepEqual(await (await send(body)).json(), { accepted: 0, duplicates: 1 });
     assert.deepEqual(await (await send({ ...body, events: [{ ...body.events[0], event_id: randomUUID() }] })).json(), { accepted: 0, duplicates: 1 });
     const db = new Database(dbPath, { readonly: true });
-    try { const rows = db.prepare('SELECT * FROM agent_events').all(); assert.equal(rows.length, 2); assert.equal(rows[0].user_id, 'geod-only'); assert.equal(rows.find(r=>r.event_id===detailed.event_id).download_kind,'vector');assert.equal(db.prepare('SELECT count(*) n FROM model_generations').get().n, 0); }
+    try { const rows = db.prepare('SELECT * FROM agent_events').all(); assert.equal(rows.length, 2); assert.equal(rows[0].user_id, 'geod-only'); assert.equal(rows.find(r=>r.event_id===detailed.event_id).download_kind,'raster');assert.equal(rows.find(r=>r.event_id===detailed.event_id).reason,'processing');assert.equal(db.prepare('SELECT count(*) n FROM model_generations').get().n, 0); }
     finally { db.close(); }
   } finally { await new Promise(resolve => server.close(resolve)); rmSync(directory, { recursive: true }); }
 });

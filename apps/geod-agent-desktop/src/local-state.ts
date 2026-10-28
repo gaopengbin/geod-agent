@@ -8,6 +8,7 @@ const prefixes = [
   "geod-agent-pending-generations-0.1", "geod-agent-workspace-list-0.1", "geod-map-session-1:",
   "geod-agent-plan-presentation-1:", "geod-agent-task-queue-1:", "geod.boundary-bookmarks.v1:",
   "geod-agent-deleted-conversations-1",
+  "geod-agent-planning-conflicts-1:",
 ];
 export const isLargeStateKey = (key: string) => prefixes.some(prefix => key.startsWith(prefix));
 

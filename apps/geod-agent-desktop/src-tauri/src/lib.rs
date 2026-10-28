@@ -33,6 +33,9 @@ mod data_jobs;
 mod data_schedules;
 mod data_credentials;
 mod imagery_recovery;
+mod imagery_partition;
+mod planning_requirements;
+mod raster_exports;
 mod history_recovery;
 mod imagery_task_cleanup;
 mod cache_management;
@@ -669,13 +672,21 @@ fn plans_create(
     for overlay in store.plan_overlays(&spec, &source.descriptor)? { source_auth::assert_ready(&state, &overlay)?; }
     let options=spec.export_options.get_or_insert_with(Default::default);
     let crs=options.target_crs.as_ref().or(workspace.output_crs.as_ref()).ok_or_else(||workspace_error("OUTPUT_CRS_REQUIRED","请通过选项卡询问成果坐标系；仅用户明确设置的会话默认可以沿用"))?;
-    options.target_crs=Some(export_crs::validate(crs,true)?);
+    options.target_crs=Some(export_crs::imagery_target(crs,&spec.output_formats)?);
     if let Some(existing)=imagery_recovery::reusable_pending_plan(&state,&owner,&conversation_id,Path::new(&workspace.directory),&spec,&source.descriptor)?{
         return Ok(existing);
     }
     let stored = store.create_plan_for_tool_execution(&tool_execution_id, spec, &source.descriptor, Utc::now())?;
     imagery_recovery::bind_created_plan(&state, &owner, &conversation_id, Path::new(&workspace.directory), &stored.plan_id)?;
     Ok(stored)
+}
+
+#[tauri::command]
+fn plans_partition_create(
+    app: AppHandle, state: State<'_, AppState>, services: State<'_, services::ServiceState>,
+    conversation_id: String, spec: TaskSpec, tool_execution_id: String,
+) -> Result<serde_json::Value, AppError> {
+    imagery_partition::create(app,state,services,conversation_id,spec,tool_execution_id)
 }
 
 #[tauri::command]
@@ -1636,6 +1647,7 @@ pub fn run() {
             workspace_default,
             workspace_set,
             workspace_set_output_crs,
+            planning_requirements::planning_output_requirements_set,
             workspace_open_directory,
             output_directory_suggest,
             workspace_boundaries_list,
@@ -1674,6 +1686,7 @@ pub fn run() {
             source_creator::source_creator_tools,
             sources_save,
             plans_create,
+            plans_partition_create,
             plans_for_tool_execution,
             plans_get,
             approvals_grant,
@@ -1709,6 +1722,7 @@ pub fn run() {
             services::agent_payment_action,
             services::agent_events,
             download_telemetry::download_telemetry_set,
+            download_telemetry::download_telemetry_status,
             activity_telemetry::agent_activity_set,
             services::agent_generation_get,
             codex_runtime::codex_available,

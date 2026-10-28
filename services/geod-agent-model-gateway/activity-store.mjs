@@ -3,11 +3,13 @@ const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export function validateActivity(body,now=Date.now()) {
   if(!body||Object.keys(body).sort().join(',')!=='accountId,events,schema_version'||body.schema_version!==1||typeof body.accountId!=='string'||!Array.isArray(body.events)||!body.events.length||body.events.length>20)throw Error('INVALID_ACTIVITY');
   return body.events.map(e=>{
-    if(!e||Object.keys(e).sort().join(',')!=='event_id,input_tokens,kind,occurred_at,output_tokens,reason,state,usage_known'||!uuid.test(e.event_id)||!['app_session','app_first_seen','personal_model'].includes(e.kind)||!['started','completed','failed','interrupted'].includes(e.state)||!['none','network','auth','rate_limit','context','provider','unknown'].includes(e.reason)||typeof e.usage_known!=='boolean')throw Error('INVALID_ACTIVITY');
+    const diagnosticReasons=['consent_disabled','no_download_observed','queued','reported','transport_auth','transport_network','transport_schema','transport_other','collector_unavailable'];
+    if(!e||Object.keys(e).sort().join(',')!=='event_id,input_tokens,kind,occurred_at,output_tokens,reason,state,usage_known'||!uuid.test(e.event_id)||!['app_session','app_first_seen','personal_model','download_status'].includes(e.kind)||!['started','completed','failed','interrupted'].includes(e.state)||!(e.kind==='download_status'?diagnosticReasons:['none','network','auth','rate_limit','context','provider','unknown']).includes(e.reason)||typeof e.usage_known!=='boolean')throw Error('INVALID_ACTIVITY');
     const at=Date.parse(e.occurred_at);
     if(typeof e.occurred_at!=='string'||!/T.*(?:Z|[+-]\d\d:\d\d)$/.test(e.occurred_at)||!Number.isFinite(at)||at<now-90*86400000||at>now+300000)throw Error('INVALID_ACTIVITY');
     for(const n of [e.input_tokens,e.output_tokens])if(n!==null&&(!Number.isSafeInteger(n)||n<0||n>1e12))throw Error('INVALID_ACTIVITY');
     if(['app_session','app_first_seen'].includes(e.kind)&&(e.state!=='started'||e.reason!=='none'||e.usage_known||e.input_tokens!==null||e.output_tokens!==null))throw Error('INVALID_ACTIVITY');
+    if(e.kind==='download_status'&&(e.usage_known||e.input_tokens!==null||e.output_tokens!==null||e.state!==(e.reason==='reported'?'completed':e.reason.startsWith('transport_')||e.reason==='collector_unavailable'?'failed':'started')))throw Error('INVALID_ACTIVITY');
     if(!e.usage_known&&(e.input_tokens!==null||e.output_tokens!==null))throw Error('INVALID_ACTIVITY');
     if(e.usage_known&&(e.input_tokens===null||e.output_tokens===null))throw Error('INVALID_ACTIVITY');
     return {...e,occurred_at:new Date(at).toISOString()};

@@ -28,7 +28,7 @@ async function start(value) {
   writeFileSync(join(value.home, 'config.toml'), `approval_policy = "never"\nsandbox_mode = "workspace-write"\nweb_search = "disabled"\n${process.platform === 'win32' ? '[windows]\nsandbox = "unelevated"\n' : ''}`);
   child = spawn(value.codex, ['app-server', '--stdio'], { cwd: value.workspace, env: { ...process.env, CODEX_HOME: value.home }, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
   let diagnostics = '';
-  child.stderr.on('data', bytes => { diagnostics = (diagnostics + bytes.toString('utf8')).slice(-8192); });
+  child.stderr.setEncoding('utf8');child.stderr.on('data', text => { diagnostics = (diagnostics + text).slice(-8192); });
   const failed = () => { if (!done) void finish({ error: diagnostics.includes('failed to initialize sqlite state runtime') ? { code: 'COMMAND_ENGINE_STORAGE', message: 'Codex 命令记录目录无法初始化，请检查目录可写性和路径长度' } : { code: 'COMMAND_ENGINE_EXITED', message: '后台命令引擎已退出' }, cancelled: stopped }); };
   child.on('error', failed); child.on('exit', failed);
   createInterface({ input: child.stdout }).on('line', line => {

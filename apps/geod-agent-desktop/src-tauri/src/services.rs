@@ -1394,13 +1394,16 @@ pub(crate) fn send_download_events(state:&ServiceState,account_id:&str,events:Va
     let mut events=events;
     // Old gateways reject unknown event fields. Negotiate metadata without
     // losing legacy delivery; this check never calls a model.
-    let detailed=gateway_call(state,"/api/agent/capabilities",None).ok().is_some_and(|v|v["downloadEventDetails"]==1);
-    if !detailed{if let Some(rows)=events.as_array_mut(){for row in rows{if let Some(obj)=row.as_object_mut(){obj.remove("download_kind");}}}}
+    let detail_version=gateway_call(state,"/api/agent/capabilities",None).ok().and_then(|v|v["downloadEventDetails"].as_u64()).unwrap_or(0);
+    if let Some(rows)=events.as_array_mut(){for row in rows{if let Some(obj)=row.as_object_mut(){if detail_version==0{obj.remove("download_kind");}else if detail_version<2&&obj.get("download_kind").is_some_and(|v|v=="raster"){obj.insert("download_kind".into(),json!("unknown"));}if detail_version<2&&obj.get("reason").and_then(Value::as_str).is_some_and(|r|["provider","processing","verification","backend"].contains(&r)){obj.insert("reason".into(),json!("unknown"));}}}}
     gateway_call(state,"/api/agent/events",Some(json!({"schema_version":1,"accountId":account_id,"events":events})))
 }
 pub(crate) fn send_activity_events(state:&ServiceState,account_id:&str,events:Value)->Result<Value,ServiceError>{
     if current_user_id(state)?!=account_id{return Err(error("ACCOUNT_CHANGED","使用统计账号已切换"));}
     gateway_call(state,"/api/agent/activity",Some(json!({"schema_version":1,"accountId":account_id,"events":events})))
+}
+pub(crate) fn download_diagnostics_supported(state:&ServiceState)->bool{
+    gateway_call(state,"/api/agent/capabilities",None).ok().is_some_and(|v|v["downloadDiagnostics"]==1)
 }
 #[tauri::command]
 pub async fn agent_generation_get(

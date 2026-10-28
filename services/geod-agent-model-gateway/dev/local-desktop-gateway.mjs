@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { createServer } from "node:http";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync,existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createGatewayServer, readConfig } from "../server.mjs";
@@ -33,7 +33,7 @@ const identity = createServer(async (request, response) => {
     });
     if (check.status !== 200) { response.writeHead(401); response.end(); return; }
     response.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
-    response.end(JSON.stringify({ active: { userId: "local-desktop-test", clientId: "geod-agent-desktop", scope: "geod:agent", expiresAt: Date.now() + 60_000 } }));
+    response.end(JSON.stringify({ active: { userId: process.env.GEOD_LOCAL_GATEWAY_ACCOUNT_ID||"local-desktop-test", clientId: "geod-agent-desktop", scope: "geod:agent", expiresAt: Date.now() + 60_000 } }));
   } catch {
     response.writeHead(503); response.end();
   }
@@ -44,6 +44,17 @@ const config = readConfig({ ...process.env, GEOD_AGENT_GATEWAY_SECRET: secret, G
   DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY, DEEPSEEK_MODEL: "deepseek-flash",GEOD_AGENT_SPONSORS_JSON:process.env.GEOD_AGENT_SPONSORS_JSON||'[]',
    GEOD_AGENT_DB_PATH: process.env.GEOD_LOCAL_GATEWAY_DB_PATH||join(folder, "gateway.sqlite"), GEOD_AGENT_TOKEN_LIMIT: "200000", GEOD_AGENT_QUOTA_MODE: "unlimited" });
 gateway = createGatewayServer(config);
+// Explicitly local test-only transport fault. Downloads and model requests
+// still execute normally; only result reporting receives an actual 503.
+if(process.env.GEOD_LOCAL_TEST_EVENT_FAILURE_FILE){
+ const listeners=gateway.listeners('request');gateway.removeAllListeners('request');
+ gateway.on('request',(request,response)=>{
+  if(request.method==='POST'&&request.url==='/api/agent/events'&&existsSync(process.env.GEOD_LOCAL_TEST_EVENT_FAILURE_FILE)){
+   response.writeHead(503,{'content-type':'application/json'});response.end(JSON.stringify({error:'TEMPORARY_UNAVAILABLE'}));return;
+  }
+  for(const listener of listeners)listener.call(gateway,request,response);
+ });
+}
 gateway.listen(port, "127.0.0.1", () => process.stdout.write(`GeoD local desktop gateway ready on 127.0.0.1:${port}\n`));
 
 function shutdown() {

@@ -9,7 +9,7 @@ fn storage<T>(_: T) -> AppError {
     workspace_error("ACTIVITY_STORAGE", "使用统计暂不可用，任务不受影响")
 }
 pub(crate) fn schema(db: &Connection) -> rusqlite::Result<()> {
-    db.execute_batch("CREATE TABLE IF NOT EXISTS activity_consent(owner TEXT PRIMARY KEY,enabled INTEGER NOT NULL); CREATE TABLE IF NOT EXISTS activity_outbox(owner TEXT NOT NULL,resource TEXT NOT NULL,state TEXT NOT NULL,id TEXT NOT NULL,body TEXT NOT NULL,PRIMARY KEY(owner,resource,state)); CREATE TABLE IF NOT EXISTS activity_seen(owner TEXT NOT NULL,resource TEXT NOT NULL,state TEXT NOT NULL,PRIMARY KEY(owner,resource,state));")
+    db.execute_batch("CREATE TABLE IF NOT EXISTS activity_consent(owner TEXT PRIMARY KEY,enabled INTEGER NOT NULL); CREATE TABLE IF NOT EXISTS activity_outbox(owner TEXT NOT NULL,resource TEXT NOT NULL,state TEXT NOT NULL,id TEXT NOT NULL,body TEXT NOT NULL,PRIMARY KEY(owner,resource,state)); CREATE TABLE IF NOT EXISTS activity_seen(owner TEXT NOT NULL,resource TEXT NOT NULL,state TEXT NOT NULL,PRIMARY KEY(owner,resource,state)); CREATE TABLE IF NOT EXISTS activity_status_state(owner TEXT NOT NULL,kind TEXT NOT NULL,digest TEXT NOT NULL,PRIMARY KEY(owner,kind));")
 }
 fn enabled(db: &Connection, owner: &str) -> rusqlite::Result<bool> {
     Ok(db
@@ -56,7 +56,7 @@ fn enqueue(
             .as_u64()
             .is_some_and(|n| n <= 1_000_000_000_000);
     let id = uuid::Uuid::new_v4().to_string();
-    let body = json!({"event_id":id,"kind":kind,"state":state,"reason":if ["failed","interrupted"].contains(&state){reason(value["errorCode"].as_str().unwrap_or(""))}else{"none"},"occurred_at":Utc::now().to_rfc3339(),"usage_known":known,"input_tokens":if known{value["inputTokens"].clone()}else{Value::Null},"output_tokens":if known{value["outputTokens"].clone()}else{Value::Null}});
+    let body = json!({"event_id":id,"kind":kind,"state":state,"reason":if kind=="download_status"{value["reason"].as_str().unwrap_or("collector_unavailable")}else if ["failed","interrupted"].contains(&state){reason(value["errorCode"].as_str().unwrap_or(""))}else{"none"},"occurred_at":Utc::now().to_rfc3339(),"usage_known":known,"input_tokens":if known{value["inputTokens"].clone()}else{Value::Null},"output_tokens":if known{value["outputTokens"].clone()}else{Value::Null}});
     // Both tables are updated in one transaction by the caller. A delivered
     // generation stays seen so reconciliation cannot count it a second time.
     let fresh = db.execute(
@@ -101,6 +101,7 @@ fn set(db: &Connection, owner: &str, on: bool) -> rusqlite::Result<()> {
     if !on {
         tx.execute("DELETE FROM activity_outbox WHERE owner=?1", [owner])?;
         tx.execute("DELETE FROM activity_seen WHERE owner=?1", [owner])?;
+        tx.execute("DELETE FROM activity_status_state WHERE owner=?1",[owner])?;
     }
     tx.commit()
 }
@@ -128,6 +129,16 @@ pub(crate) fn start(app: AppHandle) {
         }
     });
 }
+fn record_download_status(db:&Connection,owner:&str,value:&Value)->rusqlite::Result<()> {
+    if !enabled(db,owner)?{return Ok(());}
+    let reason=value["reason"].as_str().filter(|s|matches!(*s,"consent_disabled"|"no_download_observed"|"queued"|"reported"|"transport_auth"|"transport_network"|"transport_schema"|"transport_other"|"collector_unavailable")).unwrap_or("collector_unavailable");
+    let previous:Option<String>=db.query_row("SELECT digest FROM activity_status_state WHERE owner=?1 AND kind='download_status'",[owner],|r|r.get(0)).optional()?;
+    if previous.as_deref()==Some(reason){return Ok(());}
+    let state=if reason=="reported"{"completed"}else if reason.starts_with("transport_")||reason=="collector_unavailable"{"failed"}else{"started"};
+    enqueue(db,owner,&format!("download-status:{}",uuid::Uuid::new_v4()),state,"download_status",&json!({"reason":reason}))?;
+    db.execute("INSERT INTO activity_status_state VALUES(?1,'download_status',?2) ON CONFLICT(owner,kind) DO UPDATE SET digest=excluded.digest",params![owner,reason])?;
+    Ok(())
+}
 fn tick(app: &AppHandle, session: &str) -> Result<(), AppError> {
     let service = app.state::<services::ServiceState>();
     let owner =
@@ -137,18 +148,21 @@ fn tick(app: &AppHandle, session: &str) -> Result<(), AppError> {
     if !enabled(&db, &owner).map_err(storage)? {
         return Ok(());
     }
+    let supports_diagnostics=services::download_diagnostics_supported(&service);
+    let download_status=if supports_diagnostics{Some(crate::download_telemetry::diagnostics(app,&owner).unwrap_or_else(|_|json!({"reason":"collector_unavailable"})))}else{None};
     {
         let tx = db.unchecked_transaction().map_err(storage)?;
         enqueue(&tx, &owner, "first-observed-client", "started", "app_first_seen", &Value::Null).map_err(storage)?;
         enqueue(&tx, &owner, session, "started", "app_session", &Value::Null).map_err(storage)?;
+        if let Some(diagnostic)=download_status {record_download_status(&tx,&owner,&diagnostic).map_err(storage)?;}
         tx.commit().map_err(storage)?;
     }
     let batch = {
         let mut q = db
-            .prepare("SELECT id,body FROM activity_outbox WHERE owner=?1 ORDER BY rowid LIMIT 20")
+            .prepare("SELECT id,body FROM activity_outbox WHERE owner=?1 AND (?2 OR json_extract(body,'$.kind')<>'download_status') ORDER BY rowid LIMIT 20")
             .map_err(storage)?;
         let rows = q
-            .query_map([&owner], |r| {
+            .query_map(params![owner,supports_diagnostics], |r| {
                 Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
             })
             .map_err(storage)?
@@ -189,6 +203,15 @@ fn tick(app: &AppHandle, session: &str) -> Result<(), AppError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]fn download_diagnostic_requires_activity_consent_and_records_only_state_changes(){
+        let db=Connection::open_in_memory().unwrap();schema(&db).unwrap();let off=json!({"reason":"consent_disabled","privatePath":"private","source":"secret"});
+        record_download_status(&db,"a",&off).unwrap();assert_eq!(db.query_row("SELECT count(*) FROM activity_outbox",[],|r|r.get::<_,i64>(0)).unwrap(),0);
+        set(&db,"a",true).unwrap();record_download_status(&db,"a",&off).unwrap();record_download_status(&db,"a",&off).unwrap();
+        record_download_status(&db,"a",&json!({"reason":"reported"})).unwrap();record_download_status(&db,"a",&off).unwrap();
+        assert_eq!(db.query_row("SELECT count(*) FROM activity_outbox",[],|r|r.get::<_,i64>(0)).unwrap(),3);
+        let body:String=db.query_row("SELECT body FROM activity_outbox LIMIT 1",[],|r|r.get(0)).unwrap();assert!(!body.contains("private")&&!body.contains("secret"));
+        assert_eq!(serde_json::from_str::<Value>(&body).unwrap()["reason"],"consent_disabled");
+    }
     #[test]
     fn first_observation_requires_consent_and_is_locally_deduplicated() {
         let db=Connection::open_in_memory().unwrap();schema(&db).unwrap();

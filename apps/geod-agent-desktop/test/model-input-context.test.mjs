@@ -16,6 +16,19 @@ test('boundary/vector export discovery ranks an executable native route before b
  assert.equal(one.discoveryFingerprint,two.discoveryFingerprint);assert.deepEqual(two.newlyActivated,[]);
 });
 const tools=declared.map(({function:f})=>({type:'function',...f}));
+test('discovery fingerprints ignore ranking changes and exact context re-reads are identified',()=>{
+ const c=new ModelToolCatalog(declared,{input:'download data'});
+ const a=c.search({names:['jobs_get','jobs_start'],limit:32}),b=c.search({names:['jobs_start','jobs_get'],limit:32});
+ assert.equal(a.discoveryFingerprint,b.discoveryFingerprint);
+ c.archived.rules=[{name:'raw_bands',text:'preserve original numeric values'}];
+ const first=c.context({section:'rules',query:'numeric'}),again=c.context({section:'rules',query:'original'});
+ assert.equal(first.reusedContext,false);assert.equal(again.reusedContext,true);assert.equal(first.retrievalFingerprint,again.retrievalFingerprint);
+ const next=c.context({section:'rules',query:'not present'});assert.equal(next.reusedContext,false);
+});
+test('reading sources activates the actual source setup rules and contracts before further exploration',()=>{
+ const c=new ModelToolCatalog(declared,{input:'download imagery'});assert(!c.groups.has('sources'));
+ c.observe('workspace_status');assert(!c.groups.has('sources'));c.observe('sources_list');assert(c.groups.has('sources'));assert(c.enabled.has('source_configure'));assert(c.enabled.has('source_registration_prepare'));
+});
 const owned=`You are GeoD Agent. Reply in the user's language. Use real tools. For requests to switch to 2D/3D use the actual map. For explicitly requested later or recurring AI use schedules. For explicitly requested long-running workspace commands use background commands. Independent file analysis subtasks have restricted workspaces. GeoD explicit memory is managed only on explicit human request. ${USER_INPUT_POLICY} Keep native permission checks and confirmed defaults.`;
 const suffix='<skills_instructions>large catalogue</skills_instructions><permissions instructions>KEEP PERMISSIONS EXACT</permissions instructions>';
 const message=(role,body)=>({role,content:[{type:'input_text',text:body}]});

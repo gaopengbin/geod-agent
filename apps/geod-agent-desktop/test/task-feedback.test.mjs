@@ -3,6 +3,10 @@ import {buildTaskFeedback,taskFeedbackText} from '../src-tauri/task-feedback.mjs
 import {terminalTaskFeedback,needsTerminalFeedback} from '../src/task-feedback.ts';
 const trace={id:'tool',turnId:'run',role:'tool',toolName:'jobs_start',content:'启动影像',details:JSON.stringify({arguments:{planId:'p'},result:{error:'SOURCE_NETWORK'}})};
 const client={imagery:async()=>[{stored:{planId:'p'},job:{jobId:'j',state:'completed'}}],data:async()=>[],active:async()=>[]};
+
+test('a missing Agent task stays in Agent and does not redirect to another product',()=>{
+ const f=buildTaskFeedback({code:'JOB_NOT_FOUND_IN_AGENT'});assert.match(f.reason,/不能据此认定/);assert.match(f.next,/GeoD Agent/);assert.match(f.next,/原会话和工作区/);assert.doesNotMatch(f.next,/GeoDownloader|旧软件|重新下载/);
+});
 test('an actual source credential blocker explains the condition and recovery without a blind retry',()=>{
  const f=buildTaskFeedback({code:'SOURCE_CREDENTIAL_REQUIRED'});assert.equal(f.status,'waiting');assert.equal(f.canContinue,false);
  const text=taskFeedbackText(f);assert.match(text,/本机认证/);assert.match(text,/图源管理/);assert.match(text,/参数和任务记录保留/);assert.doesNotMatch(text,/SOURCE_CREDENTIAL|sk-|\bkey=/);
@@ -18,6 +22,8 @@ test('verified partial results, active background work and unverified state rema
 test('completed turn feedback scopes results to this turn and never treats an unreadable ledger as zero or failure',async()=>{
  const f=await terminalTaskFeedback([trace],'run',client);assert.equal(f.completed,1);assert.equal(f.status,'partial');
  const other=await terminalTaskFeedback([{...trace,turnId:'old'}],'run',client);assert.equal(other.completed,0);
+ assert.match(other.progress,/本会话任务记录中已有 1 项/);assert.match(other.progress,/不代表这些下载失败/);assert.match(other.progress,/不表示本次问题/);
+ const emptyReply=await terminalTaskFeedback([],'run',client,{code:'MODEL_EMPTY_RESPONSE'});assert.equal(emptyReply.status,'incomplete');assert.match(emptyReply.reason,/模型没有给出/);assert.match(emptyReply.progress,/已有 1 项/);
  const unavailable=await terminalTaskFeedback([trace],'run',{...client,imagery:async()=>{throw Error('unavailable');}});assert.equal(unavailable.status,'unknown');assert.match(unavailable.progress,/未能读取/);
  const slow=await terminalTaskFeedback([trace],'run',{...client,imagery:()=>new Promise(()=>{})},{probeMs:5});assert.equal(slow.status,'unknown');
 });

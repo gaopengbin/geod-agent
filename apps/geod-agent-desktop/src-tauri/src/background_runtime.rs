@@ -70,9 +70,9 @@ fn launch_companion(command: &mut Command) -> std::io::Result<std::process::Chil
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Endpoint { port: u16, pid: u32, protocol: u32, fingerprint: String }
 #[derive(Clone)]
-pub(crate) struct BackgroundClient { dir: PathBuf, stopped: Arc<AtomicBool>, maintenance: Arc<AtomicBool> }
+pub(crate) struct BackgroundClient { dir: PathBuf, stopped: Arc<AtomicBool>, maintenance: Arc<AtomicBool>, start_failure: Arc<Mutex<Option<Value>>> }
 impl BackgroundClient {
-    pub(crate) fn new(dir: PathBuf) -> Self { Self { dir, stopped: Arc::new(AtomicBool::new(false)), maintenance:Arc::new(AtomicBool::new(false)) } }
+    pub(crate) fn new(dir: PathBuf) -> Self { Self { dir, stopped: Arc::new(AtomicBool::new(false)), maintenance:Arc::new(AtomicBool::new(false)),start_failure:Arc::new(Mutex::new(None)) } }
     // Read-only monitor: never launches/restarts a companion or replays work.
     pub(crate) fn observe(&self) -> Result<Value, Value> {
         self.request("runtime_status", json!({}), Duration::from_secs(2))
@@ -111,7 +111,15 @@ impl BackgroundClient {
     }
     pub(crate) fn ensure(&self) -> Result<Value, Value> {
         let _start = START_GATE.lock().map_err(|_| failure("BACKGROUND_START", "后台启动状态不可用"))?;
-        self.ensure_locked()
+        self.remember_start(self.ensure_locked())
+    }
+    fn remember_start(&self,result:Result<Value,Value>)->Result<Value,Value>{
+        if let Ok(mut saved)=self.start_failure.lock(){match &result{
+            Ok(_)=>*saved=None,
+            Err(value)if value["code"]=="BACKGROUND_START"=>*saved=Some(value.clone()),
+            _=>{}
+        }}
+        result
     }
     fn ensure_locked(&self) -> Result<Value,Value> {
         if self.maintenance.load(Ordering::Acquire) {return Err(failure("BACKGROUND_MAINTENANCE", "正在备份或更新应用，后台稍后恢复"));}
@@ -129,6 +137,12 @@ impl BackgroundClient {
             }
             Err(_) => {}
         }
+        if let Some(value)=self.start_failure.lock().ok().and_then(|v|v.clone()) {
+            // Polling and another tool name cannot cure the same failed launch.
+            // A live matching companion is still accepted above; an explicit
+            // Restore action clears this state and makes a new attempt.
+            return Err(value);
+        }
         let executable = std::env::current_exe().map_err(|_| failure("BACKGROUND_START", "无法定位后台程序"))?;
         let output = OpenOptions::new().create(true).append(true).open(self.dir.join("background.log"))
             .map_err(|_| failure("BACKGROUND_START", "无法创建后台日志"))?;
@@ -137,7 +151,7 @@ impl BackgroundClient {
         command.env_remove("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS");
         let mut child=launch_companion(&mut command).map_err(|cause| {
             eprintln!("GeoD companion launch failed: kind={:?}, os_code={:?}",cause.kind(),cause.raw_os_error());
-            failure("BACKGROUND_START", "无法启动下载后台，请点击“恢复后台”后继续原任务")
+            json!({"code":"BACKGROUND_START","message":"无法启动下载后台，请点击“恢复后台”后继续原任务","diagnostic":{"stage":"spawn","osCode":cause.raw_os_error(),"recovery":"explicit-background-start"}})
         })?;
         let deadline = Instant::now() + Duration::from_secs(15);
         while Instant::now() < deadline {
@@ -147,16 +161,18 @@ impl BackgroundClient {
             if let Ok(Some(status))=child.try_wait() {
                 eprintln!("GeoD companion exited before readiness: {:?}",status.code());
                 if let Ok(status)=self.request("runtime_status",json!({}),Duration::from_secs(1)) {if status["fingerprint"]==fingerprint(){return Ok(status);}}
-                return Err(failure("BACKGROUND_START", "下载后台启动后退出，请打开后台运行设置恢复；原任务已保留"));
+                return Err(json!({"code":"BACKGROUND_START","message":"下载后台启动后退出，请打开后台运行设置恢复；原任务已保留","diagnostic":{"stage":"early-exit","exitCode":status.code(),"recovery":"explicit-background-start"}}));
             }
             std::thread::sleep(Duration::from_millis(100));
         }
-        Err(failure("BACKGROUND_START", "独立后台没有就绪，请检查后台日志"))
+        Err(json!({"code":"BACKGROUND_START","message":"下载后台未能就绪，请在后台设置查看诊断并点击恢复；原任务已保留","diagnostic":{"stage":"readiness","recovery":"explicit-background-start"}}))
     }
     fn start_requested(&self)->Result<Value,Value>{
         let _start=START_GATE.lock().map_err(|_|failure("BACKGROUND_START","后台启动状态不可用"))?;
         if self.maintenance.load(Ordering::Acquire){return Err(failure("BACKGROUND_MAINTENANCE","正在备份或更新应用，后台稍后恢复"));}
-        self.stopped.store(false,Ordering::Release);self.ensure_locked()
+        self.stopped.store(false,Ordering::Release);
+        if let Ok(mut previous)=self.start_failure.lock(){*previous=None;}
+        self.remember_start(self.ensure_locked())
     }
     fn stop_requested(&self)->Result<Value,Value>{
         let _start=START_GATE.lock().map_err(|_|failure("BACKGROUND_START","后台启动状态不可用"))?;
@@ -403,6 +419,13 @@ fn dispatch(app: &AppHandle, endpoint: &Endpoint, command: &str, a: &Value) -> R
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]fn startup_failure_is_shared_until_explicit_recovery_or_actual_readiness(){
+        let client=BackgroundClient::new(std::env::temp_dir().join("background-cache-proof"));let other=client.clone();
+        let error=json!({"code":"BACKGROUND_START","diagnostic":{"stage":"spawn","osCode":1816}});
+        assert_eq!(client.remember_start(Err(error.clone())),Err(error.clone()));
+        assert_eq!(other.start_failure.lock().unwrap().as_ref(),Some(&error));
+        other.remember_start(Ok(json!({"running":true}))).unwrap();assert!(client.start_failure.lock().unwrap().is_none());
+    }
     #[test] fn rejects_unregistered_commands_and_wrong_auth() {
         assert!(!routes("codex_turn")); assert!(!routes("mcp_call"));
         assert!(!routes("data_download_preview")); assert!(routes("data_download_start_auto"));

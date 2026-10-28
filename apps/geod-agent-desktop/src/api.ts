@@ -20,7 +20,7 @@ async function invoke<T>(command: string, args?: InvokeArgs, options?: InvokeOpt
 
 export type Bounds = [number, number, number, number];
 export type OutputFormat = "geotiff" | "mbtiles" | "png" | "jpeg" | "gpkg" | "tiles";
-export interface ExportOptions { targetCrs?: string; resampling?: "nearest" | "bilinear" | "cubic"; cacheOnly?: boolean; reuseVerifiedCache?: boolean; compression?: "none" | "lzw" | "deflate"; buildPyramid?: boolean; generateSidecars?: boolean; jpegQuality?: number; overlaySources?: { sourceId: string; configRevision: string }[]; elevationEncoding?: "terrarium" }
+export interface ExportOptions { pixelValueMode?:"rendered"|"native";targetCrs?: string; resampling?: "nearest" | "bilinear" | "cubic"; cacheOnly?: boolean; reuseVerifiedCache?: boolean; compression?: "none" | "lzw" | "deflate"; buildPyramid?: boolean; generateSidecars?: boolean; jpegQuality?: number; overlaySources?: { sourceId: string; configRevision: string }[]; elevationEncoding?: "terrarium" }
 export type JobState = "queued" | "downloading" | "paused" | "processing" | "verifying" | "completed" | "partial" | "failed" | "cancelled";
 export interface BoundaryGeometry { polygons: [number, number][][][] }
 export interface BoundaryImport { name: string; bounds: Bounds; polygonCount: number; geometry: BoundaryGeometry; boundaryId?: string }
@@ -224,6 +224,7 @@ export const api = {
   networkSet: (settings: NetworkSettings) => invoke<NetworkStatus>("network_set", { settings }),
   networkTest: (settings: NetworkSettings) => invoke<NetworkProbe>("network_test", { settings }),
   workspaceSetOutputCrs: (conversationId: string, crs: string | null) => invoke<WorkspaceSettings>("workspace_set_output_crs", { conversationId, crs }),
+  planningOutputSet:(accountId:string,conversationId:string,conditions:unknown)=>invoke('planning_output_requirements_set',{accountId,conversationId,conditions}),
   workspaceGet: (conversationId: string) => invoke<WorkspaceSettings>("workspace_get", { conversationId }),
   workspaceOpenDirectory: (conversationId: string) => invoke<void>("workspace_open_directory", { conversationId }),
   workspaceDefault: () => invoke<WorkspaceSettings>("workspace_default"),
@@ -275,6 +276,7 @@ export const api = {
   sourceCreatorCall: (toolName: string, arguments_: Record<string, unknown>) => invoke<Record<string, unknown>>("source_creator_call", { toolName, arguments: arguments_ }),
   sourcesSave: (endpoint: HttpSource, minZoom: number, maxZoom: number, replaceExisting = false, credential?: SourceCredentialInput) => invoke<SourceDescriptor>("sources_save", { endpoint, minZoom, maxZoom, replaceExisting, credential }),
   plansCreate: (spec: TaskSpec, toolExecutionId: string, conversationId: string) => invoke<StoredPlan>("plans_create", { spec, toolExecutionId, conversationId }),
+  plansPartitionCreate: (spec: TaskSpec, toolExecutionId: string, conversationId: string) => invoke<{plans:StoredPlan[];partition:Record<string,unknown>}>("plans_partition_create", { spec, toolExecutionId, conversationId }),
   imageryPlansClaim: (conversationId: string, planIds: string[]) => invoke<{bound:string[];rejected:{planId:string;code:string;message:string}[]}>("imagery_plans_claim", { conversationId, planIds }),
   imageryHistoryInspect: (conversationId:string,planIds:string[])=>invoke<import('./plan-reference-recovery').HistoryInspection>('imagery_history_inspect',{conversationId,planIds}),
   imageryHistoryRestore: (conversationId:string,planIds:string[])=>invoke<import('./plan-reference-recovery').HistoryRestoreReport>('imagery_history_restore',{conversationId,planIds}),

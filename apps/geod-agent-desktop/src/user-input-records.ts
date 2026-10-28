@@ -6,7 +6,7 @@ export interface UserInputRecord {
   requestId:string; questions:UserInputQuestion[]; status:'pending'|'answered'|'cancelled'|'resolved';
   userMessageId?:string; userText?:string; reply?:UserInputReply; draft?:UserInputDraft;
   toolCallId?:string; createdAt:string;
-  resolution?:{kind:'existingMcp';connectorId:string;name:string;url:string}|{kind:'existingPlanCrs';planId:string;crs:string;resampling:'nearest'|'bilinear'|'cubic'};
+  resolution?:{kind:'existingMcp';connectorId:string;name:string;url:string}|{kind:'existingPlanCrs';planId:string;crs:string;resampling:'nearest'|'bilinear'|'cubic'}|{kind:'planningConflict';conflictId:string};
 }
 const fingerprint=(q:UserInputQuestion)=>JSON.stringify([q.header,q.question,q.options??[]]);
 export function inputOrigin(messages:DisplayMessage[],userMessageId?:string){

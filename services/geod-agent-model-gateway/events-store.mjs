@@ -3,7 +3,7 @@ import Database from 'better-sqlite3';
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const states = new Set(['started', 'completed', 'partial', 'failed', 'cancelled']);
 const durations = new Set(['unknown', 'under_10s', '10-60s', '1-5m', '5-30m', '30m+']);
-const reasons = new Set(['none', 'cancelled', 'network', 'auth', 'disk', 'permission', 'missing_tiles', 'unknown']);
+const reasons = new Set(['none', 'cancelled', 'network', 'auth', 'disk', 'permission', 'missing_tiles', 'provider', 'processing', 'verification', 'backend', 'unknown']);
 export function validateEvents(body, now = Date.now()) {
   if (!body || Object.keys(body).sort().join(',') !== 'accountId,events,schema_version' || body.schema_version !== 1 ||
       typeof body.accountId !== 'string' || !Array.isArray(body.events) || !body.events.length || body.events.length > 20) throw new Error('INVALID_EVENTS');
@@ -12,7 +12,7 @@ export function validateEvents(body, now = Date.now()) {
     if (!event || Object.keys(event).some(key=>!['attempt_id','duration','event_id','occurred_at','reason','state','download_kind'].includes(key)) ||
         !uuid.test(event.event_id) || !uuid.test(event.attempt_id) || !states.has(event.state) || !durations.has(event.duration) || !reasons.has(event.reason) ||
         typeof event.occurred_at !== 'string' || !/T.*(?:Z|[+-]\d\d:\d\d)$/.test(event.occurred_at) || !Number.isFinite(at) || at < now - 90 * 86400000 || at > now + 300000) throw new Error('INVALID_EVENTS');
-    if(event.download_kind!=null&&!['imagery','vector','online','tiles3d','unknown'].includes(event.download_kind))throw new Error('INVALID_EVENTS');
+    if(event.download_kind!=null&&!['imagery','vector','online','tiles3d','raster','unknown'].includes(event.download_kind))throw new Error('INVALID_EVENTS');
     return { ...event, occurred_at: new Date(at).toISOString() };
   });
 }
