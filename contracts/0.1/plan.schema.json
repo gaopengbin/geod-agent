@@ -153,6 +153,16 @@
             "$ref": "#/$defs/OverlaySourceRef"
           }
         },
+        "pixelValueMode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PixelValueMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "resampling": {
           "$ref": "#/$defs/RasterResampling"
         },
@@ -194,6 +204,13 @@
       "required": [
         "sourceId",
         "configRevision"
+      ]
+    },
+    "PixelValueMode": {
+      "type": "string",
+      "enum": [
+        "rendered",
+        "native"
       ]
     },
     "PlanTileGrid": {

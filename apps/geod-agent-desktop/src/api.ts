@@ -131,7 +131,8 @@ export interface ImagerySchedule { templatePlanId:string|null; scheduleId:string
 export interface ScheduleRun { runId:string; scheduleId:string; scheduledAt:string; state:string; attempt:number; nextAttemptAt:string; planId:string|null; jobId:string|null; errorCode:string|null; finishedAt:string|null }
 export interface Approval { approvalId: string; planId: string; planHash: string; approvedAt: string }
 export interface Job { jobId: string; planId: string; approvalId: string; planHash: string; state: JobState; version: number; createdAt: string }
-export interface JobEvent { jobId: string; seq: number; occurredAt: string; state: JobState; processingStage?: "assembling" | "reprojecting"; errorCode?: string; completedTiles?: number; totalTiles?: number }
+export type FailureDiagnostic = {kind:"storage";report:{volumes:{locations:{role:string;path:string;requiredBytes:number}[];requiredBytes:number;availableBytes:number;sufficient:boolean}[]}} | {kind:"sourceAccess";httpStatus:number;host:string;sourceId:string;authenticationConfigured:boolean};
+export interface JobEvent { jobId: string; seq: number; occurredAt: string; state: JobState; processingStage?: "assembling" | "reprojecting"; errorCode?: string; completedTiles?: number; totalTiles?: number; failureDiagnostic?:FailureDiagnostic }
 export interface Asset { crs: string; crsDefinition?: string; geoTransform?: number[]; id: string; kind: string; role: string; path: string; bytes: number; sha256: string; bounds: Bounds; width?: number; height?: number }
 export interface Manifest { name: string; bounds: Bounds; assets: Asset[]; quality: { status: string; missingTiles: number; missing?: { zoom: number; x: number; y: number }[]; warnings: string[] }; provenance: { source: string; attribution: string; retrievedAt: string }[] }
 export interface ArtifactPreview { dataUrl: string; bounds: Bounds; attribution: string }

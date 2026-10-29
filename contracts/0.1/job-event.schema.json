@@ -17,6 +17,16 @@
         "null"
       ]
     },
+    "failureDiagnostic": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FailureDiagnostic"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "jobId": {
       "type": "string"
     },
@@ -55,6 +65,122 @@
     "state"
   ],
   "$defs": {
+    "DiskLocation": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "requiredBytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "role": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "path",
+        "requiredBytes"
+      ]
+    },
+    "DiskPreflight": {
+      "type": "object",
+      "properties": {
+        "volumes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DiskVolumeCheck"
+          }
+        }
+      },
+      "required": [
+        "volumes"
+      ]
+    },
+    "DiskVolumeCheck": {
+      "type": "object",
+      "properties": {
+        "availableBytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "locations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DiskLocation"
+          }
+        },
+        "requiredBytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "sufficient": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "locations",
+        "requiredBytes",
+        "availableBytes",
+        "sufficient"
+      ]
+    },
+    "FailureDiagnostic": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "storage"
+            },
+            "report": {
+              "$ref": "#/$defs/DiskPreflight"
+            }
+          },
+          "required": [
+            "kind",
+            "report"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "authenticationConfigured": {
+              "type": "boolean"
+            },
+            "host": {
+              "type": "string"
+            },
+            "httpStatus": {
+              "type": "integer",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            },
+            "kind": {
+              "type": "string",
+              "const": "sourceAccess"
+            },
+            "sourceId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "httpStatus",
+            "host",
+            "sourceId",
+            "authenticationConfigured"
+          ]
+        }
+      ]
+    },
     "JobState": {
       "type": "string",
       "enum": [

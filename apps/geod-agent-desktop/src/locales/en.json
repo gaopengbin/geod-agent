@@ -2625,5 +2625,18 @@
   "保留浮点数值，预览图不替代 GeoTIFF。": "Floating-point values are retained. The preview does not replace the GeoTIFF.",
   "提供方数据时期：{0} 至 {1}": "Provider data interval: {0} to {1}",
   "保留原始数值波段并按边界导出栅格": "Preserve original numeric bands and export the selected region",
-  "打开任务诊断": "Open task diagnostics"
+  "打开任务诊断": "Open task diagnostics",
+  "存储空间检查": "Storage check",
+  "以下为失败时的空间检查结果，重试会重新检查。": "These are the checks recorded at failure. Retrying checks space again.",
+  "存储空间检查未通过，已下载瓦片保留。": "Storage check failed. Downloaded tiles are retained.",
+  "瓦片缓存目录": "Tile cache directory",
+  "保存及导出临时目录": "Output and export staging directory",
+  "保守空间预算": "Conservative storage budget",
+  "实际可用空间": "Actual free space",
+  "历史记录没有保留失败时的磁盘明细。请同时检查保存目录和缓存目录，不能只看保存盘的可用空间。": "This historical record has no disk details from the failure. Check both output and cache locations.",
+  "缓存和成果可能在不同磁盘。调整不足的目录后，可重试原任务，无需重新规划。": "Cache and output may be on separate disks. Adjust the affected location, then retry the existing task.",
+  "管理缓存位置": "Manage cache location",
+  "单张瓦片连接测试通过；批量下载还需核对接口权限及访问限制。": "A single tile is accessible. Bulk downloading still requires checking API permissions and access limits.",
+  "图源拒绝了下载请求。": "The source rejected the download request.",
+  "请核对下载接口地址、对应服务授权和网络出口。在线预览与批量下载的请求条件可能不同；现有任务和缓存已保留。": "Check the download endpoint, service authorization and network route. Preview and bulk download requests may have different conditions. Existing tasks and cache are retained."
 }

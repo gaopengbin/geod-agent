@@ -539,6 +539,14 @@ pub struct Manifest {
 pub struct CoreError {
     pub code: &'static str,
     pub message: String,
+    pub diagnostic: Option<FailureDiagnostic>,
+}
+
+#[derive(Debug,Clone,PartialEq,Eq,Serialize,Deserialize,schemars::JsonSchema)]
+#[serde(tag="kind",rename_all="camelCase",rename_all_fields="camelCase")]
+pub enum FailureDiagnostic {
+    Storage { report:crate::storage_preflight::DiskPreflight },
+    SourceAccess { http_status:u16,host:String,source_id:String,authentication_configured:bool },
 }
 
 impl CoreError {
@@ -546,6 +554,7 @@ impl CoreError {
         Self {
             code,
             message: message.into(),
+            diagnostic: None,
         }
     }
 }
@@ -955,10 +964,12 @@ async fn get_tile(
             .and_then(retry_after_delay);
     }
     if matches!(status.as_u16(), 401 | 403) {
-        return Err(CoreError::new(
+        let mut error=CoreError::new(
             if source.authentication.is_some() { "SOURCE_CREDENTIAL_REJECTED" } else { "SOURCE_UNAUTHORIZED" },
-            if source.authentication.is_some() { "图源拒绝了 Token，请在图源设置中检查 Key/Token 及服务类型。".into() } else { format!("Tile service returned HTTP {}", status.as_u16()) },
-        ));
+            format!("图源拒绝了下载请求（HTTP {}）。请检查图源地址、该接口的访问授权及网络出口；预览与下载的请求条件可能不同。已有任务与缓存已保留。",status.as_u16()),
+        );
+        error.diagnostic=Some(FailureDiagnostic::SourceAccess{http_status:status.as_u16(),host:target.host_str().unwrap_or_default().into(),source_id:source.id.clone(),authentication_configured:source.authentication.is_some()});
+        return Err(error);
     }
     if matches!(status.as_u16(), 404 | 410) {
         return Err(CoreError::new(
@@ -1568,16 +1579,13 @@ where
         .ok_or_else(|| CoreError::new("INVALID_SPEC", "Output has no parent"))?;
     fs::create_dir_all(parent).map_err(io_error)?;
     let total_tiles: u64 = request.grids.iter().map(|grid| grid.tile_count).sum();
-    let required_disk = required_free_disk_bytes_for_outputs(total_tiles, source.tile_size,
+    let (workspace_bytes,cache_bytes) = crate::storage_preflight::location_budgets(total_tiles, source.tile_size,
         usize::from(request.output_geotiff) + usize::from(request.output_mbtiles) + request.extra_outputs.len() + if reproject { 8 } else { 0 },
-        request.output_geotiff && request.export_options.build_pyramid)?;
-    ensure_disk_budget(parent, required_disk)?;
+        request.output_geotiff && request.export_options.build_pyramid,cache_config.is_some())?;
     let mut cache = cache_config
         .map(|config| TileCache::open(config, source, &request.export_options.overlay_sources, request.export_options.cache_only || request.export_options.reuse_verified_cache))
         .transpose()?;
-    if let Some(cache) = &cache {
-        ensure_disk_budget(&cache.root, required_disk)?;
-    }
+    crate::storage_preflight::inspect(parent,cache.as_ref().map(|c|c.root.as_path()),workspace_bytes,cache_bytes)?.ensure()?;
     let started = Instant::now();
     let stage = tempfile::Builder::new()
         .prefix(".geod-agent-stage-")
@@ -2197,6 +2205,20 @@ pub fn inspect_bundle(root: &Path) -> Result<Manifest, CoreError> {
 #[cfg(test)]
 mod source_tests {
     use super::*;
+
+    #[test]
+    fn long_shared_cache_blob_paths_survive_atomic_publish_and_reuse() {
+        let temp=tempfile::tempdir().unwrap();let mut root=temp.path().to_path_buf();
+        while root.to_string_lossy().len()<135{root=root.join("long-cache-directory-name");}
+        fs::create_dir_all(&root).unwrap();
+        let source:HttpSource=serde_json::from_value(serde_json::json!({"id":"long-cache-fixture","name":"Long cache fixture","attribution":"Fixture","license":"Fixture","urlTemplate":"http://127.0.0.1/{z}/{x}/{y}","scheme":"XYZ","tileSize":256,"networkPolicy":"UserTrustedHttp","minIntervalMs":0})).unwrap();
+        let config=|name:&str|TileCacheConfig{root:root.join(name),plan_hash:"a".repeat(64),job_id:Uuid::new_v4().to_string()};
+        let mut cache=TileCache::open(&config("job-a"),&source,&[],false).unwrap();
+        let mut encoded=Cursor::new(Vec::new());image::DynamicImage::ImageRgba8(RgbaImage::from_pixel(256,256,image::Rgba([1,2,3,255]))).write_to(&mut encoded,image::ImageFormat::Png).unwrap();
+        cache.save(2,2,1,encoded.get_ref()).unwrap();drop(cache);
+        let mut another=TileCache::open(&config("job-b"),&source,&[],false).unwrap();
+        assert_eq!(another.load(2,2,1,256).unwrap().unwrap().bytes,*encoded.get_ref());
+    }
 
     #[test]
     fn arcgis_export_has_exact_web_mercator_tile_extent() {

@@ -30,6 +30,21 @@ fn png(color: [u8; 4]) -> Vec<u8> {
 }
 
 #[tokio::test]
+async fn source_refusal_survives_restart_with_approval_and_safe_diagnostics() {
+ let listener=TcpListener::bind("127.0.0.1:0").unwrap();let address=listener.local_addr().unwrap();
+ let worker=thread::spawn(move||{let(mut stream,_)=listener.accept().unwrap();let mut request=[0u8;4096];stream.read(&mut request).unwrap();stream.write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").unwrap();});
+ let endpoint=HttpSource{subdomains:vec![],coordinate_system:None,elevation_encoding:None,id:"refused-fixture".into(),name:"Refused fixture".into(),attribution:"Fixture".into(),license:"Fixture".into(),url_template:format!("http://{address}/{{z}}/{{x}}/{{y}}"),scheme:HttpTileScheme::XYZ,tile_size:256,network_policy:NetworkPolicy::UserTrustedHttp,min_interval_ms:0,authentication:None,runtime_token:None};
+ let descriptor=SourceDescriptor{elevation_encoding:None,schema_version:SchemaVersion::V0_1,id:endpoint.id.clone(),display_name:endpoint.name.clone(),attribution:endpoint.attribution.clone(),license:endpoint.license.clone(),bulk_download_allowed:true,scheme:TileScheme::XYZ,tile_size:256,min_zoom:0,max_zoom:22,config_revision:endpoint.configuration_revision(),credential_ref_version:None};
+ let directory=tempfile::tempdir().unwrap();let db=directory.path().join("jobs.sqlite");let output=directory.path().join("result");
+ let spec=TaskSpec{schema_version:SchemaVersion::V0_1,kind:TaskKind::Imagery,source_id:descriptor.id.clone(),bounds:[1.0,1.0,2.0,2.0],boundary:None,zoom_levels:vec![2],output_formats:vec![OutputFormat::GeoTiff],export_options:None,output_directory:output.display().to_string(),limits:ResourceLimits{max_tiles:1,max_decoded_rgba_bytes:256*256*4}};
+ let mut store=TaskStore::open(&db).unwrap();let p=store.create_plan(spec,&descriptor,now()).unwrap();let a=store.grant_approval(&p.plan_id,&p.plan.plan_hash,"fixture-user","fixture",now()).unwrap();
+ let j=store.start_job(&p.plan_id,&p.plan.plan_hash,&a.approval_id,"refused-once",&descriptor,now()).unwrap();
+ let error=store.run_job_with_control_proxy(&j.job_id,&descriptor,&endpoint,now(),&AtomicBool::new(false),&AtomicBool::new(false),geod_core::imagery::ProxyRoute::Direct).await.unwrap_err();worker.join().unwrap();assert_eq!(error.code,"SOURCE_UNAUTHORIZED");drop(store);
+ let reopened=TaskStore::open(&db).unwrap();let saved=reopened.get_job(&j.job_id).unwrap().unwrap();assert_eq!(saved.state,JobState::Failed);assert_eq!(saved.approval_id,a.approval_id);assert!(!output.exists());
+ let events=reopened.events_after(&j.job_id,0,100).unwrap();let diagnostic=serde_json::to_value(events.last().unwrap().failure_diagnostic.as_ref().unwrap()).unwrap();assert_eq!(diagnostic["httpStatus"],403);assert_eq!(diagnostic["host"],"127.0.0.1");assert_eq!(events.iter().filter(|e|e.state==JobState::Downloading).count(),1);
+}
+
+#[tokio::test]
 async fn approved_job_downloads_and_only_then_completes() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();

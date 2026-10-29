@@ -26,11 +26,16 @@ impl SharedTileCache {
         Ok(Some(DownloadedTile {image,bytes}))
     }
     pub(super) fn save(&self,z:u8,x:u32,y:u32,bytes:&[u8]) -> Result<(),CoreError> {
-        let hash=format!("{:x}",Sha256::digest(bytes));let target=self.root.join("blobs").join(&hash);
+        let hash=format!("{:x}",Sha256::digest(bytes));
+        // tempfile's Windows persist path does not add the extended-length
+        // prefix itself. Resolve the existing parent before constructing both
+        // paths, so long content-addressed names remain atomically writable.
+        let blobs=fs::canonicalize(self.root.join("blobs")).map_err(io_error)?;
+        let target=blobs.join(&hash);
         // A corrupt file may already occupy its content-addressed name. Keep a
         // valid concurrent writer's bytes, but atomically replace bad contents.
         if fs::read(&target).map_or(true, |stored| stored.as_slice()!=bytes) {
-            let mut temporary=tempfile::NamedTempFile::new_in(self.root.join("blobs")).map_err(io_error)?;
+            let mut temporary=tempfile::NamedTempFile::new_in(&blobs).map_err(io_error)?;
             use std::io::Write;temporary.write_all(bytes).map_err(io_error)?;
             temporary.as_file().sync_all().map_err(io_error)?;
             temporary.persist(&target).map_err(io_error)?;

@@ -398,7 +398,7 @@ export function App() {
       <aside id="agent-results" className="right-panel task-panel panel-scroll" aria-label={t("任务与成果")} hidden={focusedConversation || !resultsOpen}>
         <TaskPanel key={mapConversationId} conversationId={mapConversationId} onOpenScheduleRun={run=>void openScheduleRun(run).catch(cause=>setError(errorMessage(cause)))} tasks={tasks} focusPlanIds={taskFocusIds} onClearTaskFocus={() => setTaskFocusIds([])} onTaskSelect={selectTask} onTaskAction={taskAction} onStart={startJob} onDiscard={discardPlan} permission={workspaceState?.conversationId === mapConversationId ? workspaceState.permission : null} plan={plan} job={job} events={events} manifest={manifest} jobs={conversationJobs} activeJobs={activeJobs} working={working} error={error} notice={notice}
           onClose={() => { setResultsOpen(false); layout.show("conversation"); }} onClearError={() => setError("")} onClearNotice={() => setNotice("")}
-          onOpenNetwork={() => setNetworkDialogOpen(true)} onRefresh={() => void refreshJobs().catch(cause => setError(errorMessage(cause)))}
+          onOpenNetwork={() => setNetworkDialogOpen(true)} onManageCache={() => setCacheManagerOpen(true)} onRefresh={() => void refreshJobs().catch(cause => setError(errorMessage(cause)))}
           onSelect={item => void selectJob(item)} onResume={() => void resumeJob()} onPause={() => void pauseJob()} onCancel={() => void cancelJob()} />
       </aside>
       <SourcePage active={mainView === "sources"} draft={sourceDraft} reviewing={!!sourceReviewConversationId} onOpenConnections={() => setTiles3dConnections({})} onReturn={() => { setMainView("conversation"); setSourceDraft(null); setSourceReviewConversationId(null); }} onSaved={saved => {

@@ -121,6 +121,8 @@ pub struct JobEvent {
     pub total_tiles: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub processing_stage: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failure_diagnostic: Option<imagery::FailureDiagnostic>,
 }
 
 pub struct TaskStore {
@@ -644,6 +646,7 @@ impl TaskStore {
             completed_tiles: None,
             total_tiles: None,
             processing_stage: None,
+            failure_diagnostic: None,
         };
         let insert = tx.execute(
             "INSERT INTO jobs(job_id, plan_id, approval_id, plan_hash, idempotency_key, state, version, created_at)
@@ -914,6 +917,10 @@ impl TaskStore {
         error_code: Option<&str>,
         now: DateTime<Utc>,
     ) -> Result<Job, LedgerError> {
+        self.transition_with_diagnostic(job_id,expected,next,error_code,now,None)
+    }
+
+    fn transition_with_diagnostic(&mut self,job_id:&str,expected:JobState,next:JobState,error_code:Option<&str>,now:DateTime<Utc>,failure_diagnostic:Option<imagery::FailureDiagnostic>)->Result<Job,LedgerError>{
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -940,6 +947,7 @@ impl TaskStore {
             occurred_at: now,
             state: next,
             error_code: error_code.map(str::to_owned),
+            failure_diagnostic,
             completed_tiles: None,
             total_tiles: None,
             processing_stage: None,
@@ -984,6 +992,7 @@ impl TaskStore {
             completed_tiles: Some(completed),
             total_tiles: Some(total),
             processing_stage: None,
+            failure_diagnostic: None,
         };
         tx.execute(
             "INSERT INTO job_events(job_id,seq,body) VALUES (?1,?2,?3)",
@@ -997,7 +1006,7 @@ impl TaskStore {
         let tx=self.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let job=read_job(&tx,job_id)?.ok_or_else(||LedgerError::new("JOB_NOT_FOUND","任务不存在"))?;
         if job.state!=JobState::Processing{return Err(LedgerError::new("JOB_STATE_CONFLICT","任务未在生成成果"));}
-        let event=JobEvent{job_id:job_id.into(),seq:job.version+1,occurred_at:Utc::now(),state:JobState::Processing,error_code:None,completed_tiles:None,total_tiles:None,processing_stage:Some(stage.into())};
+        let event=JobEvent{job_id:job_id.into(),seq:job.version+1,occurred_at:Utc::now(),state:JobState::Processing,error_code:None,completed_tiles:None,total_tiles:None,processing_stage:Some(stage.into()),failure_diagnostic:None};
         tx.execute("UPDATE jobs SET version=?1 WHERE job_id=?2 AND version=?3",params![event.seq,job_id,job.version])?;
         tx.execute("INSERT INTO job_events(job_id,seq,body) VALUES(?1,?2,?3)",params![job_id,event.seq,serde_json::to_string(&event)?])?;
         tx.commit()?;Ok(())
@@ -1240,7 +1249,7 @@ impl TaskStore {
                     "PAUSED" => JobState::Paused,
                     _ => JobState::Failed,
                 };
-                self.transition(job_id, job.state, next, Some(error.code), Utc::now())?;
+                self.transition_with_diagnostic(job_id, job.state, next, Some(error.code), Utc::now(),error.diagnostic.clone())?;
                 Err(LedgerError::new(error.code, error.message))
             }
         }

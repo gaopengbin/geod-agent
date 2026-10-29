@@ -29,6 +29,17 @@ fn serve(expected: &'static str, status: &'static str) -> (String, thread::JoinH
 }
 
 #[tokio::test]
+async fn forbidden_reports_safe_http_context_without_retry_or_token_echo() {
+    let (address, worker)=serve("tk=declared-test-token","403 Forbidden");
+    let endpoint=source(&address,AuthenticationMode::QueryToken,"tk");
+    let failure=fetch_preview_tile(&endpoint,2,2,1,ProxyRoute::Direct).await.unwrap_err();worker.join().unwrap();
+    let diagnostic=serde_json::to_value(failure.diagnostic.unwrap()).unwrap();
+    assert_eq!(diagnostic["kind"],"sourceAccess");assert_eq!(diagnostic["httpStatus"],403);
+    assert_eq!(diagnostic["host"],"127.0.0.1");assert_eq!(diagnostic["authenticationConfigured"],true);
+    assert!(!diagnostic.to_string().contains("declared-test-token"));assert!(!failure.message.contains("declared-test-token"));
+}
+
+#[tokio::test]
 async fn three_authentication_modes_fetch_real_images_without_serializing_secrets() {
     for (mode, parameter, expected) in [
         (AuthenticationMode::QueryToken, "tk", "tk=declared-test-token"),
