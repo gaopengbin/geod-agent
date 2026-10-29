@@ -19,7 +19,7 @@ pub(crate) fn schema(db: &Connection) -> Result<(), AppError> {
     db.execute_batch("CREATE TABLE IF NOT EXISTS download_transport_state(owner TEXT PRIMARY KEY,last_attempt TEXT,last_delivery TEXT,last_error TEXT);").map_err(storage)?;
     db.execute_batch("CREATE TABLE IF NOT EXISTS download_collector_health(owner TEXT PRIMARY KEY,last_tick TEXT NOT NULL,last_error TEXT);").map_err(storage)?;
     let columns={let mut q=db.prepare("PRAGMA table_info(download_telemetry_consent)").map_err(storage)?;let rows=q.query_map([],|r|r.get::<_,String>(1)).map_err(storage)?.collect::<Result<Vec<_>,_>>().map_err(storage)?;rows};
-    for(name,definition)in [("diagnostic_consent","INTEGER NOT NULL DEFAULT 0"),("notice_version","INTEGER NOT NULL DEFAULT 1"),("diagnostic_since","TEXT")]{if !columns.iter().any(|n|n==name){db.execute_batch(&format!("ALTER TABLE download_telemetry_consent ADD COLUMN {name} {definition};")).map_err(storage)?;}}
+    for(name,definition)in [("diagnostic_consent","INTEGER NOT NULL DEFAULT 0"),("notice_version","INTEGER NOT NULL DEFAULT 1"),("diagnostic_since","TEXT"),("notice_ack_version","INTEGER NOT NULL DEFAULT 0"),("preference_source","TEXT NOT NULL DEFAULT 'legacy'")]{if !columns.iter().any(|n|n==name){db.execute_batch(&format!("ALTER TABLE download_telemetry_consent ADD COLUMN {name} {definition};")).map_err(storage)?;}}
     db.execute_batch("CREATE TABLE IF NOT EXISTS download_collector_cursors(owner TEXT PRIMARY KEY,event_rowid INTEGER NOT NULL);").map_err(storage)?;
     db.execute_batch("CREATE TABLE IF NOT EXISTS download_observation_receipts(owner TEXT NOT NULL,resource TEXT NOT NULL,event_seq INTEGER NOT NULL,PRIMARY KEY(owner,resource,event_seq));").map_err(storage)?;
     if !db.prepare("PRAGMA table_info(download_observations)").map_err(storage)?.query_map([],|r|r.get::<_,String>(1)).map_err(storage)?.filter_map(Result::ok).any(|n|n=="event_seq"){
@@ -63,6 +63,38 @@ pub(crate) fn initialize_for_business(db:&Connection){
     let result=schema(db);
     let _=db.busy_timeout(std::time::Duration::from_millis(timeout.max(0)as u64));
     if let Err(error)=result{eprintln!("GeoD download collector unavailable: {}",error.code);}
+}
+/// Enrol before the first owned task, independent of frontend mounting or clicks.
+/// Existing explicit opt-outs remain disabled. No historical task is replayed.
+pub(crate) fn initialize_for_owner(db:&Connection,owner:&str){
+    let timeout:i64=db.query_row("PRAGMA busy_timeout",[],|r|r.get(0)).unwrap_or(5000);
+    let _=db.busy_timeout(std::time::Duration::from_millis(25));
+    initialize_for_business(db);
+    if let Err(error)=default_policy(db,owner){eprintln!("GeoD diagnostic defaults unavailable: {}",error.code);}
+    let _=db.busy_timeout(std::time::Duration::from_millis(timeout.max(0)as u64));
+}
+fn default_policy(db:&Connection,owner:&str)->Result<(),AppError>{
+    let at=Utc::now().to_rfc3339();
+    db.execute("UPDATE download_telemetry_consent SET preference_source='explicit' WHERE owner=?1 AND preference_source='legacy' AND notice_version>=2",[owner]).map_err(storage)?;
+    db.execute("INSERT OR IGNORE INTO download_telemetry_consent(owner,enabled,since,diagnostic_consent,notice_version,diagnostic_since,preference_source) VALUES(?1,1,?2,1,3,?2,'default')",params![owner,at]).map_err(storage)?;
+    // Before notice v2 the detail switch did not exist. A v2 decline is an
+    // actual user choice and must not be replaced by this default migration.
+    db.execute("UPDATE download_telemetry_consent SET diagnostic_consent=1,diagnostic_since=?2,notice_version=3,preference_source='default' WHERE owner=?1 AND enabled=1 AND notice_version<2",params![owner,at]).map_err(storage)?;
+    let last:i64=db.query_row("SELECT coalesce(max(rowid),0) FROM job_events",[],|r|r.get(0)).unwrap_or(0);
+    db.execute("INSERT OR IGNORE INTO download_collector_cursors VALUES(?1,?2)",params![owner,last]).map_err(storage)?;
+    Ok(())
+}
+fn migrate_legacy_preference(db:&Connection,owner:&str,legacy_optout:bool)->Result<(),AppError>{
+    let preference:Option<(bool,i64,String)>=db.query_row("SELECT enabled,notice_version,preference_source FROM download_telemetry_consent WHERE owner=?1",[owner],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?))).optional().map_err(storage)?;
+    if let Some((_,version,source))=preference{
+        if source=="explicit"{return Ok(());}
+        if legacy_optout{
+            db.execute("UPDATE download_telemetry_consent SET enabled=0,diagnostic_consent=0,diagnostic_since=NULL,notice_version=3,preference_source='explicit' WHERE owner=?1",[owner]).map_err(storage)?;
+        }else if version<2&&source=="legacy"{
+            let at=Utc::now().to_rfc3339();
+            db.execute("UPDATE download_telemetry_consent SET enabled=1,since=?2,diagnostic_consent=1,diagnostic_since=?2,notice_version=3,preference_source='default' WHERE owner=?1",params![owner,at]).map_err(storage)?;
+        }
+    }Ok(())
 }
 fn terminal(state: &str) -> bool {
     matches!(
@@ -254,7 +286,9 @@ fn set_consent(app:&AppHandle,enabled:bool,account_id:String,diagnostics:Option<
         .map_err(storage)?;
     schema(&db)?;
     db.execute("INSERT INTO download_telemetry_consent(owner,enabled,since) VALUES(?1,?2,?3) ON CONFLICT(owner) DO UPDATE SET enabled=excluded.enabled,since=CASE WHEN enabled=excluded.enabled THEN since ELSE excluded.since END",params![owner,enabled,Utc::now().to_rfc3339()]).map_err(storage)?;
-    if let Some(detail)=diagnostics{db.execute("UPDATE download_telemetry_consent SET notice_version=2,diagnostic_consent=?2,diagnostic_since=CASE WHEN ?2=0 THEN NULL WHEN diagnostic_consent=1 THEN diagnostic_since ELSE ?3 END WHERE owner=?1",params![owner,enabled&&detail,Utc::now().to_rfc3339()]).map_err(storage)?;}else if !enabled{db.execute("UPDATE download_telemetry_consent SET diagnostic_consent=0,diagnostic_since=NULL WHERE owner=?1",[&owner]).map_err(storage)?;}
+    if let Some(detail)=diagnostics{db.execute("UPDATE download_telemetry_consent SET notice_version=3,diagnostic_consent=?2,diagnostic_since=CASE WHEN ?2=0 THEN NULL WHEN diagnostic_consent=1 THEN diagnostic_since ELSE ?3 END WHERE owner=?1",params![owner,enabled&&detail,Utc::now().to_rfc3339()]).map_err(storage)?;}else if !enabled{db.execute("UPDATE download_telemetry_consent SET diagnostic_consent=0,diagnostic_since=NULL,notice_version=3 WHERE owner=?1",[&owner]).map_err(storage)?;}
+    db.execute("UPDATE download_telemetry_consent SET notice_ack_version=3 WHERE owner=?1",[&owner]).map_err(storage)?;
+    db.execute("UPDATE download_telemetry_consent SET preference_source='explicit',notice_version=3 WHERE owner=?1",[&owner]).map_err(storage)?;
     let last:i64=db.query_row("SELECT coalesce(max(rowid),0) FROM job_events",[],|r|r.get(0)).unwrap_or(0);
     db.execute("INSERT OR IGNORE INTO download_collector_cursors VALUES(?1,?2)",params![owner,last]).map_err(storage)?;
     if !enabled {
@@ -294,21 +328,36 @@ pub(crate) fn diagnostic_snapshot(db:&Connection,owner:&str)->rusqlite::Result<V
     let health:Option<(String,Option<String>)>=db.query_row("SELECT last_tick,last_error FROM download_collector_health WHERE owner=?1",[owner],|r|Ok((r.get(0)?,r.get(1)?))).optional()?;
     let collector_error=health.as_ref().and_then(|(_,e)|e.as_deref());
     let reason=if enabled!=Some(true){"consent_disabled"}else if collector_error.is_some(){"collector_unavailable"}else if queued>0&&last_error.is_some(){match last_error.as_deref(){Some("auth")=>"transport_auth",Some("network")=>"transport_network",Some("schema")=>"transport_schema",_=>"transport_other"}}else if queued>0||observations>0{"queued"}else if last_delivery.is_some(){"reported"}else{"no_download_observed"};
-    Ok(json!({"enabled":enabled.unwrap_or(false),"hasConsentRecord":enabled.is_some(),"diagnosticsEnabled":details.is_some_and(|(v,_)|v),"needsConsentReview":enabled==Some(true)&&details.is_some_and(|(_,version)|version<2),"reason":reason,"queuedEvents":queued,"pendingObservations":observations,"observedAttempts":attempts,"observedAttemptsMeaning":"resources with a retained latest attempt, not a historical attempt total","lastAttemptAt":last_attempt,"lastDeliveryAt":last_delivery,"lastErrorCategory":last_error,"collector":"native-background","collectorLastTick":health.as_ref().map(|(t,_)|t),"collectorError":collector_error,"schemaVersion":1}))
+    let notice_ack:Option<i64>=db.query_row("SELECT notice_ack_version FROM download_telemetry_consent WHERE owner=?1",[owner],|r|r.get(0)).optional()?;
+    Ok(json!({"enabled":enabled.unwrap_or(false),"hasConsentRecord":enabled.is_some(),"diagnosticsEnabled":details.is_some_and(|(v,_)|v),"needsConsentReview":false,"noticePending":notice_ack.is_some_and(|v|v<3),"reason":reason,"queuedEvents":queued,"pendingObservations":observations,"observedAttempts":attempts,"observedAttemptsMeaning":"resources with a retained latest attempt, not a historical attempt total","lastAttemptAt":last_attempt,"lastDeliveryAt":last_delivery,"lastErrorCategory":last_error,"collector":"native-background","collectorLastTick":health.as_ref().map(|(t,_)|t),"collectorError":collector_error,"schemaVersion":1}))
 }
 pub(crate) fn diagnostics(app:&AppHandle,owner:&str)->Result<Value,AppError>{
+    diagnostics_policy(app,owner,None)
+}
+fn diagnostics_policy(app:&AppHandle,owner:&str,legacy_optout:Option<bool>)->Result<Value,AppError>{
     let state=app.state::<AppState>();let db=Connection::open(&state.db_path).map_err(storage)?;
-    db.busy_timeout(std::time::Duration::from_secs(2)).map_err(storage)?;schema(&db)?;
+    db.busy_timeout(std::time::Duration::from_secs(2)).map_err(storage)?;schema(&db)?;default_policy(&db,owner)?;
+    if let Some(value)=legacy_optout{migrate_legacy_preference(&db,owner,value)?;}
     diagnostic_snapshot(&db,owner).map_err(storage)
 }
 #[tauri::command]
-pub(crate) async fn download_telemetry_status(app:AppHandle,account_id:String)->Result<Value,AppError>{
-    tauri::async_runtime::spawn_blocking(move||status(&app,account_id)).await.map_err(|_|storage("collector thread"))?
+pub(crate) async fn download_telemetry_status(app:AppHandle,account_id:String,legacy_optout:Option<bool>)->Result<Value,AppError>{
+    tauri::async_runtime::spawn_blocking(move||status(&app,account_id,legacy_optout)).await.map_err(|_|storage("collector thread"))?
 }
-fn status(app:&AppHandle,account_id:String)->Result<Value,AppError>{
+fn status(app:&AppHandle,account_id:String,legacy_optout:Option<bool>)->Result<Value,AppError>{
     let owner=services::current_user_id(&app.state::<services::ServiceState>()).map_err(|e|workspace_error(e.code,e.message))?;
     if owner!=account_id{return Err(workspace_error("ACCOUNT_CHANGED","下载统计账号已切换"));}
-    diagnostics(app,&owner)
+    diagnostics_policy(app,&owner,legacy_optout)
+}
+#[tauri::command]
+pub(crate) async fn download_telemetry_acknowledge(app:AppHandle,account_id:String)->Result<Value,AppError>{
+    tauri::async_runtime::spawn_blocking(move||{
+        let owner=services::current_user_id(&app.state::<services::ServiceState>()).map_err(|e|workspace_error(e.code,e.message))?;
+        if owner!=account_id{return Err(workspace_error("ACCOUNT_CHANGED","统计设置账号已切换"));}
+        let state=app.state::<AppState>();let db=Connection::open(&state.db_path).map_err(storage)?;schema(&db)?;default_policy(&db,&owner)?;
+        db.execute("UPDATE download_telemetry_consent SET notice_ack_version=3 WHERE owner=?1",[&owner]).map_err(storage)?;
+        diagnostic_snapshot(&db,&owner).map_err(storage)
+    }).await.map_err(|_|storage("collector thread"))?
 }
 fn tick(app: &AppHandle) -> Result<(), AppError> {
     let state = app.state::<AppState>();
@@ -319,6 +368,7 @@ fn tick(app: &AppHandle) -> Result<(), AppError> {
     let service = app.state::<services::ServiceState>();
     let owner =
         services::current_user_id(&service).map_err(|e| workspace_error(e.code, e.message))?;
+    default_policy(&db,&owner)?;
     let collected=reconcile_imagery(&db).and_then(|_|collect(&mut db));
     let category=collected.as_ref().err().map(|e|e.code);
     db.execute("INSERT INTO download_collector_health VALUES(?1,?2,?3) ON CONFLICT(owner) DO UPDATE SET last_tick=excluded.last_tick,last_error=excluded.last_error WHERE coalesce(last_error,'')<>coalesce(excluded.last_error,'') OR julianday(excluded.last_tick)-julianday(last_tick)>30.0/86400.0",params![owner,Utc::now().to_rfc3339(),category]).map_err(storage)?;
@@ -389,6 +439,28 @@ fn flush(service:&services::ServiceState,db:&mut Connection,owner:&str)->Result<
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]fn default_reporting_is_ready_without_a_frontend_choice_and_disclosure_does_not_gate_it(){
+        let mut db=Connection::open_in_memory().unwrap();schema(&db).unwrap();default_policy(&db,"fresh").unwrap();
+        let state=diagnostic_snapshot(&db,"fresh").unwrap();assert_eq!(state["enabled"],true);assert_eq!(state["diagnosticsEnabled"],true);assert_eq!(state["noticePending"],true);
+        db.execute("INSERT INTO download_observations(owner,resource,state,stamp,reason) VALUES('fresh','data:new','failed',?1,'SOURCE_NETWORK')",[Utc::now().to_rfc3339()]).unwrap();collect(&mut db).unwrap();
+        assert_eq!(db.query_row("SELECT count(*) FROM download_outbox",[],|r|r.get::<_,i64>(0)).unwrap(),2);
+        db.execute("UPDATE download_telemetry_consent SET notice_ack_version=3 WHERE owner='fresh'",[]).unwrap();default_policy(&db,"fresh").unwrap();assert_eq!(diagnostic_snapshot(&db,"fresh").unwrap()["noticePending"],false);
+    }
+    #[test]fn default_migration_preserves_explicit_optouts_and_does_not_seed_historical_attempts(){
+        let db=Connection::open_in_memory().unwrap();schema(&db).unwrap();
+        db.execute_batch("CREATE TABLE job_events(body TEXT);INSERT INTO job_events VALUES('{}');INSERT INTO download_telemetry_consent(owner,enabled,since,diagnostic_consent,notice_version) VALUES('off',0,'old',0,2),('basic-only',1,'old',0,2),('legacy',1,'old',0,1)").unwrap();
+        for owner in["off","basic-only","legacy"]{default_policy(&db,owner).unwrap();}
+        assert_eq!(diagnostic_snapshot(&db,"off").unwrap()["enabled"],false);assert_eq!(diagnostic_snapshot(&db,"basic-only").unwrap()["diagnosticsEnabled"],false);assert_eq!(diagnostic_snapshot(&db,"legacy").unwrap()["diagnosticsEnabled"],true);
+        assert_eq!(db.query_row("SELECT min(event_rowid) FROM download_collector_cursors",[],|r|r.get::<_,i64>(0)).unwrap(),1);assert_eq!(db.query_row("SELECT count(*) FROM download_outbox",[],|r|r.get::<_,i64>(0)).unwrap(),0);
+    }
+    #[test]fn old_automatic_false_migrates_without_clicks_but_identifiable_optouts_stay_off(){
+        let db=Connection::open_in_memory().unwrap();schema(&db).unwrap();
+        db.execute_batch("INSERT INTO download_telemetry_consent(owner,enabled,since) VALUES('automatic',0,'old'),('legacy-optout',0,'old');INSERT INTO download_telemetry_consent(owner,enabled,since,diagnostic_consent,notice_version) VALUES('explicit-v2',0,'old',0,2)").unwrap();
+        for owner in["automatic","legacy-optout","explicit-v2"]{default_policy(&db,owner).unwrap();}
+        migrate_legacy_preference(&db,"automatic",false).unwrap();migrate_legacy_preference(&db,"legacy-optout",true).unwrap();migrate_legacy_preference(&db,"explicit-v2",false).unwrap();
+        assert_eq!(diagnostic_snapshot(&db,"automatic").unwrap()["diagnosticsEnabled"],true);assert_eq!(diagnostic_snapshot(&db,"legacy-optout").unwrap()["enabled"],false);assert_eq!(diagnostic_snapshot(&db,"explicit-v2").unwrap()["enabled"],false);
+        db.execute("UPDATE download_telemetry_consent SET enabled=0,diagnostic_consent=0,preference_source='explicit' WHERE owner='automatic'",[]).unwrap();default_policy(&db,"automatic").unwrap();migrate_legacy_preference(&db,"automatic",false).unwrap();assert_eq!(diagnostic_snapshot(&db,"automatic").unwrap()["enabled"],false);
+    }
     #[test]fn outcome_reasons_retain_processing_provider_permission_and_verification_without_uploading_details(){
         for (detail,expected) in [("原始栅格处理返回无效结果","processing"),("SOURCE_NETWORK","network"),("SOURCE_HTTP HTTP 500","provider"),("CHECKSUM_MISMATCH private.tif","verification"),("ACCESS_DENIED","permission"),("BACKGROUND_UNAVAILABLE","backend"),("no diagnostic","unknown")]{assert_eq!(failure_reason(detail),expected);}
     }

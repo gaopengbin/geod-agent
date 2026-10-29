@@ -79,6 +79,7 @@ pub(crate) fn bind_created_plan(state: &AppState, owner: &str, conversation_id: 
     let stored = open_store(state)?.get_plan(plan_id)?.ok_or_else(|| workspace_error("PLAN_NOT_FOUND", "计划不存在"))?;
     let root = plan_workspace(&stored, workspace)?.to_string_lossy().into_owned();
     let conn = db(state)?;
+    crate::download_telemetry::initialize_for_owner(&conn,owner);
     conn.execute("INSERT OR IGNORE INTO imagery_plan_owners(plan_id,owner_id,conversation_id,workspace,bound_at) VALUES(?1,?2,?3,?4,?5)",
         params![plan_id,owner,conversation_id,root,Utc::now().to_rfc3339()]).map_err(storage)?;
     let actual: (String,String,String) = conn.query_row("SELECT owner_id,conversation_id,workspace FROM imagery_plan_owners WHERE plan_id=?1", [plan_id], |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?))).map_err(storage)?;

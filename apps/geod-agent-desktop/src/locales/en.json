@@ -2647,5 +2647,14 @@
   "请核对下载接口地址、对应服务授权和网络出口。在线预览与批量下载的请求条件可能不同；现有任务和缓存已保留。": "Check the download endpoint, service authorization and network route. Preview and bulk download requests may have different conditions. Existing tasks and cache are retained.",
   "关联当前账号，发送图源服务、底图与注记、HTTP 状态、失败阶段和空间数值。不含密钥、坐标、文件名或完整路径；可随时关闭，不影响下载。": "Linked to this account: source service, base and overlay layers, HTTP status, failure stage and disk space. No keys, coordinates, filenames or full paths. Optional; turning it off does not affect downloads.",
   "仅基础下载结果，详细诊断未开启。": "Basic outcomes only; detailed diagnostics are off.",
-  "采集器暂不可用，下载不受影响；请重启应用或联系支持。": "The collector is unavailable. Downloads are unaffected. Restart the app or contact support."
+  "采集器暂不可用，下载不受影响；请重启应用或联系支持。": "The collector is unavailable. Downloads are unaffected. Restart the app or contact support.",
+  "基础诊断与使用统计默认开启，可随时关闭。": "Basic diagnostics and usage reporting are on by default. You can turn them off at any time.",
+  "关联当前账号，记录启动、调用结果和可用用量，以及图源服务、底图与注记、HTTP 状态、失败阶段和空间数值。不发送对话、密钥、坐标、文件名或完整路径；明确关闭的选择会保留。": "Linked to this account: launches, call results and available usage, source services, base and annotation layers, HTTP status, failure stage and disk space. No conversations, keys, coordinates, filenames or full paths. Existing opt-outs are preserved.",
+  "下载诊断：": "Download diagnostics: ",
+  "使用统计：": "Usage reporting: ",
+  "知道了": "Got it",
+  "关闭统计": "Turn off reporting",
+  "默认开启，启动、自有渠道调用结果与可用 Token 用量会关联当前账号；不发送对话、模型名称、渠道地址或密钥。关闭会清除待上传记录，已发送的请求可能完成。下载统计单独控制。": "On by default: launches, personal-provider call outcomes and available token usage are linked to this account. No conversations, model names, provider URLs or keys are sent. Turning it off clears pending records; requests already in flight may finish. Download reporting is controlled separately.",
+  "默认关联活跃、自有渠道用量及下载统计是否可用；不上传对话或密钥，下载结果仍由独立开关控制。": "Activity, personal usage and download-reporting status are linked by default. No conversations or keys are uploaded; download outcomes have their own switch.",
+  "统计设置未全部保存，请在账号菜单确认开关状态。": "Some reporting settings could not be saved. Check the switches in the account menu."
 }

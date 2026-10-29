@@ -601,6 +601,7 @@ fn start(
     let workspace = read_workspace(app, state, services, conversation)?;
     let owner = owner(services)?;
     let db = open_data_db(&state.db_path)?;
+    crate::download_telemetry::initialize_for_owner(&db,&owner);
     let task = get(&db, &owner, conversation, id)?;
     check_binding(&db, &task, &workspace.directory)?;
     if task.plan_hash != plan_hash

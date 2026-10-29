@@ -1,4 +1,4 @@
-//! Optional account-scoped activity. Never sends prompts, provider/model names,
+//! Disclosed, default-on account-scoped diagnostics. Never sends prompts, provider/model names,
 //! channel URLs, credentials, conversation IDs or native generation IDs.
 use crate::{ai_channels::AiChannels, services, workspace_error, AppError};
 use chrono::Utc;
@@ -9,17 +9,20 @@ fn storage<T>(_: T) -> AppError {
     workspace_error("ACTIVITY_STORAGE", "使用统计暂不可用，任务不受影响")
 }
 pub(crate) fn schema(db: &Connection) -> rusqlite::Result<()> {
-    db.execute_batch("CREATE TABLE IF NOT EXISTS activity_consent(owner TEXT PRIMARY KEY,enabled INTEGER NOT NULL); CREATE TABLE IF NOT EXISTS activity_outbox(owner TEXT NOT NULL,resource TEXT NOT NULL,state TEXT NOT NULL,id TEXT NOT NULL,body TEXT NOT NULL,PRIMARY KEY(owner,resource,state)); CREATE TABLE IF NOT EXISTS activity_seen(owner TEXT NOT NULL,resource TEXT NOT NULL,state TEXT NOT NULL,PRIMARY KEY(owner,resource,state)); CREATE TABLE IF NOT EXISTS activity_status_state(owner TEXT NOT NULL,kind TEXT NOT NULL,digest TEXT NOT NULL,PRIMARY KEY(owner,kind));")
+    db.execute_batch("CREATE TABLE IF NOT EXISTS activity_consent(owner TEXT PRIMARY KEY,enabled INTEGER NOT NULL); CREATE TABLE IF NOT EXISTS activity_preferences(owner TEXT PRIMARY KEY,enabled INTEGER NOT NULL,source TEXT NOT NULL); CREATE TABLE IF NOT EXISTS activity_outbox(owner TEXT NOT NULL,resource TEXT NOT NULL,state TEXT NOT NULL,id TEXT NOT NULL,body TEXT NOT NULL,PRIMARY KEY(owner,resource,state)); CREATE TABLE IF NOT EXISTS activity_seen(owner TEXT NOT NULL,resource TEXT NOT NULL,state TEXT NOT NULL,PRIMARY KEY(owner,resource,state)); CREATE TABLE IF NOT EXISTS activity_status_state(owner TEXT NOT NULL,kind TEXT NOT NULL,digest TEXT NOT NULL,PRIMARY KEY(owner,kind));")
 }
 fn enabled(db: &Connection, owner: &str) -> rusqlite::Result<bool> {
+    if db.execute("INSERT OR IGNORE INTO activity_consent(owner,enabled) VALUES(?1,1)",[owner])?>0{
+        db.execute("INSERT OR IGNORE INTO activity_preferences VALUES(?1,1,'default')",[owner])?;
+    }
     Ok(db
         .query_row(
-            "SELECT enabled FROM activity_consent WHERE owner=?1",
+            "SELECT coalesce((SELECT enabled FROM activity_preferences WHERE owner=?1),enabled) FROM activity_consent WHERE owner=?1",
             [owner],
             |r| r.get(0),
         )
         .optional()?
-        .unwrap_or(false))
+        .unwrap_or(true))
 }
 fn reason(code: &str) -> &'static str {
     let s = code.to_uppercase();
@@ -98,12 +101,37 @@ fn set(db: &Connection, owner: &str, on: bool) -> rusqlite::Result<()> {
     schema(db)?;
     let tx = db.unchecked_transaction()?;
     tx.execute("INSERT INTO activity_consent VALUES(?1,?2) ON CONFLICT(owner) DO UPDATE SET enabled=excluded.enabled",params![owner,on])?;
+    tx.execute("INSERT INTO activity_preferences VALUES(?1,?2,'explicit') ON CONFLICT(owner) DO UPDATE SET enabled=excluded.enabled,source='explicit'",params![owner,on])?;
     if !on {
         tx.execute("DELETE FROM activity_outbox WHERE owner=?1", [owner])?;
         tx.execute("DELETE FROM activity_seen WHERE owner=?1", [owner])?;
         tx.execute("DELETE FROM activity_status_state WHERE owner=?1",[owner])?;
     }
     tx.commit()
+}
+fn status_default(db:&Connection,owner:&str,legacy_preference:Option<bool>)->rusqlite::Result<Value>{
+    schema(db)?;
+    let preference:Option<(bool,String)>=db.query_row("SELECT enabled,source FROM activity_preferences WHERE owner=?1",[owner],|r|Ok((r.get(0)?,r.get(1)?))).optional()?;
+    let value=match preference{
+        Some((value,source))if source=="explicit"=>value,
+        Some((value,_))if legacy_preference.is_none()=>value,
+        _=>{
+            let value=legacy_preference.unwrap_or(true);
+            let tx=db.unchecked_transaction()?;
+            tx.execute("INSERT INTO activity_consent VALUES(?1,?2) ON CONFLICT(owner) DO UPDATE SET enabled=excluded.enabled",params![owner,value])?;
+            tx.execute("INSERT INTO activity_preferences VALUES(?1,?2,?3) ON CONFLICT(owner) DO UPDATE SET enabled=excluded.enabled,source=excluded.source",params![owner,value,if legacy_preference.is_some(){"explicit"}else{"default"}])?;
+            tx.commit()?;value
+        }
+    };
+    Ok(json!({"enabled":value,"schemaVersion":2}))
+}
+#[tauri::command]
+pub(crate) async fn agent_activity_status(app:AppHandle,account_id:String,legacy_preference:Option<bool>)->Result<Value,AppError>{
+    tauri::async_runtime::spawn_blocking(move||{
+        let owner=services::current_user_id(&app.state::<services::ServiceState>()).map_err(|e|workspace_error(e.code,e.message))?;
+        if owner!=account_id{return Err(workspace_error("ACCOUNT_CHANGED","统计设置账号已切换"));}
+        let db=app.state::<AiChannels>().db().map_err(storage)?;status_default(&db,&owner,legacy_preference).map_err(storage)
+    }).await.map_err(|_|storage("collector thread"))?
 }
 #[tauri::command]
 pub(crate) fn agent_activity_set(
@@ -201,10 +229,23 @@ fn tick(app: &AppHandle, session: &str) -> Result<(), AppError> {
     tx.commit().map_err(storage)
 }
 #[cfg(test)]
+pub(crate) fn live_default_acceptance(db:&Connection,service:&services::ServiceState,owner:&str,download:&Value)->Value{
+    assert_eq!(status_default(db,owner,None).unwrap()["enabled"],true);
+    enqueue(db,owner,"first-observed-client","started","app_first_seen",&Value::Null).unwrap();
+    enqueue(db,owner,&uuid::Uuid::new_v4().to_string(),"started","app_session",&Value::Null).unwrap();
+    record_download_status(db,owner,download).unwrap();
+    let events={let mut query=db.prepare("SELECT body FROM activity_outbox WHERE owner=?1 ORDER BY rowid").unwrap();let rows=query.query_map([owner],|r|r.get::<_,String>(0)).unwrap().map(|r|serde_json::from_str::<Value>(&r.unwrap()).unwrap()).collect::<Vec<_>>();rows};
+    let receipt=services::send_activity_events(service,owner,json!(events)).unwrap();
+    assert_eq!(receipt["accepted"].as_u64().unwrap_or(0)+receipt["duplicates"].as_u64().unwrap_or(0),events.len()as u64);
+    db.execute("DELETE FROM activity_outbox WHERE owner=?1",[owner]).unwrap();
+    json!({"receipt":receipt,"eventIds":events.iter().map(|v|v["event_id"].clone()).collect::<Vec<_>>(),"manualEnableCalls":0})
+}
+#[cfg(test)]
 mod tests {
     use super::*;
-    #[test]fn download_diagnostic_requires_activity_consent_and_records_only_state_changes(){
+    #[test]fn download_diagnostic_respects_explicit_disable_and_records_only_state_changes(){
         let db=Connection::open_in_memory().unwrap();schema(&db).unwrap();let off=json!({"reason":"consent_disabled","privatePath":"private","source":"secret"});
+        set(&db,"a",false).unwrap();
         record_download_status(&db,"a",&off).unwrap();assert_eq!(db.query_row("SELECT count(*) FROM activity_outbox",[],|r|r.get::<_,i64>(0)).unwrap(),0);
         set(&db,"a",true).unwrap();record_download_status(&db,"a",&off).unwrap();record_download_status(&db,"a",&off).unwrap();
         record_download_status(&db,"a",&json!({"reason":"reported"})).unwrap();record_download_status(&db,"a",&off).unwrap();
@@ -213,10 +254,10 @@ mod tests {
         assert_eq!(serde_json::from_str::<Value>(&body).unwrap()["reason"],"consent_disabled");
     }
     #[test]
-    fn first_observation_requires_consent_and_is_locally_deduplicated() {
+    fn first_observation_is_default_on_and_locally_deduplicated() {
         let db=Connection::open_in_memory().unwrap();schema(&db).unwrap();
         enqueue(&db,"a","first-observed-client","started","app_first_seen",&Value::Null).unwrap();
-        assert_eq!(db.query_row("SELECT count(*) FROM activity_outbox",[],|r|r.get::<_,i64>(0)).unwrap(),0);
+        assert_eq!(db.query_row("SELECT count(*) FROM activity_outbox",[],|r|r.get::<_,i64>(0)).unwrap(),1);
         set(&db,"a",true).unwrap();
         for _ in 0..2 {enqueue(&db,"a","first-observed-client","started","app_first_seen",&Value::Null).unwrap();}
         assert_eq!(db.query_row("SELECT count(*) FROM activity_outbox",[],|r|r.get::<_,i64>(0)).unwrap(),1);
@@ -257,6 +298,7 @@ mod tests {
     fn consent_dedup_privacy_and_account_isolation() {
         let db = Connection::open_in_memory().unwrap();
         schema(&db).unwrap();
+        set(&db,"a",false).unwrap();
         let v = json!({"generationId":"secret-native-id","billingScope":"personal","state":"settled","usageKnown":true,"inputTokens":123,"outputTokens":4,"result":"private prompt","channelId":"secret-channel","model":"private-model"});
         record_generation(&db, "a", &v).unwrap();
         assert_eq!(
@@ -304,5 +346,13 @@ mod tests {
                 .unwrap(),
             0
         );
+    }
+    #[test]fn legacy_automatic_false_is_not_a_user_optout_and_new_explicit_choice_is_durable(){
+        let db=Connection::open_in_memory().unwrap();schema(&db).unwrap();db.execute("INSERT INTO activity_consent VALUES('old',0)",[]).unwrap();
+        assert_eq!(status_default(&db,"old",None).unwrap()["enabled"],true);
+        assert_eq!(status_default(&db,"declined",Some(false)).unwrap()["enabled"],false);
+        assert_eq!(status_default(&db,"declined",None).unwrap()["enabled"],false);
+        set(&db,"old",false).unwrap();assert_eq!(status_default(&db,"old",Some(true)).unwrap()["enabled"],false);
+        assert_eq!(status_default(&db,"other",None).unwrap()["enabled"],true);
     }
 }
