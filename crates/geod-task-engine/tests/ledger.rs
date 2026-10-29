@@ -322,6 +322,7 @@ fn transient_failure_requeues_same_approved_job_after_restart() {
         total_tiles: None,
         processing_stage: None,
         failure_diagnostic: None,
+        diagnostic: None,
     };
     conn.execute(
         "INSERT INTO job_events(job_id,seq,body) VALUES (?1,2,?2)",

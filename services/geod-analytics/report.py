@@ -202,7 +202,10 @@ def event_report(path, start, until, website=False):
     product_filter = "product = 'geod-web' AND " if website else ""
     predicate = product_filter + "julianday(occurred_at) >= julianday(?) AND julianday(occurred_at) < julianday(?)"
     parameters = (start.isoformat(), until.isoformat())
-    with readonly_database(path, {table, 'telemetry_metadata'} if not website else {table}) as connection:
+    with readonly_database(path, {table, 'telemetry_metadata','telemetry_internal_installations'} if not website else {table}) as connection:
+        internal_available=not website and bool(connection.execute('PRAGMA table_info(telemetry_internal_installations)').fetchall())
+        if internal_available:
+            table='(SELECT e.* FROM events e WHERE NOT EXISTS(SELECT 1 FROM telemetry_internal_installations i WHERE i.install_id=e.install_id))'
         summary = first(connection, f"SELECT count(*) events, count(distinct {identity}) anonymous_ids, "
                         f"count(distinct session_id) sessions FROM {table} WHERE {predicate}", parameters)
         summary["last_event_bj"] = latest_bj(first(connection,
@@ -226,9 +229,9 @@ def event_report(path, start, until, website=False):
             metadata = metadata_rows[0]['value'] if metadata_rows else None
             has_version = any(r['name'] == 'app_version' for r in rows(connection, 'PRAGMA table_info(events)'))
             version_column = "app_version" if has_version else "'unknown' app_version"
-            lifecycle = rows(connection, f"SELECT install_id identity,occurred_at,properties_json,{version_column} FROM events WHERE event_name='download_task_state' AND julianday(occurred_at)>=julianday(?) AND julianday(occurred_at)<julianday(?)", parameters)
+            lifecycle = rows(connection, f"SELECT install_id identity,occurred_at,properties_json,{version_column} FROM {table} WHERE event_name='download_task_state' AND julianday(occurred_at)>=julianday(?) AND julianday(occurred_at)<julianday(?)", parameters)
             first_observed = first(connection,
-                "SELECT min(occurred_at) first_observed FROM events WHERE event_name='download_task_state' "
+                f"SELECT min(occurred_at) first_observed FROM {table} WHERE event_name='download_task_state' "
                 "AND julianday(occurred_at)<julianday(?) AND json_valid(properties_json) "
                 "AND json_extract(properties_json,'$.attempt_id') IS NOT NULL "
                 "AND json_extract(properties_json,'$.attempt_id')!='' "
@@ -236,6 +239,7 @@ def event_report(path, start, until, website=False):
                 (until.isoformat(),))['first_observed']
             summary['downloads'] = download_report([dict(row, properties=json.loads(row['properties_json'])) for row in lifecycle], metadata, start, until, first_observed)
             summary['token_diagnostics'] = token_diagnostics_report([dict(row, properties=json.loads(row['properties_json'])) for row in lifecycle])
+            summary['acquisition_diagnostics']=[{'version':r['app_version'],'state':p.get('state'),'diagnostic':p.get('diagnostic')} for r in lifecycle if (p:=json.loads(r['properties_json'])).get('state')!='started']
             summary["download_workflows"] = rows(connection,
                 f"SELECT coalesce(json_extract(properties_json,'$.workflow'),'unknown') workflow,count(*) tasks "
                 f"FROM {table} WHERE {predicate} AND event_name='download_task_created' GROUP BY workflow", parameters)

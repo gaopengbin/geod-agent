@@ -1395,8 +1395,22 @@ pub(crate) fn send_download_events(state:&ServiceState,account_id:&str,events:Va
     // Old gateways reject unknown event fields. Negotiate metadata without
     // losing legacy delivery; this check never calls a model.
     let detail_version=gateway_call(state,"/api/agent/capabilities",None).ok().and_then(|v|v["downloadEventDetails"].as_u64()).unwrap_or(0);
-    if let Some(rows)=events.as_array_mut(){for row in rows{if let Some(obj)=row.as_object_mut(){if detail_version==0{obj.remove("download_kind");}else if detail_version<2&&obj.get("download_kind").is_some_and(|v|v=="raster"){obj.insert("download_kind".into(),json!("unknown"));}if detail_version<2&&obj.get("reason").and_then(Value::as_str).is_some_and(|r|["provider","processing","verification","backend"].contains(&r)){obj.insert("reason".into(),json!("unknown"));}}}}
-    gateway_call(state,"/api/agent/events",Some(json!({"schema_version":1,"accountId":account_id,"events":events})))
+    if let Some(rows)=events.as_array_mut(){for row in rows{if let Some(obj)=row.as_object_mut(){if detail_version==0{obj.remove("download_kind");}else if detail_version<2&&obj.get("download_kind").is_some_and(|v|v=="raster"){obj.insert("download_kind".into(),json!("unknown"));}if detail_version<2&&obj.get("reason").and_then(Value::as_str).is_some_and(|r|["provider","processing","verification","backend"].contains(&r)){obj.insert("reason".into(),json!("unknown"));}if detail_version<3{obj.remove("diagnostic");obj.remove("client_version");obj.remove("diagnostic_status");}}}}
+    let mut receipt=gateway_call(state,"/api/agent/events",Some(json!({"schema_version":1,"accountId":account_id,"events":events})))?;
+    receipt["download_detail_version"]=json!(detail_version);Ok(receipt)
+}
+#[cfg(test)]
+pub(crate) fn diagnostic_qa_service(directory:&std::path::Path)->(ServiceState,String){
+    let file=std::env::var("GEOD_DIAGNOSTIC_QA_FILE").expect("Explicit internal QA credentials required");
+    let value:Value=serde_json::from_slice(&fs::read(file).unwrap()).unwrap();
+    assert_eq!(value["testOnly"],true);
+    let origin="http://127.0.0.1:19429".to_owned();
+    let response:TokenResponse=serde_json::from_value(value["oauth"].clone()).unwrap();
+    assert_eq!(response.user_id,value["userId"].as_str().unwrap());
+    let owner=response.user_id.clone();
+    write_tokens(&token_response(response,origin.clone()).unwrap()).unwrap();
+    let config=directory.join("agent-services.json");fs::write(&config,serde_json::to_vec(&ServiceConfig{identity_origin:origin,gateway_origin:"https://geod.laogao.xyz".into()}).unwrap()).unwrap();
+    (ServiceState::new(config),owner)
 }
 pub(crate) fn send_activity_events(state:&ServiceState,account_id:&str,events:Value)->Result<Value,ServiceError>{
     if current_user_id(state)?!=account_id{return Err(error("ACCOUNT_CHANGED","使用统计账号已切换"));}

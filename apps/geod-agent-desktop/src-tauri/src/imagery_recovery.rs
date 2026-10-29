@@ -31,7 +31,7 @@ pub(crate) fn db(state: &AppState) -> Result<Connection, AppError> {
       workspace TEXT NOT NULL, bound_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS imagery_recoveries (
       plan_id TEXT PRIMARY KEY, original_job_id TEXT NOT NULL, mode TEXT NOT NULL);").map_err(storage)?;
-    crate::download_telemetry::schema(&conn)?;
+    crate::download_telemetry::initialize_for_business(&conn);
     Ok(conn)
 }
 fn storage(error: impl std::fmt::Display) -> AppError { workspace_error("STORAGE_ERROR", error.to_string()) }

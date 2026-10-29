@@ -1,0 +1,4 @@
+.download-consent-notice{margin:8px 20px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--background);color:var(--foreground);flex-shrink:0}
+.download-consent-notice p{margin:0;font-size:13px;line-height:1.6}
+.download-consent-notice small{display:block;color:var(--muted-foreground);font-size:12px;line-height:1.6}
+.download-consent-notice>div{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}

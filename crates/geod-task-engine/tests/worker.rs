@@ -41,7 +41,7 @@ async fn source_refusal_survives_restart_with_approval_and_safe_diagnostics() {
  let j=store.start_job(&p.plan_id,&p.plan.plan_hash,&a.approval_id,"refused-once",&descriptor,now()).unwrap();
  let error=store.run_job_with_control_proxy(&j.job_id,&descriptor,&endpoint,now(),&AtomicBool::new(false),&AtomicBool::new(false),geod_core::imagery::ProxyRoute::Direct).await.unwrap_err();worker.join().unwrap();assert_eq!(error.code,"SOURCE_UNAUTHORIZED");drop(store);
  let reopened=TaskStore::open(&db).unwrap();let saved=reopened.get_job(&j.job_id).unwrap().unwrap();assert_eq!(saved.state,JobState::Failed);assert_eq!(saved.approval_id,a.approval_id);assert!(!output.exists());
- let events=reopened.events_after(&j.job_id,0,100).unwrap();let diagnostic=serde_json::to_value(events.last().unwrap().failure_diagnostic.as_ref().unwrap()).unwrap();assert_eq!(diagnostic["httpStatus"],403);assert_eq!(diagnostic["host"],"127.0.0.1");assert_eq!(events.iter().filter(|e|e.state==JobState::Downloading).count(),1);
+ let events=reopened.events_after(&j.job_id,0,100).unwrap();let diagnostic=serde_json::to_value(events.last().unwrap().failure_diagnostic.as_ref().unwrap()).unwrap();assert_eq!(diagnostic["httpStatus"],403);assert_eq!(diagnostic["host"],"127.0.0.1");let mut states=events.iter().map(|e|e.state).collect::<Vec<_>>();states.dedup();assert_eq!(states.iter().filter(|s|**s==JobState::Downloading).count(),1);let rich=events.last().unwrap().diagnostic.as_ref().unwrap();assert_eq!(rich["error_http_status"],403);assert_eq!(rich["sources"][0]["role"],"base");assert_eq!(rich["phase"],"base_download");assert!(!rich["storage"].as_array().unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -170,22 +170,21 @@ async fn approved_job_downloads_and_only_then_completes() {
         store.get_job(&queued.job_id).unwrap().unwrap().state,
         JobState::Completed
     );
-    let events = store.events_after(&queued.job_id, 0, 10).unwrap();
+    let events = store.events_after(&queued.job_id, 0, 100).unwrap();
+    let mut phases=events.iter().map(|event|event.state).collect::<Vec<_>>();phases.dedup();
     assert_eq!(
-        events.iter().map(|event| event.state).collect::<Vec<_>>(),
+        phases,
         [
             JobState::Queued,
-            JobState::Downloading,
-            JobState::Downloading,
             JobState::Downloading,
             JobState::Processing,
             JobState::Verifying,
             JobState::Completed
         ]
     );
-    assert_eq!(events[2].completed_tiles, Some(1));
-    assert_eq!(events[3].completed_tiles, Some(2));
-    assert_eq!(events[3].total_tiles, Some(2));
+    let progress=events.iter().filter(|e|e.completed_tiles.is_some()).collect::<Vec<_>>();
+    assert_eq!(progress[0].completed_tiles, Some(1));assert_eq!(progress[1].completed_tiles, Some(2));assert_eq!(progress[1].total_tiles, Some(2));
+    let diagnostic=events.last().unwrap().diagnostic.as_ref().unwrap();assert_eq!(diagnostic["sources"][0]["http_status"],200);assert_eq!(diagnostic["phase"],"completed");assert!(!diagnostic.to_string().contains("jobs.sqlite"));
     assert!(output.join("manifest.json").exists());
     assert_eq!(
         store.inspect_job_artifact(&queued.job_id).unwrap().id,

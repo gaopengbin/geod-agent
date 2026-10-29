@@ -2627,6 +2627,12 @@
   "保留原始数值波段并按边界导出栅格": "Preserve original numeric bands and export the selected region",
   "打开任务诊断": "Open task diagnostics",
   "存储空间检查": "Storage check",
+  "下载诊断统计": "Download diagnostics",
+  "是否允许发送下载结果和脱敏诊断，帮助排查失败原因？": "Allow download outcomes and redacted diagnostics to help investigate failures?",
+  "包括图源服务、底图与注记、HTTP 状态、失败阶段和空间数值。不含密钥、坐标、文件名或完整路径；可随时关闭，不影响下载。": "Includes source services, base and annotation roles, HTTP status, failure stages and storage figures. No keys, coordinates, file names or full paths. You can disable this at any time; downloads are unaffected.",
+  "允许发送诊断": "Allow diagnostics",
+  "暂不开启": "Not now",
+  "开启后，下载结果及脱敏图源、HTTP 状态、失败阶段、分盘空间数值会关联当前 GeoD 账号；不发送密钥、文件名、完整路径、坐标或对话，可随时关闭。": "When enabled, download outcomes and redacted source, HTTP, failure-stage and per-volume storage diagnostics are linked to this GeoD account. Keys, file names, full paths, coordinates and conversations are excluded. You can disable this at any time.",
   "以下为失败时的空间检查结果，重试会重新检查。": "These are the checks recorded at failure. Retrying checks space again.",
   "存储空间检查未通过，已下载瓦片保留。": "Storage check failed. Downloaded tiles are retained.",
   "瓦片缓存目录": "Tile cache directory",
@@ -2638,5 +2644,8 @@
   "管理缓存位置": "Manage cache location",
   "单张瓦片连接测试通过；批量下载还需核对接口权限及访问限制。": "A single tile is accessible. Bulk downloading still requires checking API permissions and access limits.",
   "图源拒绝了下载请求。": "The source rejected the download request.",
-  "请核对下载接口地址、对应服务授权和网络出口。在线预览与批量下载的请求条件可能不同；现有任务和缓存已保留。": "Check the download endpoint, service authorization and network route. Preview and bulk download requests may have different conditions. Existing tasks and cache are retained."
+  "请核对下载接口地址、对应服务授权和网络出口。在线预览与批量下载的请求条件可能不同；现有任务和缓存已保留。": "Check the download endpoint, service authorization and network route. Preview and bulk download requests may have different conditions. Existing tasks and cache are retained.",
+  "关联当前账号，发送图源服务、底图与注记、HTTP 状态、失败阶段和空间数值。不含密钥、坐标、文件名或完整路径；可随时关闭，不影响下载。": "Linked to this account: source service, base and overlay layers, HTTP status, failure stage and disk space. No keys, coordinates, filenames or full paths. Optional; turning it off does not affect downloads.",
+  "仅基础下载结果，详细诊断未开启。": "Basic outcomes only; detailed diagnostics are off.",
+  "采集器暂不可用，下载不受影响；请重启应用或联系支持。": "The collector is unavailable. Downloads are unaffected. Restart the app or contact support."
 }

@@ -540,6 +540,9 @@ pub struct CoreError {
     pub code: &'static str,
     pub message: String,
     pub diagnostic: Option<FailureDiagnostic>,
+    pub source_index: Option<usize>,
+    pub http_status: Option<u16>,
+    pub phase: Option<&'static str>,
 }
 
 #[derive(Debug,Clone,PartialEq,Eq,Serialize,Deserialize,schemars::JsonSchema)]
@@ -555,6 +558,9 @@ impl CoreError {
             code,
             message: message.into(),
             diagnostic: None,
+            source_index: None,
+            http_status: None,
+            phase: None,
         }
     }
 }
@@ -946,6 +952,7 @@ async fn get_tile(
     let mut response = loop {
         let response=authenticated_request(client,target.clone(),source)?.send().await
             .map_err(tile_network_error)?;
+        acquisition_observer::response(target.host_str().unwrap_or_default(),response.status().as_u16());
         if !response.status().is_redirection(){break response;}
         if hops>=5 {return Err(CoreError::new("SOURCE_REDIRECT_LIMIT","Tile service redirected more than five times"));}
         let location=response.headers().get(reqwest::header::LOCATION).and_then(|value|value.to_str().ok())
@@ -1228,10 +1235,10 @@ async fn get_registered_tile(client:&Client,source:&HttpSource,zoom:u8,x:u32,y:u
 async fn get_composite_tile(client: &Client, _url: Url, source: &HttpSource, overlays: &[HttpSource],
     grid: &TileGrid, x: u32, y: u32, cancelled: &AtomicBool, paused: Option<&AtomicBool>, started: Instant,
     deadline: Duration, cooldown: &Mutex<Instant>) -> Result<DownloadedTile, CoreError> {
-    let mut tile = get_registered_tile(client,source,grid.zoom,x,y,cancelled,paused,started,deadline,cooldown).await?;
-    for overlay in overlays {
-        let annotation = get_registered_tile(client,overlay,grid.zoom,x,y,cancelled,paused,started,deadline,cooldown).await
-            .map_err(|e| if e.code == "SOURCE_TILE_MISSING" { CoreError::new("SOURCE_OVERLAY_MISSING", "An annotation tile is missing; no incomplete composite was published") } else { e })?;
+    let mut tile = acquisition_observer::source(0,get_registered_tile(client,source,grid.zoom,x,y,cancelled,paused,started,deadline,cooldown)).await?;
+    for (index,overlay) in overlays.iter().enumerate() {
+        let annotation = acquisition_observer::source(index+1,get_registered_tile(client,overlay,grid.zoom,x,y,cancelled,paused,started,deadline,cooldown)).await
+            .map_err(|e| if e.code == "SOURCE_TILE_MISSING" { let mut mapped=CoreError::new("SOURCE_OVERLAY_MISSING", "An annotation tile is missing; no incomplete composite was published");mapped.source_index=e.source_index;mapped.http_status=e.http_status;mapped } else { e })?;
         // Integer source-over keeps opaque backgrounds exactly opaque. The
         // generic image blend truncates 1.0 to 254 for some alpha fractions.
         for (back, front) in tile.image.pixels_mut().zip(annotation.image.pixels()) {
@@ -1243,7 +1250,7 @@ async fn get_composite_tile(client: &Client, _url: Url, source: &HttpSource, ove
     }
     if !overlays.is_empty() {
         let mut bytes = Vec::new();
-        image::codecs::png::PngEncoder::new(&mut bytes).write_image(tile.image.as_raw(), tile.image.width(), tile.image.height(), image::ExtendedColorType::Rgba8).map_err(io_error)?;
+        image::codecs::png::PngEncoder::new(&mut bytes).write_image(tile.image.as_raw(), tile.image.width(), tile.image.height(), image::ExtendedColorType::Rgba8).map_err(|e|{let mut e=io_error(e);e.phase=Some("composite");e})?;
         tile.bytes = bytes;
     }
     Ok(tile)
@@ -1255,6 +1262,8 @@ mod raster_export;
 mod tile_exports;
 #[path = "shared_tile_cache.rs"]
 mod shared_tile_cache;
+#[path = "acquisition_observer.rs"]
+mod acquisition_observer;
 
 struct PixelCrop {
     left: u32,
@@ -1385,17 +1394,18 @@ pub async fn fetch_bundle_with_cancel(
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BundleStage { Downloading, Processing, Reprojecting }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BundleProgress {
     Stage(BundleStage),
     Tiles { completed: u64, total: u64 },
+    Diagnostic(serde_json::Value),
 }
 
 fn tile_callback<F: FnMut(u64, u64) -> Result<(), CoreError>>(mut callback: F)
     -> impl FnMut(BundleProgress) -> Result<(), CoreError> {
     move |progress| match progress {
         BundleProgress::Tiles { completed, total } => callback(completed, total),
-        BundleProgress::Stage(_) => Ok(()),
+        BundleProgress::Stage(_) | BundleProgress::Diagnostic(_) => Ok(()),
     }
 }
 
@@ -1549,6 +1559,32 @@ where F: FnMut(BundleProgress) -> Result<(), CoreError> {
 }
 
 async fn fetch_bundle_internal<F>(
+    request: &ImageryRequest, source: &HttpSource, cancelled: &AtomicBool,
+    paused: Option<&AtomicBool>, cache_config: Option<&TileCacheConfig>, proxy: ProxyRoute<'_>,
+    options: DownloadOptions, mut on_progress:F, projector:Option<&dyn RasterProjector>,
+) -> Result<Manifest,CoreError> where F:FnMut(BundleProgress)->Result<(),CoreError>{
+    let observer=acquisition_observer::new(request,source);
+    let result={
+        let mut last_signature=None;
+        let mut callback=|event:BundleProgress|{
+            if let BundleProgress::Stage(stage)=&event{acquisition_observer::phase(match stage{BundleStage::Downloading=>"base_download",BundleStage::Processing=>"export",BundleStage::Reprojecting=>"reproject"});}
+            let checkpoint=observer.lock().ok().and_then(|d|{
+                let signature=(d.phase.clone(),d.sources.iter().map(|s|(s.http_status,s.last_rejection_status)).collect::<Vec<_>>(),d.storage.len());
+                if last_signature.as_ref()==Some(&signature){None}else{last_signature=Some(signature);serde_json::to_value(&*d).ok()}
+            });
+            if let Some(value)=checkpoint{let _=on_progress(BundleProgress::Diagnostic(value));}
+            on_progress(event)
+        };
+        acquisition_observer::CURRENT.scope(observer.clone(),fetch_bundle_observed(request,source,cancelled,paused,cache_config,proxy,options,&mut callback,projector)).await
+    };
+    if let Ok(mut d)=observer.lock(){
+        match &result{Ok(_)=>d.phase="completed".into(),Err(e)=>{d.fail(e.code,e.source_index,e.http_status.or_else(||crate::acquisition_diagnostic::http_status(&e.message)));if let Some(phase)=e.phase{d.phase=phase.into();}else if let Some(i)=e.source_index{d.phase=if i==0{"base_download"}else{"overlay_download"}.into();}}}
+        if let Ok(value)=serde_json::to_value(&*d){let _=on_progress(BundleProgress::Diagnostic(value));}
+    }
+    result
+}
+
+async fn fetch_bundle_observed<F>(
     request: &ImageryRequest,
     source: &HttpSource,
     cancelled: &AtomicBool,
@@ -1582,10 +1618,14 @@ where
     let (workspace_bytes,cache_bytes) = crate::storage_preflight::location_budgets(total_tiles, source.tile_size,
         usize::from(request.output_geotiff) + usize::from(request.output_mbtiles) + request.extra_outputs.len() + if reproject { 8 } else { 0 },
         request.output_geotiff && request.export_options.build_pyramid,cache_config.is_some())?;
+    acquisition_observer::phase("storage_preflight");
+    acquisition_observer::pending_storage(parent,cache_config.map(|c|c.root.as_path()),workspace_bytes,cache_bytes);
+    let disk=crate::storage_preflight::inspect(parent,cache_config.map(|c|c.root.as_path()),workspace_bytes,cache_bytes)?;
+    acquisition_observer::storage(&disk);disk.ensure()?;
+    acquisition_observer::phase("cache");
     let mut cache = cache_config
         .map(|config| TileCache::open(config, source, &request.export_options.overlay_sources, request.export_options.cache_only || request.export_options.reuse_verified_cache))
         .transpose()?;
-    crate::storage_preflight::inspect(parent,cache.as_ref().map(|c|c.root.as_path()),workspace_bytes,cache_bytes)?.ensure()?;
     let started = Instant::now();
     let stage = tempfile::Builder::new()
         .prefix(".geod-agent-stage-")
@@ -1787,7 +1827,7 @@ where
             };
             if !from_cache {
                 if let Some(cache) = &mut cache {
-                    cache.save(grid.zoom, x, y, &tile.bytes)?;
+                    cache.save(grid.zoom, x, y, &tile.bytes).map_err(|mut e|{e.phase=Some("cache");e})?;
                 }
             }
             extra_tiles.put(grid.zoom, x, y, &tile)?;

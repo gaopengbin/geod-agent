@@ -6,8 +6,13 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createGatewayServer } from '../server.mjs';
-import { validateEvents } from '../events-store.mjs';
+import { validateEvents, openEventStore } from '../events-store.mjs';
 const event = () => ({ event_id: randomUUID(), attempt_id: randomUUID(), occurred_at: new Date().toISOString(), state: 'completed', duration: '10-60s', reason: 'none' });
+test('detailed receipt confirms persisted metadata without touching model or credit ledgers',()=>{
+ const directory=mkdtempSync(join(tmpdir(),'geod-detail-')),path=join(directory,'events.sqlite');const store=openEventStore(path);
+ const diagnostic={version:1,phase:'export',sources:[],storage:[{roles:['output','temporary'],volume:'E:',budget_kind:'estimate',required_bytes:400,available_bytes:600,met_budget:true}],storage_checked_at:new Date().toISOString(),failed_source:null,error_code:'EXPORT_FAILED',error_http_status:null,additional_sources:0};
+ try{const rows=validateEvents({schema_version:1,accountId:'qa',events:[{...event(),client_version:'0.2.15',diagnostic,diagnostic_status:'available'}]});assert.deepEqual(store.record('qa',rows),{accepted:1,duplicates:0,diagnostics:{accepted:1,duplicates:0}});assert.deepEqual(store.record('qa',rows),{accepted:0,duplicates:1,diagnostics:{accepted:0,duplicates:1}});const db=new Database(path,{readonly:true});try{assert.deepEqual(JSON.parse(db.prepare('SELECT diagnostic_json FROM agent_events').get().diagnostic_json),diagnostic);}finally{db.close();}}finally{store.close();rmSync(directory,{recursive:true});}
+});
 test('events reject client identity labels, paths, raw errors and unbounded timestamps', () => {
   const body = { schema_version: 1, accountId: 'user-1', events: [event()] };
   assert.equal(validateEvents(body).length, 1);

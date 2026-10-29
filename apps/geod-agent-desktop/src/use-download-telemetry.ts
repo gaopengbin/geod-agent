@@ -6,6 +6,7 @@ import type { BackgroundSnapshot } from './background-jobs';
 export interface DownloadDiagnostic {
   enabled:boolean;hasConsentRecord:boolean;reason:string;queuedEvents:number;pendingObservations:number;observedAttempts:number;
   lastAttemptAt:string|null;lastDeliveryAt:string|null;lastErrorCategory:string|null;
+  diagnosticsEnabled?:boolean;needsConsentReview?:boolean;
 }
 const key=(account:string)=>`geod-agent-download-telemetry-v2:${account}`;
 export function useDownloadTelemetry(accountId:string|null,_snapshots:Record<string,BackgroundSnapshot>) {
@@ -27,13 +28,16 @@ export function useDownloadTelemetry(accountId:string|null,_snapshots:Record<str
     void refresh();const interval=setInterval(()=>void refresh(),10000);
     return()=>{disposed=true;clearInterval(interval);};
   },[accountId]);
-  const toggle=async()=>{
+  const setConsent=async(value:boolean,details:boolean)=>{
     if(!accountId||busy)return;const account=accountId;setBusy(true);setError(false);
     try{
-      await invoke('download_telemetry_set',{enabled:!enabled,accountId:account});
+      await invoke('download_telemetry_set',{enabled:value,diagnostics:details,accountId:account});
       const state=await invoke<DownloadDiagnostic>('download_telemetry_status',{accountId:account});
       if(owner.current===account){setEnabled(state.enabled);setDiagnostic(state);try{localStorage.setItem(key(account),state.enabled?'enabled':'disabled');}catch{}}
     }catch{if(owner.current===account)setError(true);}finally{if(owner.current===account)setBusy(false);}
   };
-  return{enabled,toggle,diagnostic,error,busy};
+  const decide=(value:boolean)=>setConsent(value,value);
+  const review=(value:boolean)=>setConsent(value||enabled,value);
+  const toggle=()=>decide(!enabled);
+  return{enabled,toggle,decide,review,diagnostic,error,busy};
 }

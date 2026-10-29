@@ -27,6 +27,7 @@ import { AccountMenu } from "./account-menu";
 import type { GeoDAuth } from "./geod-auth";
 import { useAIModels, modelValue,availableAIChannels,SPONSORED_CHANNELS_VISIBLE } from "./ai-channels";
 import { useDownloadTelemetry } from "./use-download-telemetry";
+import {DownloadConsentNotice}from './download-consent-notice';
 import { useActivityTelemetry } from "./use-activity-telemetry";
 import { ChatTranscript } from "./chat-ui";
 import {recordGenerationTokenUsage,type TurnTokenUsage} from './turn-token-usage';
@@ -1944,6 +1945,7 @@ export function AgentPanel({ auth, onAccountChange, onBackgroundSnapshots, ledge
     <AccountMenu open={accountMenuOpen} onOpenChange={setAccountMenuOpen} connected={status.state === "connected"} userId={status.userId} profile={auth.profile} profileError={auth.profileError} onProfileRefresh={auth.refreshProfile} usage={usage} busy={busy||runningIds.length>0} theme={theme} onModels={() => onMainViewChange("models")} onNetwork={onOpenNetwork} onCache={onOpenCache} onTheme={onToggleTheme} onLogout={() => void logout()} telemetryEnabled={downloadTelemetry.enabled} onTelemetry={downloadTelemetry.toggle} telemetryDiagnostic={downloadTelemetry.diagnostic} telemetryError={downloadTelemetry.error} telemetryBusy={downloadTelemetry.busy} activityEnabled={activityTelemetry.enabled} onActivity={activityTelemetry.toggle}/>
   </aside><section className={`agent-panel agent-primary ${emptyConversation ? "agent-start" : ""}`} aria-label={t("GeoD Agent 智能助手")} hidden={mainView !== "conversation"}>
     <div className="agent-header"><strong>{currentChat?chatTitle(currentChat):t("新对话")}</strong>{engine==="codex"&&display.some(m=>m.role==="assistant"&&m.phase!=="progress")&&<UiTooltip content={t("复制已完成的对话，创建独立分支")}><Button variant="ghost" size="icon" aria-label={t("创建会话分支")} disabled={busy||!!pendingId||!workspace} onClick={()=>void forkChat()}><GitBranch size={16}/></Button></UiTooltip>}</div>
+    {status.state==='connected'&&(downloadTelemetry.diagnostic?.hasConsentRecord===false||downloadTelemetry.diagnostic?.needsConsentReview===true)&&<DownloadConsentNotice busy={downloadTelemetry.busy} onDecide={downloadTelemetry.review}/>}
     {error && <div className="agent-error" role="alert"><CircleAlert size={16} />{localize(error)}</div>}
     {accountId&&conversationId&&<HistoryRecovery key={`${accountId}:${conversationId}`} conversationId={conversationId} planIds={[...new Set([...planIds,...currentChat?.unavailablePlanIds??[]])]} expectedDirectory={currentChat?.workspaceDirectory} problem={historyProblem} onRecheck={()=>checkHistory()} onTasks={()=>onTaskGroupSelect(planIdsRef.current)}/>}
     {(status.error || auth.error) && <div className="agent-error" role="alert"><CircleAlert size={16} />{localize(status.error || auth.error)}</div>}

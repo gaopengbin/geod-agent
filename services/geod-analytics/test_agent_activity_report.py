@@ -3,6 +3,12 @@ from pathlib import Path
 from datetime import datetime,timezone
 spec=importlib.util.spec_from_file_location('activity',Path(__file__).with_name('agent_activity_report.py'));report=importlib.util.module_from_spec(spec);spec.loader.exec_module(report)
 class ActivityReportTest(unittest.TestCase):
+    def test_admin_registry_excludes_unmarked_qa_accounts(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);accounts=root/'accounts.json';ledger=root/'agent.sqlite'
+            accounts.write_text(json.dumps({'users':[{'id':'qa','email':'qa@example.test','createdAt':'2026-10-20T00:00:00Z'}]}))
+            db=sqlite3.connect(ledger);db.executescript("CREATE TABLE model_generations(user_id,funding_scope,state,created_at);CREATE TABLE agent_events(user_id,state,download_kind,occurred_at);CREATE TABLE agent_telemetry_internal_users(user_id,reason,created_at);INSERT INTO agent_telemetry_internal_users VALUES('qa','internal acceptance','now');INSERT INTO agent_events VALUES('qa','completed','imagery','2026-10-20T01:00:00Z');");db.close()
+            result=report.collect(until=datetime(2026,10,21,tzinfo=timezone.utc),accounts=str(accounts),ledger=str(ledger));self.assertEqual(result['new_accounts'],0);self.assertEqual(result['usage_excluding_owner_and_internal']['reported_downloads'],[])
     def test_download_reporting_diagnostic_is_distinct_from_outcome_and_excludes_internal(self):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp);accounts=root/'accounts.json';ledger=root/'agent.sqlite'

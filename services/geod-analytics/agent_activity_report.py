@@ -19,6 +19,9 @@ def collect(hours=48,until=None,accounts='/srv/laogao/data/geod-studio/accounts/
     db=sqlite3.connect(Path(ledger).resolve().as_uri()+'?mode=ro',uri=True);db.row_factory=sqlite3.Row
     db.execute('PRAGMA query_only=ON');db.execute('BEGIN')
     tables={r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if 'agent_telemetry_internal_users' in tables:
+        internal={r[0]for r in db.execute('SELECT user_id FROM agent_telemetry_internal_users')}
+        users=[u for u in users if u['id']not in internal]
     cohort=[];summary={}
     try:
         ids=[u['id'] for u in users];marks=','.join('?' for _ in ids) or 'NULL'
@@ -27,6 +30,9 @@ def collect(hours=48,until=None,accounts='/srv/laogao/data/geod-studio/accounts/
             return [dict(r) for r in db.execute(f'SELECT {columns} FROM {table} WHERE user_id IN ({marks}) AND julianday({time_column})>=julianday(?) AND julianday({time_column})<julianday(?) GROUP BY 1,2',ids+[start.isoformat(),until.isoformat()])]
         summary['server_model_requests']=grouped('model_generations','funding_scope,state,count(*) requests,count(distinct user_id) accounts','created_at')
         summary['reported_downloads']=grouped('agent_events','state,download_kind,count(*) attempts,count(distinct user_id) accounts','occurred_at')
+        detail_columns={r[1] for r in db.execute('PRAGMA table_info(agent_events)')} if 'agent_events' in tables else set()
+        detail_rows=[dict(r) for r in db.execute(f'SELECT state,client_version,diagnostic_status,diagnostic_json FROM agent_events WHERE user_id IN ({marks}) AND julianday(occurred_at)>=julianday(?) AND julianday(occurred_at)<julianday(?) AND state!=\'started\'',ids+[start.isoformat(),until.isoformat()])] if {'diagnostic_json','diagnostic_status','client_version'}<=detail_columns else None
+        summary['download_details']={'status':'unavailable' if detail_rows is None else 'observed' if detail_rows else 'not_observed','terminal_events':None if detail_rows is None else len(detail_rows),'details':detail_rows}
         summary['reported_personal_activity']=grouped('agent_activity_events','kind,state,count(*) events,count(distinct user_id) accounts,sum(input_tokens) input_tokens,sum(output_tokens) output_tokens,sum(usage_known=0) unknown_usage_events','occurred_at')
         diagnostic_available='agent_activity_events' in tables and 'reason' in {r[1] for r in db.execute('PRAGMA table_info(agent_activity_events)')}
         summary['download_reporting_diagnostics']=[dict(r) for r in db.execute(f"SELECT reason,count(distinct user_id) accounts,count(*) events,max(occurred_at) last_observed_at FROM agent_activity_events WHERE user_id IN ({marks}) AND kind='download_status' AND julianday(occurred_at)>=julianday(?) AND julianday(occurred_at)<julianday(?) GROUP BY reason",ids+[start.isoformat(),until.isoformat()])] if diagnostic_available else None

@@ -61,9 +61,12 @@ fn group(samples:Vec<(String,u64,DiskLocation)>)->Result<DiskPreflight,CoreError
 pub fn inspect(workspace:&Path,cache:Option<&Path>,workspace_bytes:u64,cache_bytes:u64)->Result<DiskPreflight,CoreError>{
  let mut samples=vec![];
  for(role,path,required)in [Some(("workspace",workspace,workspace_bytes)),cache.map(|p|("cache",p,cache_bytes))].into_iter().flatten(){
-  let canonical=path.canonicalize().map_err(|_|CoreError::new("DISK_CHECK_FAILED","保存位置或缓存目录无法访问，请检查目录和权限。"))?;
+  if !path.is_absolute(){return Err(CoreError::new("DISK_CHECK_FAILED","存储目录必须是绝对路径。"));}
+  let existing=path.ancestors().find(|p|p.exists()).ok_or_else(||CoreError::new("DISK_CHECK_FAILED","未找到可访问的存储位置。"))?;
+  let canonical=existing.canonicalize().map_err(|_|CoreError::new("DISK_CHECK_FAILED","保存位置或缓存目录无法访问，请检查目录和权限。"))?;
   let available=crate::imagery::available_disk_bytes(&canonical)?;
-  samples.push((volume_id(&canonical)?,available,DiskLocation{role:role.into(),path:canonical.display().to_string(),required_bytes:required}));
+  let resolved=canonical.join(path.strip_prefix(existing).unwrap_or_else(|_|Path::new("")));
+  samples.push((volume_id(&canonical)?,available,DiskLocation{role:role.into(),path:resolved.display().to_string(),required_bytes:required}));
  }
  group(samples)
 }

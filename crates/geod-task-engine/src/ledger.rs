@@ -123,6 +123,8 @@ pub struct JobEvent {
     pub processing_stage: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub failure_diagnostic: Option<imagery::FailureDiagnostic>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub diagnostic: Option<serde_json::Value>,
 }
 
 pub struct TaskStore {
@@ -647,6 +649,7 @@ impl TaskStore {
             total_tiles: None,
             processing_stage: None,
             failure_diagnostic: None,
+            diagnostic: None,
         };
         let insert = tx.execute(
             "INSERT INTO jobs(job_id, plan_id, approval_id, plan_hash, idempotency_key, state, version, created_at)
@@ -941,6 +944,8 @@ impl TaskStore {
             "UPDATE jobs SET state=?1, version=?2 WHERE job_id=?3 AND version=?4",
             params![state, seq, job_id, current.version],
         )?;
+        let mut diagnostic:Option<serde_json::Value>=if next==JobState::Queued{None}else{tx.query_row("SELECT json_extract(body,'$.diagnostic') FROM job_events WHERE job_id=?1 AND json_type(body,'$.diagnostic')='object' ORDER BY seq DESC LIMIT 1",[job_id],|r|r.get::<_,String>(0)).optional()?.and_then(|s|serde_json::from_str(&s).ok())};
+        if next==JobState::Failed{if let(Some(value),Some(code))=(&mut diagnostic,error_code){value["error_code"]=serde_json::json!(code);if expected==JobState::Verifying{value["phase"]=serde_json::json!("verify");value["failed_source"]=serde_json::Value::Null;value["error_http_status"]=serde_json::Value::Null;}}}
         let event = JobEvent {
             job_id: job_id.into(),
             seq,
@@ -948,6 +953,7 @@ impl TaskStore {
             state: next,
             error_code: error_code.map(str::to_owned),
             failure_diagnostic,
+            diagnostic,
             completed_tiles: None,
             total_tiles: None,
             processing_stage: None,
@@ -993,6 +999,7 @@ impl TaskStore {
             total_tiles: Some(total),
             processing_stage: None,
             failure_diagnostic: None,
+            diagnostic: None,
         };
         tx.execute(
             "INSERT INTO job_events(job_id,seq,body) VALUES (?1,?2,?3)",
@@ -1006,7 +1013,16 @@ impl TaskStore {
         let tx=self.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let job=read_job(&tx,job_id)?.ok_or_else(||LedgerError::new("JOB_NOT_FOUND","任务不存在"))?;
         if job.state!=JobState::Processing{return Err(LedgerError::new("JOB_STATE_CONFLICT","任务未在生成成果"));}
-        let event=JobEvent{job_id:job_id.into(),seq:job.version+1,occurred_at:Utc::now(),state:JobState::Processing,error_code:None,completed_tiles:None,total_tiles:None,processing_stage:Some(stage.into()),failure_diagnostic:None};
+        let event=JobEvent{job_id:job_id.into(),seq:job.version+1,occurred_at:Utc::now(),state:JobState::Processing,error_code:None,completed_tiles:None,total_tiles:None,processing_stage:Some(stage.into()),failure_diagnostic:None,diagnostic:None};
+        tx.execute("UPDATE jobs SET version=?1 WHERE job_id=?2 AND version=?3",params![event.seq,job_id,job.version])?;
+        tx.execute("INSERT INTO job_events(job_id,seq,body) VALUES(?1,?2,?3)",params![job_id,event.seq,serde_json::to_string(&event)?])?;
+        tx.commit()?;Ok(())
+    }
+
+    fn record_download_diagnostic(&mut self,job_id:&str,diagnostic:serde_json::Value)->Result<(),LedgerError>{
+        let tx=self.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let job=read_job(&tx,job_id)?.ok_or_else(||LedgerError::new("JOB_NOT_FOUND","Job was not found"))?;
+        let event=JobEvent{job_id:job_id.into(),seq:job.version+1,occurred_at:Utc::now(),state:job.state,error_code:None,completed_tiles:None,total_tiles:None,processing_stage:None,failure_diagnostic:None,diagnostic:Some(diagnostic)};
         tx.execute("UPDATE jobs SET version=?1 WHERE job_id=?2 AND version=?3",params![event.seq,job_id,job.version])?;
         tx.execute("INSERT INTO job_events(job_id,seq,body) VALUES(?1,?2,?3)",params![job_id,event.seq,serde_json::to_string(&event)?])?;
         tx.commit()?;Ok(())
@@ -1139,8 +1155,6 @@ impl TaskStore {
         }
         let destination = PathBuf::from(&stored.plan.spec.output_directory);
         let cache_parent = geod_core::cache_maintenance::cache_root_for_database(&self.db_path).map_err(|e| LedgerError::new(e.code, e.message))?;
-        std::fs::create_dir_all(&cache_parent)
-            .map_err(|error| LedgerError::new("STORAGE_ERROR", error.to_string()))?;
         let cache = imagery::TileCacheConfig {
             root: cache_parent.join(job_id),
             plan_hash: job.plan_hash.clone(),
@@ -1205,6 +1219,7 @@ impl TaskStore {
                         ));
                     }
                     match progress {
+                        imagery::BundleProgress::Diagnostic(value)=>{let _=self.record_download_diagnostic(job_id,value);}
                         imagery::BundleProgress::Stage(stage) => {
                             let next = match stage {
                                 imagery::BundleStage::Downloading => JobState::Downloading,

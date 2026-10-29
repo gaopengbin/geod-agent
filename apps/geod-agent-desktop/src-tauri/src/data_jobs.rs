@@ -266,7 +266,7 @@ fn open_data_db(path: &Path) -> Result<Connection, AppError> {
         initialized.insert(path.to_path_buf());
     }
     db.execute_batch("CREATE TABLE IF NOT EXISTS data_task_visibility(task_id TEXT PRIMARY KEY,updated_at TEXT NOT NULL);").map_err(storage_error)?;
-    crate::download_telemetry::schema(&db)?;
+    crate::download_telemetry::initialize_for_business(&db);
     Ok(db)
 }
 const SELECT:&str="SELECT id,conversation_id,kind,title,status,plan_hash,request_json,output_dir,progress_json,manifest_json,error,created_at,updated_at,EXISTS(SELECT 1 FROM data_task_visibility v WHERE v.task_id=data_download_tasks.id) FROM data_download_tasks";
