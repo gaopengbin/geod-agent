@@ -2,9 +2,22 @@
 //! coordinates, file names or full local paths are serialized by these types.
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
+use std::sync::Mutex;
 
 pub const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum NetworkCause {
+    Timeout,
+    Tls,
+    Dns,
+    Proxy,
+    Connect,
+    ResponseBody,
+    Request,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct SourceDiagnostic {
@@ -41,10 +54,12 @@ pub struct AcquisitionDiagnostic {
     pub failed_source: Option<usize>,
     pub error_code: Option<String>,
     pub error_http_status: Option<u16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub network_cause: Option<NetworkCause>,
     pub additional_sources: u32,
 }
 impl Default for AcquisitionDiagnostic {
-    fn default() -> Self { Self { version:1,phase:"prepare".into(),sources:vec![],storage:vec![],storage_checked_at:None,failed_source:None,error_code:None,error_http_status:None,additional_sources:0 } }
+    fn default() -> Self { Self { version:1,phase:"prepare".into(),sources:vec![],storage:vec![],storage_checked_at:None,failed_source:None,error_code:None,error_http_status:None,network_cause:None,additional_sources:0 } }
 }
 pub fn safe_integer(value:u64)->Option<u64>{(value<=MAX_SAFE_INTEGER).then_some(value)}
 pub fn http_status(message:&str)->Option<u16>{
@@ -121,6 +136,57 @@ impl AcquisitionDiagnostic {
         self.failed_source=index.filter(|i|*i<self.sources.len());
         self.error_http_status=status;
     }
+}
+
+#[derive(Default)]
+struct DataDownloadObservation {
+    diagnostic: AcquisitionDiagnostic,
+    additional_origins: HashSet<(String, String)>,
+}
+tokio::task_local! { static DATA_DOWNLOAD: Mutex<DataDownloadObservation>; }
+
+pub async fn observe_data_download<T>(work: impl std::future::Future<Output = T>) -> (T, AcquisitionDiagnostic) {
+    DATA_DOWNLOAD.scope(Mutex::new(DataDownloadObservation::default()), async {
+        let result = work.await;
+        let diagnostic = DATA_DOWNLOAD.with(|value| value.lock().map(|value| value.diagnostic.clone()).unwrap_or_default());
+        (result, diagnostic)
+    }).await
+}
+
+pub fn data_phase(phase: &str) {
+    let _ = DATA_DOWNLOAD.try_with(|value| {
+        if let Ok(mut value) = value.lock() { value.diagnostic.phase = phase.into(); }
+    });
+}
+
+pub fn data_http(endpoint: &str, url: &reqwest::Url, auth: bool, status: Option<u16>, failure: Option<&str>) {
+    let _ = DATA_DOWNLOAD.try_with(|value| {
+        let Ok(mut value) = value.lock() else { return };
+        let DataDownloadObservation { diagnostic, additional_origins } = &mut *value;
+        let status = status.filter(|status| (100..=599).contains(status));
+        let auth = auth || url.query_pairs().any(|(key, _)| matches!(key.to_ascii_lowercase().as_str(), "key" | "api_key" | "token" | "access_token" | "signature"));
+        // Group dynamic tiles and redirected resources by origin. The payload
+        // never retains a generated tile address, a query, or a credential.
+        let mut source = describe_source("base", &url.origin().ascii_serialization(), auth);
+        source.endpoint = endpoint.into();
+        let index = diagnostic.sources.iter().position(|saved| saved.fingerprint == source.fingerprint && saved.endpoint == endpoint)
+            .or_else(|| {
+                if diagnostic.sources.len() == 8 {
+                    if additional_origins.len() < 65535 {
+                        additional_origins.insert((source.fingerprint,source.endpoint));
+                        diagnostic.additional_sources = additional_origins.len() as u32;
+                    }
+                    return None;
+                }
+                diagnostic.sources.push(source);
+                Some(diagnostic.sources.len() - 1)
+            });
+        if let Some(index) = index {
+            diagnostic.sources[index].authentication_configured |= auth;
+            if let (Some(status), Some(host)) = (status, url.host_str()) { diagnostic.response(index, host, status); }
+        }
+        if let Some(code) = failure { diagnostic.fail(code, index, status); }
+    });
 }
 #[cfg(test)]mod tests {
     use super::*;

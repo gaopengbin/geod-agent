@@ -26,6 +26,8 @@ pub(crate) fn schema(db: &Connection) -> Result<(), AppError> {
         db.execute_batch("ALTER TABLE download_observations ADD COLUMN event_seq INTEGER;").map_err(storage)?;
     }
     db.execute_batch("CREATE UNIQUE INDEX IF NOT EXISTS download_observation_identity ON download_observations(owner,resource,event_seq);").map_err(storage)?;
+    let has_detail:bool=db.query_row("SELECT EXISTS(SELECT 1 FROM pragma_table_info('download_observations') WHERE name='diagnostic_json')",[],|r|r.get(0)).map_err(storage)?;
+    if !has_detail { db.execute_batch("ALTER TABLE download_observations ADD COLUMN diagnostic_json TEXT").map_err(storage)?; }
     let exists = |name: &str| {
         db.query_row(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1",
@@ -47,8 +49,21 @@ pub(crate) fn schema(db: &Connection) -> Result<(), AppError> {
           RELEASE download_trigger_upgrade;");if let Err(error)=migration{let _=db.execute_batch("ROLLBACK TO download_trigger_upgrade;RELEASE download_trigger_upgrade;");return Err(storage(error));}}
     }
     if exists("data_download_tasks") {
-        db.execute_batch("CREATE TRIGGER IF NOT EXISTS download_data_update AFTER UPDATE OF status ON data_download_tasks WHEN OLD.status<>NEW.status AND EXISTS(SELECT 1 FROM download_telemetry_consent c WHERE c.owner=NEW.owner_id AND c.enabled=1) BEGIN
-          INSERT INTO download_observations(owner,resource,state,stamp,reason) VALUES(NEW.owner_id,'data:'||NEW.id,NEW.status,NEW.updated_at,coalesce(NEW.error,'')); END;").map_err(storage)?;
+        let has_detail:bool=db.query_row("SELECT EXISTS(SELECT 1 FROM pragma_table_info('data_download_tasks') WHERE name='diagnostic_json')",[],|r|r.get(0)).map_err(storage)?;
+        if has_detail {
+            let migrated:bool=db.query_row("SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='trigger' AND name='download_data_update' AND sql LIKE '%NEW.diagnostic_json%')",[],|r|r.get(0)).map_err(storage)?;
+            if !migrated {
+                let migration=db.execute_batch("SAVEPOINT download_data_trigger_upgrade;
+                  DROP TRIGGER IF EXISTS download_data_update;
+                  CREATE TRIGGER download_data_update AFTER UPDATE OF status ON data_download_tasks WHEN OLD.status<>NEW.status AND EXISTS(SELECT 1 FROM download_telemetry_consent c WHERE c.owner=NEW.owner_id AND c.enabled=1) BEGIN
+                    INSERT INTO download_observations(owner,resource,state,stamp,reason,diagnostic_json) VALUES(NEW.owner_id,'data:'||NEW.id,NEW.status,NEW.updated_at,coalesce(NEW.error,''),NEW.diagnostic_json); END;
+                  RELEASE download_data_trigger_upgrade;");
+                if let Err(error)=migration { let _=db.execute_batch("ROLLBACK TO download_data_trigger_upgrade; RELEASE download_data_trigger_upgrade;"); return Err(storage(error)); }
+            }
+        } else {
+            db.execute_batch("CREATE TRIGGER IF NOT EXISTS download_data_update AFTER UPDATE OF status ON data_download_tasks WHEN OLD.status<>NEW.status AND EXISTS(SELECT 1 FROM download_telemetry_consent c WHERE c.owner=NEW.owner_id AND c.enabled=1) BEGIN
+              INSERT INTO download_observations(owner,resource,state,stamp,reason) VALUES(NEW.owner_id,'data:'||NEW.id,NEW.status,NEW.updated_at,coalesce(NEW.error,'')); END;").map_err(storage)?;
+        }
     }
     if exists("job_events"){
         // On upgrade, preserve queued events but do not invent historical
@@ -151,7 +166,13 @@ fn enqueue(
     } else if state == "cancelled" {
         "cancelled"
     } else if state == "failed" {
-        failure_reason(reason)
+        match diagnostic.as_ref().and_then(|value| value["error_code"].as_str()) {
+            Some("DATA_VERIFICATION_FAILED") => "verification",
+            Some("DATA_PROCESSING_FAILED") if failure_reason(reason) != "disk" => "processing",
+            Some("SOURCE_HTTP") if diagnostic.as_ref().is_some_and(|value|matches!(value["error_http_status"].as_u64(),Some(401 | 403))) => "auth",
+            Some("SOURCE_NETWORK") => "network",
+            _ => failure_reason(reason),
+        }
     } else {
         "none"
     };
@@ -190,7 +211,7 @@ fn collect(db: &mut Connection) -> Result<(), AppError> {
         .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
         .map_err(storage)?;
     let observations = {
-        let mut q=tx.prepare("SELECT o.seq,o.owner,o.resource,o.state,o.stamp,o.reason,o.event_seq FROM download_observations o JOIN download_telemetry_consent c ON c.owner=o.owner AND c.enabled=1 ORDER BY o.seq LIMIT 1000").map_err(storage)?;
+        let mut q=tx.prepare("SELECT o.seq,o.owner,o.resource,o.state,o.stamp,o.reason,o.event_seq,o.diagnostic_json FROM download_observations o JOIN download_telemetry_consent c ON c.owner=o.owner AND c.enabled=1 ORDER BY o.seq LIMIT 1000").map_err(storage)?;
         let rows = q
             .query_map([], |r| {
                 Ok((
@@ -201,6 +222,7 @@ fn collect(db: &mut Connection) -> Result<(), AppError> {
                     r.get::<_, String>(4)?,
                     r.get::<_, String>(5)?,
                     r.get::<_, Option<i64>>(6)?,
+                    r.get::<_, Option<String>>(7)?,
                 ))
             })
             .map_err(storage)?
@@ -208,7 +230,7 @@ fn collect(db: &mut Connection) -> Result<(), AppError> {
             .map_err(storage)?;
         rows
     };
-    for (seq, owner, resource, state, stamp, reason,event_seq) in observations {
+    for (seq, owner, resource, state, stamp, reason,event_seq,data_detail) in observations {
         if let Some(native_seq)=event_seq{
             let fresh=tx.execute("INSERT OR IGNORE INTO download_observation_receipts VALUES(?1,?2,?3)",params![owner,resource,native_seq]).map_err(storage)?;
             if fresh==0{tx.execute("DELETE FROM download_observations WHERE seq=?1",[seq]).map_err(storage)?;continue;}
@@ -221,7 +243,8 @@ fn collect(db: &mut Connection) -> Result<(), AppError> {
             ("imagery".to_owned(),error.unwrap_or(reason),diagnostic)
         }else{
             let kind:Option<String>=tx.query_row("SELECT kind FROM data_download_tasks WHERE id=?1 AND owner_id=?2",params![resource.strip_prefix("data:").unwrap_or(""),owner],|r|r.get(0)).optional().unwrap_or(None);
-            (kind.unwrap_or_else(||"unknown".into()),reason,None)
+            let diagnostic: Option<Value> = data_detail.and_then(|raw| serde_json::from_str(&raw).ok());
+            (kind.unwrap_or_else(||"unknown".into()),reason,diagnostic)
         };
         if active(&state) || terminal(&state) {
             let previous:Option<(String,String,String)>=tx.query_row("SELECT attempt,state,started FROM download_attempts WHERE owner=?1 AND resource=?2",params![owner,resource],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?))).optional().map_err(storage)?;
@@ -238,7 +261,8 @@ fn collect(db: &mut Connection) -> Result<(), AppError> {
                 let (a, s, t) = previous.unwrap();
                 (a, t, s)
             };
-            if new_attempt {
+            // A terminal-only observation has no measured start or duration.
+            if new_attempt && active(&state) {
                 enqueue(&tx, &owner, &attempt, "started", &stamp, &start, "",&kind,diagnostic.clone())?;
             }
             if terminal(&state) && !terminal(&old) {
@@ -439,11 +463,40 @@ fn flush(service:&services::ServiceState,db:&mut Connection,owner:&str)->Result<
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn data_diagnosis_survives_retry_until_collected() {
+        let mut db = Connection::open_in_memory().unwrap();
+        db.execute_batch("CREATE TABLE data_download_tasks(id TEXT,owner_id TEXT,kind TEXT,status TEXT,updated_at TEXT,error TEXT,diagnostic_json TEXT);").unwrap();
+        schema(&db).unwrap();
+        default_policy(&db,"test").unwrap();
+        let stamp = Utc::now().to_rfc3339();
+        db.execute("INSERT INTO data_download_tasks VALUES ('private','test','tiles3d','pending',?1,NULL,NULL)",[&stamp]).unwrap();
+        db.execute("UPDATE data_download_tasks SET status='queued',updated_at=?1",[&stamp]).unwrap();
+        let mut detail = geod_core::acquisition_diagnostic::AcquisitionDiagnostic::default();
+        detail.phase = "base_download".into();
+        let source = detail.source("base","https://example.test",false).unwrap();
+        detail.sources[source].endpoint = "3d-tiles".into();
+        detail.response(source,"example.test",403);
+        detail.fail("SOURCE_HTTP",Some(source),Some(403));
+        db.execute("UPDATE data_download_tasks SET status='failed',diagnostic_json=?1,updated_at=?2",params![serde_json::to_string(&detail).unwrap(),stamp]).unwrap();
+        db.execute("UPDATE data_download_tasks SET status='queued',diagnostic_json=NULL,updated_at=?1",[&stamp]).unwrap();
+        collect(&mut db).unwrap();
+        let failed:String=db.query_row("SELECT body FROM download_outbox WHERE json_extract(body,'$.state')='failed'",[],|row|row.get(0)).unwrap();
+        let event:Value=serde_json::from_str(&failed).unwrap();
+        assert_eq!(event["diagnostic"]["error_http_status"],403);
+        assert_eq!(event["download_kind"],"tiles3d");
+        assert_eq!(event["reason"],"auth");
+        assert!(!failed.contains("private"));
+    }
     #[test]fn default_reporting_is_ready_without_a_frontend_choice_and_disclosure_does_not_gate_it(){
         let mut db=Connection::open_in_memory().unwrap();schema(&db).unwrap();default_policy(&db,"fresh").unwrap();
         let state=diagnostic_snapshot(&db,"fresh").unwrap();assert_eq!(state["enabled"],true);assert_eq!(state["diagnosticsEnabled"],true);assert_eq!(state["noticePending"],true);
         db.execute("INSERT INTO download_observations(owner,resource,state,stamp,reason) VALUES('fresh','data:new','failed',?1,'SOURCE_NETWORK')",[Utc::now().to_rfc3339()]).unwrap();collect(&mut db).unwrap();
-        assert_eq!(db.query_row("SELECT count(*) FROM download_outbox",[],|r|r.get::<_,i64>(0)).unwrap(),2);
+        let body:String=db.query_row("SELECT body FROM download_outbox",[],|r|r.get(0)).unwrap();
+        let event:Value=serde_json::from_str(&body).unwrap();
+        assert_eq!(event["state"],"failed");
+        assert_eq!(event["duration"],"unknown");
+        assert_eq!(db.query_row("SELECT count(*) FROM download_outbox",[],|r|r.get::<_,i64>(0)).unwrap(),1);
         db.execute("UPDATE download_telemetry_consent SET notice_ack_version=3 WHERE owner='fresh'",[]).unwrap();default_policy(&db,"fresh").unwrap();assert_eq!(diagnostic_snapshot(&db,"fresh").unwrap()["noticePending"],false);
     }
     #[test]fn default_migration_preserves_explicit_optouts_and_does_not_seed_historical_attempts(){
@@ -495,6 +548,9 @@ mod tests {
     }
     fn fixture_event(db:&Connection,seq:i64,state:&str,code:Option<&str>){
         let mut diagnostic=geod_core::acquisition_diagnostic::AcquisitionDiagnostic::default();diagnostic.phase=if state=="completed"{"completed"}else{"base_download"}.into();if let Some(code)=code{diagnostic.fail(code,None,None);}
+        if code == Some("SOURCE_NETWORK") {
+            diagnostic.network_cause = Some(geod_core::acquisition_diagnostic::NetworkCause::ResponseBody);
+        }
         if seq==1{db.execute("INSERT INTO jobs VALUES('native-job','p',?1,?2)",params![state,seq]).unwrap();}else{db.execute("UPDATE jobs SET state=?1,version=?2 WHERE job_id='native-job'",params![state,seq]).unwrap();}
         let body=json!({"state":state,"errorCode":code,"occurredAt":"2026-10-18T00:00:00Z","diagnostic":diagnostic});
         db.execute("INSERT INTO job_events VALUES('native-job',?1,?2)",params![seq,body.to_string()]).unwrap();
@@ -504,6 +560,7 @@ mod tests {
         for(seq,state,code)in [(1,"queued",None),(2,"downloading",None),(3,"failed",Some("SOURCE_NETWORK")),(4,"queued",None),(5,"downloading",None),(6,"completed",None)]{fixture_event(&db,seq,state,code);}
         reconcile_imagery(&db).unwrap();collect(&mut db).unwrap();
         let failed:String=db.query_row("SELECT body FROM download_outbox WHERE json_extract(body,'$.state')='failed'",[],|r|r.get(0)).unwrap();let failed:Value=serde_json::from_str(&failed).unwrap();assert_eq!(failed["reason"],"network");assert_eq!(failed["diagnostic"]["error_code"],"SOURCE_NETWORK");
+        assert_eq!(failed["diagnostic"]["network_cause"],"response_body");
         let complete:String=db.query_row("SELECT body FROM download_outbox WHERE json_extract(body,'$.state')='completed'",[],|r|r.get(0)).unwrap();assert_eq!(serde_json::from_str::<Value>(&complete).unwrap()["diagnostic"]["phase"],"completed");
         reconcile_imagery(&db).unwrap();collect(&mut db).unwrap();assert_eq!(db.query_row("SELECT count(*) FROM download_outbox",[],|r|r.get::<_,i64>(0)).unwrap(),4);
     }

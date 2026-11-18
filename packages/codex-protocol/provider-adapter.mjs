@@ -2,7 +2,7 @@
 // they never belong to the serializable channel snapshot or Codex host process.
 import {codexRequest, codexResult} from './codex-contract.mjs';
 import {ProviderError, providerFail as fail} from './provider-error.mjs';
-import {upstreamDiagnostic} from './upstream-diagnostics.mjs';
+import {protocolDiagnostic,upstreamDiagnostic} from './upstream-diagnostics.mjs';
 import {nativeProviderRequest,collectNativeProvider,providerTransport} from './provider-native.mjs';
 export {ProviderError} from './provider-error.mjs';
 
@@ -189,6 +189,10 @@ export async function generateProvider(snapshot, apiKey, request, {generationId,
       if (error.terminal) {
         error.terminal.id ??= response.headers.get('x-request-id') ?? response.headers.get('x-oneapi-request-id');
         error.terminal.model ??= snapshot.model;
+      }
+      if (!error.terminal && !error.diagnostic && !controller.signal.aborted) {
+        const stage = error.code?.startsWith('CODEX_') ? 'tool_contract' : 'stream_parse';
+        error.diagnostic = protocolDiagnostic(response, body, {stage, code:error.code});
       }
       throw error;
     }

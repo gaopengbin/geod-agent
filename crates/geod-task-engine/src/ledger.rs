@@ -945,7 +945,17 @@ impl TaskStore {
             params![state, seq, job_id, current.version],
         )?;
         let mut diagnostic:Option<serde_json::Value>=if next==JobState::Queued{None}else{tx.query_row("SELECT json_extract(body,'$.diagnostic') FROM job_events WHERE job_id=?1 AND json_type(body,'$.diagnostic')='object' ORDER BY seq DESC LIMIT 1",[job_id],|r|r.get::<_,String>(0)).optional()?.and_then(|s|serde_json::from_str(&s).ok())};
-        if next==JobState::Failed{if let(Some(value),Some(code))=(&mut diagnostic,error_code){value["error_code"]=serde_json::json!(code);if expected==JobState::Verifying{value["phase"]=serde_json::json!("verify");value["failed_source"]=serde_json::Value::Null;value["error_http_status"]=serde_json::Value::Null;}}}
+        if next == JobState::Failed {
+            if let (Some(value), Some(code)) = (diagnostic.as_mut().and_then(serde_json::Value::as_object_mut), error_code) {
+                value.insert("error_code".into(), serde_json::json!(code));
+                if code != "SOURCE_NETWORK" { value.remove("network_cause"); }
+                if expected == JobState::Verifying {
+                    value.insert("phase".into(), serde_json::json!("verify"));
+                    value.insert("failed_source".into(), serde_json::Value::Null);
+                    value.insert("error_http_status".into(), serde_json::Value::Null);
+                }
+            }
+        }
         let event = JobEvent {
             job_id: job_id.into(),
             seq,
@@ -1192,6 +1202,7 @@ impl TaskStore {
         if matches!(job.state, JobState::Queued | JobState::Processing) {
             job = self.transition(job_id, job.state, JobState::Downloading, None, now)?;
         }
+        let mut pending_progress = None;
         let result = if destination.exists() {
             imagery::inspect_bundle(&destination).and_then(|manifest| {
                 if manifest.id != format!("geod-agent-job-{job_id}") {
@@ -1226,6 +1237,10 @@ impl TaskStore {
                                 imagery::BundleStage::Processing | imagery::BundleStage::Reprojecting => JobState::Processing,
                             };
                             if job.state != next {
+                                if let Some((completed, total)) = pending_progress.take() {
+                                    self.record_progress(job_id, completed, total)
+                                        .map_err(|error| imagery::CoreError::new(error.code, error.message))?;
+                                }
                                 job = self.transition(job_id, job.state, next, None, Utc::now())
                                     .map_err(|error| imagery::CoreError::new(error.code, error.message))?;
                             }
@@ -1238,6 +1253,9 @@ impl TaskStore {
                             if completed <= 10 || completed % 16 == 0 || completed == total {
                                 self.record_progress(job_id, completed, total)
                                     .map_err(|error| imagery::CoreError::new(error.code, error.message))?;
+                                pending_progress = None;
+                            } else {
+                                pending_progress = Some((completed, total));
                             }
                         }
                     }
@@ -1253,6 +1271,7 @@ impl TaskStore {
             )
             .await
         };
+        if let Some((completed, total)) = pending_progress { self.record_progress(job_id, completed, total)?; }
         match result {
             Ok(_) => {
                 self.transition(job_id, job.state, JobState::Verifying, None, Utc::now())?;

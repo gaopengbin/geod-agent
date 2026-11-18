@@ -101,6 +101,34 @@ fn request(url: String) -> Request {
     }
 }
 #[tokio::test]
+async fn vector_http_rejection_preserves_source_and_status_without_the_address() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/private-tiles/{{z}}/{{x}}/{{y}}.pbf",listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let mut request = [0; 8192];
+        socket.read(&mut request).await.unwrap();
+        socket.write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").await.unwrap();
+    });
+    let root = tempfile::tempdir().unwrap();
+    let plan = geod_vector::plan(request(url)).unwrap();
+    let mut options = RunOptions::new(root.path().join("out"), root.path().join("cache"));
+    options.network.allow_local_http = true;
+    options.network.query.insert("key".into(), "private-test-value".into());
+    let (result, diagnostic) = geod_core::acquisition_diagnostic::observe_data_download(geod_vector::run(&plan, options, |_| {})).await;
+    assert!(result.is_err());
+    assert_eq!(diagnostic.phase, "base_download");
+    assert_eq!(diagnostic.error_http_status, Some(403));
+    let source = &diagnostic.sources[diagnostic.failed_source.unwrap()];
+    assert_eq!(source.endpoint, "vector-tiles");
+    assert_eq!(source.observed_responses, 1);
+    assert!(source.authentication_configured);
+    assert_eq!(source.host.as_deref(), Some("loopback"));
+    let json = serde_json::to_string(&diagnostic).unwrap();
+    assert!(!json.contains("private-tiles") && !json.contains("private-test-value"));
+    server.await.unwrap();
+}
+#[tokio::test]
 async fn native_packages_retry_resume_and_integrity() {
     let (url, hits, server) = server(tile(), true, false).await;
     let root = tempfile::tempdir().unwrap();

@@ -71,6 +71,19 @@ test('diagnostics describe Anthropic, Gemini and string Responses inputs without
  for(const [request,expected] of cases){const d=await upstreamDiagnostic(new Response(null,{status:402}),request);assert.deepEqual(d.requestShape,expected);assert.doesNotMatch(JSON.stringify(d),/private/);}
 });
 
+test('a tool request rejection reports field type and historical mismatch count only',async()=>{
+ const request={
+  tools:[{type:'function',function:{name:'available_tool'}}],
+  messages:[{role:'assistant',tool_calls:[{function:{name:'private_old_tool',arguments:'private input'}}]}],
+ };
+ const response=Response.json({error:{type:'invalid_request_error',param:'tools[0].function.parameters.properties.private_field'}},{status:400});
+ const diagnostic=await upstreamDiagnostic(response,request);
+ assert.equal(diagnostic.reason,'tools_invalid');
+ assert.equal(diagnostic.rejectedToolField,'tool_schema');
+ assert.equal(diagnostic.requestShape.historicalToolsOutsideCatalog,1);
+ assert.doesNotMatch(JSON.stringify(diagnostic),/private/);
+});
+
 test('unlimited sponsored rejections preserve native evidence, release once and never retry or charge Credits',async()=>{
  const folder=mkdtempSync(join(tmpdir(),'geod-luna-billing-rejection-')),path=join(folder,'ledger.sqlite');let calls=0;
  const emptyWallet=createPaymentLedgerCandidate(path+'-credits.sqlite',{creditOnly:true,loadGeneration:()=>null});emptyWallet.close();
@@ -114,7 +127,8 @@ test('unusable tool results and missing usage retain safe protocol diagnostics a
  }});await new Promise(r=>server.listen(0,'127.0.0.1',r));
  const generate=async id=>{const r=await fetch(`http://127.0.0.1:${server.address().port}/api/agent/codex/generations/stream`,{method:'POST',headers:{authorization:'Bearer '+'A'.repeat(43),'content-type':'application/json'},body:JSON.stringify({generationId:id,conversationId:'protocol-conversation',request:{input:[{role:'user',content:'private prompt'}],tools:[{type:'function',name:'declared_tool',parameters:{type:'object',properties:{}}}]}})});return(await r.text()).split('\n\n').filter(x=>x.includes('event: generation')).map(x=>JSON.parse(x.match(/data: (.+)/)[1]))[0];};
  try{
-  for(let i=0;i<3;i++){const r=await generate('protocol-'+i);assert.equal(r.state,'failed');assert.equal(r.errorCode,i<2?'UPSTREAM_INVALID_TOOL':'UPSTREAM_MALFORMED');assert.equal(r.upstreamDiagnostic.protocol.stage,i<2?'tool_contract':'stream_parse');assert.doesNotMatch(JSON.stringify(r.upstreamDiagnostic),/private prompt|private-project-key/);}
+  const codes=['CODEX_TOOL_NOT_IN_REQUEST','CODEX_TOOL_CALL_ID_INVALID','PROVIDER_STREAM_INCOMPLETE'];
+  for(let i=0;i<3;i++){const r=await generate('protocol-'+i);assert.equal(r.state,'failed');assert.equal(r.errorCode,i<2?'UPSTREAM_INVALID_TOOL':'UPSTREAM_MALFORMED');assert.equal(r.upstreamDiagnostic.protocol.stage,i<2?'tool_contract':'stream_parse');if(i<2)assert.equal(r.upstreamDiagnostic.protocol.code,codes[i]);assert.doesNotMatch(JSON.stringify(r.upstreamDiagnostic),/private prompt|private-project-key/);}
   await generate('protocol-2');assert.equal(calls,3);
   const db=new Database(path,{readonly:true});try{assert.equal(db.prepare("SELECT count(*) n FROM usage_ledger WHERE kind='release'").get().n,3);assert.equal(db.prepare("SELECT count(*) n FROM usage_ledger WHERE kind='settle'").get().n,0);}finally{db.close();}
  }finally{await new Promise(r=>server.close(r));rmSync(folder,{recursive:true,force:true});}

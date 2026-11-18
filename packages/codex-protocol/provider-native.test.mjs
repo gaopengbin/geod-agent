@@ -64,7 +64,7 @@ test('Unknown usage stays unknown and undeclared Claude tools remain rejected',a
   const config=snapshot('anthropic'),wire=providerRequest(config,request).body.tools[0].name;
   const stream=anthropicTool(wire).split('\r\n\r\n').filter(Boolean).map(text=>JSON.parse(text.slice(6))).map(value=>{if(value.message)delete value.message.usage;delete value.usage;return event(value);}).join('');
   const result=await generateProvider(config,'key',request,{fetchImpl:async()=>response(stream)});assert.equal(result.inputTokens,null);assert.equal(result.outputTokens,null);assert.equal(result.cachedInputTokens,null);assert.equal(result.usageKnown,false);
-  await assert.rejects(generateProvider(config,'key',request,{fetchImpl:async()=>response(anthropicTool('undeclared_tool'))}),/UNDECLARED_TOOL/);
+  await assert.rejects(generateProvider(config,'key',request,{fetchImpl:async()=>response(anthropicTool('undeclared_tool'))}),{code:'CODEX_TOOL_NOT_IN_REQUEST'});
 });
 test('Native catalogue discovery uses provider authentication and real model IDs',async()=>{
   const claude=await listProviderModels(snapshot('anthropic'),'key',{fetchImpl:async(_url,options)=>{assert.equal(options.headers['x-api-key'],'key');return Response.json({data:[{id:'actual-claude-id'}]});}});assert.deepEqual(claude,[{id:'actual-claude-id'}]);

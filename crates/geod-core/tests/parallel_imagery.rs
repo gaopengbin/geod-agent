@@ -422,6 +422,8 @@ async fn retry_after_pauses_all_lanes_without_storming_new_requests() {
         4
     );
     assert_eq!(times.len(), 36);
+    assert!(times[4..12].windows(2).all(|pair| pair[1].duration_since(pair[0]) >= Duration::from_millis(65)),
+        "lanes should restart gradually after Retry-After expires");
 }
 
 #[tokio::test]

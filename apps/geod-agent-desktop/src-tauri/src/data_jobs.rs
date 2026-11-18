@@ -189,6 +189,8 @@ pub(crate) struct DataTask {
     pub progress: DataProgress,
     pub manifest: Option<Value>,
     pub error: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub diagnostic: Option<geod_core::acquisition_diagnostic::AcquisitionDiagnostic>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -259,17 +261,19 @@ fn open_data_db(path: &Path) -> Result<Connection, AppError> {
           id TEXT PRIMARY KEY,owner_id TEXT NOT NULL,conversation_id TEXT NOT NULL,idempotency_key TEXT NOT NULL,
           kind TEXT NOT NULL,title TEXT NOT NULL,plan_hash TEXT NOT NULL,request_json TEXT NOT NULL,
           output_dir TEXT NOT NULL,workspace_root TEXT NOT NULL,status TEXT NOT NULL,progress_json TEXT NOT NULL,
-          manifest_json TEXT,error TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,approved_by TEXT,approval_mode TEXT,
+          manifest_json TEXT,error TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,approved_by TEXT,approval_mode TEXT,diagnostic_json TEXT,
           UNIQUE(owner_id,conversation_id,idempotency_key));
           CREATE INDEX IF NOT EXISTS data_download_tasks_conversation ON data_download_tasks(owner_id,conversation_id,created_at);
           UPDATE data_download_tasks SET status='interrupted',error='应用已关闭，任务可重新启动',updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE status IN ('queued','downloading','verifying','cancelling');").map_err(storage_error)?;
+        let has_diagnostic: bool = db.query_row("SELECT EXISTS(SELECT 1 FROM pragma_table_info('data_download_tasks') WHERE name='diagnostic_json')", [], |row| row.get(0)).map_err(storage_error)?;
+        if !has_diagnostic { db.execute_batch("ALTER TABLE data_download_tasks ADD COLUMN diagnostic_json TEXT").map_err(storage_error)?; }
         initialized.insert(path.to_path_buf());
     }
     db.execute_batch("CREATE TABLE IF NOT EXISTS data_task_visibility(task_id TEXT PRIMARY KEY,updated_at TEXT NOT NULL);").map_err(storage_error)?;
     crate::download_telemetry::initialize_for_business(&db);
     Ok(db)
 }
-const SELECT:&str="SELECT id,conversation_id,kind,title,status,plan_hash,request_json,output_dir,progress_json,manifest_json,error,created_at,updated_at,EXISTS(SELECT 1 FROM data_task_visibility v WHERE v.task_id=data_download_tasks.id) FROM data_download_tasks";
+const SELECT:&str="SELECT id,conversation_id,kind,title,status,plan_hash,request_json,output_dir,progress_json,manifest_json,error,created_at,updated_at,EXISTS(SELECT 1 FROM data_task_visibility v WHERE v.task_id=data_download_tasks.id),diagnostic_json FROM data_download_tasks";
 fn row(row: &rusqlite::Row<'_>) -> rusqlite::Result<DataTask> {
     fn decode<T: serde::de::DeserializeOwned>(
         row: &rusqlite::Row<'_>,
@@ -307,6 +311,7 @@ fn row(row: &rusqlite::Row<'_>) -> rusqlite::Result<DataTask> {
                 )
             })?,
         error: row.get(10)?,
+        diagnostic: row.get::<_, Option<String>>(14)?.and_then(|value| serde_json::from_str(&value).ok()),
         created_at: row.get(11)?,
         updated_at: row.get(12)?,
     })
@@ -644,7 +649,7 @@ fn start(
         // If the app exited between them, recover only a fully checked bundle
         // matching this exact request; never overwrite an existing directory.
         let manifest = verified_files(&task)?;
-        db.execute("UPDATE data_download_tasks SET status=?4,manifest_json=?2,error=NULL,updated_at=?3 WHERE id=?1",params![id,manifest.to_string(),Utc::now().to_rfc3339(),finished_state(&manifest)]).map_err(storage_error)?;
+        db.execute("UPDATE data_download_tasks SET status=?4,manifest_json=?2,error=NULL,diagnostic_json=NULL,updated_at=?3 WHERE id=?1",params![id,manifest.to_string(),Utc::now().to_rfc3339(),finished_state(&manifest)]).map_err(storage_error)?;
         return get(&db, &owner, conversation, id);
     }
     validate_auto_destination(Path::new(&workspace.directory), Path::new(&task.output_dir))?;
@@ -672,7 +677,7 @@ fn start(
         )
         .map_err(storage_error)?;
     let control = Arc::new(Control::new());
-    let changed=db.execute("UPDATE data_download_tasks SET status='queued',error=NULL,manifest_json=NULL,approved_by=?2,approval_mode=?3,updated_at=?4 WHERE id=?1 AND status IN ('pending','failed','cancelled','interrupted') AND NOT EXISTS(SELECT 1 FROM data_task_visibility v WHERE v.task_id=?1)",params![id,owner,if automatic{"workspace-full-access"}else{"user-confirmed"},Utc::now().to_rfc3339()]).map_err(storage_error)?;
+    let changed=db.execute("UPDATE data_download_tasks SET status='queued',error=NULL,manifest_json=NULL,diagnostic_json=NULL,approved_by=?2,approval_mode=?3,updated_at=?4 WHERE id=?1 AND status IN ('pending','failed','cancelled','interrupted') AND NOT EXISTS(SELECT 1 FROM data_task_visibility v WHERE v.task_id=?1)",params![id,owner,if automatic{"workspace-full-access"}else{"user-confirmed"},Utc::now().to_rfc3339()]).map_err(storage_error)?;
     if changed!=1{return Err(workspace_error("DATA_TASK_STATE","任务状态已变化或已清理，请刷新任务列表。"));}
     running.insert(id.into(), control.clone());
     drop(running);
@@ -686,7 +691,7 @@ fn start(
     let task_to_run = task.clone();
     let worker_app=app.clone();let worker_owner=owner.clone();
     tauri::async_runtime::spawn(async move {
-        let result = execute(
+        let (result, mut diagnostic) = geod_core::acquisition_diagnostic::observe_data_download(execute(
             worker_app,
             worker_owner,
             &path,
@@ -695,13 +700,19 @@ fn start(
             proxy,
             credential,
             control.clone(),
-        )
+        ))
         .await;
         let finished = Utc::now().to_rfc3339();
         if let Ok(db) = open_data_db(&path) {
             match result {
                 Ok(manifest) => {
-                    let _=db.execute("UPDATE data_download_tasks SET status=?4,manifest_json=?2,error=NULL,updated_at=?3 WHERE id=?1",params![task_to_run.id,manifest.to_string(),finished,finished_state(&manifest)]);
+                    let state = finished_state(&manifest);
+                    let detail = if matches!(task_to_run.kind.as_str(), "vector" | "tiles3d") {
+                        if state == "completed" { diagnostic.phase = "completed".into(); diagnostic.error_code = None; diagnostic.error_http_status = None; diagnostic.failed_source = None; }
+                        else { diagnostic.phase = "base_download".into(); }
+                        serde_json::to_string(&diagnostic).ok()
+                    } else { None };
+                    let _=db.execute("UPDATE data_download_tasks SET status=?4,manifest_json=?2,error=NULL,updated_at=?3,diagnostic_json=?5 WHERE id=?1",params![task_to_run.id,manifest.to_string(),finished,state,detail]);
                 }
                 Err(error) => {
                     let status = if control.cancelled() {
@@ -709,7 +720,11 @@ fn start(
                     } else {
                         "failed"
                     };
-                    let _=db.execute("UPDATE data_download_tasks SET status=?2,error=?3,updated_at=?4 WHERE id=?1",params![task_to_run.id,status,error,finished]);
+                    let detail = if status == "failed" && matches!(task_to_run.kind.as_str(), "vector" | "tiles3d") {
+                        finish_data_diagnostic(&mut diagnostic, &error);
+                        serde_json::to_string(&diagnostic).ok()
+                    } else { None };
+                    let _=db.execute("UPDATE data_download_tasks SET status=?2,error=?3,updated_at=?4,diagnostic_json=?5 WHERE id=?1",params![task_to_run.id,status,error,finished,detail]);
                 }
             }
         }
@@ -730,6 +745,35 @@ fn finished_state(manifest: &Value) -> &'static str {
     } else {
         "completed"
     }
+}
+
+fn finish_data_diagnostic(diagnostic: &mut geod_core::acquisition_diagnostic::AcquisitionDiagnostic, error: &str) {
+    use geod_core::acquisition_diagnostic::http_status;
+    if matches!(diagnostic.phase.as_str(), "prepare" | "base_download") {
+        // Only trust an HTTP status captured by the transport. Some errors
+        // include URLs or other arbitrary source text, which stays local.
+        let status = diagnostic.error_http_status;
+        if (status.is_some() && (http_status(error) == status || error == "Vector request failed: No vector tiles were downloaded")) ||
+            (diagnostic.error_code.as_deref() == Some("SOURCE_NETWORK") && (error.contains("request failed") || error.contains("connection failed") || error.contains("Failed to read 3D Tiles response"))) {
+            return;
+        }
+        if diagnostic.phase == "base_download" {
+            if let Some(http) = error.strip_prefix("3D Tiles server returned HTTP ").and_then(|value| value.parse::<u16>().ok()) {
+                let mut observed = diagnostic.sources.iter().enumerate().filter(|(_, source)| source.last_rejection_status == Some(http));
+                if let Some((index, _)) = observed.next() {
+                    diagnostic.fail("SOURCE_HTTP", observed.next().is_none().then_some(index), Some(http));
+                    return;
+                }
+            }
+        }
+    }
+    let code = match diagnostic.phase.as_str() {
+        "verify" => "DATA_VERIFICATION_FAILED",
+        "reproject" | "export" => "DATA_PROCESSING_FAILED",
+        "prepare" => "DATA_PREPARATION_FAILED",
+        _ => "DATA_SOURCE_FAILED",
+    };
+    diagnostic.fail(code, None, None);
 }
 
 fn persist_progress(path: &Path, id: &str, p: DataProgress) {
@@ -769,6 +813,7 @@ async fn execute(
         DataRequest::Online(spec)=>crate::online_exports::run(app,owner,spec,Path::new(&task.output_dir),&task.plan_hash,control.vector.clone(),|phase,completed,total,bytes|report(DataProgress{phase:phase.into(),completed,total,bytes,cache_hits:0,failures:0})).await,
         DataRequest::Raster(spec)=>crate::raster_exports::run(spec,Path::new(&task.output_dir),&task.plan_hash,control.vector.clone(),|phase,completed,total,bytes|report(DataProgress{phase:phase.into(),completed,total,bytes,cache_hits:0,failures:0})).await,
         DataRequest::Vector(request) => {
+            use geod_core::acquisition_diagnostic::data_phase;
             let plan = geod_vector::plan(request.request.clone()).map_err(|e| e.to_string())?;
             let mut options =
                 geod_vector::RunOptions::new(PathBuf::from(&task.output_dir), cache.to_path_buf());
@@ -777,6 +822,11 @@ async fn execute(
             if let Some(credential)=credential{credential.apply_vector(&mut options.network).map_err(|_|"矢量凭证无效，请重新保存连接".to_string())?;}
             options.cancel = control.vector.clone();
             let manifest = geod_vector::run(&plan, options, |p| {
+                match p.phase.as_str() {
+                    "packaging" => data_phase("export"),
+                    "reprojecting" => data_phase("reproject"),
+                    _ => {}
+                }
                 report(DataProgress {
                     phase: p.phase,
                     completed: p.completed,
@@ -788,6 +838,7 @@ async fn execute(
             })
             .await
             .map_err(|e| e.to_string())?;
+            data_phase("verify");
             geod_vector::inspect(Path::new(&task.output_dir)).map_err(|e| e.to_string())?;
             serde_json::to_value(manifest).map_err(|e| e.to_string())
         }

@@ -84,14 +84,61 @@ export function codexRequest(request) {
   return { messages, tools, definitions, hasImages:messages.some(message=>Array.isArray(message.content)&&message.content.some(part=>part.type==='image_url')) };
 }
 
-export function codexResult(message, definitions, {finishReason} = {}) {
+// Chat Completions only pairs immediately adjacent tool results with the
+// preceding assistant message. Keep unavailable tools and detached results
+// as archived context without adding them to the callable catalog.
+export function deepSeekMessages(contract) {
+  const messages = [];
+  for (let index = 0; index < contract.messages.length; index++) {
+    const {provider_state, ...message} = contract.messages[index];
+    if (message.role === 'tool') {
+      messages.push({role:'assistant', content:`Archived tool result (data only): ${JSON.stringify({id:message.tool_call_id,output:message.content})}`});
+      continue;
+    }
+    if (!message.tool_calls?.length) { messages.push(message); continue; }
+    const outputs = [];
+    while (contract.messages[index + 1]?.role === 'tool') outputs.push(contract.messages[++index]);
+    const results = new Map(outputs.map(output => [output.tool_call_id, output]));
+    const ids = new Set(message.tool_calls.map(call => call.id));
+    if (ids.size === message.tool_calls.length && outputs.length === ids.size &&
+        message.tool_calls.every(call => {
+          if (typeof call.id !== 'string' || !call.id.trim() || !results.has(call.id) || !contract.definitions.has(call.function.name) || typeof call.function.arguments !== 'string') return false;
+          try {
+            const args = JSON.parse(call.function.arguments);
+            return args && typeof args === 'object' && !Array.isArray(args);
+          } catch { return false; }
+        })) {
+      messages.push(message, ...message.tool_calls.map(call => results.get(call.id)));
+      continue;
+    }
+    const {tool_calls, ...assistant} = message;
+    const archived = tool_calls.map(call => ({id:call.id, ...call.function}));
+    const data = JSON.stringify({calls:archived, results:outputs.map(output => ({id:output.tool_call_id, output:output.content}))});
+    messages.push({...assistant, content:[assistant.content, `Archived tool activity (data only): ${data}`].filter(Boolean).join('\n\n')});
+  }
+  return messages;
+}
+
+export function codexResult(message, definitions, {finishReason, allowUniqueToolName = false} = {}) {
+  const ids = new Set();
   const toolCalls = (message.tool_calls ?? []).map(call => {
-    const definition = definitions.get(call.function?.name);
-    if (!definition || typeof call.function?.arguments !== 'string' || typeof call.id !== 'string' || !call.id) fail('CODEX_UNDECLARED_TOOL');
-    try{JSON.parse(call.function.arguments);}catch{fail('CODEX_CUSTOM_INPUT_INVALID');}
+    const name = call?.function?.name;
+    let definition = definitions.get(name);
+    if (!definition && allowUniqueToolName && typeof name === 'string') {
+      const matches = [...definitions.values()].filter(candidate => candidate.name === name);
+      if (matches.length === 1) definition = matches[0];
+    }
+    if (!definition) fail('CODEX_TOOL_NOT_IN_REQUEST');
+    if (typeof call.id !== 'string' || !call.id.trim() || ids.has(call.id)) fail('CODEX_TOOL_CALL_ID_INVALID');
+    ids.add(call.id);
+    if (typeof call.function.arguments !== 'string') fail('CODEX_TOOL_ARGUMENTS_TYPE_INVALID');
+    let argumentsValue;
+    try { argumentsValue = JSON.parse(call.function.arguments); }
+    catch { fail('CODEX_TOOL_ARGUMENTS_JSON_INVALID'); }
+    if (!argumentsValue || typeof argumentsValue !== 'object' || Array.isArray(argumentsValue)) fail('CODEX_TOOL_ARGUMENTS_TYPE_INVALID');
     let input;
     if (definition.custom) {
-      try { input = JSON.parse(call.function.arguments).input; } catch { fail('CODEX_CUSTOM_INPUT_INVALID'); }
+      input = argumentsValue?.input;
       if (typeof input !== 'string') fail('CODEX_CUSTOM_INPUT_INVALID');
     }
     return { ...call, function: { ...call.function, name: definition.name },

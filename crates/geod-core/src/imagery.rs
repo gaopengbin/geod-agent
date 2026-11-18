@@ -550,6 +550,7 @@ pub struct CoreError {
 pub enum FailureDiagnostic {
     Storage { report:crate::storage_preflight::DiskPreflight },
     SourceAccess { http_status:u16,host:String,source_id:String,authentication_configured:bool },
+    Network { cause: crate::acquisition_diagnostic::NetworkCause },
 }
 
 impl CoreError {
@@ -753,7 +754,7 @@ pub async fn fetch_preview_tile(source: &HttpSource, zoom: u8, x: u32, y: u32, p
     let builder = match proxy { ProxyRoute::Environment => builder, ProxyRoute::Direct => builder.no_proxy(), ProxyRoute::Http(url) => builder.no_proxy().proxy(reqwest::Proxy::all(url).map_err(|_| CoreError::new("SOURCE_NETWORK", "Invalid proxy"))?) };
     let client = builder.build().map_err(|_| CoreError::new("SOURCE_NETWORK", "Unable to create source connection"))?;
     if source.coordinate_system==Some(CoordinateSystem::Gcj02) || geod_earth_history::is_template(&source.url_template) {
-        get_registered_tile(&client,source,zoom,x,y,&AtomicBool::new(false),None,Instant::now(),Duration::from_secs(90),&Mutex::new(Instant::now())).await.map(|tile|tile.bytes)
+    get_registered_tile(&client,source,zoom,x,y,&AtomicBool::new(false),None,Instant::now(),Duration::from_secs(90),&Mutex::new(DownloadCooldown::new())).await.map(|tile|tile.bytes)
     } else { get_tile(&client, url, source, &mut None).await.map(|tile| tile.bytes) }
 }
 
@@ -916,6 +917,7 @@ fn retry_after_delay(header: &HeaderValue) -> Option<Duration> {
 }
 
 fn tile_network_error(error: reqwest::Error) -> CoreError {
+    use crate::acquisition_diagnostic::NetworkCause::*;
     use std::error::Error;
     let error = error.without_url();
     // Inspect the chain to classify the failure, but emit only fixed labels:
@@ -923,14 +925,17 @@ fn tile_network_error(error: reqwest::Error) -> CoreError {
     let mut chain = String::new();
     let mut cause: Option<&(dyn Error + 'static)> = Some(&error);
     while let Some(value) = cause { chain.push_str(&value.to_string().to_ascii_lowercase()); cause = value.source(); }
-    let reason = if error.is_timeout() { "TIMEOUT: 图源请求超时" }
-        else if ["certificate", "tls", "ssl"].iter().any(|value| chain.contains(value)) { "TLS: 图源安全连接失败" }
-        else if ["dns", "resolve", "name or service", "nodename"].iter().any(|value| chain.contains(value)) { "DNS: 图源域名解析失败" }
-        else if chain.contains("tunnel") || chain.contains("proxy") { "PROXY: 代理连接失败" }
-        else if error.is_connect() { "CONNECT: 无法连接图源或代理" }
-        else if error.is_body() { "BODY: 影像响应读取中断" }
-        else { "REQUEST: 图源请求失败" };
-    CoreError::new("SOURCE_NETWORK", reason)
+    if error.is_builder(){return CoreError::new("SOURCE_REQUEST_INVALID","图源请求配置无效，请检查地址、请求头和代理设置后重试；已有任务与缓存已保留");}
+    let (cause, message) = if error.is_timeout() { (Timeout, "TIMEOUT: 图源请求超时") }
+        else if ["certificate", "tls", "ssl"].iter().any(|value| chain.contains(value)) { (Tls, "TLS: 图源安全连接失败") }
+        else if ["dns", "resolve", "name or service", "nodename"].iter().any(|value| chain.contains(value)) { (Dns, "DNS: 图源域名解析失败") }
+        else if chain.contains("tunnel") || chain.contains("proxy") { (Proxy, "PROXY: 代理连接失败") }
+        else if error.is_connect() { (Connect, "CONNECT: 无法连接图源或代理") }
+        else if error.is_body() || error.is_decode() { (ResponseBody, "BODY: 影像响应读取中断") }
+        else { (Request, "REQUEST: 图源请求失败") };
+    let mut error = CoreError::new("SOURCE_NETWORK", message);
+    error.diagnostic = Some(FailureDiagnostic::Network { cause });
+    error
 }
 
 fn history_error(error:String)->CoreError {
@@ -1075,18 +1080,38 @@ fn check_download_control(
     Ok(())
 }
 
+struct DownloadCooldown {
+    until: Instant,
+    stagger_until: Instant,
+}
+impl DownloadCooldown {
+    fn new() -> Self {
+        let now = Instant::now();
+        Self { until: now, stagger_until: now }
+    }
+}
+
 async fn wait_for_download_slot(
     ready_at: Instant,
-    cooldown: &Mutex<Instant>,
+    cooldown: &Mutex<DownloadCooldown>,
     cancelled: &AtomicBool,
     paused: Option<&AtomicBool>,
     started: Instant,
     deadline: Duration,
+    admit_request: bool,
 ) -> Result<(), CoreError> {
     loop {
         check_download_control(cancelled, paused, started, deadline)?;
-        let until = ready_at.max(*cooldown.lock().expect("download cooldown poisoned"));
-        let remaining = until.saturating_duration_since(Instant::now());
+        let now = Instant::now();
+        let remaining = {
+            let mut gate = cooldown.lock().expect("download cooldown poisoned");
+            let remaining = ready_at.max(gate.until).saturating_duration_since(now);
+            // Pace new HTTP requests as lanes restart after a provider limit.
+            if admit_request && remaining.is_zero() && now < gate.stagger_until {
+                gate.until = now + Duration::from_millis(100);
+            }
+            remaining
+        };
         if remaining.is_zero() {
             return Ok(());
         }
@@ -1102,7 +1127,7 @@ async fn get_tile_with_retry(
     paused: Option<&AtomicBool>,
     started: Instant,
     deadline: Duration,
-    cooldown: &Mutex<Instant>,
+    cooldown: &Mutex<DownloadCooldown>,
 ) -> Result<DownloadedTile, CoreError> {
     // ImageServer 5xx responses can outlast the first few short retries. Keep
     // the wait bounded by the job deadline and interruptible by pause/cancel.
@@ -1115,6 +1140,7 @@ async fn get_tile_with_retry(
             paused,
             started,
             deadline,
+            true,
         )
         .await?;
         if cancelled.load(Ordering::Relaxed) {
@@ -1154,7 +1180,8 @@ async fn get_tile_with_retry(
                 // pauses new requests from every lane, including other retries.
                 if error.code == "SOURCE_RATE_LIMITED" || retry_after.is_some() {
                     let mut shared = cooldown.lock().expect("download cooldown poisoned");
-                    *shared = (*shared).max(Instant::now() + delay);
+                    shared.until = shared.until.max(Instant::now() + delay);
+                    shared.stagger_until = shared.until + Duration::from_secs(10);
                 }
                 let wait_until = Instant::now() + delay;
                 while Instant::now() < wait_until {
@@ -1191,7 +1218,7 @@ impl Drop for WarpPermit { fn drop(&mut self) { ACTIVE_WARPS.fetch_sub(1,Orderin
 /// A maximum of four source mosaics are decoded at once, independent of the
 /// ordinary network concurrency setting. Output checkpoints keep canonical WGS tiles.
 async fn get_registered_tile(client:&Client,source:&HttpSource,zoom:u8,x:u32,y:u32,cancelled:&AtomicBool,
-    paused:Option<&AtomicBool>,started:Instant,deadline:Duration,cooldown:&Mutex<Instant>) -> Result<DownloadedTile,CoreError> {
+    paused:Option<&AtomicBool>,started:Instant,deadline:Duration,cooldown:&Mutex<DownloadCooldown>) -> Result<DownloadedTile,CoreError> {
     if geod_earth_history::is_template(&source.url_template) {
         let read=geod_earth_history::read_tile(&source.url_template,zoom,x,y,client.clone());
         tokio::pin!(read);
@@ -1220,7 +1247,7 @@ async fn get_registered_tile(client:&Client,source:&HttpSource,zoom:u8,x:u32,y:u
     let mut tiles=std::collections::HashMap::new();
     let mut ready_at=Instant::now();
     for &(tx,ty) in &plan.tiles {
-        wait_for_download_slot(ready_at,cooldown,cancelled,paused,started,deadline).await?;
+        wait_for_download_slot(ready_at,cooldown,cancelled,paused,started,deadline,false).await?;
         let tile=get_tile_with_retry(client,tile_url_at(source,zoom,tx,ty)?,source,cancelled,paused,started,deadline,cooldown).await?;
         tiles.insert((tx,ty),std::sync::Arc::new(tile.image));
         ready_at=Instant::now()+Duration::from_millis(source.min_interval_ms);
@@ -1234,7 +1261,7 @@ async fn get_registered_tile(client:&Client,source:&HttpSource,zoom:u8,x:u32,y:u
 
 async fn get_composite_tile(client: &Client, _url: Url, source: &HttpSource, overlays: &[HttpSource],
     grid: &TileGrid, x: u32, y: u32, cancelled: &AtomicBool, paused: Option<&AtomicBool>, started: Instant,
-    deadline: Duration, cooldown: &Mutex<Instant>) -> Result<DownloadedTile, CoreError> {
+    deadline: Duration, cooldown: &Mutex<DownloadCooldown>) -> Result<DownloadedTile, CoreError> {
     let mut tile = acquisition_observer::source(0,get_registered_tile(client,source,grid.zoom,x,y,cancelled,paused,started,deadline,cooldown)).await?;
     for (index,overlay) in overlays.iter().enumerate() {
         let annotation = acquisition_observer::source(index+1,get_registered_tile(client,overlay,grid.zoom,x,y,cancelled,paused,started,deadline,cooldown)).await
@@ -1578,7 +1605,20 @@ async fn fetch_bundle_internal<F>(
         acquisition_observer::CURRENT.scope(observer.clone(),fetch_bundle_observed(request,source,cancelled,paused,cache_config,proxy,options,&mut callback,projector)).await
     };
     if let Ok(mut d)=observer.lock(){
-        match &result{Ok(_)=>d.phase="completed".into(),Err(e)=>{d.fail(e.code,e.source_index,e.http_status.or_else(||crate::acquisition_diagnostic::http_status(&e.message)));if let Some(phase)=e.phase{d.phase=phase.into();}else if let Some(i)=e.source_index{d.phase=if i==0{"base_download"}else{"overlay_download"}.into();}}}
+        match &result {
+            Ok(_) => d.phase = "completed".into(),
+            Err(error) => {
+                d.fail(error.code, error.source_index, error.http_status.or_else(||crate::acquisition_diagnostic::http_status(&error.message)));
+                if let Some(FailureDiagnostic::Network { cause }) = &error.diagnostic {
+                    d.network_cause = Some(*cause);
+                }
+                if let Some(phase) = error.phase {
+                    d.phase = phase.into();
+                } else if let Some(index) = error.source_index {
+                    d.phase = if index == 0 { "base_download" } else { "overlay_download" }.into();
+                }
+            }
+        }
         if let Ok(value)=serde_json::to_value(&*d){let _=on_progress(BundleProgress::Diagnostic(value));}
     }
     result
@@ -1728,7 +1768,7 @@ where
     };
     let mut completed_tiles = 0u64;
     let mut extra_tiles = tile_exports::ExtraTileWriter::new(stage.path(), source, request)?;
-    let cooldown = Mutex::new(Instant::now());
+    let cooldown = Mutex::new(DownloadCooldown::new());
     let cooldown_ref = &cooldown;
     for grid in &request.grids {
         on_progress(BundleProgress::Stage(BundleStage::Downloading))?;
@@ -1775,6 +1815,7 @@ where
                             paused,
                             started,
                             request.deadline,
+                            false,
                         )
                         .await?;
                         get_composite_tile(
@@ -2298,6 +2339,7 @@ mod source_tests {
         let error = tile_network_error(error);
         assert_eq!(error.code, "SOURCE_NETWORK");
         assert!(error.message.starts_with("CONNECT:"));
+        assert_eq!(error.diagnostic, Some(FailureDiagnostic::Network { cause: crate::acquisition_diagnostic::NetworkCause::Connect }));
         assert!(!error.message.contains("private-fixture"));
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let address = listener.local_addr().unwrap();
@@ -2310,6 +2352,7 @@ mod source_tests {
         let error = tile_network_error(error);
         assert_eq!(error.code, "SOURCE_NETWORK");
         assert!(error.message.starts_with("TIMEOUT:"));
+        assert_eq!(error.diagnostic, Some(FailureDiagnostic::Network { cause: crate::acquisition_diagnostic::NetworkCause::Timeout }));
         assert!(!error.message.contains("private-fixture"));
         worker.join().unwrap();
     }

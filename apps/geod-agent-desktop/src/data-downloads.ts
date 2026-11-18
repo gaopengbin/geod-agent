@@ -7,6 +7,7 @@ export interface DataDownloadTask {
   request: { kind: string; spec: Record<string, unknown> }; outputDir: string;
   progress: { phase: string; completed: number; total: number; bytes: number; cacheHits: number; failures: number } | null;
   manifest: Record<string, unknown> | null; error: string | null; createdAt: string; updatedAt: string; cleaned?:boolean;
+  diagnostic?: {phase: string; sources: {endpoint:string; host:string|null}[]; failed_source:number|null; error_code:string|null; error_http_status:number|null};
 }
 export interface DataDownloadPreview { kind: "vector" | "tiles3d"; resourcePath: string; token: string; bounds?: number[]; featureCount?: number; truncated: boolean }
 export interface DataPreviewEvent {

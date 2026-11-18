@@ -1395,6 +1395,22 @@ pub(crate) fn send_download_events(state:&ServiceState,account_id:&str,events:Va
     // Old gateways reject unknown event fields. Negotiate metadata without
     // losing legacy delivery; this check never calls a model.
     let detail_version=gateway_call(state,"/api/agent/capabilities",None).ok().and_then(|v|v["downloadEventDetails"].as_u64()).unwrap_or(0);
+    if detail_version < 5 {
+        if let Some(rows) = events.as_array_mut() {
+            for row in rows {
+                if let Some(diagnostic) = row["diagnostic"].as_object_mut() {
+                    if detail_version < 4 { diagnostic.remove("network_cause"); }
+                    if let Some(sources) = diagnostic.get_mut("sources").and_then(Value::as_array_mut) {
+                        for source in sources {
+                            if matches!(source.get("endpoint").and_then(Value::as_str),Some("vector-tiles" | "overpass" | "poi" | "3d-tiles" | "ion-endpoint")) {
+                                source["endpoint"] = json!("external-protocol");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
     if let Some(rows)=events.as_array_mut(){for row in rows{if let Some(obj)=row.as_object_mut(){if detail_version==0{obj.remove("download_kind");}else if detail_version<2&&obj.get("download_kind").is_some_and(|v|v=="raster"){obj.insert("download_kind".into(),json!("unknown"));}if detail_version<2&&obj.get("reason").and_then(Value::as_str).is_some_and(|r|["provider","processing","verification","backend"].contains(&r)){obj.insert("reason".into(),json!("unknown"));}if detail_version<3{obj.remove("diagnostic");obj.remove("client_version");obj.remove("diagnostic_status");}}}}
     let mut receipt=gateway_call(state,"/api/agent/events",Some(json!({"schema_version":1,"accountId":account_id,"events":events})))?;
     receipt["download_detail_version"]=json!(detail_version);Ok(receipt)
@@ -1412,8 +1428,18 @@ pub(crate) fn diagnostic_qa_service(directory:&std::path::Path)->(ServiceState,S
     let config=directory.join("agent-services.json");fs::write(&config,serde_json::to_vec(&ServiceConfig{identity_origin:origin,gateway_origin:"https://geod.laogao.xyz".into()}).unwrap()).unwrap();
     (ServiceState::new(config),owner)
 }
-pub(crate) fn send_activity_events(state:&ServiceState,account_id:&str,events:Value)->Result<Value,ServiceError>{
+pub(crate) fn send_activity_events(state:&ServiceState,account_id:&str,mut events:Value)->Result<Value,ServiceError>{
     if current_user_id(state)?!=account_id{return Err(error("ACCOUNT_CHANGED","使用统计账号已切换"));}
+    if let Some(rows) = events.as_array_mut() {
+        let has_details = rows.iter().any(|row| row.get("failure_detail").is_some());
+        if has_details && !gateway_call(state,"/api/agent/capabilities",None).ok()
+            .and_then(|value| value["agentActivityEvents"].as_u64()).is_some_and(|version| version >= 2) {
+            for row in rows.iter_mut().filter_map(Value::as_object_mut) {
+                row.remove("failure_detail");
+                row.remove("failure_http_status");
+            }
+        }
+    }
     gateway_call(state,"/api/agent/activity",Some(json!({"schema_version":1,"accountId":account_id,"events":events})))
 }
 pub(crate) fn download_diagnostics_supported(state:&ServiceState)->bool{

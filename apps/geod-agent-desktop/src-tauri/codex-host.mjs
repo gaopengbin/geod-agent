@@ -24,10 +24,20 @@ const modelError=error=>({code:['SPONSOR_QUOTA_EXCEEDED','QUOTA_EXCEEDED'].inclu
 export function assertGenerationSettlement(generation){
  if(generation?.state==='settled'&&generation.result)return;
  if(generation?.state==='incomplete')throw Object.assign(new Error(generation.errorCode==='UPSTREAM_OUTPUT_LIMIT'?'模型输出达到本次上限，回复未完成；已保存终态、已知用量和任务进展，可从当前步骤继续。':'模型服务明确返回未完成；已保存原因、已知用量和任务进展，未执行不完整的工具调用。'),{code:generation.errorCode??'UPSTREAM_INCOMPLETE'});
- const messages={UPSTREAM_REJECTED:'模型渠道拒绝了请求，具体原因暂不可用；任务状态已保留。',UPSTREAM_MALFORMED:'模型供应商返回的内容或用量不完整，本次请求待核对；已保留任务状态，未自动重试。',UPSTREAM_INVALID_TOOL:'模型供应商返回了未声明的工具调用，本次请求待核对，未执行该操作。',UPSTREAM_UNKNOWN:'模型请求结果暂未确认，请先检查状态；已保留任务状态，未自动重试。'};
+ const messages={UPSTREAM_REJECTED:'模型渠道拒绝了请求，具体原因暂不可用；任务状态已保留。',UPSTREAM_MALFORMED:'模型供应商返回的内容或用量不完整，本次请求待核对；已保留任务状态，未自动重试。',UPSTREAM_INVALID_TOOL:'模型返回的工具调用格式异常，未执行该操作。已确认的参数和任务仍可继续使用。',UPSTREAM_UNKNOWN:'模型请求结果暂未确认，请先检查状态；已保留任务状态，未自动重试。'};
  const code=Object.hasOwn(messages,generation?.errorCode)?generation.errorCode:'GATEWAY_GENERATION_INCOMPLETE';
  const reasons={authentication:'模型渠道认证失败，需要检查服务端密钥配置。',balance:'模型渠道余额不足，需要补充渠道额度。',rate_limit:'模型渠道请求过于频繁，请稍后重试。',context_limit:'请求超出模型上下文限制，需要整理上下文后再发送。',image_unsupported:'当前模型渠道不支持本次图片输入，请使用支持图片的模型。',tools_invalid:'模型渠道不接受当前工具定义，需要检查工具协议兼容性。',messages_invalid:'模型渠道不接受当前消息结构，需要检查消息协议兼容性。',parameters_invalid:'模型渠道不接受本次请求参数，需要检查协议兼容性。',permission:'模型渠道没有使用此模型的权限。'};
- const detail=code==='UPSTREAM_REJECTED'?reasons[generation?.upstreamDiagnostic?.reason]:null;
+ const toolReasons={
+  CODEX_TOOL_NOT_IN_REQUEST:'模型调用了本轮未提供的工具。',
+  CODEX_TOOL_CALL_ID_INVALID:'模型返回的工具调用缺少有效编号。',
+  CODEX_TOOL_ARGUMENTS_TYPE_INVALID:'模型返回的工具参数类型无效。',
+  CODEX_TOOL_ARGUMENTS_JSON_INVALID:'模型返回的工具参数无法解析。',
+  CODEX_CUSTOM_INPUT_INVALID:'模型返回的自定义工具输入格式无效。',
+ };
+ // Old receipts used CODEX_UNDECLARED_TOOL for several distinct failures.
+ const toolDetail=toolReasons[generation?.upstreamDiagnostic?.protocol?.code];
+ const detail=code==='UPSTREAM_REJECTED'?reasons[generation?.upstreamDiagnostic?.reason]
+  :code==='UPSTREAM_INVALID_TOOL'&&toolDetail?`${toolDetail} 未执行该操作，任务状态已保留。`:null;
  throw Object.assign(new Error(detail??messages[code]??'模型请求未正常完成，请先检查状态；已保留任务状态。'),{code});
 }
 export function assertModelCompletion(result){

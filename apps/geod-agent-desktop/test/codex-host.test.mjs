@@ -23,7 +23,7 @@ test('Responses history preserves instructions, environment and tool pairs',()=>
 test('disabled tools remain readable as history without becoming callable',()=>{
  const result=request([{type:'function_call',namespace:'shell',name:'exec',call_id:'x',arguments:'{}'},{type:'function_call_output',call_id:'x',output:'past output'}]);
  assert.equal(result[1].content,'past output');
- assert.throws(()=>codexResult({tool_calls:[result[0].tool_calls[0]]},new Map()),/UNDECLARED_TOOL/);
+ assert.throws(()=>codexResult({tool_calls:[result[0].tool_calls[0]]},new Map()),{code:'CODEX_TOOL_NOT_IN_REQUEST'});
 });
 test('parallel tool calls remain paired in one Chat Completions assistant message',()=>{
  const result=request([
@@ -102,5 +102,5 @@ test('namespaced custom tools and reasoning are preserved in both directions',()
  const continued=codexRequest({tools,input:[{type:'custom_tool_call',call_id:'p1',namespace:'functions',name:'apply_patch',input:'patch'},{type:'custom_tool_call_output',call_id:'p1',output:'done'}]});
  assert.equal(continued.messages[0].tool_calls[0].function.name,name);assert.equal(continued.messages[1].content,'done');
  assert.throws(()=>codexRequest({tools:[],input:[{role:'user',content:[{type:'input_image',image_url:'data:'}]}]}),/IMAGE_INVALID/);
- assert.throws(()=>codexResult({tool_calls:[{id:'x',function:{name:'invented',arguments:'{}'}}]},adapted.definitions),/UNDECLARED_TOOL/);
+ assert.throws(()=>codexResult({tool_calls:[{id:'x',function:{name:'invented',arguments:'{}'}}]},adapted.definitions),{code:'CODEX_TOOL_NOT_IN_REQUEST'});
 });

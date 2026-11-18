@@ -5,6 +5,12 @@ const value=()=>({version:1,phase:'overlay_download',sources:[source],storage:[{
 test('source roles, real HTTP status and nullable disk measurements survive strict validation',()=>{
  const v=value();assert.deepEqual(validateDownloadDiagnostic(v),v);v.sources=[];v.failed_source=null;v.storage[0].available_bytes=null;v.storage[0].met_budget=null;assert.equal(validateDownloadDiagnostic(v).storage[0].available_bytes,null);
 });
+test('a tile connection failure preserves only its classified network cause',()=>{
+ const diagnostic={...value(),error_code:'SOURCE_NETWORK',error_http_status:null,network_cause:'response_body'};
+ assert.equal(validateDownloadDiagnostic(diagnostic).network_cause,'response_body');
+ assert.throws(()=>validateDownloadDiagnostic({...diagnostic,network_cause:'http://private/path'}));
+ assert.throws(()=>validateDownloadDiagnostic({...diagnostic,error_code:'SOURCE_UNAUTHORIZED'}));
+});
 test('raw URLs, tokens, paths, coordinates and invented observations are rejected',()=>{
  for(const modify of [v=>v.url='https://private/?token=secret',v=>v.sources[0]={...source,token:'secret'},v=>v.sources[0]={...source,host:'https://host/?key=secret'},v=>v.sources[0]={...source,options:{token:'secret'}},v=>v.storage[0].volume='C:/Users/private',v=>v.storage[0].met_budget=false,v=>v.sources[0]={...source,observed_responses:0}]){const v=value();modify(v);assert.throws(()=>validateDownloadDiagnostic(v));}
 });

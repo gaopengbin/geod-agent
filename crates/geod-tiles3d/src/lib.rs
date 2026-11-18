@@ -290,6 +290,7 @@ where
     if request.output_dir.exists() {
         return Err("Output directory already exists; choose a new bundle destination".into());
     }
+    geod_core::acquisition_diagnostic::data_phase("prepare");
     let parent = request
         .output_dir
         .parent()
@@ -334,6 +335,7 @@ where
         warnings: vec![],
     };
     while !queue.is_empty() {
+        geod_core::acquisition_diagnostic::data_phase("base_download");
         check_cancel(&cancel)?;
         let batch: Vec<_> = (0..request.concurrency)
             .filter_map(|_| queue.pop_front())
@@ -354,6 +356,7 @@ where
         for (p, bytes) in results {
             check_cancel(&cancel)?;
             let bytes = bytes?;
+            geod_core::acquisition_diagnostic::data_phase("base_download");
             let bytes =
                 implicit::expand(&bytes, &p, &client, &root, &request, &area, &cancel).await?;
             let mut ctx = RewriteContext {
@@ -419,13 +422,16 @@ where
     bundle.resources.sort_by(|a, b| a.path.cmp(&b.path));
     bundle.warnings.sort();
     bundle.warnings.dedup();
+    geod_core::acquisition_diagnostic::data_phase("export");
     std::fs::write(
         stage.path().join("manifest.json"),
         serde_json::to_vec_pretty(&bundle).map_err(|e| e.to_string())?,
     )
     .map_err(|e| e.to_string())?;
+    geod_core::acquisition_diagnostic::data_phase("verify");
     inspect(stage.path())?;
     check_cancel(&cancel)?;
+    geod_core::acquisition_diagnostic::data_phase("export");
     std::fs::rename(stage.path(), &request.output_dir)
         .map_err(|e| format!("Cannot publish 3D Tiles bundle: {e}"))?;
     progress(Progress {
@@ -450,9 +456,11 @@ async fn fetch(
     request: &DownloadRequest,
     cancel: &CancellationToken,
 ) -> Result<Vec<u8>, String> {
+    use geod_core::acquisition_diagnostic::data_http;
     let mut last = "Request failed".to_string();
     for attempt in 0..=request.retries {
         check_cancel(cancel)?;
+        let mut rejected = false;
         let result = async {
             let mut current = url.clone();
             for _ in 0..=5 {
@@ -462,10 +470,18 @@ async fn fetch(
                         req = req.header(k, v);
                     }
                 }
-                let mut resp = req
-                    .send()
-                    .await
-                    .map_err(|_| "3D Tiles network request failed".to_string())?;
+                let auth = current.origin() == root.origin() && !request.headers.is_empty();
+                let mut resp = match req.send().await {
+                    Ok(response) => response,
+                    Err(_) => {
+                        if attempt == request.retries { data_http("3d-tiles", &current, auth, None, Some("SOURCE_NETWORK")); }
+                        return Err("3D Tiles network request failed".to_string());
+                    }
+                };
+                let status = resp.status();
+                rejected = !status.is_success() && !status.is_redirection() && !status.is_server_error() && !matches!(status.as_u16(), 408 | 429);
+                let terminal = !status.is_success() && !status.is_redirection() && (rejected || attempt == request.retries);
+                data_http("3d-tiles", resp.url(), auth, Some(status.as_u16()), terminal.then_some("SOURCE_HTTP"));
                 if resp.status().is_redirection() {
                     let location = resp
                         .headers()
@@ -494,7 +510,10 @@ async fn fetch(
                 while let Some(chunk) = resp
                     .chunk()
                     .await
-                    .map_err(|_| "Failed to read 3D Tiles response")?
+                    .map_err(|_| {
+                        if attempt == request.retries { data_http("3d-tiles", &current, auth, None, Some("SOURCE_NETWORK")); }
+                        "Failed to read 3D Tiles response"
+                    })?
                 {
                     check_cancel(cancel)?;
                     if bytes.len() as u64 + chunk.len() as u64 > request.max_asset_bytes {
@@ -509,6 +528,7 @@ async fn fetch(
         let result = tokio::select! {_ = cancel.cancelled()=>return Err("3D Tiles download cancelled".into()),r=result=>r};
         match result {
             Ok(bytes) => return Ok(bytes),
+            Err(e) if rejected => return Err(e),
             Err(e) => last = e,
         }
         if attempt < request.retries {

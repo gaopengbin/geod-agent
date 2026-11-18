@@ -35,12 +35,14 @@ test('native activity HTTP retry is idempotent, account-bound and never charges 
  const dir=mkdtempSync(join(tmpdir(),'geod-activity-')),path=join(dir,'ledger.sqlite');
  const server=createGatewayServer({dbPath:path,tokenLimit:10000,secret:'s'.repeat(40),quotaEnforced:false},{fetchImpl:async()=>Response.json({active:{userId:'geod-only',clientId:'geod-agent-desktop',scope:'geod:agent',expiresAt:Date.now()+60000}})});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
- const body={schema_version:1,accountId:'geod-only',events:[event()]};
+ const failed={...event(),state:'failed',reason:'provider',failure_detail:'tools_invalid',failure_http_status:400};
+ const body={schema_version:1,accountId:'geod-only',events:[failed]};
  const send=(b,token='A'.repeat(43))=>fetch(`http://127.0.0.1:${server.address().port}/api/agent/activity`,{method:'POST',headers:{authorization:`Bearer ${token}`,'content-type':'application/json'},body:JSON.stringify(b)});
  try{
   assert.equal((await send(body,'')).status,401);assert.equal((await send({...body,accountId:'other'})).status,409);
   assert.equal((await send({...body,events:[{...event(),path:'private'}]})).status,400);
+  assert.equal((await send({...body,events:[{...failed,failure_detail:'private request'}]})).status,400);
   assert.deepEqual(await(await send(body)).json(),{accepted:1,duplicates:0});assert.deepEqual(await(await send(body)).json(),{accepted:0,duplicates:1});
-  const db=new Database(path,{readonly:true});try{assert.equal(db.prepare('SELECT count(*) n FROM agent_activity_events').get().n,1);assert.equal(db.prepare('SELECT count(*) n FROM model_generations').get().n,0);assert.equal(db.prepare('SELECT count(*) n FROM usage_ledger').get().n,0);}finally{db.close();}
+  const db=new Database(path,{readonly:true});try{assert.equal(db.prepare('SELECT count(*) n FROM agent_activity_events').get().n,1);assert.deepEqual(db.prepare('SELECT failure_detail,failure_http_status FROM agent_personal_model_failures').all(),[{failure_detail:'tools_invalid',failure_http_status:400}]);assert.equal(db.prepare('SELECT count(*) n FROM model_generations').get().n,0);assert.equal(db.prepare('SELECT count(*) n FROM usage_ledger').get().n,0);}finally{db.close();}
  }finally{await new Promise(r=>server.close(r));rmSync(dir,{recursive:true});}
 });

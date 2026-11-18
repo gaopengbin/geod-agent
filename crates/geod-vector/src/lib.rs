@@ -416,7 +416,11 @@ impl Downloader {
         })
     }
     async fn fetch(&self, url: &str, body: Option<&str>, limit: usize) -> Result<Vec<u8>> {
+        use geod_core::acquisition_diagnostic::{data_http, data_phase};
+        let endpoint = if body.is_some() { "overpass" } else { "vector-tiles" };
         let mut url = validate_url(url, self.network.allow_local_http)?;
+        data_phase("base_download");
+        let auth = !self.network.headers.is_empty() || !self.network.query.is_empty();
         {
             let mut pairs = url.query_pairs_mut();
             for (k, v) in &self.network.query {
@@ -438,6 +442,8 @@ impl Downloader {
             match response {
                 Ok(response) => {
                     let status = response.status();
+                    let rejected = !status.is_success() && (!(status.as_u16() == 429 || status.is_server_error()) || attempt == self.retries);
+                    data_http(endpoint, response.url(), auth, Some(status.as_u16()), rejected.then_some("SOURCE_HTTP"));
                     if status.is_success() {
                         if response.content_length().is_some_and(|n| n > limit as u64) {
                             return Err(Error::InvalidData(
@@ -460,12 +466,13 @@ impl Downloader {
                                 tokio::select! {_=cancelled(&self.cancel)=>return Err(Error::Cancelled),_=tokio::time::sleep(Duration::from_millis(500u64<<attempt))=>{}}
                                 continue;
                             }
-                            Err(error) => return Err(error),
+                            Err(error) => {
+                                if matches!(error, Error::Network(_)) { data_http(endpoint, &url, auth, None, Some("SOURCE_NETWORK")); }
+                                return Err(error);
+                            }
                         }
                     }
-                    if !(status.as_u16() == 429 || status.is_server_error())
-                        || attempt == self.retries
-                    {
+                    if rejected {
                         return Err(Error::Network(format!("HTTP {}", status.as_u16())));
                     }
                     let delay = response
@@ -477,8 +484,10 @@ impl Downloader {
                         .min(30);
                     tokio::select! {_=cancelled(&self.cancel)=>return Err(Error::Cancelled),_=tokio::time::sleep(Duration::from_secs(delay))=>{}}
                 }
-                Err(_) => {
+                Err(error) => {
+                    if error.is_builder(){return Err(Error::InvalidPlan("Invalid HTTP request configuration".into()));}
                     if attempt == self.retries {
+                        data_http(endpoint, &url, auth, None, Some("SOURCE_NETWORK"));
                         return Err(Error::Network("Connection failed or timed out".into()));
                     }
                     tokio::select! {_=cancelled(&self.cancel)=>return Err(Error::Cancelled),_=tokio::time::sleep(Duration::from_millis(500u64<<attempt))=>{}}

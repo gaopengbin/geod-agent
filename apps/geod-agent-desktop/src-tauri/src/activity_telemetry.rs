@@ -40,6 +40,26 @@ fn reason(code: &str) -> &'static str {
         "unknown"
     }
 }
+fn personal_failure_detail(value: &Value) -> (&str, Option<u64>) {
+    let diagnostic = &value["upstreamDiagnostic"];
+    let status = diagnostic["httpStatus"].as_u64().filter(|status| (100..=599).contains(status));
+    let detail = match (diagnostic["protocol"]["stage"].as_str(), diagnostic["reason"].as_str()) {
+        (Some("tool_contract"), _) => "tool_contract",
+        (Some("stream_parse" | "message_shape" | "provider_result"), _) => "stream_parse",
+        (_, Some(detail @ ("authentication" | "balance" | "payment_required" | "rate_limit" |
+            "context_limit" | "image_unsupported" | "tools_invalid" | "messages_invalid" |
+            "parameters_invalid" | "permission" | "provider_unavailable"))) => detail,
+        _ => match value["errorCode"].as_str().unwrap_or_default() {
+            "AI_KEY_REJECTED" => "authentication",
+            "AI_PROVIDER_LIMIT" => "rate_limit",
+            "PROVIDER_TIMEOUT" => "timeout",
+            "PROVIDER_STREAM_INCOMPLETE" | "AI_PROVIDER_FORMAT" => "stream_parse",
+            "AI_ENDPOINT_NOT_FOUND" | "AI_MODEL_INVALID" | "AI_HISTORY_INVALID" => "config",
+            _ => "unknown",
+        },
+    };
+    (detail, status)
+}
 fn enqueue(
     db: &Connection,
     owner: &str,
@@ -59,7 +79,12 @@ fn enqueue(
             .as_u64()
             .is_some_and(|n| n <= 1_000_000_000_000);
     let id = uuid::Uuid::new_v4().to_string();
-    let body = json!({"event_id":id,"kind":kind,"state":state,"reason":if kind=="download_status"{value["reason"].as_str().unwrap_or("collector_unavailable")}else if ["failed","interrupted"].contains(&state){reason(value["errorCode"].as_str().unwrap_or(""))}else{"none"},"occurred_at":Utc::now().to_rfc3339(),"usage_known":known,"input_tokens":if known{value["inputTokens"].clone()}else{Value::Null},"output_tokens":if known{value["outputTokens"].clone()}else{Value::Null}});
+    let mut body = json!({"event_id":id,"kind":kind,"state":state,"reason":if kind=="download_status"{value["reason"].as_str().unwrap_or("collector_unavailable")}else if ["failed","interrupted"].contains(&state){reason(value["errorCode"].as_str().unwrap_or(""))}else{"none"},"occurred_at":Utc::now().to_rfc3339(),"usage_known":known,"input_tokens":if known{value["inputTokens"].clone()}else{Value::Null},"output_tokens":if known{value["outputTokens"].clone()}else{Value::Null}});
+    if kind == "personal_model" && state == "failed" {
+        let (detail, status) = personal_failure_detail(value);
+        body["failure_detail"] = json!(detail);
+        body["failure_http_status"] = json!(status);
+    }
     // Both tables are updated in one transaction by the caller. A delivered
     // generation stays seen so reconciliation cannot count it a second time.
     let fresh = db.execute(

@@ -5,6 +5,7 @@ const reasons=new Set(['authentication','balance','payment_required','rate_limit
 const billingScopes=new Set(['api_key','account','upstream','unknown']);
 const billingIssues=new Set(['quota_exhausted','balance_insufficient','precharge_rejected','unknown']);
 const bodyFormats=new Set(['json','text','empty','oversized','unreadable']);
+const toolFields=new Set(['tools','tool_name','tool_schema','tool_choice','tool_history']);
 const codes=new Set(['invalid_api_key','insufficient_balance','insufficient_quota','insufficient_user_quota','pre_consume_token_quota_failed','rate_limit_exceeded','invalid_request_error','context_length_exceeded','permission_denied','model_not_found','invalid_request','authentication_error','invalid_parameter','invalid_parameter_error']);
 const safeToken=v=>typeof v==='string'&&/^[A-Za-z0-9_.:-]{1,100}$/.test(v)&&!/^sk-|^Bearer|^AKID/i.test(v)?v:null;
 const count=v=>Number.isSafeInteger(v)&&v>=0?v:null;
@@ -16,7 +17,13 @@ function requestShape(request={}){
  const role=item=>item?.role==='model'?'assistant':item?.role??(['function_call_output','custom_tool_call_output'].includes(item?.type)?'tool':['function_call','custom_tool_call','reasoning'].includes(item?.type)?'assistant':null);
  const lastRole=items.map(role).filter(Boolean).at(-1)??null;
  const images=items.reduce((n,item)=>n+(Array.isArray(item?.content)?item.content:Array.isArray(item?.parts)?item.parts:[]).filter(p=>['image_url','input_image','image'].includes(p?.type)||p?.inlineData?.mimeType?.startsWith('image/')||p?.fileData?.mimeType?.startsWith('image/')).length,0);
- return {messages:items.length,tools:Array.isArray(request.tools)?request.tools.length:0,images,lastRole,maxOutputTokens:request.max_output_tokens??request.max_completion_tokens??request.max_tokens??request.generationConfig?.maxOutputTokens};
+ const tools = Array.isArray(request.tools) ? request.tools : [];
+ const declaredNames = new Set(tools.map(tool => tool?.function?.name).filter(Boolean));
+ const historicalCalls = items.flatMap(item => Array.isArray(item?.tool_calls) ? item.tool_calls : []);
+ const historicalToolsOutsideCatalog = Array.isArray(request.messages)
+   ? historicalCalls.filter(call => call?.function?.name && !declaredNames.has(call.function.name)).length
+   : undefined;
+ return {messages:items.length,tools:tools.length,images,lastRole,maxOutputTokens:request.max_output_tokens??request.max_completion_tokens??request.max_tokens??request.generationConfig?.maxOutputTokens,historicalToolsOutsideCatalog};
 }
 
 function requestId(response,payload){
@@ -36,7 +43,7 @@ export function safeDiagnostic(value){
  if(!value||!Number.isInteger(value.httpStatus)||value.httpStatus<100||value.httpStatus>599||!reasons.has(value.reason))return null;
  const shape=value.requestShape??{};
  const stages=new Set(['stream_parse','message_shape','tool_contract','provider_result']);
- const protocolCodes=new Set(['CODEX_UNDECLARED_TOOL','CODEX_CUSTOM_INPUT_INVALID','PROVIDER_STREAM_INCOMPLETE','PROVIDER_STREAM_INVALID','INVALID_USAGE_OR_MESSAGE','INVALID_TOOL_CONTRACT']);
+ const protocolCodes=new Set(['CODEX_UNDECLARED_TOOL','CODEX_TOOL_NOT_IN_REQUEST','CODEX_TOOL_CALL_ID_INVALID','CODEX_TOOL_ARGUMENTS_TYPE_INVALID','CODEX_TOOL_ARGUMENTS_JSON_INVALID','CODEX_CUSTOM_INPUT_INVALID','PROVIDER_STREAM_INCOMPLETE','PROVIDER_STREAM_INVALID','INVALID_USAGE_OR_MESSAGE','INVALID_TOOL_CONTRACT']);
  const protocol=stages.has(value.protocol?.stage)?{stage:value.protocol.stage,code:protocolCodes.has(value.protocol.code)?value.protocol.code:'INVALID_TOOL_CONTRACT',usagePresent:value.protocol.usagePresent===true,returnedTools:(Array.isArray(value.protocol.returnedTools)?value.protocol.returnedTools:[]).filter(n=>typeof n==='string'&&/^[a-z][a-z0-9_]{0,63}$/.test(n)&&!n.startsWith('sk_')).slice(0,12)}:null;
  let billing=billingScopes.has(value.billing?.scope)&&billingIssues.has(value.billing?.issue)?{scope:value.billing.scope,issue:value.billing.issue}:null;
  const providerCode=codes.has(value.providerCode)?value.providerCode:null;
@@ -45,8 +52,8 @@ export function safeDiagnostic(value){
  if(!billing&&value.httpStatus===402)billing=billingDiagnostic('',providerCode);
  const reason=value.httpStatus===402&&value.reason==='balance'&&!billing?'payment_required':value.reason;
  if(!billing&&value.httpStatus===402)billing={scope:'unknown',issue:'unknown'};
- return {version:1,httpStatus:value.httpStatus,reason,providerCode,requestId:safeToken(value.requestId),...(protocol?{protocol}:{}),...(billing?{billing}:{}),...(bodyFormats.has(value.bodyFormat)?{bodyFormat:value.bodyFormat}:{}),retryAfterSeconds:count(value.retryAfterSeconds)===null?null:Math.min(value.retryAfterSeconds,86400),
-  requestShape:{messages:count(shape.messages)??0,tools:count(shape.tools)??0,images:count(shape.images)??0,lastRole:['system','user','assistant','tool'].includes(shape.lastRole)?shape.lastRole:null,maxOutputTokens:count(shape.maxOutputTokens)}};
+ return {version:1,httpStatus:value.httpStatus,reason,providerCode,requestId:safeToken(value.requestId),...(protocol?{protocol}:{}),...(billing?{billing}:{}),...(bodyFormats.has(value.bodyFormat)?{bodyFormat:value.bodyFormat}:{}),...(toolFields.has(value.rejectedToolField)?{rejectedToolField:value.rejectedToolField}:{}),retryAfterSeconds:count(value.retryAfterSeconds)===null?null:Math.min(value.retryAfterSeconds,86400),
+  requestShape:{messages:count(shape.messages)??0,tools:count(shape.tools)??0,images:count(shape.images)??0,lastRole:['system','user','assistant','tool'].includes(shape.lastRole)?shape.lastRole:null,maxOutputTokens:count(shape.maxOutputTokens),...(count(shape.historicalToolsOutsideCatalog)?{historicalToolsOutsideCatalog:shape.historicalToolsOutsideCatalog}:{})}};
 }
 
 export function protocolDiagnostic(response,request,{stage,code,payload}={}){
@@ -70,9 +77,14 @@ export async function upstreamDiagnostic(response,request={}){
  const status=response.status,billing=billingDiagnostic(detail,code);
  // An HTTP 402 is not proof that the key, account or upstream wallet is empty.
  // Keep unexplained payment rejections distinct; do not retry or alter budgets.
- const reason=status===401?'authentication':billing?'balance':status===402?'payment_required':status===429?'rate_limit':status>=500?'provider_unavailable':/context.{0,25}(?:length|limit)|maximum.*tokens|too many tokens/i.test(detail)?'context_limit':/image|vision|multimodal/i.test(detail)?'image_unsupported':/tool|function.{0,12}(?:name|schema|call)/i.test(detail)?'tools_invalid':/messages|role|reasoning_content/i.test(detail)?'messages_invalid':status===400||status===413||status===422?'parameters_invalid':status===403?'permission':'unknown';
+ const field=typeof e.param==='string'?e.param:'';
+ let rejectedToolField;
+ if (/^tool_choice(?:$|[.\[])/i.test(field)) rejectedToolField='tool_choice';
+ else if (/^messages[.\[].*tool_calls/i.test(field)) rejectedToolField='tool_history';
+ else if (/^tools(?:$|[.\[])/i.test(field)) rejectedToolField=/\.name$/i.test(field)?'tool_name':/\.parameters(?:$|[.\[])/i.test(field)?'tool_schema':'tools';
+ const reason=status===401?'authentication':billing?'balance':status===402?'payment_required':status===429?'rate_limit':status>=500?'provider_unavailable':/context.{0,25}(?:length|limit)|maximum.*tokens|too many tokens/i.test(detail)?'context_limit':/image|vision|multimodal/i.test(detail)?'image_unsupported':rejectedToolField||/tool|function.{0,12}(?:name|schema|call)/i.test(detail)?'tools_invalid':/messages|role|reasoning_content/i.test(detail)?'messages_invalid':status===400||status===413||status===422?'parameters_invalid':status===403?'permission':'unknown';
  const retry=response.headers?.get('retry-after');const seconds=/^\d+$/.test(retry??'')?Number(retry):retry?Math.max(0,Math.ceil((Date.parse(retry)-Date.now())/1000)):null;
- return safeDiagnostic({httpStatus:status,reason,providerCode:code,requestId:requestId(response,payload),retryAfterSeconds:seconds,billing:billing??(status===402?{scope:'unknown',issue:'unknown'}:null),bodyFormat,requestShape:requestShape(request)});
+ return safeDiagnostic({httpStatus:status,reason,providerCode:code,requestId:requestId(response,payload),retryAfterSeconds:seconds,billing:billing??(status===402?{scope:'unknown',issue:'unknown'}:null),bodyFormat,rejectedToolField,requestShape:requestShape(request)});
 }
 
 export function upstreamFailureMessage(diagnostic){

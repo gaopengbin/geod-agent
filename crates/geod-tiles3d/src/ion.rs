@@ -77,12 +77,17 @@ async fn resolve_kind_at(client: &Client, api: &str, asset_id: u64, token: &str,
         return Err("Cesium Ion requires a valid asset ID and access token".into());
     }
     // Never follow a redirect with the user's Ion account token.
+    let url = Url::parse(&format!("{api}/v1/assets/{asset_id}/endpoint")).map_err(|_| "Invalid Cesium Ion endpoint")?;
     let mut response = client
-        .get(format!("{api}/v1/assets/{asset_id}/endpoint"))
+        .get(url.clone())
         .bearer_auth(token)
         .send()
         .await
-        .map_err(|_| "Cesium Ion connection failed")?;
+        .map_err(|_| {
+            geod_core::acquisition_diagnostic::data_http("ion-endpoint", &url, true, None, Some("SOURCE_NETWORK"));
+            "Cesium Ion connection failed"
+        })?;
+    geod_core::acquisition_diagnostic::data_http("ion-endpoint", response.url(), true, Some(response.status().as_u16()), (!response.status().is_success()).then_some("SOURCE_HTTP"));
     if !response.status().is_success() {
         return Err(format!(
             "Cesium Ion returned HTTP {}",

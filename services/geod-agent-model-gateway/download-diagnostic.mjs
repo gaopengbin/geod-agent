@@ -4,11 +4,17 @@ const integer=(n,max=Number.MAX_SAFE_INTEGER)=>Number.isSafeInteger(n)&&n>=0&&n<
 const nullable=(v,p)=>v===null||p(v);
 const phases=new Set(['queued','prepare','storage_preflight','base_download','overlay_download','composite','cache','reproject','export','verify','completed','unknown']);
 const providers=new Set(['amap','tianditu','esri','google','osm','custom','unknown']);
-const endpoints=new Set(['amap-appmaptile','arcgis-image','arcgis-tile','wmts','xyz-or-other','external-protocol','unknown']);
+const endpoints=new Set(['amap-appmaptile','arcgis-image','arcgis-tile','wmts','xyz-or-other','external-protocol','vector-tiles','overpass','poi','3d-tiles','ion-endpoint','unknown']);
+const networkCauses=new Set(['timeout','tls','dns','proxy','connect','response_body','request']);
 const fail=()=>{throw Error('INVALID_DOWNLOAD_DIAGNOSTIC')};
 export function validateDownloadDiagnostic(d){
  if(d===null)return null;
- if(!exact(d,['version','phase','sources','storage','storage_checked_at','failed_source','error_code','error_http_status','additional_sources'])||d.version!==1||!phases.has(d.phase)||!integer(d.additional_sources,65535)||!Array.isArray(d.sources)||d.sources.length>8||!Array.isArray(d.storage)||d.storage.length>8)fail();
+ const keys=['version','phase','sources','storage','storage_checked_at','failed_source','error_code','error_http_status','additional_sources'];
+ if(d && Object.hasOwn(d,'network_cause')){
+   keys.push('network_cause');
+   if(d.error_code!=='SOURCE_NETWORK'||!networkCauses.has(d.network_cause))fail();
+ }
+ if(!exact(d,keys)||d.version!==1||!phases.has(d.phase)||!integer(d.additional_sources,65535)||!Array.isArray(d.sources)||d.sources.length>8||!Array.isArray(d.storage)||d.storage.length>8)fail();
  if(!nullable(d.storage_checked_at,v=>typeof v==='string'&&v.length<=40&&/T.*(?:Z|[+-]\d\d:\d\d)$/.test(v)&&Number.isFinite(Date.parse(v))))fail();
  if(!nullable(d.error_code,v=>typeof v==='string'&&/^[A-Z][A-Z0-9_]{0,95}$/.test(v))||!nullable(d.failed_source,v=>integer(v,7)&&v<d.sources.length))fail();
  if(!nullable(d.error_http_status,v=>integer(v,599)&&v>=100))fail();

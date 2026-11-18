@@ -29,11 +29,31 @@ def collect(hours=48,until=None,accounts='/srv/laogao/data/geod-studio/accounts/
             if table not in tables:return None
             return [dict(r) for r in db.execute(f'SELECT {columns} FROM {table} WHERE user_id IN ({marks}) AND julianday({time_column})>=julianday(?) AND julianday({time_column})<julianday(?) GROUP BY 1,2',ids+[start.isoformat(),until.isoformat()])]
         summary['server_model_requests']=grouped('model_generations','funding_scope,state,count(*) requests,count(distinct user_id) accounts','created_at')
+        model_columns={r[1] for r in db.execute('PRAGMA table_info(model_generations)')}
+        summary['server_model_failures']=[dict(r) for r in db.execute(f"""
+            SELECT funding_scope,error_code,
+                json_extract(upstream_diagnostic,'$.httpStatus') http_status,
+                json_extract(upstream_diagnostic,'$.reason') reason,
+                json_extract(upstream_diagnostic,'$.protocol.code') protocol_code,
+                json_extract(upstream_diagnostic,'$.rejectedToolField') rejected_tool_field,
+                count(*) requests,count(distinct user_id) accounts
+            FROM model_generations WHERE user_id IN ({marks}) AND state='failed'
+                AND julianday(created_at)>=julianday(?) AND julianday(created_at)<julianday(?)
+            GROUP BY 1,2,3,4,5,6
+        """,ids+[start.isoformat(),until.isoformat()])] if 'upstream_diagnostic' in model_columns else None
         summary['reported_downloads']=grouped('agent_events','state,download_kind,count(*) attempts,count(distinct user_id) accounts','occurred_at')
         detail_columns={r[1] for r in db.execute('PRAGMA table_info(agent_events)')} if 'agent_events' in tables else set()
         detail_rows=[dict(r) for r in db.execute(f'SELECT state,client_version,diagnostic_status,diagnostic_json FROM agent_events WHERE user_id IN ({marks}) AND julianday(occurred_at)>=julianday(?) AND julianday(occurred_at)<julianday(?) AND state!=\'started\'',ids+[start.isoformat(),until.isoformat()])] if {'diagnostic_json','diagnostic_status','client_version'}<=detail_columns else None
         summary['download_details']={'status':'unavailable' if detail_rows is None else 'observed' if detail_rows else 'not_observed','terminal_events':None if detail_rows is None else len(detail_rows),'details':detail_rows}
         summary['reported_personal_activity']=grouped('agent_activity_events','kind,state,count(*) events,count(distinct user_id) accounts,sum(input_tokens) input_tokens,sum(output_tokens) output_tokens,sum(usage_known=0) unknown_usage_events','occurred_at')
+        summary['personal_model_failures']=[dict(r) for r in db.execute(f"""
+            SELECT e.reason,f.failure_detail,f.failure_http_status,count(*) events,count(distinct e.user_id) accounts
+            FROM agent_activity_events e LEFT JOIN agent_personal_model_failures f
+                ON e.user_id=f.user_id AND e.event_id=f.event_id
+            WHERE e.user_id IN ({marks}) AND e.kind='personal_model' AND e.state='failed'
+                AND julianday(e.occurred_at)>=julianday(?) AND julianday(e.occurred_at)<julianday(?)
+            GROUP BY e.reason,f.failure_detail,f.failure_http_status
+        """,ids+[start.isoformat(),until.isoformat()])] if 'agent_personal_model_failures' in tables else None
         diagnostic_available='agent_activity_events' in tables and 'reason' in {r[1] for r in db.execute('PRAGMA table_info(agent_activity_events)')}
         summary['download_reporting_diagnostics']=[dict(r) for r in db.execute(f"SELECT reason,count(distinct user_id) accounts,count(*) events,max(occurred_at) last_observed_at FROM agent_activity_events WHERE user_id IN ({marks}) AND kind='download_status' AND julianday(occurred_at)>=julianday(?) AND julianday(occurred_at)<julianday(?) GROUP BY reason",ids+[start.isoformat(),until.isoformat()])] if diagnostic_available else None
         summary['download_reporting_diagnostics_status']='observed' if summary['download_reporting_diagnostics'] else 'not_observed' if diagnostic_available else 'unavailable'

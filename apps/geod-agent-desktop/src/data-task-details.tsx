@@ -19,6 +19,8 @@ function resultNote(value: unknown) {
 }
 
 const size = (n: number) => n >= 1024 ** 2 ? `${(n / 1024 ** 2).toFixed(1)} MB` : `${(n / 1024).toFixed(1)} KB`;
+const diagnosticPhases: Record<string,string> = {prepare:"准备下载",base_download:"获取数据",reproject:"转换坐标系",export:"写入成果",verify:"核验成果"};
+const dataEndpoints: Record<string,string> = {"vector-tiles":"矢量瓦片",overpass:"Overpass",poi:"POI","3d-tiles":"3D Tiles","ion-endpoint":"Cesium ion"};
 export function DataTaskDetails({ task, view, permission }: { task: DataDownloadTask; view: "task" | "results" | "input"; permission?: string | null }) {
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [checked, setChecked] = useState(false);
   const [parametersOpen, setParametersOpen] = useState(false), [notesOpen, setNotesOpen] = useState(false);
@@ -28,6 +30,14 @@ export function DataTaskDetails({ task, view, permission }: { task: DataDownload
   const reprojecting = generating && progress?.phase === "reprojecting";
   const outputCrs = task.kind === "tiles3d" ? null : String(task.manifest?.outputCrs ?? spec.targetCrs ?? "EPSG:4326");
   const assets = (Array.isArray(task.manifest?.assets) ? task.manifest?.assets : Array.isArray(task.manifest?.resources) ? task.manifest?.resources : []) as Record<string, unknown>[];
+  const diagnostic = task.diagnostic;
+  const failedSource = diagnostic?.failed_source == null ? undefined : diagnostic.sources[diagnostic.failed_source];
+  const httpStatus = diagnostic?.error_http_status;
+  const failureHint = httpStatus === 401 || httpStatus === 403 ? t("图源拒绝访问，请核对连接权限和凭证。")
+    : httpStatus === 429 ? t("图源限制了请求频率，请稍后重试原任务。")
+    : httpStatus === 404 ? t("图源找不到请求的资源，请核对服务地址及数据覆盖范围。")
+    : httpStatus && httpStatus >= 500 ? t("图源服务暂时异常，请稍后重试原任务。")
+    : diagnostic?.error_code === "SOURCE_NETWORK" ? t("下载连接中断，请检查网络和代理设置后重试。") : null;
   async function run(action: "start" | "cancel" | "discard" | "preview" | "inspect" | "openDirectory") {
     setBusy(true); setError("");
     try {
@@ -43,6 +53,10 @@ export function DataTaskDetails({ task, view, permission }: { task: DataDownload
   if(task.cleaned)return <div className="task-discarded"><h3>{t("已清理")}</h3><p>{t("任务记录已移出列表，成果文件和缓存仍保留。恢复后可继续查看任务与成果。")}</p><Button size="sm" variant="secondary" disabled={busy} onClick={()=>{setBusy(true);setError('');void dataDownloads.cleanup(task.conversationId,task.id,'restore').then(()=>dataDownloadChanged(task.conversationId)).catch(e=>setError(errorMessage(e))).finally(()=>setBusy(false));}}>{t("恢复任务")}</Button>{error&&<p role="alert">{error}</p>}</div>;
   return <>
     <section className="task-overview"><div className="task-source"><h3>{task.title}</h3><span className={`state-pill state-${task.status}`}>{task.status === "pending" && permission === "fullAccess" ? t("待执行") : reprojecting ? t("转换坐标系") : localize(taskStateLabels[displayState] ?? displayState)}</span></div><p className="task-subtitle">{task.kind === "tiles3d" ? t("3D Tiles · 离线三维数据") : `${t(task.kind==='raster'?'原始数值栅格':'矢量数据')} · ${outputCrs}`}</p>
+      {view === "task" && diagnostic && (task.status === "failed" || task.status === "partial") && <section className="task-network-failure" aria-label={t("下载诊断")}>
+        <p>{[t(diagnosticPhases[diagnostic.phase] ?? "获取数据"), failedSource && t(dataEndpoints[failedSource.endpoint] ?? "图源"), failedSource?.host, httpStatus && `HTTP ${httpStatus}`].filter(Boolean).join(" · ")}</p>
+        {failureHint && <p>{failureHint}</p>}
+      </section>}
       {task.kind==='raster'&&<p className="field-hint">{t('保留浮点数值，预览图不替代 GeoTIFF。')}{(spec.prepared as {startTime?:number;endTime?:number}|undefined)?.endTime?t('提供方数据时期：{0} 至 {1}',{'0':new Date((spec.prepared as {startTime:number}).startTime).toLocaleDateString(),'1':new Date((spec.prepared as {endTime:number}).endTime).toLocaleDateString()}):null}</p>}
       {view === "task" && <>
         {(progress || generating) && <div className="task-progress" aria-busy={generating}><div className="task-progress-caption"><span>{progress?.total ? t("{0} / {1} 个{2}", {"0": progress.completed, "1": progress.total, "2": task.kind==="online"?"要素":"资源"}) : task.kind==="online"&&!["completed","partial"].includes(task.status)?t("正在读取在线要素"):t("{0} 个{1}", {"0": progress?.completed ?? 0, "1": task.kind==="online"?"要素":"资源"})}</span>{generating ? <span className="task-generation-status" role="status"><Loader2 size={14} className="task-phase-spinner" aria-hidden="true"/>{reprojecting ? t("转换坐标系中…") : displayState === "processing" ? t("生成成果中…") : t("核验中…")}</span> : <strong>{size(progress?.bytes ?? 0)}</strong>}</div>{((progress?.total ?? 0) > 0 || generating) && <TaskProgressBar state={displayState} percent={progress ? 100 * progress.completed / Math.max(1, progress.total) : 0} downloadLabel={t("数据下载进度")}/>}</div>}
@@ -57,7 +71,7 @@ export function DataTaskDetails({ task, view, permission }: { task: DataDownload
     </section>
     {task.status === "partial" && <p className="warning-text">{t("部分资源未能获取，成果包含缺失内容。")}{task.progress?.failures ? t("缺失 {0} 个资源。", {"0": task.progress.failures}) : ""}</p>}
     {Array.isArray(task.manifest?.warnings) && task.manifest.warnings.length > 0 && <section className="task-disclosure"><Button variant="ghost" size="sm" className="task-disclosure-trigger" aria-expanded={notesOpen} onClick={() => setNotesOpen(!notesOpen)}>{t("成果说明 · ")}{task.manifest.warnings.length}<ChevronDown size={16} className={notesOpen ? "is-open" : ""}/></Button>{notesOpen && <div className="task-disclosure-content">{task.manifest.warnings.map((warning, i) => <p key={i}>{resultNote(warning)}</p>)}</div>}</section>}
-    {(error || task.error) && <p className="warning-text" role="alert">{error || task.error}</p>}
+    {(error || (view !== "task" || !failureHint) && task.error) && <p className="warning-text" role="alert">{error || task.error}</p>}
     {(error || task.error) && typeof spec.connectionId === "string" && <Button size="sm" variant="outline" onClick={() => openTiles3dConnection(spec.connectionId as string)}>{t("检查连接与凭证")}</Button>}
   </>;
 }

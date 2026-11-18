@@ -701,6 +701,10 @@ fn provider_failure(code: &str, status: Option<u64>) -> ServiceError {
             "AI_PROVIDER_LIMIT",
             "服务方限流或额度不足，请检查该渠道账户",
         ),
+        ("CODEX_TOOL_NOT_IN_REQUEST", _) => error("AI_PROVIDER_FORMAT", "模型调用了本轮未提供的工具，操作未执行"),
+        ("CODEX_TOOL_CALL_ID_INVALID", _) => error("AI_PROVIDER_FORMAT", "模型返回的工具调用缺少有效编号，操作未执行"),
+        ("CODEX_TOOL_ARGUMENTS_TYPE_INVALID" | "CODEX_TOOL_ARGUMENTS_JSON_INVALID" | "CODEX_CUSTOM_INPUT_INVALID", _) =>
+            error("AI_PROVIDER_FORMAT", "模型返回的工具参数格式无效，操作未执行"),
         ("PROVIDER_CANCELLED", _) => error(
             "PROVIDER_CANCELLED",
             "模型请求已停止；服务方可能仍记录已处理用量",

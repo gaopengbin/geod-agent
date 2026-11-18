@@ -12,7 +12,7 @@ import { openEventStore, validateEvents } from "./events-store.mjs";
 import { openActivityStore, validateActivity } from "./activity-store.mjs";
 import { MessageError, openMessageStore } from "./messages-store.mjs";
 import { withRangeTools } from "../../packages/codex-protocol/range-tools.mjs";
-import { codexRequest, codexResult, ContractError } from "../../packages/codex-protocol/codex-contract.mjs";
+import { codexRequest, codexResult, deepSeekMessages, ContractError } from "../../packages/codex-protocol/codex-contract.mjs";
 import {channelSnapshot,providerRequest,generateProvider,responseTerminalError} from '../../packages/codex-protocol/provider-adapter.mjs';
 import {createPaymentHostCandidate,readPaymentHostConfig} from './payment-host-candidate.mjs';
 import {readWelcomeCreditPolicy} from './welcome-credit-policy.mjs';
@@ -305,7 +305,7 @@ export function createGatewayServer(config, { fetchImpl = fetch } = {}) {
       if (request.method === "GET" && url.pathname === "/api/agent/usage") return json(response, 200, ledger.usage(userId));
       if (request.method === 'GET' && url.pathname === '/api/agent/sponsors') return json(response,200,sponsorCatalogue(config.sponsors??[],ledger,userId));
       if (request.method === "GET" && url.pathname === "/api/agent/capabilities") return json(response, 200, {
-        protocol: "geod-codex-v1", model: config.model, provider: "DeepSeek", contextWindow: config.contextWindow,downloadEventDetails:3,agentActivityEvents:1,downloadDiagnostics:1,
+        protocol: "geod-codex-v1", model: config.model, provider: "DeepSeek", contextWindow: config.contextWindow,downloadEventDetails:5,agentActivityEvents:2,downloadDiagnostics:1,
         contextWindowSource: "gatewayConfigured", maxOutputTokens: config.maxOutputTokens,
         reasoning: config.codexThinking === "enabled", inputModalities: ["text"], requestMaxBytes: 4_000_000,
         ...(defaultSponsorInfo(config,userId)??{}),
@@ -342,8 +342,8 @@ export function createGatewayServer(config, { fetchImpl = fetch } = {}) {
         return response.end();
       }
        const upstreamBody=sponsored?null:{model:selectedModel,
-         messages:codex?messages:[{role:'system',content:`${SYSTEM} ${USER_INPUT_POLICY} ${BULK_DATA_POLICY}`},...messages.map(message=>message.role==='tool'?{...message,content:compactGeometryToolOutput(message.content)}:message)],
-         ...(codex&&!contract.tools.length?{}:{tools:codex?contract.tools:TOOLS,tool_choice:'auto'}),
+         messages:codex?deepSeekMessages(contract):[{role:'system',content:`${SYSTEM} ${USER_INPUT_POLICY} ${BULK_DATA_POLICY}`},...messages.map(message=>message.role==='tool'?{...message,content:compactGeometryToolOutput(message.content)}:message)],
+         ...(codex&&!contract.tools.length?{}:{tools:codex?contract.tools:TOOLS,...(codex&&config.codexThinking==='enabled'?{}:{tool_choice:'auto'})}),
          thinking:{type:codex?config.codexThinking:'disabled'},max_tokens:codex?config.maxOutputTokens:2048,
          stream:live,...(live?{stream_options:{include_usage:true}}:{})};
        let requestReservation;
@@ -423,7 +423,7 @@ export function createGatewayServer(config, { fetchImpl = fetch } = {}) {
       }
       const toolCalls = Array.isArray(message.tool_calls) ? message.tool_calls.filter(call => validId(call.id) && call.type === "function" && TOOL_NAMES.has(call.function?.name) && typeof call.function.arguments === "string").slice(0, 4) : [];
       let result;
-      try { result = codex ? codexResult(message, contract.definitions, {finishReason:payload.choices?.[0]?.finish_reason}) : { role: "assistant", content: typeof message.content === "string" ? message.content.slice(0, 16000) : null, toolCalls }; }
+      try { result = codex ? codexResult(message, contract.definitions, {finishReason:payload.choices?.[0]?.finish_reason,allowUniqueToolName:true}) : { role: "assistant", content: typeof message.content === "string" ? message.content.slice(0, 16000) : null, toolCalls }; }
       catch(error) { return respond(ledger.fail(userId,body.generationId,'UPSTREAM_INVALID_TOOL',protocolDiagnostic(upstream,upstreamBody,{stage:'tool_contract',code:error.code??'INVALID_TOOL_CONTRACT',payload}))); }
       if (codex) result.usage = { cachedInputTokens: usage.prompt_cache_hit_tokens ?? usage.prompt_tokens_details?.cached_tokens ?? 0, reasoningTokens: usage.completion_tokens_details?.reasoning_tokens ?? 0 };
       const settled = ledger.settle(userId, body.generationId, usage.prompt_tokens, usage.completion_tokens, typeof payload.id === "string" ? payload.id : null, result, {
